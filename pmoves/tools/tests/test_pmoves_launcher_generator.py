@@ -41,6 +41,10 @@ _REPO = _TOOLS.parent.parent
 sys.path.insert(0, str(_TOOLS))
 
 import pmoves_launcher_generator as gen  # noqa: E402
+# Sibling import via the same tools/ path, so the documented standalone run
+# (`python pmoves/tools/tests/test_pmoves_launcher_generator.py`) works without
+# the repo root on sys.path.
+from bash_resolver import resolve_bash  # noqa: E402  never System32's WSL stub
 
 
 REPO_ROOT = Path(os.environ.get("PMOVES_REPO_ROOT") or _REPO).resolve()
@@ -143,7 +147,7 @@ class TestGeneratorRegistryDriven(unittest.TestCase):
                 name = Path(f.relpath).name
                 (scratch / name).write_text(f.body, encoding="utf-8", newline="\n")
                 r = subprocess.run(
-                    ["bash", "-n", name],
+                    [resolve_bash(), "-n", name],
                     capture_output=True, text=True,
                 )
                 self.assertEqual(

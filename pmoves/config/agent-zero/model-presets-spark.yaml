@@ -1,0 +1,89 @@
+# PMOVES model presets - SPARK (DGX Spark GB10) instance variant
+#
+# Checked in per MODEL_PRESET_LIFECYCLE.md: per-instance variant presets live
+# here and are seeded separately; the generator (models_sync) does not read
+# them. SPARK's A0 consumes this as pmoves/data/agent-zero/usr/plugins/
+# _model_config/presets.yaml; models_sync carries the "Cloud: *" lanes over.
+#
+# Hybrid by node: Default is the LOCAL analog on SPARK's host Ollama, cloud
+# lanes stay selectable by name.
+#   - provider ollama (litellm), bare model names, api_base is the bare host
+#     (litellm appends /api/...; a /v1 suffix 404s), think:false for qwen3.
+#   - 172.17.0.1:11434 = host Ollama seen from the docker bridge. The repo's
+#     road for that is `make -C pmoves ollama-host-bridge` (loopback Ollama +
+#     scoped socket proxy); not yet applied on SPARK.
+#   - Models are GPU-pinned variants: num_gpu 999 + num_ctx 32768. Without
+#     num_gpu GB10 loads 16/37 layers (0.9 tok/s); with it 49/49 (~70 tok/s).
+#     Without num_ctx >= A0's ~14.5k-token prompt, Ollama's default 8192
+#     truncates it and every reply is one token. Measured 2026-10-21.
+#   - qwen3:30b-a3b-gpu / qwen3:8b-gpu are stopgap variants; replace with the
+#     suit-enforced variants once #3379 (models-suit-ollama) + #3402 land.
+# Verified end-to-end through A0: POST :8080/tasks -> completed.
+- name: Default
+  chat:
+    provider: ollama
+    name: qwen3:30b-a3b-gpu
+    api_base: http://172.17.0.1:11434
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama
+    name: qwen3:8b-gpu
+    api_base: http://172.17.0.1:11434
+    ctx_length: 32768
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''
+    rl_requests: 0
+    rl_input: 0
+    kwargs: {}
+- name: 'Cloud: OpenRouter'
+  chat:
+    provider: openrouter
+    name: openai/gpt-5.6-terra
+    api_base: ''
+    ctx_length: 200000
+    ctx_history: 0.7
+    vision: true
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  utility:
+    provider: openrouter
+    name: google/gemini-3.1-flash-lite
+    api_base: ''
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''
+- name: 'Cloud: GLM-5.3 (TensorZero)'
+  chat:
+    provider: tensorzero
+    name: tensorzero::model_name::chat_zai_glm53
+    api_base: http://tensorzero-gateway:3000/openai/v1
+    ctx_length: 128000
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  utility:
+    provider: tensorzero
+    name: tensorzero::model_name::chat_zai_glm53
+    api_base: http://tensorzero-gateway:3000/openai/v1
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''

@@ -4,7 +4,31 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below)
+> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below) · **2026-09-24 addendum:** EM-FLASH registration + merge-wave receipt (see below)
+
+---
+
+## 2026-09-24 EM-FLASH registration + merge-wave receipt (elder-melchor)
+
+**Active lane**: `docs/register-emflash-identity-4090-alias` — claimed under **`EM-FLASH (hermes)`** (TTL 72h). Operator-declared 2026-09-24: EM-FLASH is the elder-melchor AGInT — `glm-5.3-flash` riding the hermes (MOA) harness — and the operator's alt for agent/team configuration and fleet automation. Registration surfaces in this lane: `identity_vocabulary.yaml` (`em-flash` identity + `hermes` harness entry), the AGInTZ awareness-ledger row in AGNOTE4482.md, and this lane's CLAIM row.
+
+**Also in this lane**: the `PMOVES-4090-CLAUDE` umbrella alias — operator-declared 2026-09-24, the AGInT for 4090-Claude and ALL its alts and variants, whose own full registration is still pending. Aliased to `4090-claude` so the two rows carrying that signature on the MCP-hosting draft (#3168) resolve instead of reding the identity gate; fold into their own canonical when their registration lands.
+
+**Merge wave 2026-09-24** (operator: approved): Pmoves-cipher #24 (pr-validation enablement — the fork gate that never ran since the 07-13 re-fork), #23 (installer reconcile), #26 (scope+ownership stack) merged; #22/#25 closed contained by #26 (compare 0-ahead/behind proofs). Superproject squash-merged: #3165 (rdna4 room rescue), #3114 (CI test deps), #3107 (compose split overlay), #3095 (kilo ratchet), #3079 (NATS exporter), #2907 (runbooks round 2), #3129 (ffmpeg-whisper arch gate), #3089 (topology paths), #3160 (hermes-agent gitlink → 8493c4f73, post-#17), #3102 (B850 register closeout — rebased clean onto post-wave main, 293 claim/identity tests green). #3118 closed superseded: bump target 18bd4f5b81 predates the Hardened tip 511f6118fd; a fresh supabase pointer bump belongs to the next submodule-pointer lane. PMOVES-supabase fork PR #20 remains the fork's own blocker (2026-09-20 survey entry above still accurate).
+
+---
+
+## 2026-09-20 submodule integrity survey (PMOVES-4090-ZAI.CLAW)
+
+**Active lane**: `chore/4090zai-register-and-sitrep` - claimed under **`PMOVES-4090-ZAI.CLAW`** (TTL 72h). First row under that signature deliberately: the 4090 node had been filing as three variants (`4090-claude`, `4090-CLAUDE-OPUS-5 (field)`, `CLAUDE-OPUS-5 (4090)`), which left the collision register unable to tell the claws on that node apart - the condition it exists to prevent.
+
+**Closed**: `wip/4090-rebased-2026-09-18` and `fix/secrets-manifest-env-shared-routing`, both RELEASED through the sanctioned road; their work landed in #3104 / #3105 and the #2938 squash.
+
+**Fixed**: the `PMOVES-n8n` submodule could not resolve its own pin. `.gitmodules` named `PMOVES-n8n.git` while the gitlink pinned `92267e98`, which exists only in `PMOVES-n8n-FlooS`. Cause is a rename history, not a bad pin: repo names are case-insensitive-unique, so `PMOVES-n8n` and `PMOVES-N8N` are the SAME name - the flows repo was renamed to `PMOVES-n8n-FlooS`, then `PMOVES-N8N-Auto` was renamed to `PMOVES-N8N` and case-insensitively re-claimed `PMOVES-n8n`. The url was repointed rather than the pin moved (**PR #3115**). Still owed: `fork-sync.yml` calls `PMOVES-n8n-FlooS` a fork of n8n-io/n8n while the registry lists it `_first_party`.
+
+**Measured**: `PMOVES-supabase`'s pending sync branch (`sync/upstream-2026-08-07-31156502195`, from workflow run 31156502195) is **15 ahead / 0 behind** `PMOVES.AI-Edition-Hardened` (`10451c28`) and merges **clean** - `git merge-tree` rc=0, zero conflicted files. The 15 commits are upstream currency (Studio scoped-PAT work, docs, marketing, UI fixes). The lane is frozen only because **PR #20 has sat open since 2026-08-07** and trips the workflow's own "skip if an open sync PR exists" guard. Two older `sync/*` branches (`-0609`) linger unmerged as well.
+
+**Open**: who owns PR #20 (the GitHub connector refuses it with "access to pull request is restricted by lockdown mode" for that repo, so its checks are unread), the merge-vs-regenerate call, the three hardcoded fork lists that disagree (`fork-sync.yml` carries 28 entries and never reads `fork_registry.json`'s 72 - 7 forks marked `sync:true` are unsyncable, 4 marked `sync:false` are synced anyway), the three missing scoped gates, and the P1 gate-parity pass across Wealth / ToKenism-Multi / DoX. Note the operator's framing to keep: **branding a branch `PMOVES.AI-Edition-Hardened` does not make it hardened** - the gate set needs defining once and applying per repo instead of being inherited from upstream by accident.
 
 ---
 

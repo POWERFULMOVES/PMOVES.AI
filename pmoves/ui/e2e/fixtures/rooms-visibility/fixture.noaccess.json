@@ -1,0 +1,17 @@
+{
+  "room_id": "fixture.room.noaccess",
+  "version": "1.0.0",
+  "display_name": "Fixture No Access",
+  "description": "no access block: must NOT be public",
+  "agent_id": "fixture-agent",
+  "shell": {
+    "theme": {
+      "theme_id": "fixture"
+    },
+    "layout": {
+      "default_route": "/",
+      "panels": []
+    }
+  },
+  "apps": []
+}

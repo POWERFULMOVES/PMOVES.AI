@@ -97,11 +97,34 @@ describe('SearchResults', () => {
       expect(score.className).toContain('text-lime-600');
     });
 
-    it('should color-code scores: yellow (<50%)', () => {
+    it('should color-code scores: red (<50%)', () => {
       render(<SearchResults results={[mockResults[2]]} />);
 
       const score = screen.getByText('45%');
-      expect(score.className).toContain('text-yellow-600');
+      expect(score.className).toContain('text-red-600');
+    });
+
+    // Bands per SCORE_COLOR_CLASSES comments: >=80 green, 70-80 lime, 60-70 yellow,
+    // 50-60 orange, <50 red (operator decision 2026-09-28: below 50% is red).
+    it.each([
+      [1.0, 'text-green-600'],
+      [0.9, 'text-green-600'],
+      [0.8, 'text-green-600'],
+      [0.79, 'text-lime-600'],
+      [0.7, 'text-lime-600'],
+      [0.69, 'text-yellow-600'],
+      [0.6, 'text-yellow-600'],
+      [0.59, 'text-orange-600'],
+      [0.5, 'text-orange-600'],
+      [0.49, 'text-red-600'],
+      [0.4, 'text-red-600'],
+      [0.1, 'text-red-600'],
+      [0, 'text-red-600'],
+    ])('should colour score %s as %s', (value, expected) => {
+      render(<SearchResults results={[{ ...mockResults[0], score: value }]} />);
+
+      const score = screen.getByTitle('Relevance score');
+      expect(score.className).toContain(expected);
     });
 
     it('should show channel name for YouTube results', () => {

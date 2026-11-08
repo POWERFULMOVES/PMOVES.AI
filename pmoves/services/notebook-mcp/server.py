@@ -196,7 +196,7 @@ async def _publish_nats(subject: str, data: dict) -> None:
 
         async def _do() -> None:
             nc = await nats.connect(
-                os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
+                os.getenv("NATS_URL", "nats://nats:4222"),
                 connect_timeout=2,
                 allow_reconnect=False,
                 max_reconnect_attempts=0,

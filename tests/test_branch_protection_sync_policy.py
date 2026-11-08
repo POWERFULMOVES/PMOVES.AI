@@ -41,6 +41,9 @@ import unittest
 from pathlib import Path
 
 import yaml
+import sys  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # repo root, for pmoves.tools
+from pmoves.tools.bash_resolver import resolve_bash  # noqa: E402  never System32's WSL stub
 
 ROOT = Path(__file__).resolve().parent.parent
 WF_REL = ".github/workflows/branch-protection-sync.yml"
@@ -194,7 +197,7 @@ class Harness:
         })
         env.update(extra_env)
         # Actions' default shell for run: bash --noprofile --norc -eo pipefail
-        return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "step.sh"],
+        return subprocess.run([resolve_bash(), "--noprofile", "--norc", "-eo", "pipefail", "step.sh"],
                               cwd=self.tmp, env=env, capture_output=True, text=True, timeout=120)
 
     def puts(self):
@@ -209,7 +212,7 @@ class Harness:
     def bash_fn(self, script: str, stdin: str = "") -> str:
         """Run the shipped policy()/normalize() definitions plus `script`."""
         prelude = _function(self.block, "policy") + _function(self.block, "normalize")
-        out = subprocess.run(["bash", "-c", prelude + script], input=stdin, text=True,
+        out = subprocess.run([resolve_bash(), "-c", prelude + script], input=stdin, text=True,
                              capture_output=True, env={**os.environ, "REQUIRED_REVIEWS": "0"},
                              timeout=30)
         if out.returncode != 0:

@@ -533,6 +533,22 @@ signatures:
       - cross-platform
     description: "Hermes-Agent-native node persona -- first PMOVES fleet node whose primary runtime is Hermes Agent (Nous Research), not Claude Code/Codex. Legacy Pascal GTX 1070; light-GPU dev/ops. H-half mirror of signing card ...0013 (agent_id missling-link)."
 
+  spark-claude:
+    agent_id: "spark-claude"
+    display_name: "SPARK Claude"
+    glyph: "⌁"              # ⌁ Electric arrow — spark mark (⚡ belongs to powerfulmoves)
+    color: "#4D7C0F"             # Lime-700 — unclaimed hue family; not spark-runner's #EA580C
+    accent: "#A3E635"            # Lime-400
+    voice: analytical
+    co_author: "SPARK Claude (pmoves-spark) <spark@pmoves.ai>"
+    node: "spark"
+    resonance:
+      - arm64-compute
+      - unified-memory-inference
+      - nvfp4-quantization
+      - dgx-spark
+    description: "Agent persona on PMOVES-SPARK (NVIDIA DGX Spark GB10 Grace-Blackwell, 128GB unified, sm_121, ARM64). Distinct from the spark-runner CI identity on the same host. H-half mirror of signing card ...0014 (agent_id spark-claude)."
+
   # ---- Community Room Stewards ----
   fordham-steward:
     agent_id: "fordham-steward"

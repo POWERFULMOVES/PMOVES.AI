@@ -217,6 +217,46 @@ def is_inert_row(line: str) -> bool:
 _UNSET = object()
 _FOLDER = _UNSET
 _LINEAGE = _UNSET
+_NODES = _UNSET
+
+
+def _import_tool(name: str):
+    """Import `pmoves/tools/<name>.py`, keeping sys.modules honest.
+
+    The module MUST be in sys.modules while it executes: identity_lineage and
+    node_identity define @dataclass, and dataclasses._is_type resolves the
+    owning module via sys.modules[cls.__module__]. Unregistered, that is None
+    and the import dies with a bare AttributeError about __dict__.
+
+    Two hygiene rules ride on that registration:
+      - REUSE an entry that is already this exact file. identity_lineage
+        imports node_identity under the same name; loading it twice built two
+        module objects and left whichever ran last in sys.modules.
+      - On a FAILED exec, restore what was there before (or remove the entry).
+        Left in place, a half-built module is what the next `import` returns,
+        and it fails somewhere unrelated with no trace of the real error.
+    """
+    import importlib.util
+    path = Path(__file__).resolve().parents[3] / "pmoves" / "tools" / f"{name}.py"
+    previous = sys.modules.get(name)
+    if previous is not None:
+        try:
+            if Path(previous.__file__).resolve() == path.resolve():
+                return previous
+        except (AttributeError, TypeError, OSError):
+            pass
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is not None:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
+        raise
+    return module
 
 
 def _load_lineage():
@@ -239,19 +279,7 @@ def _load_lineage():
         return _LINEAGE
     _LINEAGE = None
     try:
-        import importlib.util
-        root = Path(__file__).resolve().parents[3]
-        spec = importlib.util.spec_from_file_location(
-            "identity_lineage",
-            root / "pmoves" / "tools" / "identity_lineage.py",
-        )
-        module = importlib.util.module_from_spec(spec)
-        # MUST be registered before exec_module: identity_lineage defines
-        # @dataclass, and dataclasses._is_type resolves the owning module
-        # via sys.modules[cls.__module__]. Unregistered, that is None and
-        # the import dies with a bare AttributeError about __dict__.
-        sys.modules["identity_lineage"] = module
-        spec.loader.exec_module(module)
+        module = _import_tool("identity_lineage")
         module.load_vocabulary()  # fail here, not on the first fold
         _LINEAGE = module
     except Exception as exc:  # noqa: BLE001 -- a guard must not die here
@@ -261,6 +289,233 @@ def _load_lineage():
             "will not be folded, and declared co-owners will not be read.\n"
         )
     return _LINEAGE
+
+
+# Override for the node vocabulary path, honoured ONLY by _load_nodes() below.
+# It exists so a test can make the node half unreadable in a subprocess and
+# assert the degradation is audible; identity_lineage.wearing() keeps reading
+# the default file. Do not set it outside tests.
+NODE_VOCABULARY_ENV = "PMOVES_NODE_VOCABULARY"
+_NODES_ERROR = ""
+
+
+def _load_nodes():
+    """Return (node_identity module, alias index), or None if unavailable.
+
+    The node half of the owner key. node_identity.py is the ONE reader of
+    node-vocabulary.yaml (canonical names, aliases, and which entries are not a
+    machine at all), so the gate asks it rather than keeping a second list.
+
+    WHAT IS LOST WHEN THIS RETURNS None: owners fold to identity alone -- the
+    pre-#3313 key, under which one machine's RELEASE closes another machine's
+    lanes. That is NOT accepted silently: every CLAIM or RELEASE row whose
+    owner resolves to an identity with a declared home gets a caveat (see
+    owner_caveat()), and a caveat is an `ask` on the hook path, a refusal on
+    register-append, and could-not-measure on register-status.
+    """
+    global _NODES, _NODES_ERROR
+    if _NODES is not _UNSET:
+        return _NODES
+    _NODES = None
+    try:
+        module = _import_tool("node_identity")
+        override = os.environ.get(NODE_VOCABULARY_ENV)
+        _NODES = (module, module.load_vocabulary(Path(override) if override else None))
+    except Exception as exc:  # noqa: BLE001 -- a guard must not die here
+        _NODES_ERROR = f"{type(exc).__name__}: {exc}"
+        sys.stderr.write(
+            f"claim-collision-pre: node vocabulary unavailable ({exc}); owner "
+            "keys fold to identity only, so one identity's sessions on two "
+            "nodes are not told apart. CLAIM/RELEASE rows by such identities "
+            "will be ASKED, not allowed.\n"
+        )
+    return _NODES
+
+
+def _machine(nodes, raw):
+    """Canonical name of `raw` if it names one declared MACHINE, else None.
+
+    A class (`jetson`), placeholder (`any`, `cloud`) or runner label is a
+    declared non-machine: it says where something MAY run, not where a session
+    DID, so it never splits a key.
+    """
+    if raw is None:
+        return None
+    module, index = nodes
+    entry = index.get(module._norm(raw))
+    return entry.canonical if entry is not None and entry.is_machine else None
+
+
+# Version / quantity SHAPE only (Kilo r4221570771). "Contains a digit" made
+# `(nano-2)`, `(z890-mirror-2)`, `(dgx spark 2)` annotations, so an unknown
+# digit-bearing NODE folded home silently. A dotted version (`5.5`), a context
+# size (`1M`, `200K`) or the word "context" is model-shaped; a bare integer is
+# NOT -- fleet nodes are named `4090` / `5090`, so an unknown bare number is
+# more likely a node than a model and is asked about.
+_ANNOTATION_SHAPE = re.compile(
+    r"\d+\.\d+|\b\d+\s*[KM]\b|\bcontext\b", re.IGNORECASE)
+_ROLES = _UNSET
+
+
+def _roles() -> frozenset:
+    """Role names from agent_registry.yaml `role_classes` (planner, reviewer,
+    ...). Unreadable -> empty: a role token then reads as node-shaped and is
+    ASKED about -- noisy, never silent."""
+    global _ROLES
+    if _ROLES is _UNSET:
+        try:
+            import yaml
+            path = (Path(__file__).resolve().parents[3] / "pmoves" / "config"
+                    / "agent_registry.yaml")
+            doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            _ROLES = frozenset(str(k).casefold()
+                               for k in (doc.get("role_classes") or {}))
+        except Exception:  # noqa: BLE001
+            _ROLES = frozenset()
+    return _ROLES
+
+
+def _is_annotation(token: str) -> bool:
+    """True when an unrecognised parenthetical token is an annotation (a
+    model, role, or context marker), not something that might be a node."""
+    return (token.strip().casefold() in _roles()
+            or bool(_ANNOTATION_SHAPE.search(token)))
+
+
+def _node_entry(nodes, raw):
+    """The node-vocabulary entry for `raw` (machine or not), or None."""
+    module, index = nodes
+    return index.get(module._norm(raw))
+
+
+def _node_half(lineage, vocab, owner: str, identity: str):
+    """(off-home node or None, caveat). The node half of `owner`'s key.
+
+    The node is None for the HOME session:
+      - no node named in the parenthetical (`(Opus 5)`) -> home, by default;
+      - a node token plus non-node annotations (`(Knuckles, opus 4.7 1M)`
+        names knuckles AND a model; the model is not a node) -> that node.
+
+    IDENTITIES WITH NO DECLARED HOME (`claude-opus`, `crush`, `hermes-agent`,
+    any drop-in) ARE SPLIT PER NODE TOO -- operator decision 2026-10-08. The
+    node a session runs on is a MEASURED fact (launcher node resolution,
+    bootstrap probes), so a parenthetical naming a real node yields
+    `<identity>`@<node>` whether or not the identity has a home; with no node
+    named, the key stays bare (node unknown -- the legacy spelling). The MODEL
+    is never part of the key: crush runs a newer GLM and still idents as
+    crush_glm_5.2; a model is an annotation. Before this decision a no-home
+    identity folded across nodes, which on origin/main had let a bare `CRUSH`
+    RELEASE (row 1849, about another PR) close a `CRUSH-GLM52 (SPARK)` lane
+    (row 1795) -- the #3313 defect in the old ledger.
+    A node token is a declared MACHINE (node-vocabulary.yaml, aliases
+    included) or a node_relations token (`Z890-mirror-on-5090` -> node 5090);
+    each comma-separated token is parsed by identity_lineage.wearing(), the
+    parser the ledger audit already uses, so no regex lives here.
+
+    AMBIGUOUS -> CAVEAT, not a guess:
+      - more than one distinct machine named (`(Knuckles, spark)`, in either
+        order) -- there is no "last token wins";
+      - NO recognised node but some NODE-SHAPED unrecognised token
+        (`(dgx spark)`, `(Knuckles @ spark)`) -- it may be a node the
+        vocabulary does not spell, so "home" would be a guess. A token is
+        an ANNOTATION, not node-shaped, when the vocabulary's models / lanes
+        / roles know it or it is model-shaped (a version number, a context
+        size like `1M`, the word "context"; NOT any digit): `(Opus 5.5)`,
+        `(Claude Opus 5.5 1M context)`, `(reviewer)` are decided, not asked
+        (re-review P3-1: per doctrine the model is an annotation). No model
+        list is hardcoded. Unrecognised tokens BESIDE one recognised node
+        (`(spark, some lane)`) are annotations: decided;
+      - a node wearing() resolved that the gate's own node index lacks.
+    Measured on origin/main's register at the time of writing: 0 of 69
+    distinct owner strings hit either rule.
+
+    The CAVEAT is non-empty when the node half could not be evaluated -- the
+    node vocabulary is unreadable, the identity's declared home is not a node
+    the vocabulary knows, or the parse raised. The key then falls back to the
+    home key (the pre-#3313 behaviour), and the caveat is what stops that
+    fallback from being SILENT: callers turn it into an ask / a refusal.
+    """
+    declared = vocab.index.get(lineage._norm(identity))
+    home_raw = declared.node if declared else None
+    if not home_raw and not lineage.split_author(owner)[1]:
+        # No home and no parenthetical: nothing can name a node. Bare key.
+        return None, ""
+    nodes = _load_nodes()
+    if nodes is None:
+        return None, (
+            f"the node vocabulary is unavailable ({_NODES_ERROR}), so the gate "
+            f"cannot tell which node `{owner}` ({identity}) was signed from"
+        )
+    try:
+        home = _machine(nodes, home_raw) if home_raw else None
+        if home_raw and home is None:
+            return None, (
+                f"{identity}'s declared home node {home_raw!r} is not a machine "
+                f"in node-vocabulary.yaml, so whether `{owner}` is off-home "
+                "cannot be decided"
+            )
+        # PER TOKEN, not wearing(owner) once: wearing() keeps only the LAST
+        # node token it sees, so `(Knuckles, spark)` was spark and
+        # `(spark, Knuckles)` was home -- an order nobody chose meaning
+        # something. Each comma token is parsed by wearing() on its own.
+        base, paren = lineage.split_author(owner)
+        found, node_shaped, unknown_nodes = set(), [], []
+        for token in (t.strip() for t in paren.split(",")):
+            if not token:
+                continue
+            parsed = lineage.wearing(f"{base} ({token})", vocab)
+            machine = _machine(nodes, parsed.node)
+            if machine is not None:
+                found.add(machine)
+            elif parsed.node is not None and _node_entry(nodes, parsed.node) is None:
+                # wearing() resolved a node through ITS table that the gate's
+                # own index does not hold (the two can diverge: the
+                # PMOVES_NODE_VOCABULARY override feeds only this hook).
+                unknown_nodes.append(f"{token!r} -> {parsed.node!r}")
+            node_shaped.extend(t for t in parsed.unclassified
+                               if not _is_annotation(t))
+    except Exception as exc:  # noqa: BLE001 -- unparseable: say so, never guess
+        return None, (
+            f"parsing `{owner}`'s parenthetical raised {type(exc).__name__}: "
+            f"{exc}"
+        )
+    if unknown_nodes:
+        return None, (
+            f"`{owner}` names node(s) {', '.join(unknown_nodes)} that the "
+            "gate's node vocabulary does not know, so its session cannot be "
+            "keyed"
+        )
+    if len(found) > 1:
+        return None, (
+            f"`{owner}` names more than one node ({', '.join(sorted(found))}), "
+            "so which session signed it is ambiguous. Name exactly one node"
+        )
+    if not found and node_shaped:
+        return None, (
+            f"`{owner}` names no node the vocabulary knows but carries "
+            f"node-shaped token(s) {', '.join(repr(t) for t in node_shaped)}; "
+            "the gate cannot tell which session this is. Add your node token, "
+            "e.g. `(Knuckles, ...)`"
+        )
+    worn = next(iter(found), None)
+    return (worn if worn is not None and worn != home else None), ""
+
+
+# THE CONSTRUCTED-KEY NAMESPACE. An off-home owner key is
+# `<identity>` + NODE_KEY_SEP + `<node>`. The separator holds ONE backtick, and
+# every key component goes through _key_text(), which doubles any backtick --
+# so a constructed key has an ODD number of backticks and every other key
+# (raw owner, bare identity) an EVEN number. No raw owner string can therefore
+# equal a constructed key, whatever it is spelled as: `b850-claude @ spark`
+# written literally stays a raw key, not spark's session. In practice no row
+# can even deliver a backtick -- CLAIM_RE, RELEASE_RE, BATON_FROM_RE and the
+# co-owner item regex all capture [^`]+ -- the escaping covers callers that
+# hand canonical_owner() a string directly (register_append's CLI owner).
+NODE_KEY_SEP = "`@"
+
+
+def _key_text(text: str) -> str:
+    return text.replace("`", "``")
 
 
 def _load_folder():
@@ -273,30 +528,73 @@ def _load_folder():
         _FOLDER = None
         return _FOLDER
     vocab = module.load_vocabulary()
+    memo: dict = {}
 
-    def _fold(owner: str) -> str:
-        return module.canonical_identity(owner, vocab) or owner
+    def _fold(owner: str):
+        """(key, caveat) for `owner`. Memoised: the register is folded once
+        per row and most rows repeat a handful of owners."""
+        if owner in memo:
+            return memo[owner]
+        identity = module.canonical_identity(owner, vocab)
+        caveat = ""
+        if not identity:
+            key = _key_text(owner)
+        else:
+            node, caveat = _node_half(module, vocab, owner, identity)
+            key = _key_text(identity)
+            if node:
+                key += NODE_KEY_SEP + _key_text(node)
+        memo[owner] = (key, caveat)
+        return memo[owner]
 
     _FOLDER = _fold
     return _FOLDER
 
 
 def canonical_owner(owner: str) -> str:
-    """Fold an owner string to its canonical identity.
+    """Fold an owner string to its owner key: (canonical identity, node).
 
-    WHY: this hook compared owner strings with `==`, and one identity writes
-    several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus 4.7
-    1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
+    WHY THE FOLD: this hook compared owner strings with `==`, and one identity
+    writes several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus
+    4.7 1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
     spelling did not close a CLAIM opened under another, and a lane stayed
     open for a week (2026-08-25). The same equality also makes an identity
     collide with ITSELF as soon as its parenthetical changes.
+
+    WHY THE NODE (#3313): the fold went one step too far once an identity
+    could be WORN off its home node. node_identity.resolve_register_name()
+    signs such a session `<BASE> (<node>)` -- `B850-CLAUDE (spark)`, or a
+    declared node_relations token, `Z890-CLAUDE (Z890-mirror-on-5090)` --
+    precisely so two concurrent sessions of one identity on two machines do
+    not share an owner string. Folding identity alone merged them anyway: a
+    bare RELEASE on spark closed the lanes Knuckles still held, and a spark
+    CLAIM on a Knuckles branch read as a self-reclaim. So the key carries the
+    node too, and the node DEFAULTS TO HOME: every home spelling --
+    `(Knuckles)`, `(Knuckles, opus 4.7 1M)`, `(Opus 5)`, the bare base --
+    returns the bare canonical identity, exactly the key it returned before,
+    so the 2026-08-25 fold is intact. Only a parenthetical naming a declared
+    machine other than the home node yields a distinct key,
+    `<identity>`@<node>` (see NODE_KEY_SEP for why no raw owner can spell
+    it). See _node_half() for every case that stays home.
 
     FAIL-SAFE: with no vocabulary this returns the string unchanged, which
     is exactly the previous behaviour. A guard that cannot fold keys is no
     worse than it was; a guard that raises stops guarding.
     """
     fold = _load_folder()
-    return fold(owner) if fold else owner
+    return fold(owner)[0] if fold else owner
+
+
+def owner_caveat(owner: str) -> str:
+    """Why `owner`'s key could not be fully evaluated, or "".
+
+    Non-empty only when the identity vocabulary IS loaded (so the owner was
+    folded) but its node half was not decided -- see _node_half(). With no
+    identity vocabulary there is no caveat: owners are compared as exact
+    strings, which already keeps every node spelling apart.
+    """
+    fold = _load_folder()
+    return fold(owner)[1] if fold else ""
 
 
 def co_owners_in(text: str) -> set:
@@ -347,11 +645,362 @@ def _row_at(text: str, pos: int) -> str:
     return text[start:] if end == -1 else text[start:end]
 
 
+# --------------------------------------------------------------------------
+# WHO A RELEASE CLOSES -- per the accords
+#
+# The keystone docs govern this, and they say lanes are shared, not locked:
+#
+#   pmoves/docs/AGENTS/AGNOTE4482.md:1699: "This ledger is an awareness
+#     surface, not a claim registry".
+#   pmoves/docs/AGENTS/AGNOTE4482.md:1709-1713: "Shared lanes are the point.
+#     Multiple idents may sign the same lane or scope"; "Rows are reversible
+#     adsorptions ... nothing here is carved in stone." (Its "supersede your
+#     own rows" is about your OWN rows; the authority to close a shared row
+#     comes from "Shared lanes" plus KK:12, not from that phrase.)
+#   pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md:12: "One branch, one active owner
+#     at a time unless explicit overlay handoff is recorded". KK:13-16 says
+#     what recorded means for a cross-agent transition: a Graphiti trail
+#     entry, the claim/release update in the register, AND a PR comment.
+#
+# So a RELEASE closes the open rows of every PARTICIPANT of the lanes it names
+# (participants = owner U declared co-owners, computed per CLAIM below):
+#   * the signer's own rows (unchanged);
+#   * rows whose `co-owners:` declare the signer -- the signer worked that
+#     lane, and its release is a release of the shared lane;
+#   * rows of a holder the release NAMES with `baton-from: <holder>` -- the
+#     peer handoff when the holder is not running.
+# Closing a row someone else opened is a reversible adsorption: the release
+# row is the REGISTER part of the recorded handoff (who FILED it, under which
+# identity, on whose behalf) -- the trail entry and PR comment KK:13-16 also
+# asks for are not machine-checked here -- and the owner re-CLAIMing the lane
+# supersedes it. Nothing
+# here authenticates who typed a row -- a row proves only the identity it was
+# filed under. register-status shows every such close as "released by X on
+# behalf of Y" and whether Y has been heard from since; it shows, it does not
+# block.
+#
+# Until this change, pairing stayed on the signing owner alone. That rule came
+# in with the co-owners field (ad63bb8c5, #2858) as an uncited precaution and
+# cites no accord; the accords above never required it.
+#
+# A BARE release (no lane) keeps its legacy meaning exactly: it closes every
+# row the SIGNER owns, and nothing of anyone else's. A release that names no
+# lane cannot say which shared lane it means.
+#
+# A PEER CLOSE IS HELD TO THE BATON PATH'S GUARDS. The legacy RELEASE reader
+# matches `RELEASE <owner>` anywhere on a line and infers lanes from prose;
+# that reading is kept EXACTLY for the signer's own rows (monotonicity). A
+# close that reaches anyone else's row -- through `co-owners:` or
+# `baton-from:` -- needs an actual RELEASE row head (column 0, outside any
+# fence) signed by that identity, and only lanes DECLARED with `branch:`.
+#
+# WHO COUNTS AS THE CO-OWNER: identities are compared after the vocabulary
+# fold (canonical_owner), the same fold that decides whose OWN rows a release
+# closes. So a co-owner declaration matches every spelling in that fold: a row
+# declaring `CRUSH-GLM52 (Knuckles)` can be closed by any identity folding to
+# `crush` (identity_vocabulary.yaml merges CRUSH, CRUSH-GLM52 and
+# CRUSH-SPARK (KIMI) as one signer). Exact-string matching was not chosen: it
+# would make a co-owner stricter than an owner, and miss the parenthetical
+# variants the fold exists for. To narrow it, split the vocabulary entry.
+#
+# FAIL-CLOSED, NEVER FAIL-BROAD, for `baton-from:` rows. A row that declares
+# `baton-from:` and is malformed -- no holder in backticks, two holders, not a
+# real ledger RELEASE row, no declared lane -- closes NOTHING. It is never read
+# as an ordinary release: a lane-less ordinary RELEASE closes everything the
+# signer holds, and "the baton was malformed, so close all of MY lanes" is the
+# silent broadening this register has been bitten by. The refusal is recorded
+# as a BatonEvent with its reason, so it is not silent.
+# --------------------------------------------------------------------------
+
+# The marker is detected WITHOUT the identity vocabulary, on purpose. If
+# detection needed the vocabulary, a node without PyYAML would not see the
+# marker at all and would read the row as an ordinary RELEASE by the signer --
+# the exact fallback the paragraph above forbids.
+BATON_MARKER_RE = re.compile(r'\bbaton[-_ ]from\b\s*:', re.IGNORECASE)
+BATON_FROM_RE = re.compile(r'\bbaton[-_ ]from\b\s*:\s*`([^`]+)`', re.IGNORECASE)
+# A DECLARED lane: `branch:` WITH its colon. BRANCH_MARKER_RE makes the colon
+# optional because history wrote ``Branch `x` `` before the marker existed; a
+# baton row is a new row type with no such history, and the bare word "branch"
+# occurs in prose ("I am keeping branch `x`"). Same reasoning as the
+# `co-owners:` marker (identity_lineage.py:114): the noun alone never declares.
+DECLARED_LANE_RE = re.compile(r'(?<!`)\bbranch:\s*`([^`]+)`', re.IGNORECASE)
+# A LEDGER ROW HEAD: bullet at column 0, timestamp, kind, owner. Indented
+# bullets (a sub-bullet quoting an example inside another row) and anything in
+# a ``` fence are prose ABOUT rows, not rows. Measured on origin/main: 753 heads
+# at column 0, 2 indented, 36 fenced. Applied to baton rows only; the legacy
+# CLAIM/RELEASE reading is unchanged.
+_ROW_HEAD_RE = re.compile(
+    r'^[-*]\s+`([0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*)`\s+([A-Za-z][A-Za-z+-]*)\s+`([^`]+)`'
+)
+# Any row head, for "has this owner been heard from since" -- informational,
+# so it reads the register as loosely as the legacy reader does.
+_ANY_HEAD_RE = re.compile(
+    r'^\s*[-*]\s+`[0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*`\s+[A-Za-z][A-Za-z+-]*\s+`([^`]+)`'
+)
+
+
+class BatonEvent:
+    """What one `baton-from:` RELEASE did, or why it did nothing.
+
+    `closed` is the lanes actually closed on the holder's rows; `not_held` is
+    the declared lanes the holder held no open row on (a no-op for those lanes,
+    reported rather than swallowed). `problem` is set when the row was refused
+    outright and closed nothing.
+    """
+
+    __slots__ = ("lineno", "signer", "holder", "holder_key", "lanes",
+                 "closed", "not_held", "problem")
+
+    def __init__(self, lineno, signer, holder=""):
+        self.lineno = lineno
+        self.signer = signer
+        self.holder = holder
+        self.holder_key = ""
+        self.lanes = set()
+        self.closed = set()
+        self.not_held = set()
+        self.problem = ""
+
+    def as_dict(self) -> dict:
+        return {"line": self.lineno, "signer": self.signer, "holder": self.holder,
+                "lanes": sorted(self.lanes), "closed": sorted(self.closed),
+                "not_held": sorted(self.not_held), "problem": self.problem,
+                "warning": self.warning}
+
+    @property
+    def warning(self) -> str:
+        """One line for a human, or "" when the baton did exactly what it said."""
+        if self.problem:
+            return (f"line {self.lineno}: baton RELEASE by `{self.signer}` "
+                    f"closed NOTHING - {self.problem}")
+        if self.not_held:
+            lanes = ", ".join(f"`{x}`" for x in sorted(self.not_held))
+            return (f"line {self.lineno}: baton RELEASE by `{self.signer}` names "
+                    f"{lanes}, which `{self.holder}` holds no open row on - "
+                    "no-op for that lane")
+        return ""
+
+
+class PeerClose:
+    """One open row closed by a RELEASE filed under ANOTHER identity.
+
+    `via` is "baton-from" (the release named the owner) or "co-owner" (the
+    owner's row declared the signer). `heard_from` is True when the owner has
+    filed any row after the release -- the owner is back, and has seen it.
+    """
+
+    __slots__ = ("release_line", "signer", "owner_key", "owner", "claim_line",
+                 "lanes", "via", "heard_from")
+
+    def __init__(self, release_line, signer, owner_key, owner, claim_line,
+                 lanes, via):
+        self.release_line = release_line
+        self.signer = signer
+        self.owner_key = owner_key
+        self.owner = owner
+        self.claim_line = claim_line
+        self.lanes = set(lanes)
+        self.via = via
+        self.heard_from = False
+
+    def as_dict(self) -> dict:
+        return {"release_line": self.release_line, "released_by": self.signer,
+                "owner": self.owner, "claim_line": self.claim_line,
+                "lanes": sorted(self.lanes), "via": self.via,
+                "owner_heard_from_since": self.heard_from}
+
+    def __str__(self) -> str:
+        lanes = ", ".join(f"`{x}`" for x in sorted(self.lanes))
+        tail = ("" if self.heard_from
+                else f" (`{self.owner}` not heard from since)")
+        return (f"line {self.release_line}: {lanes} released by `{self.signer}` "
+                f"on behalf of owner `{self.owner}` (CLAIM line "
+                f"{self.claim_line}, via {self.via}){tail}")
+
+
+def _outside_code_spans(text: str, regex):
+    """Matches of `regex` whose START is not inside a Markdown code span.
+
+    A row that QUOTES the grammar -- ``baton-from: `X` `` in a double-backtick
+    example -- is a mention, not a declaration; this register describes its own
+    fields constantly. Uses the identity module's run-length span matcher when
+    it is available. Without it every match counts, which errs toward READING a
+    baton -- and a malformed baton closes nothing, so that error is a no-op,
+    never a broadening.
+    """
+    module = _load_lineage()
+    spans = module._code_spans(text) if module is not None else []
+    return [m for m in regex.finditer(text)
+            if not any(a <= m.start() < b for a, b in spans)]
+
+
+def baton_declared(line: str) -> bool:
+    """True when a row declares a `baton-from:` field (not merely quotes one)."""
+    return bool(_outside_code_spans(line, BATON_MARKER_RE))
+
+
+def parse_baton(line: str):
+    """(holder_as_written, problem) for a `baton-from:` row."""
+    holders = {m.group(1).strip() for m in _outside_code_spans(line, BATON_FROM_RE)}
+    holders.discard("")
+    if len(holders) > 1:
+        return "", ("names more than one `baton-from:` holder ("
+                    + ", ".join(sorted(holders)) + ")")
+    if not holders:
+        return "", "declares `baton-from:` but names no holder in backticks"
+    return holders.pop(), ""
+
+
+def declared_lanes(line: str) -> set:
+    """Lanes a `baton-from:` row DECLARES with `branch:` -- and nothing else.
+
+    NOT lanes_in(). That also infers every backticked branch-shaped token in
+    the prose, so a row reading "passing `feat/a`; I am KEEPING `fix/b`" would
+    close `fix/b` too (found in review of #3242). The legacy RELEASE reading
+    keeps lanes_in() for its history; a baton row is a new row type with none.
+    Several lanes means several `branch:` markers on the row. The holder value
+    is removed first so a branch-shaped holder string cannot become a lane.
+    """
+    line = BATON_FROM_RE.sub(" ", line)
+    return {m.group(1).strip()
+            for m in _outside_code_spans(line, DECLARED_LANE_RE)
+            if m.group(1).strip()}
+
+
+def real_row_heads(lines) -> list:
+    """Per line: the _ROW_HEAD_RE match if it is a real ledger row, else None.
+
+    Real = a head at column 0 and outside a ``` fence. One pass, so the cost is
+    paid once per register read rather than once per baton.
+    """
+    heads, fenced = [], False
+    for line in lines:
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            heads.append(None)
+            continue
+        heads.append(None if fenced else _ROW_HEAD_RE.match(line))
+    return heads
+
+
+def _close_participant_rows(open_claims, lineno, signer, signer_key, lanes,
+                            holder_key, peer_closes, peer_lanes=None):
+    """Close every open row on `lanes` that this release may close.
+
+    A row is closed when it is the signer's own, when its participants include
+    the signer (co-owners), or when its owner is the `baton-from:` holder.
+    `lanes` applies to the signer's OWN rows; `peer_lanes` (default: `lanes`)
+    to everyone else's, so the legacy reader can keep its own-row reading while
+    a peer close is held to declared lanes on a real row head.
+    Returns the lanes closed on the holder's rows (empty when no holder).
+    """
+    if peer_lanes is None:
+        peer_lanes = lanes
+    holder_closed = set()
+    for owner_key in list(open_claims):
+        kept = []
+        for ln, row_lanes, raw, participants in open_claims[owner_key]:
+            hit = row_lanes & (lanes if owner_key == signer_key else peer_lanes)
+            if owner_key == signer_key:
+                via = ""
+            elif holder_key and owner_key == holder_key:
+                via = "baton-from"
+            elif signer_key in participants:
+                via = "co-owner"
+            else:
+                hit = set()
+            if hit:
+                if owner_key == holder_key:
+                    holder_closed |= hit
+                if via:
+                    peer_closes.append(PeerClose(lineno, signer, owner_key,
+                                                 raw, ln, hit, via))
+            rest = row_lanes - hit
+            if owner_key == signer_key:
+                # The signer's own rows exactly as before this change: a row
+                # left with no lane is dropped -- INCLUDING an unkeyed claim
+                # that named no lane at all, which any named release by its
+                # owner has always closed.
+                if rest:
+                    kept.append((ln, rest, raw, participants))
+            elif rest or not hit:
+                kept.append((ln, rest if hit else row_lanes, raw, participants))
+        if kept:
+            open_claims[owner_key] = kept
+        else:
+            open_claims.pop(owner_key, None)
+    return holder_closed
+
+
+def _apply_baton(open_claims, lineno, line, heads, peer_closes):
+    """A `baton-from:` RELEASE. Returns a BatonEvent; closes nothing if malformed."""
+    head = heads[lineno - 1]
+    signer = head.group(3) if head else (RELEASE_RE.search(line) or [None, ""])[1]
+    holder, problem = parse_baton(line)
+    event = BatonEvent(lineno, signer, holder=holder)
+    event.lanes = declared_lanes(line)
+    if head is None or head.group(2).upper() != "RELEASE":
+        # A REVIEW row whose prose reads `RELEASE X ... baton-from:`, a headless
+        # continuation line, a fenced or nested example: none is a release
+        # filed by X.
+        problem = ("is not a ledger RELEASE row (a baton must be its own "
+                   "RELEASE row: bullet at column 0, timestamp, outside any "
+                   "fence)")
+    if not problem and not event.lanes:
+        problem = ("declares no lane. A baton passes lanes NAMED with "
+                   "`branch:`; there is no bare baton that closes everything "
+                   "a peer holds")
+    if problem:
+        event.problem = problem
+        return event
+    event.holder_key = canonical_owner(holder)
+    held = set().union(*(r[1] for r in open_claims.get(event.holder_key, [])))
+    event.closed = _close_participant_rows(
+        open_claims, lineno, signer, canonical_owner(signer), event.lanes,
+        event.holder_key, peer_closes)
+    event.not_held = event.lanes - held
+    return event
+
+
+def _mark_heard_from(lines, peer_closes) -> None:
+    """Set PeerClose.heard_from: has the owner filed any row after the release?"""
+    if not peer_closes:
+        return
+    last = {}
+    for lineno, line in enumerate(lines, start=1):
+        m = _ANY_HEAD_RE.match(line)
+        if m:
+            last[canonical_owner(m.group(1))] = lineno
+    for pc in peer_closes:
+        pc.heard_from = last.get(pc.owner_key, 0) > pc.release_line
+
+
 def open_claims_in(text: str) -> dict:
     """Map canonical owner -> LIST of (line, lanes, as-written, participants).
 
-    A LIST, not a single tuple. Keying one claim per owner silently forgot
-    every lane but the newest: two open claims by one identity collapsed to
+    The open-lane part of `_pair_register()`, the register's ONE pairing
+    implementation. `register_status`, `register_append` and this hook all read
+    lane state through here, so there is no second pairing to drift from it.
+    """
+    return _pair_register(text)[0]
+
+
+def baton_events_in(text: str) -> list:
+    """Every `baton-from:` RELEASE in the register, as BatonEvents, in file order."""
+    return _pair_register(text)[1]
+
+
+def peer_closes_in(text: str) -> list:
+    """Every open row a RELEASE closed on behalf of ANOTHER owner, in file order."""
+    return _pair_register(text)[2]
+
+
+def _pair_register(text: str):
+    """(open claims, baton events, peer closes). THE pairing; every reader uses it.
+
+    Open claims map canonical owner -> LIST of (line, lanes, as-written,
+    participants). A LIST, not a single tuple. Keying one claim per owner
+    silently forgot every lane but the newest: two open claims by one identity collapsed to
     one, and a later release dropped the survivor too -- so a lane another
     node genuinely held stopped colliding. That was true before
     canonicalisation for two claims under the SAME spelling, and folding
@@ -376,7 +1025,11 @@ def open_claims_in(text: str) -> dict:
     only speaks when it is blocking someone.
     """
     open_claims = {}
-    for lineno, line in enumerate(text.split("\n"), start=1):
+    batons = []
+    peer_closes = []
+    lines = text.split("\n")
+    heads = None  # computed on the first RELEASE row; read-only after that
+    for lineno, line in enumerate(lines, start=1):
         if is_inert_row(line):
             # A NOTE records a fact. It opens nothing and closes nothing, and
             # this skip is what makes that true of its PROSE as well as its
@@ -394,33 +1047,56 @@ def open_claims_in(text: str) -> dict:
             )
             continue
         m = RELEASE_RE.search(line)
+        if m and baton_declared(line):
+            # A `baton-from:` row closes the NAMED holder's rows on the
+            # DECLARED lanes (plus every other participant row on them), and
+            # a malformed one closes nothing -- never an ordinary release.
+            if heads is None:
+                heads = real_row_heads(lines)
+            batons.append(_apply_baton(open_claims, lineno, line, heads,
+                                       peer_closes))
+            continue
         if m:
-            # Pairing stays on the SIGNING owner, deliberately. A co-owner is
-            # declared as having worked the lane, not as having authority to
-            # close someone else's claim -- letting a co-worker's RELEASE close
-            # the primary's lane would make the field a way to release work you
-            # do not own. Attribution and authority are different powers.
+            # Pairing is on PARTICIPANTS of the named lane, per the accords
+            # (AGNOTE4482.md:1709-1713 "Shared lanes are the point ... Rows
+            # are reversible adsorptions"; KRISS_KROSS_ACCORD.md:12 "unless
+            # explicit overlay handoff is recorded" -- the release row is the
+            # register part of that record). It used to stay on the signing
+            # owner alone, a rule introduced with the co-owners field
+            # (ad63bb8c5, #2858) that cites no accord. See WHO A RELEASE
+            # CLOSES above.
             owner = canonical_owner(m.group(1))
             released = lanes_in(line)
+            # The PEER half is held to the baton path's guards: an actual
+            # RELEASE row head (column 0, outside fences) signed by the
+            # identity RELEASE_RE matched, and lanes DECLARED with `branch:`.
+            # Without them a REVIEW row quoting `RELEASE <co-owner>`, an
+            # indented example, or prose naming a lane the release is not
+            # about would close another owner's row (delta review of #3242,
+            # P2-1). The signer's OWN rows keep the legacy reading exactly.
+            if heads is None:
+                heads = real_row_heads(lines)
+            head = heads[lineno - 1]
+            peer_lanes = (declared_lanes(line)
+                          if head is not None
+                          and head.group(2).upper() == "RELEASE"
+                          and canonical_owner(head.group(3)) == owner
+                          else set())
             if not released:
                 # A BARE release closes everything that owner holds. 99 of
                 # the register's 120 RELEASE lines name no branch, so this
                 # is the convention, not a guess -- a bare release is a
-                # full handoff.
+                # full handoff. It names no lane, so it reaches no one
+                # else's shared row.
                 open_claims.pop(owner, None)
             else:
-                # A release that NAMES lanes closes only those. Anything
-                # else the owner still holds stays held.
-                kept = [
-                    (ln, lanes - released, raw, participants)
-                    for ln, lanes, raw, participants in open_claims.get(owner, [])
-                    if lanes - released
-                ]
-                if kept:
-                    open_claims[owner] = kept
-                else:
-                    open_claims.pop(owner, None)
-    return open_claims
+                # A release that NAMES lanes closes those lanes on the
+                # signer's own rows and on every row that declares the
+                # signer a co-owner. Anything else stays held.
+                _close_participant_rows(open_claims, lineno, m.group(1), owner,
+                                        released, "", peer_closes, peer_lanes)
+    _mark_heard_from(lines, peer_closes)
+    return open_claims, batons, peer_closes
 
 
 # --------------------------------------------------------------------------
@@ -617,8 +1293,17 @@ _SANCTIONED_TOOL_REAL = frozenset(
     os.path.realpath(str(_SANCTIONED_TOOL_DIR / n)) for n in _SANCTIONED_TOOL_NAMES
 )
 _SANCTIONED_MAKE_DIR_REAL = os.path.realpath(str(REPO_ROOT_GUESS / "pmoves"))
+# `sync` ADDED 2026-09-28, DELIBERATELY, operator-requested (fix/register-sync-road).
+# It is the one sanctioned road that REMOVES lines -- and only lines the target
+# ref already carries (byte-identical, or re-filed with a `first filed at <ts>`
+# marker by the same owner on the same lane); every other line is kept
+# byte-exact, and the tool refuses anything but a pure append over HEAD. Without
+# it a `main` checkout holding uncommitted rows could never fast-forward: this
+# hook refuses `git checkout`, interpreters and compound commands on the
+# register, and every other register-* target only appends. The same `-C` /
+# `-f` directory checks below apply to it unchanged.
 _SANCTIONED_MAKE_TARGET_RE = re.compile(
-    r"^register-(claim|release|note|docs|amend|status)$")
+    r"^register-(claim|release|note|docs|amend|status|sync)$")
 # `-c`/`-e`/`-m`/`--command` anywhere alongside the tool means an interpreter
 # was asked to run something OTHER than the file named, so the file named stops
 # being evidence of what runs.
@@ -1625,7 +2310,7 @@ class ClaimVerdict:
     """
 
     __slots__ = ("collisions", "shared", "one_sided", "unkeyed",
-                 "unreadable_co_owners")
+                 "unreadable_co_owners", "node_unmeasured")
 
     def __init__(self):
         self.collisions = []   # nobody declared anything: block
@@ -1633,10 +2318,14 @@ class ClaimVerdict:
         self.one_sided = []    # only this row declared it: ask
         self.unkeyed = []      # no branch named: not checkable
         self.unreadable_co_owners = False
+        # (owner, reason): a CLAIM/RELEASE owner whose node half was not
+        # decided, so its key fell back to the home key. Ask; never allow.
+        self.node_unmeasured = []
 
     def __bool__(self):
         return bool(self.collisions or self.shared or self.one_sided
-                    or self.unkeyed or self.unreadable_co_owners)
+                    or self.unkeyed or self.unreadable_co_owners
+                    or self.node_unmeasured)
 
 
 def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
@@ -1671,6 +2360,29 @@ def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
     """
     verdict = ClaimVerdict()
     payload_lanes = lanes_in(proposed)
+    # THE NODE HALF, for every CLAIM and RELEASE owner in the proposed write.
+    # A RELEASE is included because a RELEASE is what CLOSES lanes: an owner
+    # whose key fell back to home would close the home session's lanes, which
+    # is the #3313 defect itself.
+    # Every NAME such a row carries is folded through the same key, so each is
+    # checked: the signer, a `baton-from:` holder (whose lanes a baton closes)
+    # and `co-owners:` names (who may close the row) -- re-review P3-2.
+    seen = set()
+    lineage = _load_lineage()
+    for rx in (CLAIM_RE, RELEASE_RE):
+        for m in rx.finditer(proposed):
+            row = _row_at(proposed, m.start())
+            if is_inert_row(row):
+                continue
+            names = [m.group(1)]
+            names += [b.group(1) for b in BATON_FROM_RE.finditer(row)]
+            if lineage is not None:
+                names += [n for n, _note in lineage.co_owners_in(row)]
+            for name in names:
+                caveat = owner_caveat(name)
+                if caveat and name not in seen:
+                    seen.add(name)
+                    verdict.node_unmeasured.append((name, caveat))
     for m in CLAIM_RE.finditer(proposed):
         row = _row_at(proposed, m.start())
         if is_inert_row(row):
@@ -1844,27 +2556,62 @@ def _build_asks(verdict: ClaimVerdict):
     return asks
 
 
-def _emit_ask(asks) -> None:
+NODE_ASKS_SHOWN = 10
+
+
+def _build_node_asks(verdict: ClaimVerdict):
+    """One line per owner, capped: a Write tool's `content` is the WHOLE
+    register, so in a degraded run every historical owner is listed."""
+    asks = []
+    for owner, why in verdict.node_unmeasured[:NODE_ASKS_SHOWN]:
+        sys.stderr.write(f"claim-collision-pre: NOT MEASURED - {why}.\n")
+        asks.append(f"  - `{owner}`: {why}.")
+    hidden = len(verdict.node_unmeasured) - NODE_ASKS_SHOWN
+    if hidden > 0:
+        asks.append(f"  - ... and {hidden} more owner(s) for the same reason.")
+    return asks
+
+
+def _emit_ask(asks, node_asks=()) -> None:
+    lines = []
+    if asks:
+        lines += [
+            "This CLAIM does not collide only because of something "
+            "written in the edit itself. Nobody on the other side has "
+            "said so:",
+            "",
+            *asks,
+            "",
+            "A one-sided declaration is attribution, not a handoff, and "
+            "this hook cannot tell the two apart from here. If you have "
+            "coordinated -- or the incumbent is offline and you are "
+            "picking the lane up -- proceed. If you have not, coordinate "
+            "first or pick a different branch. Asking rather than "
+            "refusing is deliberate: the register is a shared ledger, "
+            "not a lock, and more than one node on a lane is often the "
+            "village working.",
+        ]
+    if node_asks:
+        if lines:
+            lines.append("")
+        lines += [
+            "NOT MEASURED - which NODE these owners signed from could not be "
+            "decided, so the gate compared them as their identity's HOME "
+            "session:",
+            "",
+            *node_asks,
+            "",
+            "That fallback is the key under which one machine's RELEASE "
+            "closed another machine's lanes (#3313). Proceed only if this "
+            "session IS the home session, or if no other node's session of "
+            "this identity holds the lanes involved. To fix the cause, "
+            "repair the vocabulary named above.",
+        ]
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "ask",
-            "permissionDecisionReason": "\n".join([
-                "This CLAIM does not collide only because of something "
-                "written in the edit itself. Nobody on the other side has "
-                "said so:",
-                "",
-                *asks,
-                "",
-                "A one-sided declaration is attribution, not a handoff, and "
-                "this hook cannot tell the two apart from here. If you have "
-                "coordinated -- or the incumbent is offline and you are "
-                "picking the lane up -- proceed. If you have not, coordinate "
-                "first or pick a different branch. Asking rather than "
-                "refusing is deliberate: the register is a shared ledger, "
-                "not a lock, and more than one node on a lane is often the "
-                "village working.",
-            ]),
+            "permissionDecisionReason": "\n".join(lines),
         }
     }))
 
@@ -1888,8 +2635,9 @@ def _apply_verdict(verdict: ClaimVerdict) -> None:
     # contradictory answers in one response.
     _report_unkeyed(verdict.unkeyed)
     asks = _build_asks(verdict)
-    if asks:
-        _emit_ask(asks)
+    node_asks = _build_node_asks(verdict)
+    if asks or node_asks:
+        _emit_ask(asks, node_asks)
 
 
 def _gate_shell_write(payload: dict) -> None:
@@ -1988,7 +2736,9 @@ def main() -> None:
     # Proposed-text source differs across tools.
     proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
     proposed = proposed or ""
-    if not CLAIM_RE.search(proposed):
+    # RELEASE too, not only CLAIM: a RELEASE is what closes lanes, and its
+    # owner's node half has to be decided before it closes the right ones.
+    if not (CLAIM_RE.search(proposed) or RELEASE_RE.search(proposed)):
         sys.exit(0)
 
     register = Path(file_path)

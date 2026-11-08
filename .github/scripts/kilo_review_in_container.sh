@@ -13,7 +13,12 @@
 #   KILO_EXCLUDE_MODELS           space-separated ids already tried this run
 #                                 (set by the fallback tier; skipped here)
 #   KILO_IGNORE_OVERRIDE          non-empty -> fallback tier: ignore the
-#                                 override, walk the preference list
+#                                 override, walk the preference list, and skip
+#                                 every id whose PROVIDER was already tried. A
+#                                 provider is one key and one quota, so an
+#                                 auth, quota or outage failure takes all of
+#                                 its ids down together; the fallback must
+#                                 reach a different one (#3246 review).
 #
 # Exit codes: 0 = review written to stdout (validity is judged by the
 # caller); anything else = failure. Tier STATUS is NOT an exit code (kilo's
@@ -22,11 +27,24 @@
 # copies into its meta file:
 #   catalog-empty  could-not-measure: the catalog query returned 0 ids
 #   no-candidate   fallback tier only: every catalog-valid preference was
-#                  already tried
+#                  already tried, or shares a provider with one that was
 #
-# Ids are CLI ids: `<provider>/<gateway-id>`, i.e. `kilo/z-ai/glm-5.2`. A
-# prefix-less override that exists as `kilo/<id>` is repaired with a warning
-# (the missing prefix is how this lane died twice, #3080).
+# Ids are CLI ids: `<provider>/<model>`. Three kinds of provider are active:
+#   zai-coding-plan/<m>      the operator's GLM Coding Plan, called direct on
+#                            Z_AI_API_KEY against api.z.ai.
+#   minimax-coding-plan/<m>  the operator's MiniMax Token Plan, called direct
+#                            on MINIMAX_TOKEN_PLAN_API_KEY against
+#                            api.minimax.io.
+#                            Both are built-in Kilo providers from the
+#                            models.dev catalog, active only when their key is
+#                            set, and neither bills Kilo credits.
+#   kilo/<gateway-id>        the Kilo Gateway on KILOCODE_API_KEY: billed in
+#                            Kilo credits unless the account has a BYOK key
+#                            for that model's provider at app.kilo.ai.
+# The plan providers need no Kilo credits, which is why they lead the default
+# preference list (the lane died on 'Add credits to continue', run
+# 36489607039). A prefix-less override that exists as `kilo/<id>` is repaired
+# with a warning (the missing prefix is how this lane died twice, #3080).
 set -euo pipefail
 set -f  # preference list is word-split on purpose; never glob-expanded
 
@@ -40,21 +58,42 @@ npm install -g "@kilocode/cli@${KILO_CLI_VERSION}" >/dev/null 2>&1
 mkdir -p ~/.config/kilo && cd ~/.config/kilo
 npm init -y >/dev/null 2>&1
 npm install --no-audit --no-fund "@kilocode/plugin@${KILO_CLI_VERSION}" >/dev/null 2>&1
-kilo models kilo 2>/dev/null | grep -E '^kilo/' | sort -u > "$CATALOG" || true
+# `env` names the variable each plan provider reads its key from; it is a
+# name, not a value, so no key is ever written to this file. Written BEFORE
+# the catalog query so the plan providers are listed. A provider declared in
+# config is listed EVEN WITHOUT its key (measured with @kilocode/cli 7.6.2), so
+# a plan is declared only when its key is non-empty; otherwise its ids would
+# pass the catalog check and the tier would die on auth instead of moving on.
+plans=""
+[ -n "${Z_AI_API_KEY:-}" ] && plans='"zai-coding-plan": {"env": ["Z_AI_API_KEY"]}'
+if [ -n "${MINIMAX_TOKEN_PLAN_API_KEY:-}" ]; then
+  plans="${plans:+${plans}, }"'"minimax-coding-plan": {"env": ["MINIMAX_TOKEN_PLAN_API_KEY"]}'
+fi
+PROVIDERS="\"provider\": {${plans}}"
+printf '{%s}' "$PROVIDERS" > ~/.config/kilo/kilo.json
+# Only the providers this lane is configured for: any other built-in the CLI
+# happens to activate is not a reviewer we hold a key for.
+kilo models 2>/dev/null | grep -E '^(kilo|zai-coding-plan|minimax-coding-plan)/[^[:space:]]+$' | sort -u > "$CATALOG" || true
 n=$(wc -l < "$CATALOG")
 if [ "$n" -eq 0 ]; then
-  echo "::error::kilo model catalog query ('kilo models kilo') returned 0 ids - cannot validate any model (could-not-measure)" >&2
+  echo "::error::kilo model catalog query ('kilo models') returned 0 ids - cannot validate any model (could-not-measure)" >&2
   echo "KILO_TIER_STATUS=catalog-empty" >&2
   exit 1
 fi
-echo "::notice::kilo catalog: ${n} ids (kilo/*) from @kilocode/cli@${KILO_CLI_VERSION}" >&2
+echo "::notice::kilo catalog: ${n} ids from @kilocode/cli@${KILO_CLI_VERSION} (plan providers: $(grep -cE '^(zai|minimax)-coding-plan/' "$CATALOG" || true) ids)" >&2
 
 in_catalog() { grep -Fxq -- "$1" "$CATALOG"; }
 excluded() { case " ${KILO_EXCLUDE_MODELS:-} " in *" $1 "*) return 0 ;; esac; return 1; }
+provider_tried() {
+  local t
+  for t in ${KILO_EXCLUDE_MODELS:-}; do [ "${t%%/*}" = "${1%%/*}" ] && return 0; done
+  return 1
+}
 suggest() {
   echo "valid ids in the live catalog (sample):" >&2
   { for p in ${KILO_REVIEW_MODEL_PREFERENCES:-}; do in_catalog "$p" && echo "$p"; done
-    grep -E '^kilo/(z-ai|moonshotai|qwen|deepseek|minimax)/' "$CATALOG" | grep -v ':free$' | tail -n 8
+    grep -E '^(zai-coding-plan|minimax-coding-plan)/' "$CATALOG" | head -n 6
+    grep -E '^kilo/(z-ai|moonshotai|qwen|deepseek|minimax)/' "$CATALOG" | grep -v ':free$' | tail -n 6
   } | awk '!seen[$0]++' | head -n 12 | sed 's/^/  /' >&2 || true
 }
 
@@ -78,12 +117,16 @@ else
       echo "::notice::preferred model '${cand}' already tried this run; skipping" >&2
       continue
     fi
+    if [ -n "${KILO_IGNORE_OVERRIDE:-}" ] && provider_tried "$cand"; then
+      echo "::notice::preferred model '${cand}' shares provider '${cand%%/*}' (one key, one quota) with a model already tried this run; skipping" >&2
+      continue
+    fi
     if in_catalog "$cand"; then MODEL="$cand"; break; fi
     echo "::warning::preferred model '${cand}' is not in the live kilo catalog; trying next" >&2
   done
   if [ -z "$MODEL" ]; then
     if [ -n "${KILO_IGNORE_OVERRIDE:-}" ]; then
-      echo "::notice::no untried catalog-valid model left in KILO_REVIEW_MODEL_PREFERENCES (already tried: '${KILO_EXCLUDE_MODELS:-}')" >&2
+      echo "::notice::no catalog-valid model from an untried provider left in KILO_REVIEW_MODEL_PREFERENCES (already tried: '${KILO_EXCLUDE_MODELS:-}')" >&2
       echo "KILO_TIER_STATUS=no-candidate" >&2
       exit 1
     fi
@@ -95,6 +138,36 @@ else
 fi
 
 echo "KILO_RESOLVED_MODEL=${MODEL}" >&2
-printf '{"model": "%s"}' "${MODEL}" > ~/.config/kilo/kilo.json
+
+# What the review agent can reach. `kilo run --auto` approves every permission
+# that is not explicitly denied, and its prompt is untrusted PR text, so:
+#  - Keys come from 0600 files through {file:} (this global config is trusted
+#    config, where Kilo substitutes it) and are REMOVED from the agent's
+#    process environment below, so `env` or /proc/self/environ in any tool
+#    the agent could reach shows no key.
+#  - The ruleset leaves one tool, `read`, on the diff only. An explicit
+#    `bash: deny` is required: under --auto the `"*": "deny"` catch-all alone
+#    left bash usable.
+# Measured with @kilocode/cli 7.6.2 and a stub model that issued tool calls:
+# bash was withdrawn from the tool list; reads of /proc/self/environ, a key
+# file and this config were denied; the diff read succeeded; the provider
+# received the key from the file.
+# NOT closed: the keys still live in this container's PID 1 environment and
+# in the key files, so any future tool or permission regression that gives
+# the agent a shell or an unrestricted read reaches them again.
+keydir="$HOME/.config/kilo/keys"
+(umask 077 && mkdir -p "$keydir")
+run_providers=""
+add_provider() {  # <provider> <key value> <provider json body>
+  [ -n "$2" ] || return 0
+  (umask 077 && printf '%s' "$2" > "${keydir}/$1")
+  run_providers="${run_providers:+${run_providers}, }\"$1\": {$3\"options\": {\"apiKey\": \"{file:${keydir}/$1}\"}}"
+}
+add_provider zai-coding-plan "${Z_AI_API_KEY:-}" '"env": ["Z_AI_API_KEY"], '
+add_provider minimax-coding-plan "${MINIMAX_TOKEN_PLAN_API_KEY:-}" '"env": ["MINIMAX_TOKEN_PLAN_API_KEY"], '
+add_provider kilo "${KILO_API_KEY:-${KILOCODE_API_KEY:-}}" ''
+PERMISSION='"permission": {"*": "deny", "bash": "deny", "background_process": "deny", "edit": "deny", "webfetch": "deny", "websearch": "deny", "codesearch": "deny", "task": "deny", "skill": "deny", "read": {"*": "deny", "*review/kilo-review.diff": "allow"}, "external_directory": {"*": "deny", "*review/*": "allow"}}'
+printf '{"model": "%s", "provider": {%s}, %s}' "${MODEL}" "$run_providers" "$PERMISSION" > ~/.config/kilo/kilo.json
 cd /tmp
-kilo run --auto "$(cat "$REVIEW_PROMPT")"
+env -u Z_AI_API_KEY -u MINIMAX_TOKEN_PLAN_API_KEY -u KILOCODE_API_KEY -u KILO_API_KEY \
+  kilo run --auto "$(cat "$REVIEW_PROMPT")"

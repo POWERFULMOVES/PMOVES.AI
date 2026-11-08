@@ -92,6 +92,12 @@ def is_placeholder(value: str | None) -> bool:
         return True
     if lowered.startswith("placeholder_"):
         return True
+    # Pattern: <name>_here template text (CLICKHOUSE_PASSWORD_HERE). The exact
+    # list only knew surreal_*_here, so other templates rode the CI bundle into
+    # env.shared. Suffix + identifier-only: real secrets that contain "here"
+    # elsewhere, or base64 with "_here" in it, are not templates.
+    if lowered.endswith("_here") and re.fullmatch(r"[a-z0-9_]+", lowered):
+        return True
     # Example domain checks (URLs and emails)
     if lowered.endswith("@example.com") or lowered.endswith(".example.com"):
         return True

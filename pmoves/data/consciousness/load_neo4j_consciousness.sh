@@ -4,13 +4,23 @@
 
 set -euo pipefail
 
-NEO4J_PASSWORD="${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}"
-NEO4J_USER="neo4j"
+# Password by env only: unset or empty fails closed, and it reaches cypher-shell
+# through its NEO4J_USERNAME / NEO4J_PASSWORD env vars (docker exec -e NAME), never
+# argv. A committed fallback literal lived here until 2026-10; treat it as burned.
+if [ -z "${NEO4J_PASSWORD:-}" ]; then
+  echo "ERROR: NEO4J_PASSWORD is unset or empty; refusing to fall back to a default password" >&2
+  exit 1
+fi
+export NEO4J_PASSWORD
+export NEO4J_USERNAME="${NEO4J_USER:-neo4j}"
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+CONTAINER=$("${PYTHON_BIN:-python3}" "$ROOT/scripts/neo4j_container.py") || exit 3
+cypher() { docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$CONTAINER" cypher-shell "$@"; }
 
 echo "[PMOVES] Loading consciousness schema into Neo4j..."
 
 # Create constraints and indexes
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 CREATE CONSTRAINT consciousness_category_name IF NOT EXISTS FOR (c:ConsciousnessCategory) REQUIRE c.name IS UNIQUE;
 CREATE CONSTRAINT consciousness_theory_name IF NOT EXISTS FOR (t:ConsciousnessTheory) REQUIRE t.name IS UNIQUE;
 CREATE CONSTRAINT consciousness_proponent_name IF NOT EXISTS FOR (p:Proponent) REQUIRE p.name IS UNIQUE;
@@ -20,7 +30,7 @@ CREATE INDEX consciousness_theory_category IF NOT EXISTS FOR (t:ConsciousnessThe
 echo "[PMOVES] Constraints created, loading root node..."
 
 # Create root node
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 MERGE (root:ConsciousnessRoot {name: 'Landscape of Consciousness'})
 SET root.description = 'Robert Lawrence Kuhn\\'s taxonomy of 325 consciousness theories',
     root.source = 'Progress in Biophysics and Molecular Biology (2024)',
@@ -30,7 +40,7 @@ SET root.description = 'Robert Lawrence Kuhn\\'s taxonomy of 325 consciousness t
 echo "[PMOVES] Root node created, loading categories..."
 
 # Create the 10 main categories (simplified)
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 MERGE (mat:ConsciousnessCategory {name: 'Materialism Theories'})
 SET mat.id = 'materialism', mat.description = 'Theories holding that consciousness arises from physical brain processes', mat.order = 1;
 MERGE (dual:ConsciousnessCategory {name: 'Dualisms'})
@@ -56,7 +66,7 @@ SET chal.id = 'challenge', chal.description = 'Theories challenging standard ass
 echo "[PMOVES] Categories created, linking to root..."
 
 # Link categories to root
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 MATCH (root:ConsciousnessRoot {name: 'Landscape of Consciousness'})
 MATCH (c:ConsciousnessCategory)
 MERGE (root)-[:HAS_CATEGORY]->(c);
@@ -65,21 +75,21 @@ MERGE (root)-[:HAS_CATEGORY]->(c);
 echo "[PMOVES] Categories created, linking to root..."
 
 # Link categories to root
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 MATCH (root:ConsciousnessRoot {name: 'Landscape of Consciousness'})
 MATCH (c:ConsciousnessCategory)
 MERGE (root)-[:HAS_CATEGORY]->(c);
 " 2>&1
 
 echo "[PMOVES] Adding Entity constraint for graph_match..."
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE;
 " 2>&1
 
 echo "[PMOVES] Creating sample theory Entity nodes..."
 
 # Create sample theory Entity nodes with Entity label for graph_match
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 // Materialism Theories
 MERGE (t1:ConsciousnessTheory:Entity {id: 'theory-identity-theory', name: 'Identity Theory'})
 SET t1.category = 'Materialism Theories', t1.description = 'Mental states are identical to brain states', t1.type = 'theory';
@@ -110,7 +120,7 @@ SET t9.category = 'Quantum Theories', t9.description = 'Penrose-Hameroff orchest
 " 2>&1
 
 echo "[PMOVES] Creating proponent Entity nodes..."
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 // Proponents as Entity nodes
 MERGE (p1:Proponent:Entity {id: 'proponent-david-chalmers', name: 'David Chalmers'})
 SET p1.type = 'proponent', p1.affiliation = 'NYU';
@@ -129,7 +139,7 @@ SET p7.type = 'proponent', p7.affiliation = 'Allen Institute';
 " 2>&1
 
 echo "[PMOVES] Linking theories to proponents..."
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 // Link theories to proponents
 MATCH (t:ConsciousnessTheory {name: 'Property Dualism'})
 MATCH (p:Proponent {name: 'David Chalmers'})
@@ -157,12 +167,12 @@ MERGE (p2)-[:PROPOSED]->(t);
 " 2>&1
 
 echo "[PMOVES] Verifying Entity nodes..."
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 MATCH (e:Entity) RETURN count(e) as entity_count;
 " 2>&1
 
 echo "[PMOVES] Verifying load..."
-docker exec pmoves-neo4j-1 cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "
+cypher "
 MATCH (c:ConsciousnessCategory) RETURN c.name, c.id ORDER BY c.order;
 " 2>&1
 

@@ -81,9 +81,9 @@ DEFAULT_SUBJECTS = ["agent.graphiti.signed.v1"]  # raw signature.v1 subject, NOT
 # Host default -- this daemon is designed to run on the host (see module docstring),
 # and the Docker-internal hostname `nats` only resolves inside the compose network
 # (fails opaquely from a host shell). Containers running this inside the compose
-# network must pass NATS_URL=nats://nats:pmoves@nats:4222 explicitly (5090-CLAUDE
+# network must pass NATS_URL=nats://nats:4222 explicitly (5090-CLAUDE
 # pair-review PR #2048, finding #6).
-DEFAULT_NATS_URL = "nats://nats:pmoves@127.0.0.1:4222"
+DEFAULT_NATS_URL = "nats://127.0.0.1:4222"
 FALLBACK_INTENT = "narrate"  # kokoro CPU floor -- always available without GPU
 DEFAULT_KOKORO_URL = "http://localhost:8004"  # standalone Kokoro CPU-floor deploy unit (#2024)
 # Baseline tempo reference (BPM "moderato"/phrase level per shift-from-bpm skill).

@@ -200,6 +200,10 @@ launchers-manifest: ## Print the launcher inventory (registry-driven)
 launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
 	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
 
+.PHONY: launcher-self-check
+launcher-self-check: ## Run the launcher auth-sanitize guard test (deploy/provision tests are not wired into CI)
+	@bash ../deploy/provision/tests/test-launcher-auth-sanitize.sh
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
@@ -236,12 +240,15 @@ include mk/preflight.mk
 include mk/infra.mk
 include mk/worktree.mk
 include mk/build-gate.mk
+include mk/image-staleness.mk
+include mk/node-registry.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
 include mk/amd-rdna4.mk
 include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
+include mk/neo4j-tailnet.mk
 include mk/a2ui-deploy.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk
@@ -253,6 +260,7 @@ include mk/kilo.mk
 include mk/voice.mk
 include mk/kong.mk
 include mk/review.mk
+include mk/mike.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -458,13 +466,23 @@ register-release: export REGISTER_BRANCH = $(BRANCH)
 register-release: export REGISTER_SCOPE = $(SCOPE)
 register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
+# THE BATON. Lanes are shared, not locked (AGNOTE4482.md:1709-1713): a RELEASE
+# closes the named lane for every PARTICIPANT -- the signer's own rows, rows
+# whose co-owners: declare the signer, and, with BATON_FROM=, the rows of the
+# peer who holds it when that peer is not running. The release row is the
+# REGISTER part of the recorded handoff (KRISS_KROSS_ACCORD.md:12-16 also asks
+# for a Graphiti trail entry and a PR comment), and the holder re-claiming
+# supersedes it. A malformed baton closes NOTHING -- never your own lanes.
+#   make -C pmoves register-release OWNER='<you>' BRANCH=fix/x \
+#        BATON_FROM='<holder>' SCOPE='what landed, and why you are carrying it'
+register-release: export REGISTER_BATON_FROM = $(BATON_FROM)
 # BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
 # this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
 # full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
 # tool refuses an untargeted release with a message naming both doors -- which
 # survives `make` collapsing every nonzero recipe exit to 2, because the message
 # is the structured part, not the code.
-register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes)
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM=<holder> to close a PEER's lane)
 	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
 		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \
@@ -518,6 +536,39 @@ register-docs: ## Insert prose into the register without touching ledger rows (A
 		exit 2; \
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py docs $(ARGS)
+
+.PHONY: register-sync
+# THE RECOVERY ROAD. A checkout whose register carries uncommitted appended rows
+# cannot fast-forward, and the collision gate (correctly) refuses every shell
+# route that could drop a row -- while every other register-* road only
+# appends. So a stuck checkout had no sanctioned way out (measured 2026-09-28:
+# the root checkout, 21 behind main, 8 uncommitted rows). This drops ONLY rows
+# the target ref already carries (byte-identical, or re-filed with a
+# `first filed at <ts>` marker by the same owner on the same lane) and keeps
+# every other line byte-exact. DRY RUN unless APPLY=1. Never fetches.
+#
+#   make -C pmoves register-sync                      # classify, write nothing
+#   make -C pmoves register-sync APPLY=1              # drop, re-append KEEP
+#   make -C pmoves register-sync HOLD=1 APPLY=1       # drop, HOLD KEEP in a sidecar
+#   git pull --ff-only --no-recurse-submodules
+#   make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1
+#
+# Every value travels by ENVIRONMENT, for the reason spelled out above
+# register-claim: nothing here ever becomes a shell word.
+# APPLY and HOLD are honoured ONLY from the command line: make imports the
+# ambient environment as variables, so an `APPLY=1` exported in some shell
+# would otherwise silently turn every dry run into a write. REPO is pinned
+# BLANK: the tool targets its own checkout, and an ambient REGISTER_SYNC_REPO
+# would redirect it to another checkout's register in a command that never
+# names that register (so no hook could see it). `ARGS=--repo=...` stays
+# possible and is visible in the command text.
+register-sync: export REGISTER_SYNC_APPLY = $(if $(filter command line,$(origin APPLY)),$(APPLY),)
+register-sync: export REGISTER_SYNC_HOLD = $(if $(filter command line,$(origin HOLD)),$(HOLD),)
+register-sync: export REGISTER_SYNC_REPO =
+register-sync: export REGISTER_SYNC_REAPPLY = $(REAPPLY)
+register-sync: export REGISTER_SYNC_REF = $(REF)
+register-sync: ## Drop uncommitted register rows main already has, keep the rest ([APPLY=1] [HOLD=1] [REAPPLY=sidecar] [REF=origin/main]) -- 0 done / 3 refused
+	@$(REGISTER_PYTHON) tools/register_append.py sync $(ARGS)
 
 .PHONY: register-status
 # THE SANCTIONED READ PATH. #2879 closed the shell write-hole correctly and left
@@ -1423,6 +1474,7 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, MCPs
 	@$(MAKE) --no-print-directory auth-bootstrap
 	@$(MAKE) --no-print-directory mcp-toolkit-bootstrap || true
 	@$(MAKE) --no-print-directory mcp-config-bootstrap
+	@$(MAKE) --no-print-directory a0-model-sync
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@echo ""
 	@echo "✅ First-run complete!"
@@ -1543,6 +1595,7 @@ first-run-multi-host: ## Guided first-run with multi-host mesh setup
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory up-agents-ui
 	@$(MAKE) --no-print-directory auth-bootstrap
+	@$(MAKE) --no-print-directory a0-model-sync
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@$(MAKE) --no-print-directory registry-sync
 	@echo ""
@@ -1569,11 +1622,72 @@ reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreat
 	@echo "✅ Data tier reset with current env.tier-data credentials"
 
 .PHONY: up-minio
+# Pre-check (read-only): the minio image is a LOCAL source build that no registry
+# serves (see minio-build-src below). Resolve the image the way compose will, via
+# `config --images` (shell MINIO_IMAGE > --env-file > compose default), and if it is
+# the local -src build but not present, stop with the fix instead of letting compose
+# attempt a pull that can only fail. A registry MINIO_IMAGE override is never blocked.
+# COUPLING: the check compares against MINIO_SRC_TAG, which must equal the compose
+# MINIO_IMAGE default. If they drift, the check WARNs and skips instead of guarding.
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
+	@img=$$($(DC) config --images minio 2>/dev/null | head -n1); \
+	 if [ -z "$$img" ]; then \
+	   echo "WARN: could not resolve the minio image via 'docker compose config'; image pre-check SKIPPED" >&2; \
+	 elif [ "$$img" = "$(MINIO_SRC_TAG)" ]; then \
+	   if ! docker image inspect "$$img" >/dev/null 2>&1; then \
+	     echo "ERROR: minio image $$img is not present on this node. It is built locally, not pulled:" >&2; \
+	     echo "         make -C pmoves minio-build-src" >&2; \
+	     echo "       or, if upstream is still cached here (docker image inspect minio/minio:$(MINIO_SRC_RELEASE)):" >&2; \
+	     echo "         MINIO_IMAGE=minio/minio:$(MINIO_SRC_RELEASE) make -C pmoves up-minio" >&2; \
+	     exit 1; \
+	   fi; \
+	 else \
+	   case "$$img" in *-src) echo "WARN: minio resolves to $$img but MINIO_SRC_TAG=$(MINIO_SRC_TAG); the two have drifted, image pre-check SKIPPED" >&2;; esac; \
+	 fi
 	@$(DC) up -d --force-recreate minio presign
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
 	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
+
+# MinIO RELEASE.2025-09-07T16-13-09Z built from source. Every published copy of
+# this release is gone (docker.io 401 / quay.io 401 / ghcr.io 403 / dl.min.io 410),
+# so the image is rebuilt from the archived GitHub tag — the EXACT release the
+# data in pmoves_minio-data was written by. See docker/minio-src/README.md.
+# Interim only: Garage is the planned substrate (JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+#
+# The tag lives in OUR registry namespace (ghcr.io/powerfulmoves) even though it is
+# built locally: an unbuilt node that falls through to a pull then fails closed
+# against our own org, instead of pulling whatever a third party publishes under
+# an unowned docker.io namespace.
+#
+# COUPLING: this value MUST equal the MINIO_IMAGE default of the `minio` service in
+# docker-compose.yml (and the generated docker-compose.core.yml). Change them together.
+MINIO_SRC_TAG ?= ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src
+MINIO_SRC_RELEASE := RELEASE.2025-09-07T16-13-09Z
+# The Go build of minio peaks at several GB; refuse to start below this much
+# MemAvailable rather than push a node into OOM mid-build.
+# LIMITS: the gate reads /proc/meminfo, so it only works on a Linux host
+# (macOS/Windows get a WARN and no gate). It measures the HOST, not the builder VM,
+# and BuildKit runs the minio and mc stages IN PARALLEL, so peak use is
+# roughly both Go builds at once.
+MINIO_BUILD_MIN_MEM_MB ?= 6144
+
+.PHONY: minio-build-src
+minio-build-src: ## Build MinIO RELEASE.2025-09-07T16-13-09Z (+ mc) from source -> $(MINIO_SRC_TAG)
+	@min="$(MINIO_BUILD_MIN_MEM_MB)"; \
+	 avail=$$(awk '/^MemAvailable:/{print int($$2/1024)}' /proc/meminfo 2>/dev/null); \
+	 case "$$min" in ''|*[!0-9]*) echo "WARN: MINIO_BUILD_MIN_MEM_MB='$$min' is not a number; memory gate SKIPPED" >&2; min="";; esac; \
+	 case "$$avail" in ''|*[!0-9]*) echo "WARN: MemAvailable not measurable (no Linux /proc/meminfo); memory gate SKIPPED" >&2; avail="";; esac; \
+	 if [ -n "$$min" ] && [ -n "$$avail" ] && [ "$$avail" -lt "$$min" ]; then \
+	   echo "ERROR: MemAvailable $${avail}MB < MINIO_BUILD_MIN_MEM_MB=$${min}MB; free memory or override" >&2; exit 1; \
+	 fi
+	docker build -t "$(MINIO_SRC_TAG)" -f docker/minio-src/Dockerfile docker/minio-src
+	@echo "→ smoke: minio --version reports $(MINIO_SRC_RELEASE)"
+	@docker run --rm "$(MINIO_SRC_TAG)" --version | tee /dev/stderr | grep -qF "minio version $(MINIO_SRC_RELEASE)" \
+	  || { echo "ERROR: $(MINIO_SRC_TAG) does not report $(MINIO_SRC_RELEASE)" >&2; exit 1; }
+	@echo "→ smoke: mc and curl present (brand-defaults/backup use mc; the healthcheck uses curl)"
+	@docker run --rm --entrypoint mc "$(MINIO_SRC_TAG)" --version | head -1
+	@docker run --rm --entrypoint curl "$(MINIO_SRC_TAG)" --version | head -1
 
 .PHONY: up-bus
 up-bus: ## Start message bus (NATS)
@@ -1610,14 +1724,15 @@ nats-streams-init: ## Idempotently create JetStream streams via the nats-init si
 	@bash scripts/nats/init_streams.sh
 	@echo "✅ NATS stream init complete"
 
-nats-streams-validate: ## Assert the 8 expected streams exist (CI-runnable)
+nats-streams-validate: ## Assert the expected streams exist with the expected subjects + retention (CI-runnable)
 	@echo "🔍 Validating NATS JetStream streams..."
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
-	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
-	    -c "nats -s \"$$NATS_URL\" stream ls -n" > /tmp/nats_streams_actual.txt 2>&1
-	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.txt
-	@rm -f /tmp/nats_streams_actual.txt
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" -e NATS_URL="$$NATS_URL" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c 'for name in $$(nats -s "$$NATS_URL" stream ls -n); do nats -s "$$NATS_URL" stream info "$$name" -j; done' \
+	    > /tmp/nats_streams_actual.json
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.json
+	@rm -f /tmp/nats_streams_actual.json
 
 nats-streams-list: ## List current JetStream streams (ad-hoc)
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
@@ -1788,7 +1903,14 @@ archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZ
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@# The gateway goes up on its own first. pmoves-ollama reserves an NVIDIA
+	@# device, so on an AMD node (Knuckles/B850: runc only) it fails with
+	@# 'could not select device driver "nvidia"' -- and bundled into one `up`
+	@# that error aborted the gateway too, leaving it Created but never started
+	@# (measured 2026-10-01). The gateway's host.docker.internal routes,
+	@# including the embedding model, do not need the container.
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	@$(DC) --profile tensorzero up -d pmoves-ollama || echo "⚠️ pmoves-ollama did not start (no NVIDIA runtime on this node?). Routes to http://pmoves-ollama:11434 will fail; host.docker.internal routes are unaffected (see deploy/provision/ollama-docker-bridge.sh)." >&2
 	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
@@ -2096,7 +2218,9 @@ wait-obs: ## Wait for observability to be ready
 wait-data: ## Wait for data tier to be ready
 	@echo "⏳ Waiting for data tier..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || true
+	@# Neo4j publishes no host port (internal-only behind the neo4j-tailnet forwarder), so
+	@# localhost:7474 never answers: wait on the container's own healthcheck instead.
+	@n=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) && timeout 60 bash -c "until [ \"\$$(docker inspect -f '{{.State.Health.Status}}' $$n 2>/dev/null)\" = healthy ]; do sleep 2; done" || true
 	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || true
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || true
 	@echo "✅ Data tier ready"
@@ -2182,10 +2306,10 @@ yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 
 .PHONY: gpu-rerank-evidence
 gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmoves/docs/logs/
-	@mkdir -p pmoves/docs/logs
+	@mkdir -p docs/logs
 	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
 	  echo "→ Strict GPU rerank smoke (this will fail if rerank not enabled/model missing)"; \
-	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
+	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
 	  echo "Wrote pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt"
 
 .PHONY: evidence-auto
@@ -2226,7 +2350,7 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
-# Native Archon 0.6.0: TS/SQLite-native, runs from its OWN compose + own env file.
+# Native Archon (TypeScript since upstream 0.6.0; release-tracked below): TS/SQLite-native, runs from its OWN compose + own env file.
 # 0.6.0 upstream rewrote Python -> TypeScript and does NOT use Supabase — it uses
 # SQLite by default (~/.archon), or its own Postgres via Archon's `--profile
 # with-db`. The server self-allocates port 3090 and IGNORES the compose PORT (PORT
@@ -2241,25 +2365,144 @@ ARCHON_NATIVE_DC := PORT=$(ARCHON_NATIVE_PORT) docker compose \
 	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
 
 .PHONY: up-archon-native down-archon-native archon-native-health
-up-archon-native: ## Build+start native Archon 0.6.0 (TS/SQLite) standalone on :3090
+up-archon-native: ## Build+start standalone native Archon (TS/SQLite, its own compose) on :3090
 	@test -f "$(ARCHON_NATIVE_DIR)/.env" || { echo "ERROR: Archon env file missing. Seed it first: cp $(ARCHON_NATIVE_DIR)/.env.example $(ARCHON_NATIVE_DIR)/.env"; exit 1; }
 	@$(ARCHON_NATIVE_DC) up --build -d app
-	@echo "✔ Archon 0.6.0 native starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
+	@echo "✔ Archon native (standalone) starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
 
 down-archon-native: ## Stop native Archon stack
 	@$(ARCHON_NATIVE_DC) down
 
-archon-native-health: ## Check native Archon 0.6.0 health (:3090)
-	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health && echo " ✔ archon 0.6.0 healthy" || (echo "✗ archon unhealthy" && exit 1)
+archon-native-health: ## Check native (TS) Archon health on :3090 — asserts the JSON status, not just HTTP 200
+	@# The SPA catch-all answers 200 for unknown paths, so a status-only probe is
+	@# a check that cannot fail. Assert the JSON status word, same as compose.
+	@curl -fsS http://localhost:$(ARCHON_NATIVE_PORT)/api/health | grep -qE '"status"[[:space:]]*:[[:space:]]*"(healthy|ok|ready|up)"' \
+		&& echo " ✔ archon healthy" || (echo "✗ archon unhealthy" && exit 1)
+
+# -------- Release tracking: Archon + Agent Zero follow UPSTREAM RELEASES --------
+# No hand-bumped pins. tools/upstream_release_track.py resolves the newest
+# upstream release (gh api .../releases/latest) and refuses (exit 1) unless the
+# fork's PMOVES.AI-Edition-Hardened branch already CONTAINS it -- a missing sync
+# is a finding, not something to paper over by building a stale tree.
+#
+# Channel: a node runs `<image>:current`. A freshly built release only becomes
+# :current after it boots and answers its health smoke in a throwaway container
+# (no network, no ports, no volumes). On failure :current stays on the previous
+# release and the target exits non-zero loudly. Currency without silent breakage.
+UPSTREAM_TRACK := $(PYTHON) $(CURDIR)/tools/upstream_release_track.py
+ARCHON_CHANNEL_TOOL := $(CURDIR)/tools/archon_release_channel.sh
+ARCHON_CHANNEL_REPO ?= ghcr.io/powerfulmoves/pmoves-archon
+ARCHON_CHANNEL ?= current
+ARCHON_SMOKE_TIMEOUT ?= 180
+export ARCHON_CHANNEL_REPO ARCHON_CHANNEL ARCHON_SMOKE_TIMEOUT
+# UNGATED builds never wear the channel tag. Compose's archon service carries
+# both `build:` and `image: ${ARCHON_IMAGE:-...:current}`, so any `--build` (or
+# `build`) of archon would otherwise tag the raw submodule tree as :current on
+# this node. Every target that BUILDS archon gets a target-specific EXPORT of
+# ARCHON_IMAGE (below); the recipe lines themselves stay byte-identical, so the
+# $(DC) shape (and the CIPHER_TOKEN_SHADOW_GUARD it starts with) is untouched.
+# The exported shell value outranks the --env-file value (compose precedence);
+# `override` also beats an ARCHON_IMAGE given on the make command line.
+ARCHON_LOCAL_BUILD_IMAGE ?= pmoves-archon:local-build
+ARCHON_BUILD_TARGETS := up-agents-stack archon-rebuild build-agents-integrations
+$(ARCHON_BUILD_TARGETS): export override ARCHON_IMAGE = $(ARCHON_LOCAL_BUILD_IMAGE)
+# Resolver exit codes: 1 = hardened fork lacks the release (sync it), 3 = could not measure.
+ARCHON_RESOLVE_OR_EXPLAIN = out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; printf '%s\n' "$$out"; \
+	if [ $$rc -eq 1 ]; then echo "✖ refusing: the hardened fork does not contain the latest upstream release (sync it first)"; \
+	else echo "✖ COULD-NOT-MEASURE: release resolution failed (rc=$$rc)"; fi; exit $$rc; }; eval "$$out"
+
+.PHONY: archon-release-resolve archon-build-latest archon-promote-current archon-release-latest
+archon-release-resolve: ## Print the newest upstream Archon release and whether the hardened fork contains it (exit 1 = sync needed, 3 = could not measure)
+	@$(UPSTREAM_TRACK) archon
+
+archon-build-latest: ## Resolve once, then build Archon from the exact hardened fork sha that contains the release; tags <version>-pmoves.<sha8>
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	FORK="$$FORK" FORK_SHA="$$FORK_SHA" RELEASE_TAG="$$RELEASE_TAG" RELEASE_SHA="$$RELEASE_SHA" RELEASE_VERSION="$$RELEASE_VERSION" \
+		$(ARCHON_CHANNEL_TOOL) build
+
+# Values (IMAGE, FORK_SHA, RELEASE_TAG, RELEASE_VERSION) are read from the
+# environment by the tool -- command-line make variables are exported -- and
+# never spliced into recipe text.
+archon-promote-current: ## Gate IMAGE into :current (needs IMAGE FORK_SHA RELEASE_TAG RELEASE_VERSION; refuses mismatched labels; SQLite smoke only -- Postgres migrations NOT covered)
+	@$(ARCHON_CHANNEL_TOOL) promote
+
+archon-release-latest: ## Resolve ONCE → build that sha → gate → promote :current (SQLite smoke only; Postgres migrations NOT covered)
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	export FORK FORK_SHA RELEASE_TAG RELEASE_SHA RELEASE_VERSION; \
+	$(ARCHON_CHANNEL_TOOL) build; \
+	IMAGE="$(ARCHON_CHANNEL_REPO):$$RELEASE_VERSION-pmoves.$$FORK_SHA8" $(ARCHON_CHANNEL_TOOL) promote
+
+# Agent Zero: the resolver side is here. The build side cannot be made
+# release-exact from the Makefile: services/agent-zero/Dockerfile clones a NAMED
+# BRANCH (AGENT_ZERO_REF) and nothing asserts the clone's commit. Closing that
+# needs AGENT_ZERO_SHA as a build arg plus a `git rev-parse HEAD` assertion after
+# the clone -- a Dockerfile edit, road KNOWN_ROAD=dockerfile:<reason>. Until
+# then a0-release-resolve reports what a build WOULD get; it cannot prove it.
+.PHONY: a0-release-resolve
+a0-release-resolve: ## Print the newest upstream Agent Zero release and whether the hardened fork contains it (exit 1 = sync needed)
+	@$(UPSTREAM_TRACK) agent-zero
+
+# Scoped bring-up of the in-compose Archon (TS) + Agent Zero from PREBUILT local
+# images. --no-deps: the depends_on closure otherwise recreates archon-postgres
+# and creates nats-init, tensorzero-gateway and tensorzero-clickhouse (measured
+# on B850 2026-09-28). --no-build/--pull never: use exactly the image already on
+# the node (ARCHON_IMAGE, e.g. the gated :current; agent-zero has no image key,
+# so it is the compose default pmoves-agent-zero:latest).
+# SERVICES narrows it (e.g. SERVICES=archon). DRY_RUN=1 prints the plan.
+A0_ARCHON_SERVICES ?= archon agent-zero
+A0_ARCHON_ALLOWED := archon agent-zero
+# Raw text via $(value): a command-line SERVICES='$(shell ...)' must not expand.
+A0_ARCHON_PICK := $(strip $(or $(value SERVICES),$(A0_ARCHON_SERVICES)))
+A0_ARCHON_BAD := $(filter-out $(A0_ARCHON_ALLOWED),$(A0_ARCHON_PICK))
+A0_ARCHON_DRY := $(filter-out 0 false no off,$(strip $(value DRY_RUN)))
+# Recursive (=), not :=, because DC is (re)defined further down this file.
+A0_ARCHON_UP = $(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never
+# archon ALWAYS gets --force-recreate --renew-anon-volumes. Measured on B850
+# 2026-09-28: recreating the retired Python archon container as the native TS
+# image crash-looped, because compose carried the old container's NAMED volume
+# (pmoves_archon-user-home) over the tmpfs docker-compose.yml now declares at
+# /home/appuser (archon service, `- type: tmpfs` / `target: /home/appuser`,
+# ~line 3911). -V + --force-recreate made HostConfig.Mounts show the tmpfs again
+# and the service came up healthy. agent-zero is recreated separately WITHOUT
+# -V: its state lives in bind mounts and nothing measured calls for renewal.
+# Consequence (open, not solved here): /home/appuser is an EMPTY tmpfs on every
+# start, so gh and any Claude/gh credentials the old volume carried are absent.
+#
+# Preflight (gated vs ungated): before recreating archon, the image compose
+# resolves is checked by `archon_release_channel.sh verify-current`. A :current
+# tag WITHOUT the pmoves.upstream.release label is an ungated build wearing the
+# channel name -> refused (tool exit 3; make reports 2).
+#
+# WHICH ROAD:
+#   make archon-follow          ONLINE: pull the gated GHCR :current, verify, recreate.
+#                               This is how a node follows new releases.
+#   make up-a0-archon-scoped    OFFLINE: --pull never; recreate from whatever is
+#                               already local (still label-verified). Also the
+#                               road for a pinned rollback: ARCHON_IMAGE=<repo>:<ver>-pmoves.<sha8>
+.PHONY: up-a0-archon-scoped
+up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan; archon gets --force-recreate -V)
+	$(if $(A0_ARCHON_BAD),$(error up-a0-archon-scoped: SERVICES may only name: $(A0_ARCHON_ALLOWED) (refused: $(A0_ARCHON_BAD))))
+	@set -e; case " $(A0_ARCHON_PICK) " in *" archon "*) \
+		img=$$($(DC) --profile agents config --images archon 2>/dev/null | head -n 1); \
+		if [ -z "$$img" ]; then echo "✖ COULD-NOT-MEASURE: compose did not resolve the archon image"; exit 3; fi; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"; \
+		$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon;; \
+	esac
+	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
+
+.PHONY: archon-follow
+archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, then recreate archon (use this to follow releases)
+	@set -e; img="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"; \
+		docker pull "$$img"; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"
+	@$(MAKE) --no-print-directory up-a0-archon-scoped SERVICES=archon ARCHON_IMAGE="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
 load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
-	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
-	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
-	@echo ""
-	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b): data/consciousness/neo4j-consciousness-schema.cypher"
+	$(call neo4j_apply_cypher,$(CURDIR)/data/consciousness/neo4j-consciousness-schema.cypher)
 	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
@@ -2681,9 +2924,22 @@ STACK_FILES ?= \
 AMD_OVERLAY := -f docker-compose.amd.yml
 WHISPER_NODE_OVERLAY ?=
 
+# Agent sessions export CIPHER_API_TOKEN as their OWN per-agent bearer
+# (cipher_<uuid>, bound by the launcher). Compose interpolation takes the shell
+# over --env-file, so any `up` from such a session baked that bearer into
+# cipher-api as the deployment-wide bootstrap token (every env-file bootstrap
+# caller then got 401; auth.ts never treats a cipher_ value as bootstrap, so
+# the bootstrap path is simply dead) and into Agent Zero's cipher MCP header
+# (A0 then acts as that agent). Measured on Knuckles 2026-09-26. A cipher_
+# value is never a valid bootstrap token, so drop it for compose only and let
+# the env files answer; any other exported value is an operator override and
+# is left alone. Only emitted when that shape is exported, so DC stays
+# shell-agnostic everywhere else.
+CIPHER_TOKEN_SHADOW_GUARD := $(if $(filter cipher_%,$(CIPHER_API_TOKEN)),env -u CIPHER_API_TOKEN)
+
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
-DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
+DC := $(CIPHER_TOKEN_SHADOW_GUARD) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
 MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
@@ -2774,7 +3030,7 @@ smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict 
 smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemma 3n)
 	@echo "=== New Model Providers Smoke Test ==="
 	@echo "1) NVIDIA NIM health:"
-	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null 2>&1 \
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8206}/v1/health/ready >/dev/null 2>&1 \
 	  && echo "   NIM: ready" \
 	  || echo "   NIM: not available (skipped)"
 	@echo "2) TensorZero model catalog:"
@@ -3029,7 +3285,7 @@ notebook-logs: ## Follow logs for the Open Notebook service
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
-	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; exec $(PYTHON) scripts/open_notebook_seed.py'
+	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; . scripts/pm-ca-bundle.sh && pm_ca_bundle_normalize; exec $(PYTHON) scripts/open_notebook_seed.py'
 
 .PHONY: notebook-workbench-smoke
 notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
@@ -3808,14 +4064,15 @@ ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
-# Bring up agents stack (NATS, Agent Zero, Mesh Agent) and publisher-discord.
-# NOTE: `archon` is intentionally omitted here — the in-compose `archon` service is
-# the pre-0.6.0 Python wrapper (imports server.main), which the 0.6.0 TS rewrite
-# broke (crash-loops). Archon 0.6.0 runs standalone via `make up-archon-native`
-# (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
-# the tracked "#5 Archon integration" follow-up.
+# Bring up the agents stack: NATS, Agent Zero, Archon (TS, upstream 0.x) + its
+# dedicated archon-postgres, mesh-agent, deepresearch, publisher-discord, cipher-api.
+# The in-compose `archon` service has been the first-class TS Archon since #2259
+# (the Python wrapper is retired, #2943); `up-archon-native` is the separate
+# standalone (SQLite, own compose) path. `--build` here rebuilds archon from
+# whatever is on disk in ../PMOVES-Archon; to run the gated upstream release
+# instead, use archon-release-latest + up-a0-archon-scoped.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon (TS) + its Postgres, Cipher Memory, etc.)
 	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
@@ -4077,6 +4334,28 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	echo "→ $$file"; \
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
+# Registry (not compose env) owns the Agent Zero model-config surface.
+# Per-node deployment pass-through: INSTANCE stamps header/manifest and picks
+# the instance's usr-dir var; OUT relocates output (default follows that var
+# like compose does). INSTANCE/OUT are generic names, so they are honoured ONLY
+# from the make command line: a stray exported OUT/INSTANCE in the invoking
+# shell must not relocate presets. The namespaced A0_MODEL_SYNC_INSTANCE /
+# A0_MODEL_SYNC_OUT may come from the environment. Empty INSTANCE= -> docked.
+A0_MODEL_SYNC_INSTANCE ?=
+A0_MODEL_SYNC_OUT ?=
+A0_SYNC_INSTANCE = $(or $(if $(filter command line,$(origin INSTANCE)),$(INSTANCE)),$(A0_MODEL_SYNC_INSTANCE),docked)
+A0_SYNC_OUT = $(or $(if $(filter command line,$(origin OUT)),$(OUT)),$(A0_MODEL_SYNC_OUT))
+
+.PHONY: a0-model-sync
+a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
+
+# Variant 3 of the ownership plan: drift control. Clean rooms stay quiet;
+# drifted rooms exit 1 so fleet sweepers can score them.
+.PHONY: a0-model-sync-check
+a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (writes nothing; exit 0 clean, 1 drift, 2 undecided)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
+
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
 	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/api/health || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
@@ -4197,16 +4476,9 @@ buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
 	@docker buildx inspect --bootstrap >/dev/null
 	@echo "✔ buildx builder ready: $(BUILDX_BUILDER)"
 
-docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env credentials
-	@$(LOAD_ENV_SHARED); \
-	user="$${GHCR_USERNAME:-$${GITHUB_ACTOR:-$$(gh api user -q .login 2>/dev/null || true)}}"; \
-	token="$${GHCR_TOKEN:-$${GH_PAT_PUBLISH:-$${GITHUB_TOKEN:-$$(gh auth token 2>/dev/null || true)}}}"; \
-	if [ -z "$$token" ] && [ -n "$${GHCR_TOKEN_FILE:-}" ] && [ -f "$${GHCR_TOKEN_FILE}" ]; then token="$$(cat "$${GHCR_TOKEN_FILE}")"; fi; \
-	if [ -z "$$user" ] || [ -z "$$token" ]; then \
-	  echo "✖ Missing GHCR credentials. Set GHCR_USERNAME and GHCR_TOKEN (or GH_PAT_PUBLISH)."; \
-	  exit 1; \
-	fi; \
-	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
+docker-login: ensure-env-shared ## Login to GHCR (read-only pulls: GHCR_READ_TOKEN_FILE=<0600 classic PAT> GHCR_USERNAME=<owner>; DRY_RUN=1 to validate)
+	@GHCR_READ_TOKEN_FILE="$(GHCR_READ_TOKEN_FILE)" GHCR_READ_USERNAME="$(GHCR_USERNAME)" DRY_RUN="$(DRY_RUN)" \
+	  bash scripts/ghcr_login.sh
 
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
 	@ctx=$$(pwd)/services; \
@@ -4852,23 +5124,23 @@ A2UI_RENDERER_RENDER_INPUT  ?= $(DOC)
 A2UI_RENDERER_RENDER_OUTPUT ?= $(A2UI_RENDERER_RENDER_DIR)/$(notdir $(basename $(DOC))).mp4
 a2ui-renderer-render: ## Render a single markdown doc as a living-doc MP4 via a2ui-renderer
 	@echo "Rendering $(A2UI_RENDERER_RENDER_INPUT) -> $(A2UI_RENDERER_RENDER_OUTPUT)..."
-	@mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
-	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	@cd $(CURDIR)/.. && mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
+	@cd $(CURDIR)/.. && uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
 	    --doc $(A2UI_RENDERER_RENDER_INPUT) \
 	    --output $(A2UI_RENDERER_RENDER_OUTPUT) \
 	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
 	    --token "$${A2UI_RENDERER_TOKEN}" \
 	    --format mp4
 
-# Render every entry in pmoves/config/living_docs_registry.yaml.
+# Render every entry in pmoves/configs/living_docs_registry.yaml.
 # Each entry: { id, source_doc, output_key, format, ttl_days }.
 # Outputs go to $${A2UI_RENDERER_RENDER_DIR}/<id>.<format> and are uploaded
 # to MinIO bucket $${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>.
 docs-render-living: ## Render all LIVING_DOCS_INDEX-registered docs through a2ui-renderer
-	@echo "Rendering living docs from pmoves/config/living_docs_registry.yaml..."
-	@mkdir -p $(A2UI_RENDERER_RENDER_DIR)
-	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
-	    --registry pmoves/config/living_docs_registry.yaml \
+	@echo "Rendering living docs from pmoves/configs/living_docs_registry.yaml..."
+	@cd $(CURDIR)/.. && mkdir -p $(A2UI_RENDERER_RENDER_DIR)
+	@cd $(CURDIR)/.. && uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --registry pmoves/configs/living_docs_registry.yaml \
 	    --output-dir $(A2UI_RENDERER_RENDER_DIR) \
 	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
 	    --token "$${A2UI_RENDERER_TOKEN}" \
@@ -5385,7 +5657,7 @@ chit-terminal-viz: ## Render CHIT visualization in terminal
 .PHONY: chit-mindmap-seed
 chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
 	@echo "→ Seeding Neo4j with CHIT mindmap..."
-	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	$(call neo4j_apply_cypher,$(CURDIR)/tools/chit_mindmap_seed.cypher)
 	@echo "✔ CHIT mindmap seeded"
 
 # =============================================================================
@@ -5429,6 +5701,10 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
 
+.PHONY: skills-parity
+skills-parity: ## Which harnesses see which skills (report; ARGS=--strict to gate, --json for machine output)
+	@$(PYTHON) tools/skills_parity.py $(ARGS)
+
 # Renamed from docs-render-living: it silently shadowed the Lane 2228
 # registry iterator (make keeps the LAST single-colon recipe) — same
 # duplicate-target class as the #2339 fix for juicefs-status et al.
@@ -5462,53 +5738,64 @@ github-app-test: ## Test GitHub App token minting (requires services running)
 	@echo "→ Testing GitHub App token minting..."
 	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
 
-# Neo4j Integration (PMOVES-Neo4j Submodule at root level)
+# Neo4j roads
 # =============================================================================
-.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+# These used to delegate to a Makefile inside the PMOVES-Neo4j submodule and read
+# its db/{migrations,seeds}. That submodule is the upstream neo4j/neo4j
+# source fork: it has no Makefile and no db/ on any branch, so every one of them
+# failed. They now drive the `neo4j` compose service and the Cypher files this
+# repo actually carries (pmoves/neo4j/cypher/). See docs/TAC/TAC_NEO4J.md.
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-bootstrap neo4j-status
 
-neo4j-up: ## Start Neo4j submodule stack
-	@echo "→ Starting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j up
+# Apply one Cypher file to the running Neo4j. The password reaches cypher-shell
+# through its NEO4J_PASSWORD env var (`docker exec -e NAME` copies it from this
+# shell), never argv. An unset password fails closed: there is no fallback to the
+# vendor default, which would either fail auth or, on a fresh store, succeed.
+define neo4j_apply_cypher
+	@$(LOAD_ENV_SHARED); set +e; \
+	f="$(1)"; \
+	[ -f "$$f" ] || { echo "ERROR: $$f not found" >&2; exit 1; }; \
+	[ -n "$${NEO4J_PASSWORD:-}" ] || { echo "ERROR: NEO4J_PASSWORD is unset or empty (env.shared via with-env.sh); refusing to fall back to a default password" >&2; exit 1; }; \
+	c=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	echo "→ Applying $$f to $$c"; \
+	NEO4J_USERNAME="$${NEO4J_USER:-neo4j}" docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$$c" cypher-shell < "$$f"
+endef
 
-neo4j-down: ## Stop Neo4j submodule stack
-	@echo "→ Stopping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j down
+# --no-recreate guarded neo4j-up until the compose reconciliation (#3251) landed.
+# Now a plain `up -d` is right: it recreates Neo4j only when its compose config
+# changed. On a node whose container predates #3251, the first run is that one
+# planned recreate (docs/TAC/TAC_NEO4J.md section 7: dump first). --wait returns
+# once the healthcheck passes.
+neo4j-up: ## Start Neo4j (recreates it once if its compose config changed; see TAC_NEO4J section 7)
+	@$(DC) up -d --wait neo4j
 
-neo4j-restart: ## Restart Neo4j submodule stack
-	@echo "→ Restarting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j restart
+neo4j-down: ## Stop Neo4j (container kept; data volume untouched)
+	@$(DC) stop neo4j
 
-neo4j-logs: ## View Neo4j logs
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j logs
+neo4j-restart: ## Restart Neo4j (60s graceful stop for the checkpoint)
+	@$(DC) restart neo4j
 
-neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+neo4j-logs: ## Follow Neo4j logs
+	@$(DC) logs -f --tail=200 neo4j
+
+neo4j-migrate: ## Apply one Cypher file from neo4j/cypher (usage: make neo4j-migrate VERSION=001)
 	@if [ -z "$(VERSION)" ]; then \
-		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo "Usage: make neo4j-migrate VERSION=001"; \
 		echo ""; \
-		echo "Available migrations:"; \
-		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
+		echo "Available migrations (neo4j/cypher):"; \
+		ls -1 $(CURDIR)/neo4j/cypher/*.cypher | while read -r f; do echo "  • $$(basename "$$f")"; done; \
 		exit 1; \
 	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j migrate VERSION=$(VERSION)
+	@n=$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher 2>/dev/null | wc -l); \
+	if [ "$$n" != 1 ]; then echo "ERROR: VERSION=$(VERSION) matches $$n files in neo4j/cypher (need exactly 1)" >&2; exit 1; fi
+	$(call neo4j_apply_cypher,$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher))
 
-neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
-	@if [ -z "$(SEED)" ]; then \
-		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
-		echo ""; \
-		echo "Available seeds:"; \
-		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
-
-neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+neo4j-bootstrap: ## Initialize Neo4j (constraints, alias seed CSV, CHIT geometry fixture + smoke)
 	@echo "→ Bootstrapping Neo4j..."
-	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
+	@$(LOAD_ENV_SHARED); set +e; bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
-neo4j-status: ## Check Neo4j status from submodule
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
+neo4j-status: ## Show the Neo4j container state and health
+	@$(DC) ps neo4j
 
 # Legacy compatibility
 .PHONY: neo4j-bootstrap-legacy
@@ -5542,12 +5829,13 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	backup_dir="backups"; \
 	mkdir -p "$$backup_dir"; \
-	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -z "$$container_name" ]; then \
-		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
-		$(MAKE) --no-print-directory neo4j-local-up; \
-		sleep 10; \
-		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if ! docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
+		echo "❌ Neo4j container '$$container_name' is not running; a backup does not start one."; \
+		echo "   (It used to: '$(DC) ps -q neo4j' cannot see an out-of-compose container, so the"; \
+		echo "   fallback started a SECOND Neo4j on the volume the running one held.)"; \
+		echo "   Start it deliberately: make -C pmoves up-data-tier DATA_SERVICES=neo4j"; \
+		exit 1; \
 	fi; \
 	if [ -n "$$container_name" ]; then \
 		if docker exec $$container_name neo4j-admin database dump \
@@ -5563,7 +5851,8 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \
@@ -5585,17 +5874,55 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 		echo "❌ Error: Backup file not found: $(BACKUP)"; \
 		exit 1; \
 	fi
+	@# Refuse while the container of that name is NOT compose-managed. The steps
+	@# below stop and remove only the COMPOSE service; an out-of-compose container
+	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
+	@# compose Neo4j is started beside it. Migrate it under compose first (the
+	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@# The label is read from STDOUT only: a CLI warning on stderr must never make
+	@# an unlabelled (stray) container look compose-managed.
+	@# Only an explicit "No such container" means absent. Any other inspect
+	@# failure (daemon down, permission, wrong context) is could-not-measure (3),
+	@# never "absent": treating an error as absent is how a guard waves through
+	@# exactly the case it exists to stop.
+	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	errf=$$(mktemp); \
+	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>"$$errf"); rc=$$?; \
+	err=$$(cat "$$errf"); unlink "$$errf"; \
+	if [ $$rc -ne 0 ]; then \
+		if printf '%s' "$$err" | grep -qi 'no such container'; then :; else \
+			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$err"; \
+			exit 3; \
+		fi; \
+	elif [ -z "$$label" ]; then \
+		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
+		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
+		exit 1; \
+	fi
 	@echo "→ Restoring Neo4j from $(BACKUP)..."
 	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
 	@$(MAKE) --no-print-directory neo4j-local-down
-	@docker volume rm pmoves_neo4j-data 2>/dev/null || true
+	@# Absent (an explicit "no such volume") is fine: nothing to clear. Present
+	@# but not removable fails CLOSED (1): this used to swallow the failure
+	@# (2>/dev/null || true) and go on to start and load over a volume another
+	@# Neo4j still held. Any OTHER inspect failure is could-not-measure (3), so an
+	@# error is never read as "absent" and the removal still refuses on every error.
+	@err=$$(docker volume inspect pmoves_neo4j-data 2>&1 >/dev/null); rc=$$?; \
+	if [ $$rc -eq 0 ]; then \
+		docker volume rm pmoves_neo4j-data || { echo "❌ could not remove pmoves_neo4j-data (still in use?): refusing to start and load over a volume another Neo4j may hold."; exit 1; }; \
+	elif printf '%s' "$$err" | grep -qi 'no such volume'; then \
+		echo "→ pmoves_neo4j-data absent; nothing to remove."; \
+	else \
+		echo "❌ could not determine whether pmoves_neo4j-data exists: $$err"; \
+		exit 3; \
+	fi
 	@echo "→ Starting fresh Neo4j..."
 	@$(MAKE) --no-print-directory neo4j-local-up
 	@sleep 15
-	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -n "$$container_name" ]; then \
+	@container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
 		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
 		docker exec $$container_name neo4j-admin database load \
 			--from=/backups/neo4j.dump \
@@ -5871,6 +6198,10 @@ CIPHER_MINT_DEFAULT_SCOPES := memory:read,memory:write,reasoning:read,reasoning:
 cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
 	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
+
+cipher-revoke-token: ## Retire an agent's cipher tokens (sets revoked_at; auth.ts already rejects them): AGENT=z890-claude [TOKEN_UUID=... DRY_RUN=1]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-revoke-token AGENT=z890-claude [TOKEN_UUID=<one> DRY_RUN=1]"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/revoke_cipher_token.py --agent "$(AGENT)" $(if $(TOKEN_UUID),--token-uuid "$(TOKEN_UUID)",) $(if $(DRY_RUN),--dry-run,)
 
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)

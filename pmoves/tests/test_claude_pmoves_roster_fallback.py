@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import find_bash  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER_REL = "deploy/provision/claude-pmoves.sh"
@@ -39,7 +40,7 @@ LAUNCHER = REPO_ROOT / LAUNCHER_REL
 NORMALIZER_REL = "pmoves/tools/mcp_roster_normalize.py"
 PM_PYTHON_REL = "pmoves/scripts/pm-python.sh"
 
-BASH = shutil.which("bash")
+BASH = find_bash()  # not shutil.which: that can return System32's WSL stub
 
 pytestmark = pytest.mark.skipif(BASH is None, reason="needs bash")
 

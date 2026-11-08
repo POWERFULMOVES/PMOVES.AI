@@ -8,6 +8,9 @@
   "alter": "b850-rdna4",
   "room_type": "builder",
   "owner_mode": "alter",
+  "access": {
+    "visibility": "private"
+  },
   "shell": {
     "theme": {
       "theme_id": "rdna4-studio",

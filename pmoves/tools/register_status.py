@@ -109,6 +109,10 @@ def _require_measurable(gate) -> None:
 
     The remedy is one line and it is printed, because a refusal with no route
     is the whole defect this lane exists to fix.
+
+    THE NODE HALF TOO (#3313). The owner key is (identity, node); with the
+    node vocabulary unreadable, an off-home owner folds onto the home session,
+    and the read fails open the same way. Refused for the same reason.
     """
     if gate._load_lineage() is None:
         sys.stderr.write(
@@ -120,6 +124,18 @@ def _require_measurable(gate) -> None:
             "  Remedy: `make -C pmoves register-status`, which picks an "
             "interpreter that has PyYAML, or `uv run --script "
             "pmoves/tools/register_status.py`.\n"
+        )
+        sys.exit(EXIT_UNMEASURED)
+    if gate._load_nodes() is None:
+        sys.stderr.write(
+            "register-status: NOT MEASURED - the node vocabulary could not be "
+            "loaded, so an owner signed off its home node (`B850-CLAUDE "
+            "(spark)`) folds onto the home session. A RELEASE by one machine's "
+            "session would then read as closing the other machine's lanes, and "
+            "a lane one of them holds could be reported free to the other. "
+            "Refusing to answer rather than answering wrongly.\n"
+            "  Remedy: check pmoves/configs/node-vocabulary.yaml parses "
+            "(`python3 pmoves/tools/node_identity.py`), then re-run.\n"
         )
         sys.exit(EXIT_UNMEASURED)
 
@@ -311,8 +327,11 @@ def report_listing(lanes, register, now, out) -> int:
     owners = {x.owner_key for x in lanes}
 
     out.write(f"claim register: {register}\n")
+    # Owner KEYS, not identities: since #3313 one identity signed from two
+    # nodes is two owner sessions (`b850-claude` and `b850-claude`@spark`).
     out.write(f"read at {_iso(now)} - {len(lanes)} open claim rows held by "
-              f"{len(owners)} {'identity' if len(owners) == 1 else 'identities'}\n\n")
+              f"{len(owners)} owner session{'' if len(owners) == 1 else 's'} "
+              "(identity + node)\n\n")
 
     if not lanes:
         out.write("OPEN LANES: none. Every CLAIM in this file has a later "
@@ -357,6 +376,41 @@ def report_listing(lanes, register, now, out) -> int:
     if expired:
         return EXIT_FINDINGS
     return EXIT_CLEAN
+
+
+def report_batons(events, out, code: int) -> int:
+    """Baton rows that did NOT do what they said: refused, or a no-op lane.
+
+    A malformed baton closes nothing by design, and that is only safe if it is
+    loud -- a filer who believes a peer's lane was passed would otherwise read
+    a still-open lane as somebody else's problem. A FINDING (exit 1), never
+    allowed to mask could-not-measure (exit 3).
+    """
+    warnings = [e.warning for e in events if e.warning]
+    if not warnings:
+        return code
+    out.write(f"\nBATON ROWS THAT DID NOT DO WHAT THEY SAID ({len(warnings)})\n")
+    for line in warnings:
+        out.write(f"  {line}\n")
+    return code if code == EXIT_UNMEASURED else EXIT_FINDINGS
+
+
+def report_peer_closes(peer_closes, out, everyone: bool) -> None:
+    """Rows a release closed on behalf of ANOTHER owner. Shown, never scored.
+
+    Per the accords a release closes a shared lane for every participant
+    (AGNOTE4482.md:1709-1713, KRISS_KROSS_ACCORD.md:12), and that is a
+    reversible adsorption: the owner re-claiming supersedes it. The honest
+    record is who released it, on whose behalf, and whether the owner has been
+    heard from since. In the listing, only owners NOT heard from are shown --
+    the ones who may not know; a BRANCH= probe shows every one on that lane.
+    """
+    shown = [pc for pc in peer_closes if everyone or not pc.heard_from]
+    if not shown:
+        return
+    out.write(f"\nCLOSED ON BEHALF OF A PEER ({len(shown)})\n")
+    for pc in shown:
+        out.write(f"  {pc}\n")
 
 
 def _matching(lanes, branch):
@@ -423,6 +477,11 @@ def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
 
     if verdict.collisions or verdict.one_sided:
         return EXIT_FINDINGS
+    node_unmeasured = getattr(verdict, "node_unmeasured", None) or []
+    for owner, why in node_unmeasured:
+        out.write(f"  NOT MEASURED - `{owner}`: {why}\n")
+    if node_unmeasured:
+        return EXIT_UNMEASURED
     if any(x.expiry.state == "unmeasured" for x in matching):
         return EXIT_UNMEASURED
     if stale:
@@ -432,13 +491,19 @@ def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
     return EXIT_CLEAN
 
 
-def _json_payload(lanes, register, now, branch, verdict, code):
+def _json_payload(lanes, register, now, branch, verdict, code, batons=(),
+                  peer_closes=()):
     payload = {
         "register": str(register),
         "read_at": _iso(now),
         "open_claims": [x.as_dict() for x in lanes],
         "counts": {
             "open": len(lanes),
+            # Distinct owner KEYS = (identity, node) sessions since #3313.
+            "owner_sessions": len({x.owner_key for x in lanes}),
+            # DEPRECATED alias, same value: it always counted owner keys, which
+            # were identities only until #3313. No in-repo reader found
+            # (grep 2026-10-08); kept so an out-of-repo consumer does not break.
             "identities": len({x.owner_key for x in lanes}),
             "expired": sum(1 for x in lanes if x.expiry.state == "expired"),
             "no_ttl": sum(1 for x in lanes if x.expiry.state == "none"),
@@ -446,6 +511,13 @@ def _json_payload(lanes, register, now, branch, verdict, code):
                                   if x.expiry.state == "unmeasured"),
         },
         "exit_code": code,
+        # Every baton row read (in BRANCH= mode, those aimed at that lane), with
+        # what it closed or why it closed nothing. Without this a consumer got
+        # exit 1 from a refused baton and nothing in the payload explaining it.
+        "batons": [e.as_dict() for e in batons],
+        # Rows closed by a release filed under ANOTHER identity -- shown, not
+        # scored (in BRANCH= mode, those on that lane).
+        "peer_closes": [pc.as_dict() for pc in peer_closes],
     }
     if branch:
         payload["branch"] = {
@@ -528,6 +600,8 @@ def main(argv=None) -> int:
         now = datetime.now(timezone.utc).replace(microsecond=0)
 
     lanes = collect(text, gate, append_mod, postdate_mod, now)
+    batons = gate.baton_events_in(text)
+    peer_closes = gate.peer_closes_in(text)
 
     # With --json the human report goes to stderr so stdout stays parseable.
     prose = sys.stderr if args.json else sys.stdout
@@ -538,12 +612,24 @@ def main(argv=None) -> int:
         verdict = probe_branch(text, args.branch, owner, gate, append_mod)
         code = report_branch(verdict, args.branch, bool(args.owner), lanes,
                              now, prose)
+        # Only batons aimed at THIS lane: a refused baton elsewhere is not a
+        # fact about whether this lane is free. And REPORTED, never scored:
+        # the lane's exit code is the gate's verdict on the lane. A baton that
+        # closed nothing leaves the holder's row open, which the verdict above
+        # already reports as HELD; a no-op baton on a FREE lane must not turn
+        # FREE into exit 1 (found in delta review of #3242).
+        batons = [e for e in batons if args.branch in e.lanes]
+        peer_closes = [pc for pc in peer_closes if args.branch in pc.lanes]
+        report_batons(batons, prose, code)
+        report_peer_closes(peer_closes, prose, everyone=True)
     else:
         code = report_listing(lanes, register, now, prose)
+        code = report_batons(batons, prose, code)
+        report_peer_closes(peer_closes, prose, everyone=False)
 
     if args.json:
         json.dump(_json_payload(lanes, register, now, args.branch, verdict,
-                                code), sys.stdout, indent=2)
+                                code, batons, peer_closes), sys.stdout, indent=2)
         sys.stdout.write("\n")
     return code
 

@@ -107,14 +107,14 @@ export function BulkApprovalActions({
   }
 
   return (
-    <div className="rounded-lg border-2 border-blue-500 bg-blue-50 p-4 mb-4">
+    <div data-testid="bulk-actions-bar" className="rounded-lg border-2 border-blue-500 bg-blue-50 p-4 mb-4">
       <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Selection Summary */}
         <div className="flex items-center gap-4">
-          <div className="text-sm font-medium text-blue-900">
+          <div data-testid="selected-count" className="text-sm font-medium text-blue-900">
             {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected
             {pendingSelected.length > 0 && pendingSelected.length < selectedIds.size && (
-              <span className="text-blue-700 font-normal">
+              <span data-testid="pending-count-message" className="text-blue-700 font-normal">
                 ({pendingSelected.length} can be approved)
               </span>
             )}
@@ -123,6 +123,7 @@ export function BulkApprovalActions({
           {/* Selection Controls */}
           <div className="flex items-center gap-2 text-xs">
             <button
+              data-testid="select-all-visible"
               onClick={handleSelectVisible}
               className="text-blue-700 hover:text-blue-900 underline"
               type="button"
@@ -130,6 +131,7 @@ export function BulkApprovalActions({
               Select All Visible
             </button>
             <button
+              data-testid="select-pending"
               onClick={handleSelectPending}
               className="text-blue-700 hover:text-blue-900 underline"
               type="button"
@@ -137,6 +139,7 @@ export function BulkApprovalActions({
               Select Pending
             </button>
             <button
+              data-testid="clear-selection"
               onClick={handleDeselectAll}
               className="text-red-600 hover:text-red-800 underline"
               type="button"
@@ -151,6 +154,7 @@ export function BulkApprovalActions({
           {pendingSelected.length > 0 && (
             <>
               <button
+                data-testid="bulk-approve-button"
                 onClick={() => setShowOptions(showOptions === true ? false : true)}
                 className={BUTTON_PRIMARY_CLASSES}
                 disabled={processing}
@@ -161,7 +165,7 @@ export function BulkApprovalActions({
 
               {/* Expandable Options Panel */}
               {showOptions === true && (
-                <div className="absolute top-full mt-2 right-0 z-10 rounded-lg border border-neutral-200 bg-white shadow-lg p-4 w-64">
+                <div data-testid="approval-options-panel" className="absolute top-full mt-2 right-0 z-10 rounded-lg border border-neutral-200 bg-white shadow-lg p-4 w-64">
                   <h4 className="text-sm font-medium mb-3">Approval Options</h4>
 
                   {/* Priority Setting */}
@@ -170,6 +174,7 @@ export function BulkApprovalActions({
                       Priority: {priority}
                     </label>
                     <input
+                      data-testid="priority-input"
                       type="range"
                       min={1}
                       max={10}
@@ -186,6 +191,7 @@ export function BulkApprovalActions({
                   {/* Action Buttons */}
                   <div className="flex gap-2">
                     <button
+                      data-testid="confirm-bulk-approve"
                       onClick={handleBulkApprove}
                       className="flex-1 rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
                       disabled={processing}
@@ -207,6 +213,7 @@ export function BulkApprovalActions({
           )}
 
           <button
+            data-testid="bulk-reject-button"
             onClick={() => setShowOptions(showOptions === 'reject' ? false : 'reject')}
             className={BUTTON_DANGER_CLASSES}
             disabled={processing || selectedIds.size === 0}
@@ -217,7 +224,7 @@ export function BulkApprovalActions({
 
           {/* Rejection Options Panel */}
           {showOptions === 'reject' && (
-            <div className="absolute top-full mt-2 right-0 z-10 rounded-lg border border-neutral-200 bg-white shadow-lg p-4 w-80">
+            <div data-testid="reject-options-panel" className="absolute top-full mt-2 right-0 z-10 rounded-lg border border-neutral-200 bg-white shadow-lg p-4 w-80">
               <h4 className="text-sm font-medium mb-3">Reject Items</h4>
 
               {/* Reason Input */}
@@ -226,6 +233,7 @@ export function BulkApprovalActions({
                   Rejection Reason (optional)
                 </label>
                 <textarea
+                  data-testid="reject-reason"
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   placeholder="e.g., Duplicate content, Low quality..."
@@ -233,7 +241,7 @@ export function BulkApprovalActions({
                   rows={3}
                   maxLength={500}
                 />
-                <div className="text-xs text-neutral-500 mt-1 text-right">
+                <div data-testid="reason-char-count" className="text-xs text-neutral-500 mt-1 text-right">
                   {rejectionReason.length} / 500
                 </div>
               </div>
@@ -245,6 +253,7 @@ export function BulkApprovalActions({
                   {['Duplicate', 'Low quality', 'Irrelevant', 'NSFW', 'Copyright'].map((reason) => (
                     <button
                       key={reason}
+                      data-testid={'quick-reason-' + reason.toLowerCase().replace(/\s+/g, '-')}
                       onClick={() => setRejectionReason(reason)}
                       className={`text-xs px-2 py-1 rounded border ${
                         rejectionReason === reason
@@ -262,6 +271,7 @@ export function BulkApprovalActions({
               {/* Action Buttons */}
               <div className="flex gap-2">
                 <button
+                  data-testid="confirm-bulk-reject"
                   onClick={handleBulkReject}
                   className="flex-1 rounded bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
                   disabled={processing}
@@ -285,6 +295,7 @@ export function BulkApprovalActions({
 
           {onExport && (
             <button
+              data-testid="export-csv-button"
               onClick={handleExport}
               className={BUTTON_SECONDARY_CLASSES}
               disabled={processing}
@@ -306,6 +317,8 @@ interface BulkSelectionCheckboxProps {
   selectable?: boolean;
   /** Toggle callback */
   onToggle: () => void;
+  /** Optional data-testid for the checkbox (e2e selectors) */
+  testId?: string;
 }
 
 /**
@@ -315,9 +328,11 @@ export function BulkSelectionCheckbox({
   checked,
   selectable = true,
   onToggle,
+  testId,
 }: BulkSelectionCheckboxProps) {
   return (
     <input
+      data-testid={testId}
       type="checkbox"
       checked={checked}
       onChange={onToggle}

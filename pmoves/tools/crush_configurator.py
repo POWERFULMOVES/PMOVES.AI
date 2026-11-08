@@ -13,6 +13,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+try:
+    from pmoves.tools.bash_resolver import BashNotFoundError, resolve_bash
+except ImportError:  # loaded by file path (spec_from_file_location), not as a package
+    # Load the sibling by path too, rather than putting pmoves/tools on
+    # sys.path, where its ~360 modules could shadow unrelated imports.
+    import importlib.util as _ilu
+
+    _spec = _ilu.spec_from_file_location(
+        "_pmoves_bash_resolver", Path(__file__).resolve().parent / "bash_resolver.py"
+    )
+    _bash_resolver = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_bash_resolver)
+    BashNotFoundError = _bash_resolver.BashNotFoundError
+    resolve_bash = _bash_resolver.resolve_bash
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_CANDIDATES = [
     PROJECT_ROOT / ".env.generated",
@@ -552,15 +567,18 @@ def _resolve_ts_vars(names, env):
         + '; do printf "%s=%s\\n" "$n" "${!n}"; done'
     )
     try:
+        # resolve_bash(), not "bash": on Windows a bare "bash" is System32's WSL
+        # stub, which cannot `source` a D:\ path, hits `|| exit 0`, and so
+        # resolved nothing while looking like a clean run.
         proc = subprocess.run(
-            ["bash", "-c", cmd], capture_output=True, text=True, timeout=30,
+            [resolve_bash(), "-c", cmd], capture_output=True, text=True, timeout=30,
             env={k: v for k, v in env.items() if k != "PMOVES_PYTHON"},
         )
         for line in proc.stdout.splitlines():
             name, _, value = line.partition("=")
             if name in resolved and not resolved[name] and value.strip():
                 resolved[name] = value.strip()
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, BashNotFoundError):
         pass
     return resolved
 

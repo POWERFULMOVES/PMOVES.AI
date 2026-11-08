@@ -1,0 +1,69 @@
+name: CLM Eval on Spark
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clm-eval:
+    runs-on: spark
+    timeout-minutes: 60
+    steps:
+      - name: Install contrastive-lm in venv
+        run: |
+          python3 -m venv /tmp/clmvenv
+          /tmp/clmvenv/bin/pip install --upgrade pip -q
+          /tmp/clmvenv/bin/pip install contrastive-lm 2>&1 | tail -3
+
+      - name: Verify Ollama encoder readiness
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && { echo ENCODER-UP; break; }
+            [ $i -eq 30 ] && { echo ENCODER-TIMEOUT; exit 1; }
+            sleep 2
+          done
+          curl -sf http://localhost:11434/v1/embeddings -H 'Content-Type: application/json' \
+            -d '{"model":"qwen3-embedding:8b","input":"probe"}' | head -c 80; echo
+
+      - name: Start CLM server with Ollama embedder
+        run: |
+          CUDA_VISIBLE_DEVICES="" nohup /tmp/clmvenv/bin/clm-serve --emb-url http://localhost:11434/v1/embeddings --emb-model qwen3-embedding:8b > /tmp/clm.log 2>&1 &
+          for i in $(seq 1 24); do
+            sleep 5
+            curl -sf http://localhost:8700/health >/dev/null 2>&1 && { echo CLM-UP; break; }
+            [ $i -eq 24 ] && { echo CLM-TIMEOUT; tail -10 /tmp/clm.log; exit 1; }
+          done
+
+      - name: Run eval inline
+        run: |
+          /tmp/clmvenv/bin/python /dev/stdin <<'PYEOF'
+          from clm import CLMClient, Choice, Noul
+          import json, time
+          client = CLMClient(timeout=3600)
+          results = {}
+          probes = [
+              ('Customer charged twice, no response', {'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})}),
+              ('GPU node offline, agents cannot reach Ollama', {'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'infra': 'nodes'})}),
+              ('GroToken pool computed for week 42', {'settlement': Noul(instructions='Is this a settlement event?')}),
+          ]
+          parity = []
+          for state, questions in probes:
+              t0 = time.time()
+              r = client.system_one(state=state, questions=questions)
+              ms = round((time.time() - t0) * 1000, 1)
+              parity.append({'state': state[:50], 'latency_ms': ms, 'raw': str(r)[:150]})
+          results['parity'] = parity
+          large = {f'tool{i}': f'Tool {i}' for i in range(1024)}
+          t0 = time.time()
+          client.system_one(state='pick a tool for upload', questions={'pick': Choice(instructions='Best', criteria=large)})
+          t1 = time.time()
+          client.system_one(state='pick a tool for webhook', questions={'pick': Choice(instructions='Best', criteria=large)})
+          t2 = time.time()
+          results['scaling'] = {'first_1024_ms': round((t1-t0)*1000,1), 'cached_1024_ms': round((t2-t1)*1000,1)}
+          json.dump(results, open('results.json','w'), indent=2)
+          print('=== EVAL RESULTS ===')
+          print(json.dumps(results, indent=2))
+          PYEOF
+
+      - name: Show results
+        if: always()
+        run: cat results.json 2>/dev/null || echo 'no results file'

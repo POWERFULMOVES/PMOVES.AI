@@ -61,7 +61,7 @@ def _read_secret(name: str) -> Optional[str]:
 
 # --- Environment configuration ---
 PORT = int(os.environ.get("MEDIA_AUDIO_PORT", "8082"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MEDIA_BACKEND = os.environ.get("MEDIA_BACKEND", "transformers").lower()
 STT_MODEL = os.environ.get("STT_MODEL", "openai/whisper-large-v3-turbo")
 EMOTION_MODEL = os.environ.get("EMOTION_MODEL", "superb/hubert-large-superb-er")

@@ -1,0 +1,11 @@
+/*
+!/.gitignore
+!/README.md
+!/CORPUS_SCHEMA.md
+!/ITERATIONS.md
+!/gitleaks.toml
+!/manifest.template.json
+!/RECALL_SUITE.md
+!/gen_recall_cases.py
+!/SPOTAUDIT.md
+!/exclusion-config.json

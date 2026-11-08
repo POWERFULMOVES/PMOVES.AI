@@ -31,7 +31,7 @@ from nats.js.errors import Error as JSError
 from prometheus_client import Counter, Gauge, generate_latest
 
 # Configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
 A2UI_RENDER_SUBJECT = os.getenv("A2UI_RENDER_SUBJECT", "a2ui.render.v1")
 A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
@@ -311,18 +311,12 @@ async def connect_nats() -> None:
                     logger.error(f"Failed to create A2UI stream: {e}")
                     raise
 
-            # Register the durable JetStream geometry consumer.
-            # _js_geom_sub_active stays False until a forwarding callback is
-            # wired here — per-connection core NATS subs handle delivery until then.
-            try:
-                await js.subscribe(
-                    GEOMETRY_WILDCARD,
-                    "a2ui_geom_sub",
-                    stream="GEOMETRY"
-                )
-                logger.info(f"Registered durable JetStream consumer for {GEOMETRY_WILDCARD} (forwarding via core NATS per-connection subs)")
-            except Exception as e:
-                logger.warning(f"Could not register geometry JetStream consumer: {e} — per-connection core subs will handle forwarding")
+            # No durable JetStream geometry consumer is registered here. The old
+            # one named stream "GEOMETRY" (never created; the stream is
+            # GEOMETRY_CGP) and had no callback, so it either failed or would
+            # have built an undrained backlog. Per-connection core NATS subs do
+            # the forwarding (_js_geom_sub_active stays False); a durable belongs
+            # here only together with a callback that forwards and acks.
 
             nats_connected.set(1)
             logger.info("NATS connection established")
@@ -718,7 +712,7 @@ def main() -> None:
 
     Environment variables:
         PORT: Server port (default: 9224)
-        NATS_URL: NATS server URL (default: nats://nats:pmoves@nats:4222)
+        NATS_URL: NATS server URL (default: nats://nats:4222)
     """
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)

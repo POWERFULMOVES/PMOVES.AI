@@ -132,7 +132,9 @@ def test_every_run_block_is_valid_shell():
     import tempfile
 
     yaml = pytest.importorskip("yaml")
-    bash = shutil.which("bash")
+    from pmoves.tools.bash_resolver import find_bash
+
+    bash = find_bash()  # not shutil.which: that can return System32's WSL stub
     if not bash:
         pytest.skip("bash not available on this runner")
 

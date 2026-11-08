@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/hermes-pmoves.sh        [args...]
-#   install-hermes-pmoves-pmoves-command.sh && hermes-pmoves         # rc function
+#   install-hermes-pmoves-command.sh && hermes-pmoves         # rc function
 #   hermes-pmoves.cmd                              # Windows Explorer double-click
 #
 # Purpose: One-shot Hermes bootstrap+launch (profile + MCP + CHIT)
@@ -128,6 +128,24 @@ if [ -f "$ENVF" ]; then
 else
   echo "[hermes-pmoves] WARN: $ENVF not found -- MCP creds may be missing." >&2
   echo "[hermes-pmoves]       run: make -C pmoves ensure-env-shared" >&2
+fi
+
+# --- HOST TLS ------------------------------------------------------------
+# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
+# EMPTY on purpose (a container leak guard), and the loader above EXPORTS
+# them. On the host, set-but-empty breaks python ssl and the HF Xet backend
+# (CERTIFICATE_VERIFY_FAILED). Clear the empties; fill in the system bundle
+# only when no CA variable is configured by a later-loaded env file.
+# See pmoves/scripts/pm-ca-bundle.sh.
+if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
+    echo "[hermes-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
+  fi
+else
+  echo "[hermes-pmoves] WARN: pmoves/scripts/pm-ca-bundle.sh missing -- host TLS not normalized." >&2
 fi
 
 # --- NAME BRIDGES (operator-facing alias to upstream SDK name) -------------

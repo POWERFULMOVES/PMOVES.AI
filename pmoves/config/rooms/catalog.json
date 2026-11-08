@@ -56,7 +56,7 @@
       "alter": "4090-demo",
       "display_name": "PMOVES Demo Room",
       "stage": "rehearsal",
-      "manifest": "demo.room.json",
+      "manifest": "demo.room.rehearsal.json",
       "summary": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal.",
       "current_stage": "rehearsal",
       "stage_source": "demo.room.extras.json::p7.stage (2026-07-07 strip preserves p7 block)",

@@ -24,6 +24,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import sys
 import urllib.error
 from pathlib import Path
@@ -357,3 +358,90 @@ def test_importing_the_cli_does_not_mutate_sys_path():
     # script that imported nothing at all would pass the assertion above.
     assert module.CARDS.name == "signing_identity_cards.yaml"
     assert callable(module.load_active_card_agents)
+
+
+# ---------------------------------------------------------------------------
+# Transcript-safe handoff (--emit). ADDITIVE: stdout stays the default because
+# TAC_CIPHER_VILLAGE.md:86 specifies it, and the tests above enforce that.
+# These cover the opt-in paths that let the mint run where stdout is a log.
+# ---------------------------------------------------------------------------
+
+
+def test_emit_file_writes_the_token_and_keeps_it_off_stdout(run_mint, tmp_path):
+    """The whole point: the credential reaches the caller, not the transcript."""
+    dest = tmp_path / "nested" / "tok"
+    code, out, captured = run_mint(["--emit", "file", "--emit-file", str(dest)])
+    assert code == 0, out
+
+    stored = captured["body"]["token_uuid"]
+    hex_form = stored.replace("-", "")
+
+    assert dest.read_text(encoding="utf-8") == f"cipher_{hex_form}"
+    # BOTH spellings, same trap the stdout test documents: the dashed uuid is a
+    # complete reconstruction of the bearer.
+    assert hex_form not in out, "token hex reached stdout on --emit=file"
+    assert stored not in out, "dashed uuid reached stdout on --emit=file"
+    # The operator still learns WHO and WHAT, just not the secret.
+    assert "AGENT=" in out and "SCOPES=" in out
+    assert str(dest) in out, "the caller must be told where the token landed"
+
+
+def test_emit_file_is_created_0600(run_mint, tmp_path):
+    """0600 at CREATION, not chmod after: a write-then-chmod leaves a window
+    where the credential is world-readable, which is the entire hazard."""
+    import stat as _stat
+
+    dest = tmp_path / "tok"
+    code, _out, _cap = run_mint(["--emit", "file", "--emit-file", str(dest)])
+    assert code == 0
+    mode = _stat.S_IMODE(dest.stat().st_mode)
+    # Windows does not honour POSIX bits; assert only where it is meaningful.
+    if os.name != "nt":
+        assert mode == 0o600, f"expected 0600, got {oct(mode)}"
+    assert dest.exists()
+
+
+def test_emit_file_without_a_path_is_refused(run_mint):
+    """A silent default path would put credentials somewhere nobody looked."""
+    with pytest.raises(SystemExit) as excinfo:
+        run_mint(["--emit", "file"])
+    assert excinfo.value.code != 0
+
+
+def test_emit_fd_writes_to_the_caller_opened_descriptor(run_mint, tmp_path):
+    """fd is the automation path: the value never touches a filesystem path an
+    onlooker could read later."""
+    sink = tmp_path / "fd-sink"
+    fd = os.open(str(sink), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        code, out, captured = run_mint(["--emit", "fd", "--emit-fd", str(fd)])
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    assert code == 0, out
+    hex_form = captured["body"]["token_uuid"].replace("-", "")
+    assert sink.read_text(encoding="utf-8") == f"cipher_{hex_form}"
+    assert hex_form not in out, "token hex reached stdout on --emit=fd"
+
+
+def test_emit_fd_that_cannot_be_written_fails_loudly(run_mint):
+    """A closed or absent fd must not silently discard a minted credential --
+    the token would exist in the registry with nobody holding it.
+
+    NOT fd 9: the first draft used it and PASSED-as-0 under pytest, because
+    pytest holds descriptors open in that range and `os.dup(9)` therefore
+    succeeded. The token went somewhere real and the assertion was measuring
+    the runner, not the code. Pick one nothing can plausibly hold, and prove it
+    is closed before relying on it."""
+    probe = 9999
+    try:
+        os.fstat(probe)
+    except OSError:
+        pass  # closed, as required
+    else:  # pragma: no cover - only if the runner really holds 9999
+        pytest.skip(f"fd {probe} is open in this runner; cannot test the failure path")
+
+    code, out, _cap = run_mint(["--emit", "fd", "--emit-fd", str(probe)])
+    assert code == 1, out

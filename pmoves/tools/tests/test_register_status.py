@@ -479,3 +479,17 @@ def test_the_read_tool_declares_pyyaml_for_uv_run():
     head = TOOL.read_text(encoding="utf-8")[:600]
     assert "# /// script" in head
     assert "pyyaml" in head
+
+
+def test_an_unreadable_node_vocabulary_is_could_not_measure(register, tmp_path):
+    """The node half of the owner key cannot be decided -> refuse to report
+    (exit 3), as for the identity half: a spark RELEASE would read as closing
+    Knuckles' lanes and a held lane could be reported free."""
+    import os
+    env = dict(os.environ, PMOVES_NODE_VOCABULARY=str(tmp_path / "no-such-nodes.yaml"))
+    r = subprocess.run(
+        [sys.executable, str(TOOL), "--register", str(register), "--now", NOW],
+        capture_output=True, text=True, env=env,
+    )
+    assert r.returncode == 3, (r.returncode, r.stdout, r.stderr)
+    assert "node vocabulary" in r.stderr

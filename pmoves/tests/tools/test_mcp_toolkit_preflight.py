@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MODULE = REPO_ROOT / "pmoves" / "tools" / "mcp_toolkit_preflight.py"
@@ -495,7 +496,7 @@ def listener_env(tmp_path):
 
 def _run_listener(env, extra=None):
     return subprocess.run(
-        ["bash", str(LISTENER), "--foreground"],
+        [resolve_bash(), str(LISTENER), "--foreground"],
         env={**env, **(extra or {})},
         capture_output=True,
         text=True,
@@ -556,7 +557,7 @@ def test_a_missing_preflight_tool_is_also_unmeasured_under_strict(
     _shutil.copy(LISTENER.parent / "pm-python.sh", fake_root / "scripts")
     # tools/mcp_toolkit_preflight.py deliberately absent.
     proc = subprocess.run(
-        ["bash", str(copied), "--foreground"],
+        [resolve_bash(), str(copied), "--foreground"],
         env={**listener_env, "PMOVES_MCP_STRICT": "1"},
         capture_output=True,
         text=True,

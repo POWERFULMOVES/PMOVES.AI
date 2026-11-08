@@ -263,7 +263,7 @@ async def _on_message(msg):
 
 async def run() -> None:
     """Main event loop — connect to NATS, subscribe, wait."""
-    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
     logger.info(f"Connecting to NATS at {nats_url}")
 
     nc = await nats.connect(nats_url)

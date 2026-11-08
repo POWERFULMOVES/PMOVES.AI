@@ -60,7 +60,7 @@ app = typer.Typer(
 console = Console()
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-DEFAULT_NATS = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+DEFAULT_NATS = os.environ.get("NATS_URL", "nats://nats:4222")
 SUBJECT_CGP = "geometry.cgp.v1"
 SUBJECT_DECODED = "geometry.packet.decoded.v1"
 CGP_SPEC = "chit.cgp.v0.2"

@@ -50,7 +50,7 @@ from auth import auth_middleware
 PORT = int(os.getenv("PORT", "8060"))
 FLUTE_URL = os.getenv("FLUTE_GATEWAY_URL", "http://localhost:8055")
 ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://localhost:7860")
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 # Prometheus Metrics
 CAST_REQUESTS = Counter(

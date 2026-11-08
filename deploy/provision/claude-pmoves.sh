@@ -15,6 +15,83 @@
 set -u
 
 # ---------------------------------------------------------------------------
+# --backend= flag — switch between Anthropic-direct and MiniMax-routed Claude
+# Code for THIS launch without touching ~/.claude/settings.json. Persistent
+# switching lives at `pmoves-mini claude-backend {show,set,backup,restore}`.
+#
+# Accepted values:
+#   auto       (default) — detect hijack via $ANTHROPIC_BASE_URL; strip iff
+#                          the host is not api.anthropic.com. Lets a clean
+#                          host pass through with no churn.
+#   anthropic  — force Anthropic-direct routing; strip the Mavis SDK set
+#                unconditionally. One-shot override regardless of persistent
+#                state.
+#   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+#                Used to test the MiniMax routing on demand.
+#
+# Env-var equivalent: PMOVES_CLAUDE_BACKEND={auto|anthropic|minimax}.
+#
+# The flag is parsed BEFORE the symlink-walk + ROOT resolution so `--help`
+# can be honoured even when the launcher cannot find the repo (the launched
+# `claude` does not need ROOT for help).
+#
+# Kept in step with deploy/provision/claude-pmoves.ps1: see `claude_backend_apply`
+# below and TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py.
+# ---------------------------------------------------------------------------
+PMOVES_CLAUDE_BACKEND="${PMOVES_CLAUDE_BACKEND:-}"
+PMOVES_CLAUDE_BACKEND_REST=()
+__pmoves_claude_backend_parse=0
+for __arg in "$@"; do
+  if [ "$__pmoves_claude_backend_parse" -eq 1 ]; then
+    PMOVES_CLAUDE_BACKEND="$__arg"
+    __pmoves_claude_backend_parse=0
+    continue
+  fi
+  case "$__arg" in
+    --backend=*)
+      PMOVES_CLAUDE_BACKEND="${__arg#--backend=}"
+      ;;
+    --backend)
+      __pmoves_claude_backend_parse=1
+      ;;
+    --help|-h)
+      cat <<'USAGE' >&2
+claude-pmoves.sh — launch Claude Code with PMOVES env + MCP roster.
+
+Usage: claude-pmoves.sh [--backend={auto|anthropic|minimax}] [claude-args...]
+
+  --backend=auto       (default) detect hijack via $ANTHROPIC_BASE_URL
+  --backend=anthropic  force Anthropic-direct routing for this launch
+  --backend=minimax    preserve the Mavis SDK / settings.json hijack
+
+Persistent switching (writes ~/.claude/settings.json):
+  pmoves-mini claude-backend show
+  pmoves-mini claude-backend set anthropic
+  pmoves-mini claude-backend set minimax
+  pmoves-mini claude-backend backup
+  pmoves-mini claude-backend restore <file>
+USAGE
+      exit 0
+      ;;
+    *)
+      PMOVES_CLAUDE_BACKEND_REST+=("$__arg")
+      ;;
+  esac
+done
+# Lowercase + validate. Empty stays empty (= default auto on the apply side).
+PMOVES_CLAUDE_BACKEND="$(printf '%s' "$PMOVES_CLAUDE_BACKEND" | tr '[:upper:]' '[:lower:]')"
+case "$PMOVES_CLAUDE_BACKEND" in
+  ""|auto|anthropic|minimax) ;;
+  *)
+    echo "[claude-pmoves] ERROR: --backend=$PMOVES_CLAUDE_BACKEND invalid; expected one of auto, anthropic, minimax." >&2
+    exit 2
+    ;;
+esac
+# Rebuild "$@" from the residual args (so the launched claude gets them, not the flag).
+set -- "${PMOVES_CLAUDE_BACKEND_REST[@]}"
+unset PMOVES_CLAUDE_BACKEND_REST __pmoves_claude_backend_parse __arg
+
+# ---------------------------------------------------------------------------
 # REPO-ROOT RESOLUTION — keep byte-identical across the three launchers that
 # carry it (this file, crush-pmoves.sh, pmoves/scripts/claude-pmoves.sh).
 # Enforced by deploy/provision/tests/test-launcher-root-resolution.sh, which
@@ -102,6 +179,55 @@ else
   echo "[claude-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
 fi
 
+# ---------------------------------------------------------------------------
+# Claude Code backend selector — strip the Mavis-SDK hijack when --backend=
+# (or $PMOVES_CLAUDE_BACKEND) says so. Called AFTER mavis_sdk_strip_env_for so
+# the NEEDS-list preservation there runs first; this is the OVERRIDE layer.
+#
+# The python module is the source of truth — bash just `eval`s its stdout and
+# forwards stderr (which carries the WARN when something was actually stripped).
+# PowerShell twin does the same via `Invoke-Expression`. Kept in step with the
+# ps1 by:
+#   1. TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py
+#   2. The pinned `--backend=` flag surface
+#   3. The pinned `PMOVES_CLAUDE_BACKEND` env-var name
+#   4. The pinned `stripped Mavis SDK hijack` WARN phrase
+#
+# If python or the tool is missing, we fall through with a WARN — the Mavis
+# SDK env-strip above has already done its partial work, and `claude` will
+# inherit whatever the parent shell set. The user can still fix the persistent
+# state with `pmoves-mini claude-backend set anthropic`.
+# ---------------------------------------------------------------------------
+claude_backend_apply() {
+  local _apply_backend="${PMOVES_CLAUDE_BACKEND:-auto}"
+  local _pm_py=()
+  # Reuse pm-python.sh's ladder — same precedence rules as the normalizer.
+  # shellcheck source=../../pmoves/scripts/pm-python.sh
+  if [ -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
+    . "$ROOT/pmoves/scripts/pm-python.sh"
+  fi
+  if ! pm_pick_python "" 2>/dev/null; then
+    echo "[claude-pmoves] WARN: no python interpreter; claude_backend_apply skipped (PMOVES_CLAUDE_BACKEND=$_apply_backend)." >&2
+    return 0
+  fi
+  local _apply_out _apply_rc=0
+  _apply_out="$(cd "$ROOT" && "${PM_PY[@]}" pmoves/tools/claude_backend.py apply \
+                  --backend "$_apply_backend" --label "claude-pmoves.sh")" || _apply_rc=$?
+  if [ "$_apply_rc" -ne 0 ]; then
+    echo "[claude-pmoves] WARN: claude_backend.py apply exited $_apply_rc; skipping the strip." >&2
+    return 0
+  fi
+  if [ -n "$_apply_out" ]; then
+    # The python module emits `unset NAME` and `export NAME=value` lines.
+    # Eval inside a subshell so a parse error here does not abort the launcher.
+    # Errors would be the worst kind: a launch that does not actually launch.
+    if ! (eval "$_apply_out") 2>/dev/null; then
+      echo "[claude-pmoves] WARN: claude_backend_apply eval produced an error; launching with the Mavis SDK env intact." >&2
+    fi
+  fi
+}
+claude_backend_apply
+unset -f claude_backend_apply
 # Capture an explicit per-agent cipher token BEFORE env.shared can overwrite
 # it: an operator export, or the token the outer delegate already bound. The
 # node bootstrap bearer is not cipher_-prefixed, so it is never captured here.
@@ -125,6 +251,34 @@ if [ -f "$ENVF" ]; then
   # Kept in step with deploy/provision/claude-pmoves.ps1:25-31.
   blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_.+|CLAUDE_SESSION_.+)$'
 
+  # Explicitly strip blocklisted vars from the PARENT env before exec claude.
+  # The blocklist above filters env.shared (the file being sourced), but the
+  # parent shell may have set ANTHROPIC_API_KEY via $PROFILE, env.tier-llm,
+  # or a prior session export. Without this unset, the child process inherits
+  # them on the way to exec claude and the auth-precedence warning fires
+  # ("claude.ai connectors disabled because ANTHROPIC_API_KEY takes precedence").
+  # The .ps1 twin performs the same sweep — keep them byte-identical.
+  _cleared=()
+  for _blocked_var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL; do
+    if [ -n "${!_blocked_var+x}" ]; then
+      _cleared+=("$_blocked_var")
+      unset "$_blocked_var"
+    fi
+  done
+  for _pattern in 'CLAUDECODE' 'CLAUDE_CODE_' 'CLAUDE_SESSION_'; do
+    # compgen returns names of defined vars; filter to those matching the prefix.
+    while IFS= read -r _var; do
+      [ -z "$_var" ] && continue
+      if [ -n "${!_var+x}" ]; then
+        _cleared+=("$_var")
+        unset "$_var"
+      fi
+    done < <(compgen -A variable "${_pattern}" 2>/dev/null || true)
+  done
+  if [ "${#_cleared[@]}" -gt 0 ]; then
+    echo "[claude-pmoves] cleared auth vars from parent env: ${_cleared[*]}" >&2
+  fi
+
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
   #   1. We can't `source` it raw — unquoted values break `. file`.
@@ -133,11 +287,13 @@ if [ -f "$ENVF" ]; then
   #      starts unauthorized even though the canonical key is present (Codex #1987 P2).
   # Mirror pmoves/scripts/with-env.sh: build a sanitized assignment file
   # (single-quote plain values; pass ${...}-bearing lines through for shell
-  # expansion), then source it with auto-export so aliases resolve against the
-  # canonical keys defined earlier in the same file.
+  # expansion), then source it so aliases resolve against the canonical keys
+  # defined earlier in the same file. Sourced in a SUBSHELL, not here: see the
+  # allowlist block below for what is allowed back out.
   set +H 2>/dev/null || true   # tolerate '!' in values (no history expansion)
   tmpf=$(mktemp)
   n=0
+  _keys=$'\n'                                  # every parsed key, newline-delimited
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"                       # normalize CRLF
     case "$line" in ''|\#*) continue;; esac
@@ -159,19 +315,118 @@ if [ -f "$ENVF" ]; then
       printf "%s='%s'\n" "$key" "$esc" >> "$tmpf"
     fi
     n=$((n+1))
+    _keys="$_keys$key"$'\n'
   done < "$ENVF"
-  set -a; set +u                               # auto-export; tolerate forward refs
-  # shellcheck source=/dev/null
-  . "$tmpf"
-  set +a; set -u
-  rm -f "$tmpf"
+
+  # ALLOWLIST EXPORT -- only the names a roster server or the launcher reads.
+  #
+  # This used to be `set -a; . "$tmpf"`, which exported EVERY env.shared key:
+  # the JWT / service-role / database-password class, provider keys, CHIT and
+  # NATS material, none of which most MCP servers read. The session env then
+  # shadowed the tier files for every child, and docker compose gives shell env
+  # precedence over --env-file values -- so a stale env.shared value silently
+  # beat the fresh one the funnel wrote into env.tier-*. Measured on Z890
+  # 2026-09-09: kong ran on a demo-era JWT from exactly this path.
+  #
+  # pmoves/tools/launcher_env_allowlist.py is the single source of the list
+  # (roster ${VAR} refs, origin/main's roster included, plus IMPLICIT_READS,
+  # minus the blocklist). The .ps1 twin calls the same tool.
+  #
+  # The file is sourced in a subshell so a key that is NOT allowed never
+  # touches this shell. Sourcing it here unexported would still overwrite a
+  # same-named variable the parent had already exported, and that one would
+  # cross. A key the file does not define is left alone; an allowed key with a
+  # non-empty value wins over the inherited one, as `set -a` did
+  # (cipher_preflight.py's env-file overlay relies on that order).
+  _allow=""
+  _allow_how="launcher_env_allowlist.py"
+  _allow_tool="$ROOT/pmoves/tools/launcher_env_allowlist.py"
+  _allow_ref="origin/main"
+  [ -n "${PMOVES_ROSTER_FROM_TREE:-}" ] && _allow_ref=""
+  if [ -n "$_allow_ref" ] && [ -f "$ROOT/pmoves/Makefile" ]; then
+    # Fetch HERE, not only at the roster block below: the list must be cut from
+    # the same origin/main the roster is, or a var main's roster just gained is
+    # missing for one launch and the normalizer drops that server.
+    git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+    PM_ORIGIN_MAIN_FETCHED=1
+  fi
+  if [ -f "$_allow_tool" ] && [ -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
+    # shellcheck source=../../pmoves/scripts/pm-python.sh
+    . "$ROOT/pmoves/scripts/pm-python.sh"
+    if pm_pick_python "" 2>/dev/null; then
+      _allow="$("${PM_PY[@]}" "$_allow_tool" --root "$ROOT" ${_allow_ref:+--ref "$_allow_ref"} 2>/dev/null)" || _allow=""
+    fi
+  fi
+  if [ -z "$_allow" ] && [ ! -f "$ROOT/pmoves/Makefile" ]; then
+    # REPO-LESS MODE: the root block above honours an explicit PMOVES_ENV_SHARED
+    # when no repo resolves. There is no tool and no roster to cut a list from,
+    # so intersecting against them would export nothing. The operator pinned
+    # this file by hand; export it as before, and say so.
+    _allow="$(printf '%s' "$_keys")"
+    _allow_how="repo-less: no allowlist source, exporting the pinned PMOVES_ENV_SHARED"
+    echo "[claude-pmoves] WARN: no repo, so no allowlist -- every key of $ENVF crosses into this session." >&2
+  fi
+  if [ -z "$_allow" ]; then
+    # No python (or the tool failed): the same two sources, read without it.
+    # Coarser -- it cannot skip `_`-disabled servers or read origin/main -- so
+    # it can only allow MORE of what the roster names, never an unrelated key.
+    _allow_how="fallback: roster refs + IMPLICIT_READS, no python"
+    for _rf in "$ROOT/.claude/mcp.json" "$ROOT/.mcp.json"; do
+      [ -f "$_rf" ] || continue
+      # [$][{], not \$\{: GNU grep's ERE rejects \$ before \{ (0 matches, measured).
+      _allow="$_allow"$'\n'"$(grep -oE '[$][{][A-Za-z_][A-Za-z0-9_]*' "$_rf" 2>/dev/null | sed 's/^[$][{]//' || true)"
+    done
+    if [ -f "$_allow_tool" ]; then
+      _allow="$_allow"$'\n'"$(sed -n '/^IMPLICIT_READS/,/^}/p' "$_allow_tool" | grep -oE '^    "[A-Za-z_][A-Za-z0-9_]*"' | tr -d ' "' || true)"
+    fi
+  fi
+  _allow="${_allow//$'\r'/}"                   # a Windows python prints CRLF (measured: 0 matched)
+  _allowf=$(mktemp)
+  (
+    set +u                                     # tolerate forward refs
+    # shellcheck source=/dev/null
+    . "$tmpf" >/dev/null                      # stderr stays visible: a bad line must say so
+    for _v in $(printf '%s\n' "$_allow" | sort -u); do
+      case "$_keys" in *$'\n'"$_v"$'\n'*) ;; *) continue ;; esac
+      [[ "$_v" =~ $blocklist ]] && continue
+      [ -n "${!_v:-}" ] || continue
+      printf '%s=%s\0' "$_v" "${!_v}"
+    done
+  ) > "$_allowf"
+  exported=0
+  while IFS= read -r -d '' _kv; do
+    export "$_kv"
+    exported=$((exported+1))
+  done < "$_allowf"
+  rm -f "$tmpf" "$_allowf"
+  unset _keys _allow _allow_tool _allow_ref _allowf _rf _v _kv
   set -H 2>/dev/null || true
-  echo "[claude-pmoves] loaded $n vars from $ENVF" >&2
-  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh ($n vars)"
+  echo "[claude-pmoves] exported $exported allowlisted of $n parsed vars from $ENVF ($_allow_how)" >&2
+  [ "$exported" -eq 0 ] && echo "[claude-pmoves] WARN: no env.shared value crossed the allowlist -- MCP creds may be missing." >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh ($exported of $n vars)"
+  unset _allow_how
 else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
   PMOVES_LAUNCHER_SESSION="claude-pmoves.sh (env file NOT FOUND)"
+fi
+
+# --- HOST TLS ------------------------------------------------------------
+# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
+# EMPTY on purpose (a container leak guard). The allowlist above no longer
+# exports them, but the parent shell may still carry them. On the host, set-but-empty breaks python ssl and the HF Xet backend
+# (CERTIFICATE_VERIFY_FAILED). Clear the empties; fill in the system bundle
+# only when no CA variable is configured by a later-loaded env file.
+# See pmoves/scripts/pm-ca-bundle.sh.
+if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
+    echo "[claude-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
+  fi
+else
+  echo "[claude-pmoves] WARN: pmoves/scripts/pm-ca-bundle.sh missing -- host TLS not normalized." >&2
 fi
 
 # Leave a marker in the child's environment so "did this session come through
@@ -269,7 +524,8 @@ if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
   # before anything validates it.
   _main_roster="$(mktemp "${TMPDIR:-/tmp}/pmoves-roster-origin-main.XXXXXXXX.json" 2>/dev/null)" \
     || _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.$$.json"
-  git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+  [ -n "${PM_ORIGIN_MAIN_FETCHED:-}" ] || git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+  unset PM_ORIGIN_MAIN_FETCHED
   if git -C "$ROOT" show origin/main:.claude/mcp.json > "$_main_roster" 2>/dev/null      && [ -s "$_main_roster" ]; then
     MCP_ROSTER="$_main_roster"
     MCP_ROSTER_SOURCE="origin/main"

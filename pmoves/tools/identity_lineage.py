@@ -672,33 +672,64 @@ _TABLES: dict[str, dict[str, str]] | None = None
 def _tables(path: Path | None = None) -> dict[str, dict[str, str]]:
     global _TABLES
     if _TABLES is None:
+        # Built into a LOCAL and published only when complete. Assigning the
+        # global first and filling it after meant one malformed row (a
+        # node_relations entry with no `token`) raised AFTER the cache was set:
+        # every later call got a half-built table and a KeyError on "relations"
+        # that named nothing about the real defect.
         with open(path or _vocabulary_path(), encoding="utf-8") as handle:
             doc = yaml.safe_load(handle) or {}
-        _TABLES = {
+        tables = {
             key: _fold_table(key, doc)
             for key in ("models", "lanes", "provisioning", "harnesses")
         }
         # Node names come from the node vocabulary, which already exists and is
         # already gated -- duplicating them here would be a second source of
         # truth for the same fact.
-        _TABLES["relations"] = {
+        tables["relations"] = {
             _norm(r["token"]): (r.get("node"), r.get("mirrored_from"))
             for r in (doc.get("node_relations") or [])
         }
-        _TABLES["nodes"] = {}
+        tables["nodes"] = {}
         try:
-            import importlib.util
-            spec = importlib.util.spec_from_file_location(
-                "node_identity", REPO_ROOT / "pmoves" / "tools" / "node_identity.py"
-            )
-            module = importlib.util.module_from_spec(spec)
-            sys.modules["node_identity"] = module
-            spec.loader.exec_module(module)
+            module = _node_identity_module()
             for alias, node in module.load_vocabulary().items():
-                _TABLES["nodes"][alias] = node.canonical
+                tables["nodes"][alias] = node.canonical
         except Exception:  # noqa: BLE001 -- node vocab is optional here
             pass
+        _TABLES = tables
     return _TABLES
+
+
+def _node_identity_module():
+    """node_identity, reusing a loaded copy of THIS file; never a half-built one.
+
+    Registered in sys.modules before exec (it defines @dataclass). An entry
+    that is already this file is reused rather than replaced, and a failed
+    exec restores whatever was there before instead of leaving a half-built
+    module for the next import to find.
+    """
+    import importlib.util
+    path = REPO_ROOT / "pmoves" / "tools" / "node_identity.py"
+    previous = sys.modules.get("node_identity")
+    if previous is not None:
+        try:
+            if Path(previous.__file__).resolve() == path.resolve():
+                return previous
+        except (AttributeError, TypeError, OSError):
+            pass
+    spec = importlib.util.spec_from_file_location("node_identity", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["node_identity"] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is not None:
+            sys.modules["node_identity"] = previous
+        else:
+            sys.modules.pop("node_identity", None)
+        raise
+    return module
 
 
 def wearing(author: str, vocab: Vocabulary | None = None) -> Wearing:

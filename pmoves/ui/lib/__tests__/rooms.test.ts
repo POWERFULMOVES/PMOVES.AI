@@ -5,6 +5,8 @@ import {
   loadRoom,
   loadRoomCatalog,
   loadRooms,
+  type RoomDefinition,
+  type RoomManifest,
 } from '../rooms';
 
 describe('room catalog loader', () => {
@@ -84,5 +86,59 @@ describe('room visibility curation ("show rooms, not all")', () => {
     const demoRoom = await loadRoom('demo.room.rehearsal');
     expect(demoRoom).toBeDefined();
     expect(isPublicRoom(demoRoom!)).toBe(true);
+  });
+});
+
+describe('isPublicRoom fails closed (a room is public only when it says so)', () => {
+  // Start from a real public manifest so only the access block varies.
+  async function withAccess(access: unknown): Promise<RoomDefinition> {
+    const demoRoom = await loadRoom('demo.room.rehearsal');
+    expect(demoRoom).not.toBeNull();
+    // JSON round-trip, not structuredClone: the jsdom test env does not provide it.
+    const room = JSON.parse(JSON.stringify(demoRoom)) as RoomDefinition;
+    if (access === undefined) {
+      delete room.manifest.access;
+    } else {
+      room.manifest.access = access as RoomManifest['access'];
+    }
+    return room;
+  }
+
+  it('treats a manifest with no access block as not public', async () => {
+    expect(isPublicRoom(await withAccess(undefined))).toBe(false);
+  });
+
+  it('treats an access block without visibility as not public', async () => {
+    expect(isPublicRoom(await withAccess({}))).toBe(false);
+  });
+
+  it('treats an unknown visibility value (e.g. a typo) as not public', async () => {
+    expect(isPublicRoom(await withAccess({ visibility: 'pubic' }))).toBe(false);
+  });
+
+  it('treats public + owner_only as not public', async () => {
+    expect(isPublicRoom(await withAccess({ visibility: 'public', owner_only: true }))).toBe(false);
+  });
+
+  it('treats public + exclude_from_public_catalog as not public', async () => {
+    expect(
+      isPublicRoom(await withAccess({ visibility: 'public', exclude_from_public_catalog: true }))
+    ).toBe(false);
+  });
+
+  it('treats explicit public visibility as public', async () => {
+    expect(isPublicRoom(await withAccess({ visibility: 'public' }))).toBe(true);
+  });
+
+  it('leaves the live public listing unchanged over the real catalog', async () => {
+    // Regression pin: the fail-closed rewrite must not move any seeded room.
+    // 9850x3d-rdna4.room.studio left this list when it gained access.visibility=private.
+    const publicIds = (await loadPublicRooms()).map((room) => room.room_id).sort();
+    expect(publicIds).toEqual([
+      'demo.room.rehearsal',
+      'fordham.room.community',
+      'persona.room.livingdoc',
+      'tokenism.room.exchange',
+    ]);
   });
 });

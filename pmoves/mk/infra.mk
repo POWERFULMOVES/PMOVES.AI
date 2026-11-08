@@ -114,6 +114,8 @@ cleanup-parity-check: ## Assert the 3 Docker-cleanup implementations have not dr
 # Prevents BuildKit cache accumulation (root cause of 148GB disk-full events).
 # NEVER prunes volumes (fleet data is co-hosted).
 CLEANUP_SCRIPT := ../deploy/provision/docker-fleet-cleanup.sh
+# Called by CLEANUP_SCRIPT from its own directory (bounds the shared CI builder).
+CLEANUP_CAP_SCRIPT := ../deploy/provision/pmoves-buildx-cap.sh
 CLEANUP_SERVICE := ../deploy/provision/docker-fleet-cleanup.service
 CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 
@@ -121,6 +123,17 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 
 docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
 	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
+
+# READ-ONLY. Run BEFORE any Docker Desktop restart/reset after an engine hang.
+# Docker's wsl-bootstrap cannot tell an unreadable data disk from a blank one
+# and will try to FORMAT it (z890, 2026-10-14). Never mounts, repairs or
+# restarts anything. Tool exit 0 pass / 1 warn / 2 fail / 3 could-not-measure;
+# make itself collapses any non-zero to 2, so read the RESULT line (or the
+# --json exit_code) for the real verdict.
+# Runbook: docs/handoffs/z890-docker-data-disk-usb-spof-2026-10-14.md
+.PHONY: docker-disk-preflight
+docker-disk-preflight: ## Read-only Docker Desktop data-disk check (junction/USB, vhdx header, disk events, health, VM log). ARGS='--json'
+	@$(PRECHECK_PY) tools/docker_disk_preflight.py $(ARGS)
 
 # Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
 # Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
@@ -199,6 +212,8 @@ docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run
 	fi
 	@cp $(CLEANUP_SCRIPT) /usr/local/bin/docker-fleet-cleanup.sh
 	@chmod +x /usr/local/bin/docker-fleet-cleanup.sh
+	@cp $(CLEANUP_CAP_SCRIPT) /usr/local/bin/pmoves-buildx-cap.sh
+	@chmod +x /usr/local/bin/pmoves-buildx-cap.sh
 	@cp $(CLEANUP_SERVICE) /etc/systemd/system/
 	@cp $(CLEANUP_TIMER) /etc/systemd/system/
 	@systemctl daemon-reload
@@ -444,7 +459,19 @@ gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub 
 	fi
 	@echo "=== Preflight complete ==="
 
-gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
+gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop (pulls first; RUNNER_SKIP_PULL=1 skips the pull when the registry is unreachable)
+	@# Pull first -- same stale-cached-image failure as gha-runner-up (2026-09
+	@# incident: deprecated bundled runner v2.335.1 crash-looped on B850).
+	@# RUNNER_SKIP_PULL=1 is the offline escape hatch (see gha-runner-up).
+	@if [ "$(RUNNER_SKIP_PULL)" = "1" ]; then \
+	  echo "  ⚠ RUNNER_SKIP_PULL=1: starting on the CACHED image without pulling."; \
+	  echo "    It may bundle a deprecated runner that crash-loops -- pull as soon as the registry is reachable."; \
+	else \
+	  RUNNER_ACCESS_TOKEN= docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) pull || { \
+	    echo "  ✗ FAIL: runner image pull failed; the cached image may bundle a deprecated runner."; \
+	    echo "    Registry unreachable and you accept that risk? Re-run with RUNNER_SKIP_PULL=1."; \
+	    exit 1; }; \
+	fi
 	@_pat="$(call _runner_pat)"; \
 	RUNNER_ACCESS_TOKEN=$$_pat docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) up -d
 
@@ -468,15 +495,48 @@ gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner 
 # project so up/down/status/logs only touch that node's runners. Canonical
 # entrypoint — do NOT bring these up with a raw `docker compose up` (skips the
 # pipeline token resolution + preflight).
-#   make -C pmoves gha-runner-up RUNNER_NODE=z890
+#   make -C pmoves gha-runner-up RUNNER_NODE=spark
+#
+# LABEL COLLISION WARNING: do NOT use RUNNER_NODE=4090 or RUNNER_NODE=5090.
+# Those labels already belong to the NATIVE WINDOWS ai-lab runners on those
+# nodes, which are secrets-funnel CONSUMERS. sync-secrets-local.yml refuses
+# 4090/5090 as targets (PRODUCER_TARGETS), so a Docker Linux runner carrying
+# either label can never be selected as a producer, and any other workflow
+# targeting the label would land on either runner at random. Give a Docker
+# runner on those hosts a distinct label if one is ever needed.
+#
+# RUNNER_SKIP_PULL=1 skips the pre-start image pull (offline escape hatch: a
+# stopped runner cannot restart while the registry is unreachable). It warns
+# that the cached image may bundle a deprecated runner.
 RUNNER_NODE ?= host
+RUNNER_SKIP_PULL ?=
 RUNNER_COMPOSE := docker/runner/docker-compose.runner.yml
 RUNNER_PROJECT := pmoves-runners-$(RUNNER_NODE)
 
-gha-runner-up: ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+gha-runner-up: ## Start cross-node ai-lab Docker Linux runners (RUNNER_NODE=spark|b850|z890|…; NOT 4090/5090 -- label collides with their Windows consumer runners). Pulls first; RUNNER_SKIP_PULL=1 skips the pull
 	@echo "Pre-creating host config dirs (user-owned) for the runner bind mount..."
 	@mkdir -p "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets" && \
 	  chmod 700 "$$HOME/.config/pmoves" "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets"
+	@# Always PULL before `up -d`. 2026-09 incident: the B850 runners ran a
+	@# myoung34/github-runner:ubuntu-jammy image cached since 2026-07-10, whose
+	@# bundled runner (v2.335.1) GitHub had deprecated ("Runner version v2.335.1
+	@# is deprecated and cannot receive messages"). With auto-update disabled in
+	@# the image, the containers crash-looped ~5600 times each and never took a
+	@# job, so sync-secrets-local.yml could not produce CHIT bundles for the
+	@# consumer nodes (4090/5090). `up -d` alone never refreshes a cached tag.
+	@if [ "$(RUNNER_SKIP_PULL)" = "1" ]; then \
+	  echo "  ⚠ RUNNER_SKIP_PULL=1: starting on the CACHED image without pulling."; \
+	  echo "    It may bundle a deprecated runner that crash-loops -- pull as soon as the registry is reachable."; \
+	else \
+	  echo "Pulling the runner image (a stale cached image may carry a deprecated runner)..."; \
+	  RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) pull || { \
+	    echo "  ✗ FAIL: runner image pull failed. Refusing to start on the cached image:"; \
+	    echo "    it may bundle a runner version GitHub has deprecated, which crash-loops"; \
+	    echo "    with 'Runner version vX is deprecated and cannot receive messages'."; \
+	    echo "    Fix registry/network access, then re-run this target. If the registry is"; \
+	    echo "    unreachable and you accept that risk, re-run with RUNNER_SKIP_PULL=1."; \
+	    exit 1; }; \
+	fi
 	@echo "Resolving runner credential for node '$(RUNNER_NODE)'..."
 	@_pat="$(call _runner_pat)"; \
 	if [ -n "$$_pat" ] && GH_TOKEN="$$_pat" gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners >/dev/null 2>&1; then \
@@ -523,6 +583,17 @@ up-ollama: ## Start Ollama service (default profile, always available)
 	@echo ""
 	@echo "Ollama API: http://localhost:11434"
 	@echo "Pull models: make model-pull MODEL=qwen3:8b"
+
+# Host-native Ollama binds loopback; containers reach it through a proxy on the
+# docker gateway address. Mutating the host (systemd + ufw) is an operator step.
+.PHONY: ollama-host-bridge ollama-host-bridge-status
+ollama-host-bridge: ## Plan (dry-run) exposing HOST Ollama to containers on the docker gateway; apply with sudo (printed)
+	@bash ../deploy/provision/ollama-docker-bridge.sh --dry-run
+	@echo ""
+	@echo "Apply (operator, needs root):  sudo deploy/provision/ollama-docker-bridge.sh --apply"
+
+ollama-host-bridge-status: ## Is the host-Ollama docker bridge provisioned? Needs root (state file + ufw); run the script directly for the 0/1/3 code
+	@bash ../deploy/provision/ollama-docker-bridge.sh --status
 
 up-gpu-orchestrator: ## Start GPU orchestrator (gpu profile)
 	@echo "=== Starting GPU Orchestrator ==="
@@ -678,10 +749,19 @@ dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up l
 agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
 	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
 
-# Sibling of the REPO ROOT (make -C pmoves runs from pmoves/, hence ../../).
-ACP_REGISTRY_PATH ?= ../../PMOVES-registry
-acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping (clone POWERFULMOVES/PMOVES-registry as a repo-root sibling first)
+# The PMOVES-registry SUBMODULE pinned in this repo (make -C pmoves runs from
+# pmoves/, hence ../). Not a repo-root sibling clone: a stale sibling silently
+# dropped newer entries. Populate with `git submodule update --init PMOVES-registry`.
+ACP_REGISTRY_PATH ?= ../PMOVES-registry
+acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping from the pinned PMOVES-registry submodule
 	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --write
+
+acp-registry-map-check: ## Fail if acp_registry_map.json drifted from the pinned PMOVES-registry submodule
+	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --check
+
+ACP_PROBE_ENTRIES ?= kilo,glm-acp-agent,minimax-code,qwen-code,codex-acp,claude-acp
+acp-launcher-probe: ## Verify ACP registry launchers on this node (see pmoves/docs/TAC/TAC_ACP_REGISTRY.md); scope with ACP_PROBE_ENTRIES=kilo
+	@uv run --quiet --with pyyaml python tools/acp_launcher_probe.py --registry $(ACP_REGISTRY_PATH) --entries "$(ACP_PROBE_ENTRIES)"
 
 # ── Agent Zero dependency overlay ──────────────────────────────
 # The image installs deps twice into one venv: the fork's requirements first,

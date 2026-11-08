@@ -32,6 +32,7 @@ _Add collaborators / DAO members / Fordham Hill participants in `users.yaml:huma
 | **KiloCode** `kilocode` | External Contributors: kilocode | — | `pmoves-5090` | Infra Cloud · Delivery |
 | **Codex** `codex` | External Contributors: codex | — | — | Delivery |
 | **Cipher** `cipher` | Research & Knowledge: cipher_memory (:8105) | — | — | Core |
+| **Kimi Knuckles** `kimi-knuckles` | node_steward: kimi_knuckles (Kimi Code CLI, B850) | — | `pmoves-knuckles` | Infra Cloud · Governance |
 | **MiniMax (FlOO$)** `minimax-floos` | Media & Voice _(TODO)_ | PERSONAS.md → FlOO$ suits | — | Voice |
 
 ## Nodes  *(access + tailnet host; hardware in node profiles)*

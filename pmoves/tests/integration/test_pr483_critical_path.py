@@ -7,8 +7,12 @@ Supabase → NATS → Agent Zero → TensorZero → Hi-RAG v2
 PR: https://github.com/POWERFULMOVES/PMOVES.AI/pull/483
 """
 
+from pathlib import Path
+
 import pytest
 import httpx
+
+PMOVES = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.integration
@@ -112,18 +116,28 @@ async def test_critical_path_hirag_v2(http_client: httpx.AsyncClient) -> None:
 
 @pytest.mark.integration
 @pytest.mark.dependency(depends=["test_critical_path_hirag_v2"])
-@pytest.mark.asyncio
-async def test_critical_path_neo4j(http_client: httpx.AsyncClient) -> None:
+def test_critical_path_neo4j() -> None:
     """
-    Step 6: Verify Neo4j is accessible on both HTTP and Bolt ports.
+    Step 6: Verify Neo4j is up.
 
-    Neo4j should be accessible on HTTP (7474) and Bolt (7687) ports.
+    Since #3251 Neo4j publishes no host ports (tests/test_neo4j_compose_contract.py,
+    docs/TAC/TAC_NEO4J.md), so localhost:7474 is not a health signal any more. Read the
+    container's own healthcheck instead, by its compose-declared name.
     """
-    try:
-        response = await http_client.get("http://localhost:7474", timeout=5.0)
-        assert response.status_code == 200
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
-        pytest.skip(f"Neo4j not accessible: {e}")
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None:
+        pytest.skip("docker not available")
+    name = subprocess.run(["python3", str(PMOVES / "scripts" / "neo4j_container.py")],
+                          capture_output=True, text=True, timeout=30)
+    if name.returncode != 0:
+        pytest.skip(f"could not resolve the Neo4j container name: {name.stderr.strip()}")
+    state = subprocess.run(["docker", "inspect", "-f", "{{.State.Health.Status}}", name.stdout.strip()],
+                           capture_output=True, text=True, timeout=30)
+    if state.returncode != 0:
+        pytest.skip(f"Neo4j container not present: {state.stderr.strip()}")
+    assert state.stdout.strip() == "healthy", state.stdout
 
 
 @pytest.mark.integration
@@ -221,7 +235,7 @@ def test_pr483_changes_verified() -> None:
     This test checks that the specific changes from PR #483 are present:
     1. NATS_URL moved to tier env files (not in env.shared)
     2. TensorZero uses port 3000 for internal calls
-    3. Neo4j uses separate HTTP_PORT and BOLT_PORT
+    3. Neo4j publishes no host ports (superseded PR #483's NEO4J_HTTP_PORT/BOLT_PORT; #3251)
     4. Supabase network name is correct
     """
     import subprocess
@@ -231,7 +245,7 @@ def test_pr483_changes_verified() -> None:
         ["grep", "^NATS_URL=", "env.shared"],
         capture_output=True,
         text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
+        cwd=PMOVES,
     )
     assert result.returncode != 0, "NATS_URL should be removed from env.shared"
 
@@ -240,32 +254,21 @@ def test_pr483_changes_verified() -> None:
         ["grep", "TENSORZERO_URL.*3000", "docker-compose.yml"],
         capture_output=True,
         text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
+        cwd=PMOVES,
     )
     assert result.returncode == 0, "TensorZero should use internal port 3000"
 
-    # Check 3: Neo4j dual port variables
-    result = subprocess.run(
-        ["grep", "NEO4J_HTTP_PORT", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-    assert result.returncode == 0, "Neo4j should use NEO4J_HTTP_PORT"
-
-    result = subprocess.run(
-        ["grep", "NEO4J_BOLT_PORT", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-    assert result.returncode == 0, "Neo4j should use NEO4J_BOLT_PORT"
+    # Check 3: Neo4j publishes no host ports. PR #483's NEO4J_HTTP_PORT/NEO4J_BOLT_PORT
+    # were retired by #3251; the full contract is tests/test_neo4j_compose_contract.py.
+    compose = (PMOVES / "docker-compose.yml").read_text()
+    assert "NEO4J_HTTP_PORT" not in compose, "Neo4j host ports were retired (#3251)"
+    assert "NEO4J_BOLT_PORT" not in compose, "Neo4j host ports were retired (#3251)"
 
     # Check 4: Supabase network name
     result = subprocess.run(
         ["grep", "supabase_network_PMOVES.AI", "docker-compose.yml"],
         capture_output=True,
         text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
+        cwd=PMOVES,
     )
     assert result.returncode == 0, "Should reference supabase_network_PMOVES.AI"

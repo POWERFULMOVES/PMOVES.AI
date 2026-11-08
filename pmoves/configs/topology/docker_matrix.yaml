@@ -30,6 +30,10 @@ overlays:
     canonical_path: pmoves/docker-compose.a0-elder-melchor.yml
   - name: activepieces
     canonical_path: pmoves/docker-compose.activepieces.yml
+  - name: agent-zero-darkxside-vm
+    canonical_path: pmoves/docker-compose.agent-zero-darkxside-vm.yml
+  - name: agent-zero-instances
+    canonical_path: pmoves/docker-compose.agent-zero-instances.yml
   - name: agentgym
     canonical_path: pmoves/docker-compose.agentgym.yml
   - name: agents
@@ -96,6 +100,8 @@ overlays:
     canonical_path: pmoves/docker-compose.n8n.yml
   - name: n8n.postgres
     canonical_path: pmoves/docker-compose.n8n.postgres.yml
+  - name: neo4j-tailnet
+    canonical_path: pmoves/docker-compose.neo4j-tailnet.yml
   - name: open-notebook
     canonical_path: pmoves/docker-compose.open-notebook.yml
   - name: persona
@@ -1279,6 +1285,10 @@ services:
     roots:
       - pmoves/services
     overlays:
+      - overlay: amd
+        compose_key: media-audio
+        paths:
+          - pmoves/docker-compose.amd.yml
       - overlay: hardened
         compose_key: media-audio
         paths:
@@ -1458,6 +1468,28 @@ services:
           - pmoves/docker-compose.apps.yml
       - overlay: main
         compose_key: nats_event_bus
+        paths:
+          - pmoves/docker-compose.yml
+    guard_paths: []
+    known_road_domains:
+      - compose
+      - dockerfile
+      - schema
+      - topic
+  - name: node-registry
+    directory: pmoves/services/node_registry
+    dockerfile: pmoves/services/node_registry/Dockerfile
+    dockerfile_variants:
+      - Dockerfile
+    roots:
+      - pmoves/services
+    overlays:
+      - overlay: core
+        compose_key: node-registry
+        paths:
+          - pmoves/docker-compose.core.yml
+      - overlay: main
+        compose_key: node-registry
         paths:
           - pmoves/docker-compose.yml
     guard_paths: []
@@ -2202,6 +2234,18 @@ unmapped_compose_keys:
   - overlay: activepieces
     compose_key: activepieces-worker
     path: pmoves/docker-compose.activepieces.yml
+  - overlay: agent-zero-darkxside-vm
+    compose_key: agent-zero-darkxside-vm
+    path: pmoves/docker-compose.agent-zero-darkxside-vm.yml
+  - overlay: agent-zero-darkxside-vm
+    compose_key: pmoves-net
+    path: pmoves/docker-compose.agent-zero-darkxside-vm.yml
+  - overlay: agent-zero-instances
+    compose_key: agent-zero-darkxside-inst
+    path: pmoves/docker-compose.agent-zero-instances.yml
+  - overlay: agent-zero-instances
+    compose_key: pmoves-net
+    path: pmoves/docker-compose.agent-zero-instances.yml
   - overlay: agentgym
     compose_key: agentgym-env-pmoves
     path: pmoves/docker-compose.agentgym.yml
@@ -2303,6 +2347,9 @@ unmapped_compose_keys:
     path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_external
+    path: pmoves/docker-compose.base.yml
+  - overlay: base
+    compose_key: pmoves_graph_front
     path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_monitoring
@@ -2722,6 +2769,9 @@ unmapped_compose_keys:
     compose_key: pmoves_external
     path: pmoves/docker-compose.yml
   - overlay: main
+    compose_key: pmoves_graph_front
+    path: pmoves/docker-compose.yml
+  - overlay: main
     compose_key: pmoves_monitoring
     path: pmoves/docker-compose.yml
   - overlay: main
@@ -2859,6 +2909,18 @@ unmapped_compose_keys:
   - overlay: n8n.postgres
     compose_key: n8n-db
     path: pmoves/docker-compose.n8n.postgres.yml
+  - overlay: neo4j-tailnet
+    compose_key: cap_drop
+    path: pmoves/docker-compose.neo4j-tailnet.yml
+  - overlay: neo4j-tailnet
+    compose_key: graphfront-tailnet-state
+    path: pmoves/docker-compose.neo4j-tailnet.yml
+  - overlay: neo4j-tailnet
+    compose_key: neo4j-tailnet
+    path: pmoves/docker-compose.neo4j-tailnet.yml
+  - overlay: neo4j-tailnet
+    compose_key: security_opt
+    path: pmoves/docker-compose.neo4j-tailnet.yml
   - overlay: open-notebook
     compose_key: cataclysm
     path: pmoves/docker-compose.open-notebook.yml

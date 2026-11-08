@@ -40,7 +40,7 @@ from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("fleet_sentinel")
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 POLL_INTERVAL = float(os.environ.get("SENTINEL_POLL_INTERVAL", "30"))
 FAILURE_THRESHOLD = int(os.environ.get("SENTINEL_FAILURE_THRESHOLD", "3"))
 RESTART_COOLDOWN = float(os.environ.get("SENTINEL_RESTART_COOLDOWN", "600"))

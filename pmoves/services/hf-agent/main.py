@@ -57,7 +57,7 @@ def _redact_url(url: str) -> str:
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 HF_TOKEN = _load_secret("HF_TOKEN")
 SERVER_PORT = int(os.environ.get("HF_AGENT_PORT", "8201"))
 

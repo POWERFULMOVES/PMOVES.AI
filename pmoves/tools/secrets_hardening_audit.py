@@ -22,8 +22,18 @@ class Finding:
     path: str | None = None
 
 
+# Files the walk could not read (e.g. root-owned container caches under
+# pmoves/data). Skipped -- a file this user cannot read is not one the repo
+# ships -- but counted and named in the summary so the gap stays visible.
+UNREADABLE: list[Path] = []
+
+
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore")
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        UNREADABLE.append(path)
+        return ""
 
 
 def _is_pruned_dir(root: Path, name: str) -> bool:
@@ -436,6 +446,11 @@ def main() -> int:
                 rel,
             )
         )
+
+    if UNREADABLE:
+        shown = ", ".join(str(p.relative_to(REPO_ROOT)) if p.is_relative_to(REPO_ROOT) else str(p) for p in UNREADABLE[:5])
+        more = f" (+{len(UNREADABLE) - 5} more)" if len(UNREADABLE) > 5 else ""
+        print(f"Secrets hardening audit: skipped {len(UNREADABLE)} unreadable file(s): {shown}{more}")
 
     if findings:
         errors = [f for f in findings if f.level == "ERROR"]

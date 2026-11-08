@@ -32,7 +32,7 @@ jobs:
        github.event.review.user.login == 'coderabbitai[bot]' ||
        github.event.review.user.login == 'chatgpt-codex-connector' ||
        github.event.review.user.login == 'chatgpt-codex-connector[bot]')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Aggressive: needs contents:write to apply + push fixes to the PR head branch.
     permissions:
       contents: write
@@ -47,7 +47,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Auto-fix from bot review
-        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1.0.210
+        uses: anthropics/claude-code-action@51db78a4b844e144f8d02425cb280435c04a3474 # v1.0.224
         with:
           # Coding plan, not the metered API key. See review-comment-monitor.yml.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

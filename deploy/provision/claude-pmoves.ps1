@@ -7,115 +7,133 @@
 #   (or double-click / run claude-pmoves.cmd, which calls this)
 
 $ErrorActionPreference = 'Stop'
+
+# ---------------------------------------------------------------------------
+# --backend= flag — switch between Anthropic-direct and MiniMax-routed Claude
+# Code for THIS launch without touching ~/.claude/settings.json. Persistent
+# switching lives at `pmoves-mini claude-backend {show,set,backup,restore}`.
+#
+# Accepted values:
+#   auto       (default) — detect hijack via $env:ANTHROPIC_BASE_URL; strip iff
+#                          the host is not api.anthropic.com. Lets a clean
+#                          host pass through with no churn.
+#   anthropic  — force Anthropic-direct routing; strip the Mavis SDK set
+#                unconditionally. One-shot override regardless of persistent
+#                state.
+#   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+#                Used to test the MiniMax routing on demand.
+#
+# Env-var equivalent: $env:PMOVES_CLAUDE_BACKEND = {auto|anthropic|minimax}.
+#
+# Kept in step with deploy/provision/claude-pmoves.sh: same flag surface, same
+# env-var name, same WARN phrase (`stripped Mavis SDK hijack`). Pinned by
+# TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py.
+# ---------------------------------------------------------------------------
+# Assigning '' to an env var DELETES it in PowerShell, so an unset backend is
+# still $null here -- interpolate to a string before calling .ToLower() (#3356).
+$env:PMOVES_CLAUDE_BACKEND = "$env:PMOVES_CLAUDE_BACKEND".ToLower()
+
+# Pull --backend= out of $args. We rebuild $args to the residual so the
+# launched claude gets them, not the flag.
+$__pmoves_backend_rest = New-Object System.Collections.Generic.List[string]
+$__pmoves_backend_parse_next = $false
+foreach ($__arg in $args) {
+    if ($__pmoves_backend_parse_next) {
+        $env:PMOVES_CLAUDE_BACKEND = $__arg
+        $__pmoves_backend_parse_next = $false
+        continue
+    }
+    if ($__arg -eq '--backend') {
+        $__pmoves_backend_parse_next = $true
+        continue
+    }
+    if ($__arg -like '--backend=*') {
+        $env:PMOVES_CLAUDE_BACKEND = $__arg.Substring('--backend='.Length)
+        continue
+    }
+    if ($__arg -eq '--help' -or $__arg -eq '-h') {
+        Write-Host @'
+claude-pmoves.ps1 — launch Claude Code with PMOVES env + MCP roster.
+
+Usage: claude-pmoves.ps1 [--backend={auto|anthropic|minimax}] [claude-args...]
+
+  --backend=auto       (default) detect hijack via $env:ANTHROPIC_BASE_URL
+  --backend=anthropic  force Anthropic-direct routing for this launch
+  --backend=minimax    preserve the Mavis SDK / settings.json hijack
+
+Persistent switching (writes ~/.claude/settings.json):
+  pmoves-mini claude-backend show
+  pmoves-mini claude-backend set anthropic
+  pmoves-mini claude-backend set minimax
+  pmoves-mini claude-backend backup
+  pmoves-mini claude-backend restore <file>
+'@
+        exit 0
+    }
+    $__pmoves_backend_rest.Add($__arg)
+}
+
+switch ($env:PMOVES_CLAUDE_BACKEND) {
+    '' { }                                                        # default = auto on apply
+    'auto' { }
+    'anthropic' { }
+    'minimax' { }
+    default {
+        Write-Error "[claude-pmoves] --backend=$($env:PMOVES_CLAUDE_BACKEND) invalid; expected one of auto, anthropic, minimax."
+        exit 2
+    }
+}
+
+# Rebuild $args to residual so the launched claude gets them, not the flag.
+$args = [System.Collections.Generic.List[string]]::new()
+foreach ($__arg in $__pmoves_backend_rest) { $args.Add($__arg) }
+$__pmoves_backend_rest = $null
+$__pmoves_backend_parse_next = $false
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
-# --- MAVIS SDK ENV STRIP ----------------------------------------------------
-# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
-# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
-# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
-# Claude Code session's process env.  That env block is inherited by the
-# shell that runs `claude-pmoves.ps1`, and would otherwise be inherited by
-# the launched `claude` -- overriding the operator's own Claude Code settings
-# (their Anthropic API endpoint, their model picker).
-#
-# The strip checks each Mavis SDK var against claude's NEEDS list
-# (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY) and:
-#   * keeps the ones claude consumes
-#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
-#   * unsets the originals
-#   * emits one WARN line summarizing what was caught
-#
-# Mirrors deploy/provision/claude-pmoves.sh:42-66.  Both twins source the
-# shared helper at pmoves/scripts/mavis_sdk_env.{sh,ps1} and call the
-# per-platform strip function with the same registry keys.
-# ----------------------------------------------------------------------------
-$mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
-if (Test-Path $mavis_helper) {
-    . $mavis_helper
-    Strip-MavisSdkEnvFor -CliName 'claude'
-} else {
-    Write-Warning "[claude-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+# Windows siblings of the bash fragments the POSIX launchers source
+# (pm-cipher-token-bind.sh, pm-ca-bundle.sh, pm-brv-check.sh), plus the two
+# blocks the .sh runs inline (agent selection, cipher_preflight). Same
+# contracts; each header lists its deliberate Windows differences. A missing
+# file costs the feature, never the session -- the call sites check Get-Command.
+foreach ($__pm_helper in @('pm-cipher-token-bind.ps1', 'pm-ca-bundle.ps1', 'pm-brv-check.ps1',
+                           'pm-agent-select.ps1', 'pm-cipher-preflight.ps1')) {
+    $__pm_helper_path = Join-Path $root "pmoves\scripts\$__pm_helper"
+    if (Test-Path -LiteralPath $__pm_helper_path) { . $__pm_helper_path }
+    else { Write-Warning "[claude-pmoves] pmoves\scripts\$__pm_helper missing -- that check is skipped." }
 }
 
-if (Test-Path $envf) {
-    # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
-    # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
-    # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
-    #
-    # Kept in step with deploy/provision/claude-pmoves.sh -- the bash twin
-    # has the same names but uses `CLAUDE_CODE_.+` regex anchor; the
-    # PowerShell twin's `-replace '\*','.*'` produces `CLAUDE_CODE_.*`.
-    $blocklist = @(
-        'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'
-        'CLAUDECODE', 'CLAUDE_CODE_*', 'CLAUDE_SESSION_*'
-    ) -replace '\*', '.*'
+# An explicit per-agent cipher token in the CALLER's env must survive
+# env.shared, which carries the node bootstrap bearer and is loaded next.
+# Mirrors PM_CIPHER_PRE_ENV_TOKEN in deploy/provision/claude-pmoves.sh: the
+# fragment's "explicit env token wins" rule has to hold for the FINAL session,
+# not only until env.shared overwrites it. Case-sensitive, as the bash glob is.
+$script:PmCipherPreEnvToken = if ("$env:CIPHER_API_TOKEN" -clike 'cipher_*') { $env:CIPHER_API_TOKEN } else { $null }
 
-    # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
-    # Values are NOT set into the environment yet — env.shared has ALIAS lines like
-    # SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}; exporting them verbatim leaks
-    # the literal "${SERVICE_ROLE_KEY}" into the MCP --apiKey, starting an
-    # alias-backed MCP unauthorized even though the canonical key is present
-    # (Codex #1987 P2). Mirror pmoves/scripts/with-env.sh: resolve first.
-    $vars = [ordered]@{}
-    foreach ($line in Get-Content -LiteralPath $envf) {
-        if ($line -match '^\s*#') { continue }        # comment
-        if ($line -match '^\s*$') { continue }        # blank
-        $eq = $line.IndexOf('=')
-        if ($eq -lt 1) { continue }
-        $key = $line.Substring(0, $eq).Trim()
-        # Skip blocklisted keys (these control Claude SDK/session, not MCP)
-        $blocked = $false
-        foreach ($pat in $blocklist) { if ($key -match "^$pat$") { $blocked = $true; break } }
-        if ($blocked) { continue }
-        $val = ($line.Substring($eq + 1) -replace '\r$','')
-        if ($key) { $vars[$key] = $val }
-    }
-    # Pass 2: expand ${VAR} and ${VAR:-default} against the map (mirrors the shell
-    # `source` in claude-pmoves.sh). Bounded iteration resolves chained aliases;
-    # stops early once a pass makes no substitution. A reference resolves to another
-    # key only when that key is itself fully resolved; a self-reference
-    # (KEY=${KEY:-default}, the compose self-default idiom) skips the var branch and
-    # falls to the default, exactly as the shell's `:-` does.
-    for ($pass = 0; $pass -lt 5; $pass++) {
-        $changed = $false
-        foreach ($k in @($vars.Keys)) {
-            $curKey = $k
-            $resolved = [regex]::Replace($vars[$k], '\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}', {
-                param($m)
-                $name = $m.Groups[1].Value
-                $repl = $null
-                if ($name -ne $curKey) {
-                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch '\$\{') {
-                        $repl = $vars[$name]                                  # another resolved key
-                    } else {
-                        $envv = [Environment]::GetEnvironmentVariable($name)  # real process env (parity with shell source)
-                        if ($envv) { $repl = $envv }
-                    }
-                }
-                if ($null -ne $repl) { $repl }
-                elseif ($m.Groups[2].Success) { $m.Groups[2].Value }         # ${VAR:-default}
-                else { '' }                                                  # unset, no default
-            })
-            if ($resolved -ne $vars[$k]) { $vars[$k] = $resolved; $changed = $true }
-        }
-        if (-not $changed) { break }
-    }
-    $n = 0
-    foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++ }
-    Write-Host "[claude-pmoves] loaded $n vars from $envf"
-    $script:launcherSession = "claude-pmoves.ps1 ($n vars)"
-} else {
-    Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
-    $script:launcherSession = 'claude-pmoves.ps1 (env file NOT FOUND)'
+# AGENT SELECTION -- once, here. Until 2026-11-04 the installed shim
+# (pmoves/scripts/windows/claude-pmoves.bat) chose the agent AND resolved the
+# identity AND built its own prompt before calling this file, which did the last
+# two again: claude received two --append-system-prompt blocks. The shim is now
+# a delegate; the rule it owned lives in pm-agent-select.ps1, applied here,
+# before identity, so the role read-back below sees the final --agent.
+#
+# The `claude-pmoves <agent-name>` shorthand is the SHIM's promise, so only the
+# shim turns it on (PMOVES_AGENT_POSITIONAL=1). Entered directly -- this file,
+# claude-pmoves.cmd, a per-node claude-pmoves-<node>.cmd -- a leading positional
+# stays claude's prompt, as it always was (Codex #3454 P1). Cleared at once so
+# a nested launch from inside the session does not inherit it.
+$__positional = ("$env:PMOVES_AGENT_POSITIONAL" -eq '1')
+Remove-Item Env:PMOVES_AGENT_POSITIONAL -ErrorAction SilentlyContinue
+$script:PmAgentRole = $null
+if (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue) {
+    $__sel = Resolve-PmAgentArgs -Root $root -Argv @($args) -Positional:$__positional
+    foreach ($__l in @($__sel.Lines)) { Write-Warning $__l }
+    $args = [System.Collections.Generic.List[string]]::new()
+    foreach ($__arg in @($__sel.Argv)) { $args.Add($__arg) }
+    $script:PmAgentRole = $__sel.Role
 }
-
-# Leave a marker in the process environment so "did this session come through
-# the launcher" is ANSWERABLE from inside the session. Mirrors the export in
-# claude-pmoves.sh; see the comment there for why launcher-check cannot answer
-# it. Set on BOTH branches -- "loaded 0 vars" and "never ran" are different
-# faults with different remedies, and a bare boolean would merge them.
-[Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
+Write-Host "[claude-pmoves] agent=$(if ($script:PmAgentRole) { $script:PmAgentRole } else { 'none (node identity, full tools)' })"
 
 # ---------------------------------------------------------------------------
 # Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
@@ -156,7 +174,10 @@ function Test-PmovesPythonRuns {
     $PSNativeCommandUseErrorActionPreference = $false
     if (-not $Argv -or $Argv.Count -eq 0) { return $false }
     $exe  = $Argv[0]
-    $rest = if ($Argv.Count -gt 1) { $Argv[1..($Argv.Count - 1)] } else { @() }
+    # @(...) is load-bearing: a one-element slice is a bare STRING, and splatting
+    # a string passes its characters -- `py -3` became `py - 3`, and a lone `-`
+    # makes python run a script read from STDIN (#3356).
+    $rest = @(if ($Argv.Count -gt 1) { $Argv[1..($Argv.Count - 1)] })
     $global:LASTEXITCODE = 1
     try { & $exe @rest -c 'pass' *> $null } catch { return $false }
     return ($LASTEXITCODE -eq 0)
@@ -210,6 +231,275 @@ function Get-PmovesPythonArgv {
     if (Test-PmovesPythonRuns @('python3'))  { return , @('python3') }
     if (Test-PmovesPythonRuns @('python'))   { return , @('python') }
     return $null
+}
+
+# Defined HERE, ahead of the backend selector below, because that selector is
+# their first caller. PowerShell functions must be defined before they are
+# called; a later merge left them ~190 lines below it and every launch died
+# with 'Get-PmovesPythonArgv is not recognized' (#3356).
+
+# --- MAVIS SDK ENV STRIP ----------------------------------------------------
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs `claude-pmoves.ps1`, and would otherwise be inherited by
+# the launched `claude` -- overriding the operator's own Claude Code settings
+# (their Anthropic API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against claude's NEEDS list
+# (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY) and:
+#   * keeps the ones claude consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Mirrors deploy/provision/claude-pmoves.sh:42-66.  Both twins source the
+# shared helper at pmoves/scripts/mavis_sdk_env.{sh,ps1} and call the
+# per-platform strip function with the same registry keys.
+# ----------------------------------------------------------------------------
+$mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+if (Test-Path $mavis_helper) {
+    . $mavis_helper
+    Strip-MavisSdkEnvFor -CliName 'claude'
+} else {
+    Write-Warning "[claude-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+}
+
+# ---------------------------------------------------------------------------
+# Claude Code backend selector — strip the Mavis-SDK hijack when --backend=
+# (or $env:PMOVES_CLAUDE_BACKEND) says so. Called AFTER Strip-MavisSdkEnvFor
+# so the NEEDS-list preservation there runs first; this is the OVERRIDE layer.
+#
+# The python module is the source of truth — PowerShell just Invoke-Expression's
+# its stdout and forwards stderr (which carries the WARN when something was
+# actually stripped). Bash twin does the same via `eval`. Kept in step by:
+#   1. TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py
+#   2. The pinned `--backend=` flag surface
+#   3. The pinned `PMOVES_CLAUDE_BACKEND` env-var name
+#   4. The pinned `stripped Mavis SDK hijack` WARN phrase
+#
+# If python or the tool is missing, we fall through with a WARN — the Mavis
+# SDK env-strip above has already done its partial work, and `claude` will
+# inherit whatever the parent shell set. The user can still fix the persistent
+# state with `pmoves-mini claude-backend set anthropic`.
+# ---------------------------------------------------------------------------
+if ([string]::IsNullOrEmpty($env:PMOVES_CLAUDE_BACKEND)) {
+    $applyBackend = 'auto'
+} else {
+    $applyBackend = $env:PMOVES_CLAUDE_BACKEND
+}
+$pyArgv = Get-PmovesPythonArgv -Root $root
+if (-not $pyArgv) {
+    Write-Warning "[claude-pmoves] no python interpreter; claude_backend_apply skipped (PMOVES_CLAUDE_BACKEND=$applyBackend)."
+} else {
+    $pyExe = $pyArgv[0]
+    $pyPre = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })   # @(): see Test-PmovesPythonRuns
+    $cbNormalizer = Join-Path $root 'pmoves\tools\claude_backend.py'
+    if (-not (Test-Path $cbNormalizer)) {
+        Write-Warning "[claude-pmoves] claude_backend.py not found at $cbNormalizer; backend selector skipped."
+    } else {
+        $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+        $applyOut = & $pyExe @pyPre $cbNormalizer apply --backend $applyBackend --label 'claude-pmoves.ps1'
+        $applyRc = $LASTEXITCODE
+        $ErrorActionPreference = $prevErr
+        if ($applyRc -ne 0) {
+            Write-Warning "[claude-pmoves] claude_backend.py apply exited $applyRc; skipping the strip."
+        } elseif ($applyOut) {
+            foreach ($__cb_line in ($applyOut -split "`n")) {
+                if (-not $__cb_line) { continue }
+                # The python module emits `unset NAME` and `export NAME=value`
+                # lines. Translate each into PowerShell and apply to the process
+                # env (NOT child-process-only; the launched claude needs to
+                # inherit the unset).
+                if ($__cb_line -match '^unset\s+(\S+)$') {
+                    [Environment]::SetEnvironmentVariable($Matches[1], $null, 'Process')
+                } elseif ($__cb_line -match '^export\s+(\S+)=(.+)$') {
+                    $__cb_k = $Matches[1]
+                    $__cb_v = $Matches[2]
+                    # Strip surrounding single quotes that bash-style export used.
+                    if ($__cb_v.StartsWith("'") -and $__cb_v.EndsWith("'")) {
+                        $__cb_v = $__cb_v.Substring(1, $__cb_v.Length - 2)
+                    }
+                    [Environment]::SetEnvironmentVariable($__cb_k, $__cb_v, 'Process')
+                }
+            }
+        }
+    }
+}
+
+if (Test-Path $envf) {
+    # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
+    # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
+    # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
+    #
+    # Kept in step with deploy/provision/claude-pmoves.sh -- the bash twin
+    # has the same names but uses `CLAUDE_CODE_.+` regex anchor; the
+    # PowerShell twin's `-replace '\*','.*'` produces `CLAUDE_CODE_.*`.
+    $blocklist = @(
+        'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'
+        'CLAUDECODE', 'CLAUDE_CODE_*', 'CLAUDE_SESSION_*'
+    ) -replace '\*', '.*'
+
+    # Strip blocklisted vars from PARENT env before exec claude. The blocklist
+    # above filters env.shared (the file being sourced), but the parent shell
+    # may have set ANTHROPIC_API_KEY via $PROFILE, env.tier-llm, or a prior
+    # session export. Without this unset, the child process inherits them on
+    # the way to exec claude and the auth-precedence warning fires
+    # ("claude.ai connectors disabled because ANTHROPIC_API_KEY takes
+    # precedence"). The .sh twin performs the same sweep — keep them
+    # byte-identical.
+    $cleared = @()
+    foreach ($var in @('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL')) {
+        if (Test-Path "Env:$var") {
+            $cleared += $var
+            [Environment]::SetEnvironmentVariable($var, $null, 'Process')
+        }
+    }
+    # PowerShell: enumerate process env, match prefix patterns, unset matches.
+    $processEnv = [Environment]::GetEnvironmentVariables('Process')
+    foreach ($prefix in @('CLAUDECODE', 'CLAUDE_CODE_', 'CLAUDE_SESSION_')) {
+        foreach ($key in @($processEnv.Keys)) {
+            if ($key -like "${prefix}*") {
+                $cleared += $key
+                [Environment]::SetEnvironmentVariable($key, $null, 'Process')
+            }
+        }
+    }
+    if ($cleared.Count -gt 0) {
+        Write-Host "[claude-pmoves] cleared auth vars from parent env: $($cleared -join ' ')" -ForegroundColor Yellow
+    }
+
+    # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
+    # Values are NOT set into the environment yet — env.shared has ALIAS lines like
+    # SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}; exporting them verbatim leaks
+    # the literal "${SERVICE_ROLE_KEY}" into the MCP --apiKey, starting an
+    # alias-backed MCP unauthorized even though the canonical key is present
+    # (Codex #1987 P2). Mirror pmoves/scripts/with-env.sh: resolve first.
+    $vars = [ordered]@{}
+    foreach ($line in Get-Content -LiteralPath $envf) {
+        if ($line -match '^\s*#') { continue }        # comment
+        if ($line -match '^\s*$') { continue }        # blank
+        $eq = $line.IndexOf('=')
+        if ($eq -lt 1) { continue }
+        $key = $line.Substring(0, $eq).Trim()
+        # Skip blocklisted keys (these control Claude SDK/session, not MCP)
+        $blocked = $false
+        foreach ($pat in $blocklist) { if ($key -match "^$pat$") { $blocked = $true; break } }
+        if ($blocked) { continue }
+        $val = ($line.Substring($eq + 1) -replace '\r$','')
+        if ($key) { $vars[$key] = $val }
+    }
+    # Pass 2: expand ${VAR} and ${VAR:-default} against the map (mirrors the shell
+    # `source` in claude-pmoves.sh). Bounded iteration resolves chained aliases;
+    # stops early once a pass makes no substitution. A reference resolves to another
+    # key only when that key is itself fully resolved; a self-reference
+    # (KEY=${KEY:-default}, the compose self-default idiom) skips the var branch and
+    # falls to the default, exactly as the shell's `:-` does.
+    for ($pass = 0; $pass -lt 5; $pass++) {
+        $changed = $false
+        foreach ($k in @($vars.Keys)) {
+            $curKey = $k
+            $resolved = [regex]::Replace($vars[$k], '\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}', {
+                param($m)
+                $name = $m.Groups[1].Value
+                $repl = $null
+                if ($name -ne $curKey) {
+                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch '\$\{') {
+                        $repl = $vars[$name]                                  # another resolved key
+                    } else {
+                        $envv = [Environment]::GetEnvironmentVariable($name)  # real process env (parity with shell source)
+                        if ($envv) { $repl = $envv }
+                    }
+                }
+                if ($null -ne $repl) { $repl }
+                elseif ($m.Groups[2].Success) { $m.Groups[2].Value }         # ${VAR:-default}
+                else { '' }                                                  # unset, no default
+            })
+            if ($resolved -ne $vars[$k]) { $vars[$k] = $resolved; $changed = $true }
+        }
+        if (-not $changed) { break }
+    }
+    # ALLOWLIST EXPORT -- only the names a roster server or the launcher reads.
+    # This used to set EVERY parsed key into the process env, and the session
+    # env then shadowed env.tier-* for every child (compose gives shell env
+    # precedence over --env-file). Full rationale in the .sh twin; both call
+    # pmoves/tools/launcher_env_allowlist.py, the single source of the list.
+    # An allowed key with a non-empty value wins over an inherited one, as the
+    # old loop did; a key the file does not define is left alone.
+    $allow = @()
+    $allowHow = 'launcher_env_allowlist.py'
+    $allowTool = Join-Path $root 'pmoves\tools\launcher_env_allowlist.py'
+    if ($pyArgv -and (Test-Path -LiteralPath $allowTool)) {
+        $allowArgs = @($allowTool, '--root', $root)
+        if (-not $env:PMOVES_ROSTER_FROM_TREE) {
+            $allowArgs += @('--ref', 'origin/main')
+            # Fetch before the list is cut, so it and the roster below come from
+            # the same origin/main (see the .sh twin).
+            $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+            & git -C $root fetch --quiet origin main 2>$null | Out-Null
+            $ErrorActionPreference = $prevErr
+            $script:pmOriginMainFetched = $true
+        }
+        $allowPre = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })
+        # Same 5.1 guard as the backend selector: native stderr under 'Stop' is terminating.
+        $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+        $allowOut = & $pyArgv[0] @allowPre @allowArgs 2>$null
+        $allowRc = $LASTEXITCODE
+        $ErrorActionPreference = $prevErr
+        if ($allowRc -eq 0) { $allow = @($allowOut | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*$' }) }
+    }
+    if ($allow.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $root 'pmoves\Makefile'))) {
+        # REPO-LESS MODE (an explicit PMOVES_ENV_SHARED from a copied launcher):
+        # no tool and no roster to cut a list from. Export the pinned file as
+        # before, and say so (see the .sh twin).
+        $allow = @($vars.Keys)
+        $allowHow = 'repo-less: no allowlist source, exporting the pinned PMOVES_ENV_SHARED'
+        Write-Warning "[claude-pmoves] no repo, so no allowlist -- every key of $envf crosses into this session."
+    }
+    if ($allow.Count -eq 0) {
+        # No python (or the tool failed): the same two sources, read without it.
+        # Coarser -- no `_`-disabled skip, no origin/main -- but it can only
+        # allow more of what the roster names, never an unrelated key.
+        $allowHow = 'fallback: roster refs + IMPLICIT_READS, no python'
+        foreach ($rf in @((Join-Path $root '.claude\mcp.json'), (Join-Path $root '.mcp.json'))) {
+            if (Test-Path -LiteralPath $rf) {
+                foreach ($m in [regex]::Matches((Get-Content -LiteralPath $rf -Raw), '\$\{([A-Za-z_][A-Za-z0-9_]*)')) {
+                    $allow += $m.Groups[1].Value
+                }
+            }
+        }
+        if (Test-Path -LiteralPath $allowTool) {
+            $implicit = [regex]::Match((Get-Content -LiteralPath $allowTool -Raw), '(?ms)^IMPLICIT_READS.*?^\}').Value
+            foreach ($m in [regex]::Matches($implicit, '(?m)^    "([A-Za-z_][A-Za-z0-9_]*)"')) { $allow += $m.Groups[1].Value }
+        }
+    }
+    $n = 0
+    foreach ($k in ($allow | Sort-Object -Unique)) {
+        if ($vars.Contains($k) -and $vars[$k] -ne '') {
+            [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++
+        }
+    }
+    Write-Host "[claude-pmoves] exported $n allowlisted of $($vars.Count) parsed vars from $envf ($allowHow)"
+    if ($n -eq 0) { Write-Warning "[claude-pmoves] no env.shared value crossed the allowlist -- MCP creds may be missing." }
+    $script:launcherSession = "claude-pmoves.ps1 ($n of $($vars.Count) vars)"
+} else {
+    Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
+    $script:launcherSession = 'claude-pmoves.ps1 (env file NOT FOUND)'
+}
+
+# Leave a marker in the process environment so "did this session come through
+# the launcher" is ANSWERABLE from inside the session. Mirrors the export in
+# claude-pmoves.sh; see the comment there for why launcher-check cannot answer
+# it. Set on BOTH branches -- "loaded 0 vars" and "never ran" are different
+# faults with different remedies, and a bare boolean would merge them.
+[Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
+
+# Host TLS -- after env.shared, before any python MCP server is spawned. Prints
+# only when a configured CA path is unreadable (see pm-ca-bundle.ps1).
+if (Get-Command Invoke-PmCaBundleNormalize -ErrorAction SilentlyContinue) {
+    $__pm_ca_line = Invoke-PmCaBundleNormalize
+    if ($__pm_ca_line) { Write-Warning "[claude-pmoves] $__pm_ca_line" }
 }
 
 function Test-PmovesRosterHasBarePlaceholder {
@@ -344,12 +634,21 @@ if (Get-Command tailscale -ErrorAction SilentlyContinue) {
 # convenience; losing it must not cost you the session." Every failure warns
 # and launches.
 # ---------------------------------------------------------------------------
+# An explicit cipher_ token captured before env.shared loaded is restored HERE,
+# unconditionally -- not inside the identity-success branch below. Every
+# fail-open path there (no python, resolver exit != 0, node unresolved) would
+# otherwise launch with env.shared's bootstrap bearer standing. Parity with
+# claude-pmoves.sh, which restores before identity resolution.
+if ($script:PmCipherPreEnvToken) { $env:CIPHER_API_TOKEN = $script:PmCipherPreEnvToken }
 $identityArgs = @()
+$identWhyLine = $null
+$ident = @{}
 $identTool = Join-Path $root 'pmoves\tools\node_identity.py'
 if (Test-Path -LiteralPath $identTool) {
     $identPy = Get-PmovesPythonArgv -Root $root
     if (-not $identPy) {
-        Write-Warning '[claude-pmoves] node identity: no usable python; launching without it.'
+        $identWhyLine = 'node identity: no usable python; launching without it.'
+        Write-Warning "[claude-pmoves] $identWhyLine"
     } else {
         # Same settings.local.json read as the POSIX twin: the resolver runs
         # BEFORE the harness loads that file, so a node whose hostname collides
@@ -370,7 +669,14 @@ if (Test-Path -LiteralPath $identTool) {
         }
         $identArgv = @($identTool, '--harness', 'claude-code', '--shell')
         if ($identPy.Count -gt 1) { $identArgv = @($identPy[1..($identPy.Count - 1)]) + $identArgv }
+        # Under the script-wide 'Stop', Windows PowerShell 5.1 turns ANY native
+        # stderr line into a terminating NativeCommandError even with 2>$null,
+        # so a resolver traceback (e.g. a bare `py -3` without PyYAML) killed
+        # the launch this block promises to keep (#3356). Same guard as the
+        # backend selector above.
+        $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
         $identOut = & $identPy[0] @identArgv 2>$null
+        $ErrorActionPreference = $prevErr
         if ($LASTEXITCODE -eq 0 -and $identOut) {
             # The tool emits shell assignments (KEY='value'); PARSE them rather
             # than eval. PowerShell has no eval of shell syntax, and inventing
@@ -407,14 +713,32 @@ if (Test-Path -LiteralPath $identTool) {
                 # Silence on a skip is indistinguishable from a healthy carry,
                 # which is the defect the fragment was written to end.
                 # ---------------------------------------------------------
+                # CIPHER TOKEN BIND -- before the carry measurement, so it
+                # reports the post-bind reality, and after env.shared, which
+                # would otherwise overwrite the bind with the node bootstrap
+                # bearer. Keyed on the signing-card agentId, not the registry
+                # key: the token store is CIPHER_TOKEN_<AGENT_ID>. Measured on
+                # Z890 2026-11-02 without this: writes-land-as=bootstrap.
+                # ---------------------------------------------------------
+                if (Get-Command Invoke-PmCipherTokenBind -ErrorAction SilentlyContinue) {
+                    $bind = Invoke-PmCipherTokenBind -Root $root -Agent $ident['PMOVES_CIPHER_AGENT_ID']
+                    Write-Host "[claude-pmoves] $($bind.Line)"
+                }
                 $carryLine = ''
                 $carryTool = Join-Path $root 'pmoves/tools/cipher_identity.py'
                 if (-not (Test-Path -LiteralPath $carryTool)) {
                     $carryLine = "cipher carry: unmeasurable (no $carryTool)"
                 } else {
-                    $carryArgv = @($carryTool, '--agent', $nodeIdent, '--shell')
+                    # The signing-card agentId, not the registry key -- parity
+                    # with claude-pmoves.sh (PM_IDENT_CIPHER_ID, falling back to
+                    # the registry identity where no agentId is declared).
+                    $carryAgent = if ($ident['PMOVES_CIPHER_AGENT_ID']) { $ident['PMOVES_CIPHER_AGENT_ID'] } else { $nodeIdent }
+                    $carryArgv = @($carryTool, '--agent', $carryAgent, '--shell')
                     if ($identPy.Count -gt 1) { $carryArgv = @($identPy[1..($identPy.Count - 1)]) + $carryArgv }
+                    # Same 5.1 stderr-under-'Stop' guard as the resolver above.
+                    $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
                     $carryOut = & $identPy[0] @carryArgv 2>$null
+                    $ErrorActionPreference = $prevErr
                     # EXIT CODE IS A VERDICT, NOT SUCCESS/FAILURE. The tool
                     # documents: 0 carry intact | 1 carry GAP (bootstrap /
                     # advisory / uncarded) | 2 usage error | 3 nothing to
@@ -451,15 +775,117 @@ if (Test-Path -LiteralPath $identTool) {
                 }
                 Write-Host "[claude-pmoves] $carryLine"
 
-                $identityArgs = @('--append-system-prompt', "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it, and file claim-register rows under it. Cipher memory carry for this session -- $carryLine.")
+                # ---------------------------------------------------------
+                # WHO THE SESSION IS -- mirrors pmoves/scripts/claude-pmoves.sh.
+                # Operator direction 2026-09-27: the session must wake up AS
+                # the node identity (e.g. Z890-CLAUDE), holding the node itself,
+                # not as a role that speaks of that identity in the third
+                # person. The name and the register owner string come from
+                # identity_vocabulary.yaml's declared register_form via the
+                # resolver (PMOVES_IDENTITY_NAME / PMOVES_REGISTER_FORM). The
+                # old line also told the session to "file claim-register rows
+                # under" the REGISTRY key (claude_z890), which is not the
+                # owner string the register uses.
+                #
+                # FAIL-OPEN, LOUDLY, as the POSIX twin: no declared name falls
+                # back to the registry-key sentence and warns with the reason.
+                # ---------------------------------------------------------
+                $identName = $ident['PMOVES_IDENTITY_NAME']
+                $identForm = $ident['PMOVES_REGISTER_FORM']
+                $identCard = $ident['PMOVES_CIPHER_AGENT_ID']
+                # The role arrives in $args as `--agent <name>` (claude-pmoves.cmd
+                # forwards it); this script never chose it, so read it back.
+                # pm-agent-select.ps1 already read it (both `--agent x` and
+                # `--agent=x`); the loop is the fallback when that helper is absent.
+                $roleName = $script:PmAgentRole
+                if (-not (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue)) {
+                    for ($ai = 0; $ai -lt ($args.Count - 1); $ai++) {
+                        if ($args[$ai] -eq '--agent') { $roleName = $args[$ai + 1]; break }
+                    }
+                }
+                if ($identName -and $identForm) {
+                    $cardPart = if ($identCard) { ", signing card $identCard" } else { '' }
+                    # No --agent is the DEFAULT now (operator direction
+                    # 2026-10-01): the main session is the node identity with
+                    # full tools, and states its job here instead of inheriting
+                    # it from node-steward's body. Parity with claude-pmoves.sh.
+                    $jobPart = if ($roleName) {
+                        "This session you are doing the job of the '$roleName' role: the role is the work you are doing, not a second party -- speak as $identName, in the first person, and never describe $identName as someone who directs you."
+                    } else {
+                        "This session runs with no role agent and your full tools: you hold this node yourself. Your job: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate -- coordination to the 'node-steward' role, execution to 'delivery-agent', review to 'code-review' or 'verifier' -- rather than running all three bodies alone. Speak as $identName, in the first person."
+                    }
+                    $identText = "You are $identName, the Claude Code agent for PMOVES node '$nodeName' (registry key $nodeIdent in pmoves/config/agent_registry.yaml$cardPart). You sign the claim register as '$identForm'. $jobPart Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '$identForm', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
+                    Write-Host "[claude-pmoves] name=$identName register=$identForm"
+                } else {
+                    $rw = $ident['PMOVES_REGISTER_WHY']
+                    if ($rw) { $rw = $rw.Replace("'\''", "'") } else { $rw = 'no reason given' }
+                    Write-Warning "[claude-pmoves] identity name unresolved, falling back to the registry key: $rw"
+                    $identText = "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it."
+                    # Parity with claude-pmoves.sh: with no role agent this is
+                    # full tools, so the claim sentence must survive the fallback.
+                    if (-not $roleName) { $identText += " This session runs with no role agent and your full tools: claim before any edit, then delegate." }
+                }
+                $identityArgs = @('--append-system-prompt', "$identText Cipher memory carry for this session -- $carryLine.")
             } else {
                 $w = $ident['PMOVES_IDENTITY_WHY']
                 if (-not $w) { $w = 'no reason given' }
-                Write-Warning "[claude-pmoves] node identity unresolved: $w"
+                $identWhyLine = "node identity unresolved: $w"
+                Write-Warning "[claude-pmoves] $identWhyLine"
             }
         } else {
-            Write-Warning '[claude-pmoves] node identity: resolver failed; launching without it.'
+            $identWhyLine = 'node identity: resolver failed; launching without it.'
+            Write-Warning "[claude-pmoves] $identWhyLine"
         }
+    }
+} else {
+    $identWhyLine = "node identity: no $identTool; launching without it."
+    Write-Warning "[claude-pmoves] $identWhyLine"
+}
+
+# ---------------------------------------------------------------------------
+# SESSION FACTS -- parity with the block after identity in claude-pmoves.sh.
+# All of it rides the ONE --append-system-prompt: a second flag would cancel
+# the first. Measured 2026-11-04: none of these reached a Windows session.
+# ---------------------------------------------------------------------------
+function Add-PmSessionPrompt([string]$Text) {
+    if (-not $Text) { return }
+    if ($script:identityArgs.Count -ge 2) { $script:identityArgs[1] = "$($script:identityArgs[1]) $Text" }
+    else { $script:identityArgs = @('--append-system-prompt', $Text) }
+}
+if ($identityArgs.Count -eq 0 -and -not $script:PmAgentRole) {
+    # Unresolved AND no role agent: full tools, so this sentence is the only
+    # claim discipline the session gets.
+    Add-PmSessionPrompt "Your node identity is UNRESOLVED this session. This session runs with no role agent and your full tools: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate. Say at session start that the identity is unresolved, and do not claim under a guessed name: ask the operator which owner string to sign with. The launcher reported -- $identWhyLine"
+}
+if ($ident['PMOVES_CIPHER_AGENT_ID']) {
+    Add-PmSessionPrompt "When calling the Cipher MCP tools, pass agentId '$($ident['PMOVES_CIPHER_AGENT_ID'])'. It is REQUIRED on every call and is the signing-card spelling from pmoves/config/signing_identity_cards.yaml -- not your registry identity, which cipher refuses."
+} else {
+    $cw = if ($ident['PMOVES_CIPHER_AGENT_WHY']) { $ident['PMOVES_CIPHER_AGENT_WHY'] } else { 'not measured' }
+    Add-PmSessionPrompt "You have NO declared Cipher agentId this session. Cipher requires one on every call, so declare it per call and say that you are doing so. Reason: $cw"
+}
+$env:PMOVES_HARNESS = 'claude-code'
+Add-PmSessionPrompt "When you call pmoves_cipher_session_save, ALWAYS pass harness 'claude-code' and model set to your own exact model id. Omitting them files the checkpoint as 'unknown/unknown'."
+# cipher_preflight -- is persistent memory usable, and if not, WHICH failure.
+# Called at launch, once the roster claude will be handed is chosen, and
+# against THAT roster (Codex #3454 P2) -- see the two call sites at the end.
+function Add-PmCipherPreflight([string]$Roster) {
+    if (-not (Get-Command Invoke-PmCipherPreflight -ErrorAction SilentlyContinue)) { return }
+    $cp = Invoke-PmCipherPreflight -Root $root -Roster $Roster -Py @(Get-PmovesPythonArgv -Root $root | Where-Object { $_ })
+    if ($cp.Verdict -eq 'up' -or $cp.Verdict -eq 'skipped') { Write-Host "[claude-pmoves] $($cp.Line)" }
+    else {
+        Write-Warning "[claude-pmoves] $($cp.Line)"
+        if ($cp.Output) { Write-Host $cp.Output.TrimEnd() }
+    }
+    Add-PmSessionPrompt $cp.Prompt
+}
+# brv (ByteRover CLI) -- parity with pm_brv_check in claude-pmoves.sh. Never
+# fails the launch; a missing brv is told to the session so it does not report
+# an empty context tree as "nothing curated yet".
+if (Get-Command Invoke-PmBrvCheck -ErrorAction SilentlyContinue) {
+    $brv = Invoke-PmBrvCheck
+    if ($brv.Ok) { Write-Host "[claude-pmoves] $($brv.Line)" } else { Write-Warning "[claude-pmoves] $($brv.Line)" }
+    if ($brv.Prompt) {
+        Add-PmSessionPrompt $brv.Prompt
     }
 }
 $roster = Join-Path $root '.claude\mcp.json'
@@ -472,7 +898,7 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
     $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) `
         ('pmoves-roster-origin-main.' + [System.IO.Path]::GetRandomFileName() + '.json')
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
-    & git -C $root fetch --quiet origin main 2>$null | Out-Null
+    if (-not $script:pmOriginMainFetched) { & git -C $root fetch --quiet origin main 2>$null | Out-Null }
     $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null
     $ErrorActionPreference = $prev
     if ($LASTEXITCODE -eq 0 -and $blob) {
@@ -536,7 +962,7 @@ if (Test-Path $roster) {
     } else {
         $pyShown = ($pyArgv -join ' ')
         $pyExe   = $pyArgv[0]
-        $pyPre   = if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] } else { @() }
+        $pyPre   = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })   # @(): see Test-PmovesPythonRuns
         try {
             # The tool prints the path it wrote on stdout; warnings go to stderr
             # and pass through to the console.
@@ -609,9 +1035,13 @@ if (Test-Path $roster) {
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
     # prompt as another config value (Codex #2243 P1).
+    # The RAW roster, not $useRoster: the tool resolves ${VAR}s itself, and
+    # the normalized copy is the same servers.
+    Add-PmCipherPreflight $roster
     & claude "--mcp-config=$useRoster" @identityArgs @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
+    Add-PmCipherPreflight ''
     & claude @identityArgs @args
 }
 exit $LASTEXITCODE

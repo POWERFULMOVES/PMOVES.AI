@@ -42,7 +42,7 @@ ISO8601_RE = re.compile(
 )
 
 
-def parse_iso8601_duration(duration: str) -> int | None:
+def parse_iso8601_duration(duration: str | None) -> int | None:
     """Parse ISO 8601 duration (PT1H30M15S) to seconds."""
     if not duration:
         return None
@@ -51,6 +51,82 @@ def parse_iso8601_duration(duration: str) -> int | None:
         return None
     parts = {k: int(v) for k, v in m.groupdict(default="0").items()}
     return parts.get("hours", 0) * 3600 + parts.get("minutes", 0) * 60 + parts.get("seconds", 0)
+
+
+def load_refresh_token(token_path: str) -> str:
+    """Resolve the OAuth refresh token: vault first, file fallback.
+
+    The canonical home is the encrypted `pmoves_core.yt_oauth_cookies` row
+    written by `tools/yt_oauth_flow.py auth` (Fernet via VAULT_ENC_KEY).
+    Reading it directly removes the manual decrypt-to-file bridge the
+    container-path default below used to require. The plaintext file remains
+    an escape hatch (air-gapped runs, vault unreachable).
+    """
+    vault = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get(
+        "SUPABASE_SERVICE_ROLE_KEY", ""
+    )
+    if vault:
+        base = (os.environ.get("SUPABASE_URL") or os.environ.get("SUPA_REST_URL", "")).rstrip("/")
+        if base.endswith("/rest/v1"):
+            base = base[: -len("/rest/v1")]
+        if base:
+            try:
+                resp = requests.get(
+                    f"{base}/rest/v1/yt_oauth_cookies",
+                    params={
+                        "select": "encrypted_refresh_token",
+                        "user_id": "eq." + os.environ.get("YT_OAUTH_USER", "darkxside"),
+                        "limit": 1,
+                    },
+                    headers={
+                        "apikey": vault,
+                        "Authorization": f"Bearer {vault}",
+                        "Accept-Profile": "pmoves_core",
+                    },
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    rows = resp.json()
+                    enc = rows[0].get("encrypted_refresh_token") if rows else ""
+                    if enc:
+                        tok = _decrypt_vault_token(enc)
+                        if tok:
+                            log.info("Loaded refresh token from Supabase vault (encrypted at rest)")
+                            return tok
+                        log.warning("Vault token present but decryption failed — trying file fallback")
+            except requests.RequestException as exc:
+                log.warning(f"Vault token lookup failed ({exc}) — trying file fallback")
+
+    path = Path(token_path)
+    if path.exists():
+        return path.read_text().strip()
+    raise FileNotFoundError(
+        f"No refresh token: vault lookup failed and token file not found: {token_path}"
+    )
+
+
+def _decrypt_vault_token(encrypted: str) -> str | None:
+    """Decrypt a Fernet-encrypted vault token using VAULT_ENC_KEY.
+
+    Reuses yt_oauth_flow's canonical key derivation (hex -> base64url -> raw,
+    padded/truncated to 32 bytes) so the crawl can never drift from the
+    writer. Falls back to a no-op (file fallback) if the module or crypto
+    is unavailable.
+    """
+    try:
+        from cryptography.fernet import Fernet  # noqa: F401 — presence check
+    except ImportError:
+        return None
+    try:
+        from yt_oauth_flow import _decrypt, _get_fernet
+
+        tok = _decrypt(encrypted, _get_fernet())
+        return tok if tok and tok != encrypted else None
+    except ImportError:
+        return None
+    except Exception as exc:  # noqa: BLE001 — any failure means file fallback
+        log.warning(f"Token decryption error: {exc}")
+        return None
 
 
 def get_access_token(refresh_token: str, client_id: str, client_secret: str) -> str:
@@ -204,6 +280,10 @@ def upsert_to_supabase(
     service_key: str,
 ) -> tuple[int, int]:
     """Upsert records into pmoves_core.youtube_videos via REST API."""
+    # A playlist can contain the same video twice; Postgres rejects ON
+    # CONFLICT commands whose insert set holds duplicate constrained values
+    # (SQLSTATE 21000), killing whole batches. Last occurrence wins.
+    records = list({r["video_id"]: r for r in records}.values())
     success = 0
     errors = 0
     # Batch in groups of 25 to keep payloads reasonable
@@ -332,12 +412,11 @@ def main():
         log.error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set")
         sys.exit(1)
 
-    token_path = Path(args.token_path)
-    if not token_path.exists():
-        log.error(f"Refresh token file not found: {token_path}")
+    try:
+        refresh_token = load_refresh_token(args.token_path)
+    except FileNotFoundError as exc:
+        log.error(str(exc))
         sys.exit(1)
-
-    refresh_token = token_path.read_text().strip()
 
     service_key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get(
         "SUPABASE_SERVICE_ROLE_KEY", ""

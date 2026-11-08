@@ -73,7 +73,7 @@ EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
 NATS_EVENT_BUS_URL = os.environ.get("NATS_EVENT_BUS_URL", "http://127.0.0.1:8131")
 NATS_EVENT_BUS_TOKEN = os.environ.get("NATS_EVENT_BUS_TOKEN", "")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@127.0.0.1:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 
 # ----------------------------- helpers -----------------------------
 

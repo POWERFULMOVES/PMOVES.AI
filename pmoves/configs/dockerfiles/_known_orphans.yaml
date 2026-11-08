@@ -125,3 +125,6 @@ pmoves/services/shape-attestation-bridge/Dockerfile: service with Dockerfile but
 
 # Service with Dockerfile but no compose wiring.
 pmoves/services/token-stub/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Interim exact-release MinIO source build (#3192); retire with the Garage migration.
+pmoves/docker/minio-src/Dockerfile: "interim minio RELEASE.2025-09-07T16-13-09Z source build (#3192); built by make minio-build-src; compose minio is image-only by design; retire with the Garage migration"

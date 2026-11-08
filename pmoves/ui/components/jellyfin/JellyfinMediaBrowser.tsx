@@ -60,7 +60,7 @@ export function JellyfinMediaBrowser({
 
   if (error) {
     return (
-      <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert">
+      <div data-testid="media-browser" className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert">
         {error}
       </div>
     );
@@ -68,16 +68,16 @@ export function JellyfinMediaBrowser({
 
   if (items.length === 0 && !loading) {
     return (
-      <div className="rounded border border-dashed border-neutral-300 p-12 text-center text-sm text-neutral-500">
+      <div data-testid="media-browser" className="rounded border border-dashed border-neutral-300 p-12 text-center text-sm text-neutral-500">
         <div className="text-4xl mb-4">🎬</div>
-        <p className="font-medium mb-2">No items found</p>
+        <p data-testid="no-media-results" className="font-medium mb-2">No items found</p>
         <p>Try a different search term or sync your Jellyfin library.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div data-testid="media-browser" className="space-y-4">
       {/* Results count */}
       {items.length > 0 && (
         <div className="text-sm text-neutral-600">
@@ -99,10 +99,12 @@ export function JellyfinMediaBrowser({
       )}
 
       {/* Media grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div data-testid="media-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((item) => (
           <div
             key={item.id}
+            data-testid="media-item"
+            data-selected={selectedItem?.id === item.id ? "true" : "false"}
             className={`${CARD_CLASSES} ${selectedItem?.id === item.id ? "ring-2 ring-blue-500" : ""}`}
             onClick={() => setSelectedItem(item)}
           >
@@ -116,7 +118,7 @@ export function JellyfinMediaBrowser({
                 loading="lazy"
               />
             ) : (
-              <div className={IMAGE_PLACEHOLDER_CLASSES}>
+              <div data-testid="media-image-placeholder" className={IMAGE_PLACEHOLDER_CLASSES}>
                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
                 </svg>
@@ -126,7 +128,7 @@ export function JellyfinMediaBrowser({
             {/* Title and type */}
             <h3 className="font-medium text-sm line-clamp-2">{item.name}</h3>
             <p className="text-xs text-neutral-500 mt-1">
-              <span className={`inline-block px-2 py-0.5 rounded ${getItemTypeBadge(item.type)}`}>
+              <span data-testid="media-badge" data-type={item.type} className={`inline-block px-2 py-0.5 rounded ${getItemTypeBadge(item.type)}`}>
                 {item.type}
               </span>
               {item.seriesName && (
@@ -174,7 +176,7 @@ export function JellyfinMediaBrowser({
 
       {/* Selected item details */}
       {selectedItem && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 p-4 shadow-lg md:relative md:shadow-none md:border-t-0 md:p-0">
+        <div data-testid="media-details" className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 p-4 shadow-lg md:relative md:shadow-none md:border-t-0 md:p-0">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-start justify-between">
               <div>

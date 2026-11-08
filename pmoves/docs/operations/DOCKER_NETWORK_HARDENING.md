@@ -9,7 +9,7 @@
 
 ## Network Inventory
 
-Six Docker networks are defined across the compose stack:
+Nine Docker networks are defined across the compose stack (this line said "Six" while the table already listed seven; corrected with the two rows added by #3201):
 
 | Network | Driver | `internal` | Subnet | Role |
 |---------|--------|-----------|--------|------|
@@ -20,6 +20,8 @@ Six Docker networks are defined across the compose stack:
 | `pmoves_monitoring` | bridge | **yes** | 172.30.5.0/24 | Observability — Prometheus, Grafana, Loki, cAdvisor |
 | `pmoves_external` | bridge | **no** | 172.30.6.0/24 | Internet-capable — TensorZero-gateway, Agent Zero, Archon, Hi-RAG |
 | `pmoves_public` | bridge | **no** | 172.30.7.0/24 | Host-reachable + egress-capable — Kong, PostgREST, edge-functions |
+| `pmoves_db_egress` | bridge | **no** | 172.30.8.0/24 | Dedicated non-internal bridge for the supabase-db tailnet port publish (#2728); created by the Makefile (`external: true` in compose) |
+| `pmoves_graph_front` | bridge | **yes** | 172.30.9.0/24 | Graph front (#3201) — joined ONLY by `neo4j` and its tailnet forwarder `neo4j-tailnet`, so the forwarder reaches Neo4j and nothing else on the data tier |
 
 > **`pmoves_public` was missing from this table until 2026-09-03** while being
 > live with three attached containers and referenced nine times in compose. An

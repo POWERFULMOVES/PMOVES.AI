@@ -139,6 +139,13 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 	-@$(MAKE) --no-print-directory supa-status
 	@$(CODEX_PY) tools/runtime_secrets_hydrate.py --env-file env.shared --status-file .supabase.status.env
 
+secrets-runtime-hydrate-dry: ## Show (masked) what secrets-runtime-hydrate WOULD pull from running containers; writes nothing
+	@# Deliberately NO ensure-env-shared prerequisite: that step runs brand_defaults
+	@# and rewrites env.shared on every invocation, which is exactly what a dry run
+	@# must never do. supa-status is skipped for the same reason (it refreshes the
+	@# status snapshot); the tool reads whatever snapshot already exists.
+	@$(CODEX_PY) tools/runtime_secrets_hydrate.py --env-file env.shared --status-file .supabase.status.env --dry-run
+
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
@@ -167,6 +174,8 @@ secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-sh
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/emit_local_env.py --cgp "$(CHIT_EXPORT_PATH)"
 	@$(MAKE) --no-print-directory secrets-local-hydrate FORCE=1
+	@# A FORCE overlay rewrites whatever keys the bundle carries; re-pin after it.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
 	@echo "✔ env.shared force-refreshed from prod bundle — prod-managed keys (incl. rotations) now current"
 	@echo "  Note: local.env is the prod-secrets overlay; keep genuinely node-local overrides in env.shared, not local.env."
 
@@ -181,7 +190,7 @@ gh-app-token: ## Mint a GitHub App installation token (dsh github agent). REPOSI
 	if [ -n "$(PERMISSIONS)" ]; then args="$$args --permissions $(PERMISSIONS)"; fi; \
 	if [ -n "$(OUT)" ]; then args="$$args --out $(OUT)"; fi; \
 	if [ "$(ALL)" = "1" ]; then \
-	  if [ "$$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
+	  if [ "$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
 	  args="$$args --all --yes"; \
 	fi; \
 	PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/gh_app_token.py $$args
@@ -201,8 +210,17 @@ secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files fro
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
 .PHONY: env-shared-repair
-env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing (idempotent, writes .bak on change)
+env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing; reset registry-pinned host-leak guards (SSL_CERT_FILE, *_PROXY, ...) to their defaults (idempotent)
 	@$(CODEX_PY) tools/fix_env_shared_multiline.py
+	@# The leak guards are declared "Always empty" in bootstrap/registry.json but
+	@# were only applied at first bootstrap; a host value written later survived
+	@# every funnel (Z890 2026-11-06: a dead miniconda SSL_CERT_FILE broke TLS
+	@# in every launcher session). Key NAMES only are printed.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
+
+.PHONY: env-shared-pinned-check
+env-shared-pinned-check: ## Report registry-pinned host-leak guards in env.shared that drifted from their defaults (writes nothing; exit 1 on drift)
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned-check
 
 # ORDER IS LOAD-BEARING: credential_urlencoder.py must run AFTER
 # secrets-funnel-sync, not before it.
@@ -297,15 +315,35 @@ secrets-ensure-check: ## Fail if any stack-generated secret is still unprovision
 	  $(CODEX_PY) scripts/bootstrap_env.py --ensure-dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
 	fi
 
+.PHONY: secrets-derive-nats-url
+secrets-derive-nats-url: ## Re-derive NATS_URL credentials in env.shared from NATS_USER/NATS_PASSWORD (no-op when consistent; never prints values)
+	@$(CODEX_PY) tools/derive_nats_url.py
+
+.PHONY: secrets-nats-check secrets-nats-promote
+secrets-nats-check: ## Compare NATS_URL/NATS_USER/NATS_PASSWORD in every env.tier-* with env.shared (prints match/MISMATCH only; exit 1 on mismatch)
+	@$(CODEX_PY) tools/derive_nats_url.py --check
+
+secrets-nats-promote: ## Mirror env.shared's NATS keys into each env.tier-* that declares them (never adds a key; never prints values)
+	@$(CODEX_PY) tools/derive_nats_url.py --promote
+
 secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> urlencode -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
+	@# Re-pin after BOTH hydrates and before chit-export seals the bundle. Hydrate
+	@# skips pinned keys itself; this is the backstop for any other overlay.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
 	@# ORDER IS LOAD-BEARING: must precede secrets-funnel-sync, because that
 	@# target's chit-export prerequisite encodes env.shared into the CGP bundle.
 	@# Mint after this point and the bundle is already sealed without the value.
 	@$(MAKE) --no-print-directory secrets-ensure-generated
+	@# Same ordering rule: NATS_URL embeds NATS_PASSWORD, so re-derive it before
+	@# the bundle is sealed or a password rotation ships a stale URL.
+	@$(MAKE) --no-print-directory secrets-derive-nats-url
 	@$(MAKE) --no-print-directory secrets-funnel-sync
+	@# After the sync: it writes most tiers but not all (env.tier-ui), and a
+	@# tier's stale NATS_URL overrides env.shared's for that tier's services.
+	@$(MAKE) --no-print-directory secrets-nats-promote
 	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-audit
 	@$(MAKE) --no-print-directory tooling-audit
@@ -317,6 +355,8 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
 	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
+	@# NATS_URL embeds the NATS credential; keep it in step (no-op for other keys).
+	@$(MAKE) --no-print-directory secrets-derive-nats-url
 	@# Rotation is a LEGITIMATE reason to re-export, so force past the CI-bundle
 	@# guard rather than failing the road -- but say plainly what was replaced.
 	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
@@ -335,7 +375,21 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@# env.tier-llm again -- the exact regression this guard was added for, on a
 	@# path the guard did not cover. A gate that only reports the edge misses
 	@# everything that is already over it.
-	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
+	@# THREE states, not two. The else-branch below used to absorb two of them:
+	@# a bundle with no marker (genuinely a local export) AND no bundle at all.
+	@# On a fresh node's first rotate it therefore announced that "this CHIT
+	@# bundle is a LOCAL export" and that prod-only keys were "absent from every
+	@# tier file the funnel just regenerated" -- diagnosing the provenance of a
+	@# bundle that does not exist. Absence of a marker is not evidence about a
+	@# file; it is only evidence about the marker. Test the bundle first.
+	@if [ ! -f "$(CHIT_EXPORT_PATH)" ]; then \
+	  echo "⚠ no CHIT bundle at $(CHIT_EXPORT_PATH) — nothing to judge the"; \
+	  echo "  provenance of. chit-export below will create one locally, which"; \
+	  echo "  means it starts WITHOUT the prod-only keys that"; \
+	  echo "  sync-secrets-local.yml delivers. If this node needs them, pull"; \
+	  echo "  first rather than rotating into a bundle that never had them:"; \
+	  echo "    PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	elif [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
 	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
 	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
 	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \

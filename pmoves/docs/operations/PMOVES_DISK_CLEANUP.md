@@ -47,30 +47,34 @@ $config | ConvertTo-Json -Depth 10 | Set-Content $path
 1. Removes stopped containers (unblocks image deletion)
 2. Removes dangling images
 3. Prunes ALL build cache
-4. **Reclaims stale buildx builders (>24h)** — see below; this is the one that actually recovers tens of GB
+4. **Reclaims inactive buildx builders and their orphaned `buildx_buildkit_*_state` volumes** (`docker buildx rm --all-inactive` + a name-filtered dangling-volume sweep). This **deletes the shared CI cache** (`buildx_buildkit_pmoves-shared0_state`) when no job is using it — the next build on that host starts cold. Right for a sick node; routine bounding is the nightly cap below.
 5. Skips volume prune (banned by fleet policy)
 6. Reports disk usage before/after
 7. Checks if daemon.json + compose tier anchors have log rotation (reports if not)
 
 ## The BuildKit builder leak — read this before diagnosing a full disk
 
-`docker system df` will tell you **"Build Cache: 0B"** on a node that is 100% full because of build cache. Do not trust it.
+`docker system df` will tell you **"Build Cache: 0B"** on a node that is full of build cache. Do not trust it. BuildKit cache for a `docker-container` builder lives inside that builder's `buildx_buildkit_<node>_state` volume, outside everything the usual prunes can see.
 
-`setup-buildx-action` creates a **new builder per CI run** and never removes it. Each builder is a running container plus a named `buildx_buildkit_builder-<uuid>_state` volume, and **the cache lives inside that volume** — outside everything the usual prunes can see:
+There have been two shapes of this leak.
 
-| Command | Why it misses the leak |
+**Before #2021 — one builder per CI run.** `setup-buildx-action` created a new builder (`builder-<uuid>`) per run and never removed it: a running container plus a `buildx_buildkit_builder-<uuid>_state` volume each. Measured 2026-08-06: kvm4-1 reached **193G/0 free**; kvm2 held **15 builders for four weeks (33GB)**. Fixed by the `pmoves-buildx` action (one reused builder, `pmoves-shared`); the nightly reclaim of `buildx_buildkit_builder-*` remains as a safety net.
+
+**After #2021 — one shared builder, unbounded between jobs.** `pmoves-shared` is created at the start of each job and removed at the end with `keep-state`, so between jobs there is a volume (`buildx_buildkit_pmoves-shared0_state`) and **no builder**. Measured 2026-09-27: **139.5GB on kvm4-1, 146.4GB on kvm4-2**, growing 5-9 GiB/day against a 30GB GC cap, while the nightly maintenance succeeded:
+
+| Command | Why it misses the shared volume |
 |---|---|
 | `docker system prune -af` | Skips volumes entirely |
-| `docker builder prune -af` | Clears cache *inside* builders, leaves the builders and their volumes standing |
-| `docker volume rm buildx_…` | Cannot remove a volume attached to a **running** container — and every leaked builder is running |
+| `docker builder prune -af` | Reaches only the **default** builder (0B on those hosts) |
+| the `buildx_buildkit_builder-*` reclaim loop | Matches only the old per-run names |
 
-The builder itself has to go first: `docker buildx rm <builder>`. Step 4 of the script does this for anything older than 24h (the floor protects an in-flight build).
+**The fix:** [`deploy/provision/pmoves-buildx-cap.sh`](../../../deploy/provision/pmoves-buildx-cap.sh) re-attaches `pmoves-shared` by name (node `pmoves-shared0`, so it mounts the kept volume), runs `docker buildx prune --builder pmoves-shared --all` down to the cap, and detaches with `--keep-state`. It never removes the volume. The action's BuildKit GC config also gained an `all = true` catch-all rule: the single `keepDuration = 168h`, `all = false` rule could never select anything in daily use (`buildx du` on kvm4-2 showed 155.5GB, all of it reclaimable). It runs in every build job (right after attach, from the `pmoves-buildx` action), nightly from `runner-maintenance.yml` and `fleet-docker-cleanup.yml`, and daily from the `docker-fleet-cleanup.sh` systemd timer. Details and the single cap source: [`deploy/runners/BUILDX_PROVISIONING.md`](../../../deploy/runners/BUILDX_PROVISIONING.md).
 
-Measured 2026-08-06: kvm4-1 reached **193G/0 free** this way; kvm2 was holding **15 builders alive for four weeks (33GB)** and dropped from 61% to 26% once they were removed.
+To bound one host by hand: `bash deploy/provision/pmoves-buildx-cap.sh` (exit 0 bounded or nothing to do, 1 failed, 3 docker unavailable).
 
 ## Which hosts are cleaned automatically
 
-`.github/workflows/runner-maintenance.yml` runs nightly at 03:00 UTC, one job per **physical host**, keyed on a label only that host carries — `b850`, `spark`, `kvm4-1`, `kvm4-2`.
+`.github/workflows/runner-maintenance.yml` runs nightly at 03:00 UTC, one job per **physical host**, keyed on a label only that host carries — `b850`, `spark`, `kvm4-1`, `kvm4-2`. Its last step bounds the shared builder with `pmoves-buildx-cap.sh`.
 
 Host labels must be unambiguous or coverage silently rots: `kvm4` is carried by *both* VPS runners, so the single job it replaced landed on whichever was free (kvm4-2 usually won; kvm4-1 filled to 100%). `ai-lab` is carried by both b850 runners *and* SPARK, with the same hazard.
 

@@ -66,6 +66,21 @@ fi
 
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
+# ---------------------------------------------------------------------------
+# Mavis SDK env strip -- mirrors the same step in claude-pmoves.sh so every
+# PMOVES launcher has parity (operator direction 2026-09-17). Crush consumes
+# zero Mavis SDK env (it talks to Z.AI/GLM on its own config), so all
+# Mavis SDK vars get stripped + preserved under PMOVES_MAVIS_SDK_<NAME>.
+# See pmoves/scripts/mavis_sdk_env.sh for the registry + per-CLI needs list.
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "crush"
+else
+  echo "[crush-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
+fi
+
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Crush SDK/session behavior and should NEVER be
   # sourced by the launcher. These are user's personal billing/config, not fleet
@@ -118,6 +133,24 @@ if [ -f "$ENVF" ]; then
 else
   echo "[crush-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[crush-pmoves]       run: make -C pmoves ensure-env-shared" >&2
+fi
+
+# --- HOST TLS ------------------------------------------------------------
+# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
+# EMPTY on purpose (a container leak guard), and the loader above EXPORTS
+# them. On the host, set-but-empty breaks python ssl and the HF Xet backend
+# (CERTIFICATE_VERIFY_FAILED). Clear the empties; fill in the system bundle
+# only when no CA variable is configured by a later-loaded env file.
+# See pmoves/scripts/pm-ca-bundle.sh.
+if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
+    echo "[crush-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
+  fi
+else
+  echo "[crush-pmoves] WARN: pmoves/scripts/pm-ca-bundle.sh missing -- host TLS not normalized." >&2
 fi
 
 # --- name bridge: PMOVES calls it Z_AI_API_KEY, Crush reads ZAI_API_KEY -------

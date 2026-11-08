@@ -521,6 +521,7 @@ x-network-tailnet-published: &network-tailnet-published
 name: pmoves
 volumes:
   neo4j-data: {}
+  neo4j-logs: {}
   fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
@@ -541,6 +542,7 @@ volumes:
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
+  agent-zero-playwright-tmp: {}  # Playwright browser cache for agent-zero (/a0/tmp/playwright)
   pmoves-ollama-models: {}
   hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}
@@ -579,6 +581,19 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Graph front (#3201, option A): the ONLY link between the tailnet forwarder
+  # (docker-compose.neo4j-tailnet.yml) and neo4j. Internal, and joined by exactly
+  # those two, so a compromised forwarder reaches Neo4j and nothing else on the
+  # data tier (least privilege; it is deliberately NOT on pmoves_data).
+  # Subnet 172.30.9.0/24 is permanent (DOCKER_NETWORK_HARDENING Rule 2).
+  pmoves_graph_front:
+    <<: *network-internal-only
+    name: pmoves_graph_front
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.9.0/24
+        gateway: 172.30.9.1
   # Host-reachable tier. Kong proxy/admin and PostgREST attach here; the
   # services still default to 127.0.0.1 host binds for safer standalone
   # operation. Being internal:false this is ALSO egress-capable -- see the

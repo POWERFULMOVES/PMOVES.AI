@@ -29,8 +29,22 @@ DB_PORT="${DB_PORT:-5432}"
 # DB_PASS is the META_ROLE's password. Falls back to JUICEFS_META_PASSWORD — the funnel-
 # delivered secret (registered in chit_manifest_register.py, tier data) — so a node that
 # received it via the secrets pipeline can just run with META_ROLE=juicefs_meta and no
-# explicit DB_PASS. Neither is ever inlined on a command line: both arrive via the
-# environment and are handed to JuiceFS as META_PASSWORD, so they never appear in `ps`.
+# explicit DB_PASS. This script never inlines either on a command line: both arrive via
+# the environment and are handed to JuiceFS as META_PASSWORD. An explicit DB_PASS given
+# to `make` is still visible in `ps` upstream of here (make's argv and the recipe
+# shell's `sh -c` string; see mk/egress.mk), so prefer the funnel.
+#
+# `make juicefs-cross-node-setup` runs this under scripts/with-env.sh, which
+# re-sources the node's env files (including .env.local) OVER the caller's
+# environment. A META_ROLE/DB_PASS named on the make command line would be
+# silently replaced by the node file, so make forwards them as JFS_SETUP_*,
+# names no env file sets, and they win here.
+#   Provenance: the override is with-env.sh's own behaviour (scripts/with-env.sh:55
+#   `set -a` export; :85 loads .env.local LAST). JFS_SETUP_* forwarding:
+#   Originated: B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream precedent
+#   found; checked: every recipe in pmoves/Makefile and pmoves/mk/*.mk that calls with-env.sh).
+DB_PASS="${JFS_SETUP_DB_PASS:-${DB_PASS:-}}"
+DB_PASS_EXPLICIT="${DB_PASS:+set}"
 DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # Metadata DSN role. Default supabase_admin for back-compat. Switch to juicefs_meta once
 # the scoped role is applied (make -C pmoves supabase-bootstrap) and granted LOGIN with a
@@ -38,9 +52,39 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # docs/handoffs/juicefs-meta-scoped-role-and-tailnet-exposure-2026-08-18.md, and it is what
 # shrinks the cross-node auth surface from a full superuser to DML on one schema (the point
 # of the whole lane). DB_PASS must be that role's password when META_ROLE=juicefs_meta.
-META_ROLE="${META_ROLE:-supabase_admin}"
+#
+# Role selection follows the documented precedent: name the role explicitly.
+# docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102 passes
+# META_ROLE=juicefs_meta with the funnel credential. An explicit META_ROLE
+# always wins (empty counts as not named).
+#   - The funnel credential (JUICEFS_META_PASSWORD) is juicefs_meta's password
+#     (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:22), so using it without
+#     a named role FAILS LOUDLY. It is never paired silently, and never with
+#     supabase_admin: that mismatched pair always fails auth and was the defect.
+#   - An explicit DB_PASS without a role keeps the documented back-compat default,
+#     supabase_admin, and says so out loud. (pg_hba refuses supabase_admin from
+#     the tailnet, #2702, so this only works on the host itself.)
+#   Provenance: to JuiceFS the role is only the DSN username; the vendor docs do not
+#   choose one (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md,
+#   "### PostgreSQL"). juicefs_meta is PMOVES's scoped role
+#   (supabase/initdb/00_3_juicefs_meta_role.sql). Covered by
+#   pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py.
+META_ROLE="${JFS_SETUP_META_ROLE:-${META_ROLE:-}}"
+if [ -z "$META_ROLE" ]; then
+    if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ]; then
+        echo "ERROR: the funnel credential JUICEFS_META_PASSWORD is juicefs_meta's password, but no"
+        echo "  META_ROLE was named. Name it explicitly, as the runbook does:"
+        echo "    make -C pmoves juicefs-cross-node-setup JUICEFS_HOST=<host> META_ROLE=juicefs_meta"
+        echo "  (pmoves/docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102)"
+        exit 1
+    fi
+    META_ROLE=supabase_admin
+    echo "NOTE: META_ROLE not set; using the back-compat default supabase_admin with the explicit DB_PASS."
+fi
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
-DATA_DIR="${DATA_DIR:-$HOME/.local/share/juicefs-data}"
+# JUICEFS_DATA_DIR is the name `make juicefs-mount-local` reads (mk/egress.mk:395);
+# accept it here too so one knob moves the cache backing dir on either path.
+DATA_DIR="${DATA_DIR:-${JUICEFS_DATA_DIR:-$HOME/.local/share/juicefs-data}}"
 # Escape hatch for the storage preflight, e.g. when deliberately standing up a
 # node-local FS rather than joining the shared one.
 ALLOW_FILE_STORAGE="${ALLOW_FILE_STORAGE:-0}"
@@ -59,7 +103,35 @@ echo "Mount: $MOUNT_POINT"
 echo ""
 
 # Create directories
-mkdir -p "$MOUNT_POINT" "$DATA_DIR"
+# DATA_DIR must fail loudly: a silent failure here falls through to `docker -v`,
+# which creates a missing source directory itself (Docker docs, "Bind mounts" >
+# "Syntax": "If you use --volume to bind-mount a file or directory that does not
+# yet exist on the Docker host, Docker automatically creates the directory"),
+# and a rootful daemon creates it root-owned. Only MOUNT_POINT is tolerated, because a
+# stale FUSE endpoint makes mkdir fail and the guard below diagnoses it properly.
+mkdir -p "$DATA_DIR"
+mkdir -p "$MOUNT_POINT" 2>/dev/null || true
+
+# Stale-endpoint guard (B850 2026-09-22): a killed mount container leaves the
+# FUSE endpoint dead ("Transport endpoint is not connected"). User-level
+# fusermount cannot clear container-created mounts (absent from /etc/mtab),
+# and docker then fails with a confusing "mkdir: file exists". Detect early,
+# try fusermount, and fail with the exact root fix instead.
+#   Provenance: the fix it prints, `sudo umount -l`, is the vendor's own force
+#   unmount. JuiceFS v1.3.0 docs/en/administration/troubleshooting.md:201-202
+#   ("Unmount error"): on Linux `juicefs umount --force` is translated to
+#   `umount --lazy`. Spelled out here because this host runs JuiceFS in a
+#   container and has no juicefs CLI. See also umount(8) -l/--lazy and
+#   fusermount(1) -u/-z. The /etc/mtab observation: Originated, Crush lane,
+#   2026-09-22, PR #3150, measured on Knuckles.
+if [ -d "$MOUNT_POINT" ] && ! ls "$MOUNT_POINT" >/dev/null 2>&1; then
+    fusermount -uz "$MOUNT_POINT" 2>/dev/null || true
+    if ! ls "$MOUNT_POINT" >/dev/null 2>&1; then
+        echo "ERROR: $MOUNT_POINT is a stale FUSE endpoint (dead mount container)."
+        echo "  Fix: sudo umount -l $MOUNT_POINT   — then re-run this target."
+        exit 1
+    fi
+fi
 
 # Pull JuiceFS image
 docker pull juicedata/mount:ce-v1.3.0
@@ -68,6 +140,12 @@ docker pull juicedata/mount:ce-v1.3.0
 # is safe to appear in `ps` / `docker inspect`. This is the fix for the exposure
 # recorded in the 2026-08-01 metadata note (b850's mount still has the password
 # inline in its command line).
+#   Provenance (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md, "### PostgreSQL"):
+#   DSN form postgres://[username][:<password>]@<host>[:5432]/<database-name>[?parameters];
+#   a non-public schema needs search_path in the connection string, and only one schema
+#   is supported; the password may be passed via META_PASSWORD instead of the URL
+#   (also the vendor's recommendation: docs/en/administration/metadata/
+#   postgresql_best_practices.md, "Passing sensitive information via environment variables").
 META_URL="postgres://${META_ROLE}@${JUICEFS_HOST}:${DB_PORT}/postgres?search_path=juicefs_meta&sslmode=disable"
 
 # Preflight: refuse to join a file-backed volume from a remote node. Storage is baked
@@ -75,11 +153,31 @@ META_URL="postgres://${META_ROLE}@${JUICEFS_HOST}:${DB_PORT}/postgres?search_pat
 # no remote mount can read them — you would get a filesystem that lists correctly and
 # errors on every open, which is far harder to debug than an upfront refusal.
 echo "Preflight: checking the volume's storage backend ..."
-STORAGE="$(META_PASSWORD="$DB_PASS" docker run --rm --network host \
+# The probe's stderr used to be swallowed (2>/dev/null inside the container) and
+# a probe failure killed the script under `set -euo pipefail` BEFORE the
+# "Storage backend:" line printed — a silent death with zero diagnostics
+# (measured on B850 2026-09-22 across three separate failure modes). Capture
+# both streams, print the error on failure (password redacted), keep parsing.
+# Network: host by default. A node whose block store is a compose service name
+# (e.g. `minio`) sets JUICEFS_NETWORK to that compose network, because "User-defined
+# bridges provide automatic DNS resolution between containers" (github.com/docker/docs @ main 2026-10-01,
+# content/manuals/engine/network/drivers/bridge.md:49), whereas host networking
+# "shares the host's networking namespace" (drivers/host.md:12-13) and resolves
+# only what the host can. Same flag on the mount below.
+PREFLIGHT_OUT="$(META_PASSWORD="$DB_PASS" docker run --rm --network "${JUICEFS_NETWORK:-host}" \
     -e META_PASSWORD \
     --entrypoint sh juicedata/mount:ce-v1.3.0 \
-    -c "juicefs status \"$META_URL\" 2>/dev/null" \
-    | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    -c "juicefs status \"$META_URL\" 2>&1" || true)"
+STORAGE="$(printf '%s\n' "$PREFLIGHT_OUT" | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+if [ -z "$STORAGE" ]; then
+    echo "ERROR: storage preflight probe produced no Storage field. Probe output (credential redacted):"
+    # -F: the password is a literal, never a regex (GNU grep manual, 2.1.2 Matching
+    # Control: "-F --fixed-strings Interpret patterns as fixed strings, not regular
+    # expressions"; POSIX grep -F). With a regex, BRE metacharacters in a password
+    # could miss its own line or make grep error and swallow every diagnostic.
+    printf '%s\n' "$PREFLIGHT_OUT" | grep -vF -- "$DB_PASS" | sed 's/^/  | /' >&2
+    exit 1
+fi
 
 echo "  Storage backend: ${STORAGE:-<unreadable>}"
 if [ "$STORAGE" = "file" ] && [ "$ALLOW_FILE_STORAGE" != "1" ]; then
@@ -112,7 +210,7 @@ echo "Starting JuiceFS mount..."
 META_PASSWORD="$DB_PASS" docker run -d \
     --name juicefs-mount \
     --restart unless-stopped \
-    --network host \
+    --network "${JUICEFS_NETWORK:-host}" \
     --privileged \
     --entrypoint sh \
     -e META_PASSWORD \

@@ -1,7 +1,7 @@
 """persona-thirdref service — consumption joiner + shape-trace emitter.
 
 Environment:
-  NATS_URL              default nats://nats:pmoves@nats:4222
+  NATS_URL              default nats://nats:4222
   SUPABASE_URL          PostgREST base (e.g. http://supabase-kong:8000)
   SUPABASE_ANON_KEY     anon key for PostgREST reads
   PERSONA_THIRDREF_TOKEN  shared secret for the HTTP record endpoint
@@ -273,7 +273,7 @@ def create_app(joiner: Joiner | None = None, service: Service | None = None) -> 
     async def _wire_bus(svc: Service) -> None:
         if _env("PERSONA_THIRDREF_DISABLE_NATS"):
             return
-        url = _env("NATS_URL", "nats://nats:pmoves@nats:4222")
+        url = _env("NATS_URL", "nats://nats:4222")
         stream_name = _env("PERSONA_THIRDREF_STREAM", "PMOVES-PERSONA")
         durable = _env("PERSONA_THIRDREF_DURABLE", "persona-thirdref")
         try:

@@ -220,7 +220,10 @@ detect_ram() {
     kb="$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null || echo 0)"
     # Convert kB -> GB (integer, rounding down then +1 if remainder is large)
     RAM_GB=$(( (kb + 524288) / 1048576 ))
-    [ "$RAM_GB" -lt 1 ] && RAM_GB=0
+    # if/fi, not `[ ... ] && ...`: as a function's LAST command an AND-list
+    # becomes its return status, so under `set -e` a false test (any host with
+    # >= 1 GB) returned 1 and killed the run with no output.
+    if [ "$RAM_GB" -lt 1 ]; then RAM_GB=0; fi
 }
 
 # Emits JSON array entries for GPUs
@@ -353,7 +356,10 @@ for d in data.get("blockdevices", []):
         rota = rota_raw in ("1", "true", "True")
     else:
         rota = bool(rota_raw)
-    print(f"{d['name']}|{size_gb}|{'true' if rota else 'false'}")
+    # Double quotes only: this program sits inside a single-quoted bash
+    # string, so a single-quoted key ended the bash quote, python saw a bare
+    # name (NameError) and every disk list came back empty.
+    print(d["name"] + "|" + str(size_gb) + "|" + ("true" if rota else "false"))
 ')
     else
         # awk fallback — less reliable size conversion
@@ -481,7 +487,8 @@ detect_platform_hints() {
     fi
 
     command -v tailscale >/dev/null 2>&1 && HINT_HAS_TAILSCALE=true
-    command -v docker    >/dev/null 2>&1 && HINT_HAS_DOCKER=true
+    # Last command of the function: must not be an AND-list (see detect_ram).
+    if command -v docker >/dev/null 2>&1; then HINT_HAS_DOCKER=true; fi
 }
 
 # ---------------------------------------------------------------------------

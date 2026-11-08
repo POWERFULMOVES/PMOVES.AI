@@ -246,6 +246,369 @@ def test_a_genuine_collision_still_blocks_across_spellings(tmp_path):
     )
 
 
+# ---------------------------------------------------------------------------
+# One identity, two machines (#3313).
+#
+# resolve_register_name() lets an identity sign OFF its home node as
+# `<BASE> (<node>)` -- `B850-CLAUDE (spark)`, or the declared node_relations
+# token `Z890-CLAUDE (Z890-mirror-on-5090)` -- while home stays
+# `B850-CLAUDE (Knuckles)`. The spelling fold above merged all of them into one
+# owner key, so a bare RELEASE by one machine's session closed the OTHER
+# machine's open lanes, and a CLAIM by one read as a self-reclaim of the
+# other's lane. Same identity, different sessions: the key is (identity, node).
+# Home-spelling variants -- `(Knuckles, opus 4.7 1M)`, `(Opus 5)` -- must keep
+# folding together, which is the 2026-08-25 reason the fold exists at all.
+# ---------------------------------------------------------------------------
+
+B850_SPARK = "B850-CLAUDE (spark)"
+Z890_HOME = "Z890-CLAUDE"
+Z890_MIRROR = "Z890-CLAUDE (Z890-mirror-on-5090)"
+
+
+def _claim(owner, branch="feat/widget", ts="2026-01-01T00:00:00Z"):
+    return f"- `{ts}` CLAIM `{owner}` scope: **x.** Branch `{branch}`\n"
+
+
+def _release(owner, ts="2026-01-02T00:00:00Z"):
+    return f"- `{ts}` RELEASE `{owner}` scope: done.\n"
+
+
+def test_an_off_home_release_does_not_close_the_home_sessions_lane(tmp_path):
+    """The defect. spark's bare RELEASE must leave Knuckles' lane held."""
+    existing = _claim(B850_A) + _release(B850_SPARK)
+    result = run_hook(tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"), existing)
+    assert result.returncode == BLOCK, (
+        "a RELEASE signed on spark closed a lane the Knuckles session still "
+        f"holds -- one machine's session freed the other's work\n{result.stdout}"
+    )
+    assert B850_A in result.stderr
+
+
+def test_a_home_release_does_not_close_the_off_home_sessions_lane(tmp_path):
+    """The mirror direction: Knuckles' RELEASE leaves spark's lane held."""
+    existing = _claim(B850_SPARK) + _release(B850_A)
+    result = run_hook(tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"), existing)
+    assert result.returncode == BLOCK, (
+        f"Knuckles' RELEASE closed spark's open lane\n{result.stdout}"
+    )
+    assert B850_SPARK in result.stderr
+
+
+def test_an_off_home_claim_on_a_home_held_lane_is_a_collision(tmp_path):
+    """Two concurrent sessions of one identity on one branch is the event the
+    register exists to catch -- not a self-reclaim."""
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK, (
+        "spark claimed a branch the Knuckles session holds and the gate read "
+        f"it as the same owner re-naming its own lane\n{result.stdout}"
+    )
+    assert B850_A in result.stderr
+
+
+def test_a_node_relations_mirror_claim_is_its_own_session(tmp_path):
+    """`Z890-CLAUDE (Z890-mirror-on-5090)` runs on the 5090, not on the z890."""
+    claim = run_hook(tmp_path, _claim(Z890_MIRROR, ts="2026-01-03T00:00:00Z"), _claim(Z890_HOME))
+    assert claim.returncode == BLOCK, (
+        f"the 5090 mirror's CLAIM read as the z890 re-naming its lane\n{claim.stdout}"
+    )
+    assert Z890_HOME in claim.stderr, "the block must name the holder"
+
+
+def test_a_node_relations_mirror_release_does_not_close_the_home_lane(tmp_path):
+    release = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(Z890_HOME) + _release(Z890_MIRROR),
+    )
+    assert release.returncode == BLOCK, (
+        f"the 5090 mirror's RELEASE closed the z890's open lane\n{release.stdout}"
+    )
+    assert Z890_HOME in release.stderr, "the block must name the holder"
+
+
+@pytest.mark.parametrize("spelling", [
+    "B850-CLAUDE (Knuckles, opus 4.7 1M)",   # node token + model annotation
+    "B850-CLAUDE (Opus 5)",                  # no node named -> home node
+    "B850-CLAUDE",                           # bare base -> home node
+    "B850-CLAUDE (pmoves-b850-ai-top)",      # a node ALIAS of the home node
+])
+def test_home_spelling_variants_still_fold_together(tmp_path, spelling):
+    """The 2026-08-25 fold must survive: every HOME spelling closes and
+    re-claims the home session's lane."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_A) + _release(spelling),
+    )
+    assert released.returncode == ALLOW, (
+        f"{spelling!r} is a home spelling and must close the home CLAIM\n"
+        f"{released.stderr}"
+    )
+    assert '"permissionDecision": "ask"' not in released.stdout, released.stdout
+    reclaimed = run_hook(tmp_path, _claim(spelling, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert reclaimed.returncode == ALLOW, (
+        f"{spelling!r} collided with its own home session\n{reclaimed.stderr}"
+    )
+    assert '"permissionDecision": "ask"' not in reclaimed.stdout, reclaimed.stdout
+
+
+def test_an_off_home_session_folds_its_own_spellings(tmp_path):
+    """Off home, the fold still applies WITHIN the session: spark's RELEASE
+    with an annotation closes spark's CLAIM, and re-naming is not a collision."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK) + _release("B850-CLAUDE (spark, opus 4.7 1M)"),
+    )
+    assert released.returncode == ALLOW, released.stderr
+    assert '"permissionDecision": "ask"' not in released.stdout, released.stdout
+    reclaimed = run_hook(
+        tmp_path, _claim("B850-CLAUDE (dgx-spark)", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK),
+    )
+    assert reclaimed.returncode == ALLOW, reclaimed.stderr
+    assert '"permissionDecision": "ask"' not in reclaimed.stdout, reclaimed.stdout
+
+
+@pytest.mark.parametrize("raw", ["b850-claude @ spark", "b850-claude (@ spark)"])
+def test_a_raw_owner_cannot_spell_a_constructed_node_key(tmp_path, raw):
+    """An owner literally WRITTEN as the off-home key must not become that
+    session. Constructed keys live in a namespace no raw owner can reach."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK) + _release(raw),
+    )
+    assert released.returncode == BLOCK, (
+        f"a RELEASE by the literal owner {raw!r} closed spark's lane\n{released.stdout}"
+    )
+    claimed = run_hook(tmp_path, _claim(raw, ts="2026-01-03T00:00:00Z"), _claim(B850_SPARK))
+    assert claimed.returncode == BLOCK, (
+        f"the literal owner {raw!r} re-claimed spark's lane as itself\n{claimed.stdout}"
+    )
+
+
+def test_an_identity_with_no_home_node_is_split_per_node_too(tmp_path):
+    """Operator decision 2026-10-08: the node is a measured fact, so a no-home
+    identity (`claude-opus`) on two named nodes is two sessions. The z890
+    session's RELEASE must not close the 5090 mirror's lane -- the shape of
+    register row 1795 (a spark lane closed by a bare RELEASE from elsewhere)."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (Z890-mirror-on-5090)") + _release("CLAUDE-OPUS (Z890)"),
+    )
+    assert released.returncode == BLOCK, (
+        f"a z890 RELEASE closed the 5090 session's lane\n{released.stdout}"
+    )
+    assert "CLAUDE-OPUS (Z890-mirror-on-5090)" in released.stderr
+    bare = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (spark)") + _release("CLAUDE-OPUS"),
+    )
+    assert bare.returncode == BLOCK, (
+        f"a node-less RELEASE closed a named-node session's lane\n{bare.stdout}"
+    )
+    same = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (Z890)") + _release("CLAUDE-OPUS-5 (z890)"),
+    )
+    assert same.returncode == ALLOW, same.stderr
+    assert '"permissionDecision": "ask"' not in same.stdout, same.stdout
+
+
+def test_a_non_machine_node_word_does_not_split_the_key(tmp_path):
+    """`any` is a declared placeholder, not a machine a session ran on."""
+    result = run_hook(tmp_path, _claim("B850-CLAUDE (any)", ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+# ---------------------------------------------------------------------------
+# The node half, unreadable (#3313 review, P2). Folding onto the home key is
+# the pre-#3313 behaviour -- the one under which a spark RELEASE closed
+# Knuckles' lanes -- so it may be a fallback, never a silent allow.
+# PMOVES_NODE_VOCABULARY is honoured only by the hook's node loader, for this.
+# ---------------------------------------------------------------------------
+
+def _ask_reason(result) -> str:
+    if '"permissionDecision": "ask"' not in result.stdout:
+        return ""
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+@pytest.fixture
+def no_node_vocabulary(tmp_path, monkeypatch):
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(tmp_path / "no-such-nodes.yaml"))
+
+
+def test_a_claim_is_asked_when_the_node_vocabulary_is_unreadable(tmp_path, no_node_vocabulary):
+    result = run_hook(tmp_path, _claim(B850_A, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    reason = _ask_reason(result)
+    assert reason, f"a degraded node half allowed silently\n{result.stdout!r}"
+    assert "node vocabulary is unavailable" in reason and B850_A in reason
+    assert "NOT MEASURED" in result.stderr
+
+
+def test_a_degraded_self_reclaim_across_nodes_is_never_a_silent_allow(
+        tmp_path, no_node_vocabulary):
+    """With the node half gone, Knuckles claiming spark's lane folds to
+    'same owner' -- the gate must at least ASK."""
+    result = run_hook(tmp_path, _claim(B850_A, ts="2026-01-03T00:00:00Z"), _claim(B850_SPARK))
+    assert result.returncode == BLOCK or _ask_reason(result), (
+        f"degraded cross-node reclaim was a silent allow\n{result.stdout!r}"
+    )
+
+
+def test_a_release_only_write_is_asked_when_the_node_vocabulary_is_unreadable(
+        tmp_path, no_node_vocabulary):
+    """A RELEASE is what closes lanes; a RELEASE-only Write used to skip the
+    gate entirely."""
+    existing = _claim(B850_A)
+    result = run_hook(tmp_path, existing + _release(B850_SPARK), existing)
+    assert result.returncode == ALLOW, result.stderr
+    assert B850_SPARK in _ask_reason(result), result.stdout
+
+
+def test_a_shell_release_is_asked_when_the_node_vocabulary_is_unreadable(
+        tmp_path, no_node_vocabulary):
+    reg = tmp_path / REGISTER_NAME
+    row = _release(B850_SPARK).rstrip("\n")
+    result = _run_bash(tmp_path, f"cat >> {reg} <<'EOF'\n{row}\nEOF", _claim(B850_A))
+    assert result.returncode == ALLOW, result.stderr
+    assert B850_SPARK in _ask_reason(result), result.stdout
+
+
+def test_a_malformed_node_relations_row_is_asked_not_silently_folded(tmp_path, monkeypatch):
+    """The reviewer's concrete case, through an override that predates the
+    fix: a node_relations row with no `token` makes wearing() raise. That
+    used to be swallowed, folding spark onto home -- a silent allow of a
+    cross-node reclaim. It must surface as an ask naming the failure."""
+    real = REPO_ROOT / "pmoves" / "config" / "identity_vocabulary.yaml"
+    broken = tmp_path / "identity_vocabulary.yaml"
+    broken.write_text(real.read_text(encoding="utf-8").rstrip("\n")
+                      + "\n  - node: '5090'\n", encoding="utf-8")
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(broken))
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK or _ask_reason(result), (
+        f"an unparseable node half folded spark onto home silently\n{result.stdout!r}"
+    )
+    assert "KeyError" in (_ask_reason(result) + result.stderr)
+
+
+def test_an_unresolved_owner_is_not_asked_about_nodes(tmp_path, no_node_vocabulary):
+    """No identity -> compared as an exact string, which already keeps every
+    node spelling apart. Nothing to ask."""
+    result = run_hook(tmp_path, _claim("AGENT-B", branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# An AMBIGUOUS parenthetical (#3313 review, P3). Two nodes named, or tokens
+# the vocabulary does not know and no node it does, is not "home" -- it is a
+# question. The gate asks; it does not pick (last-token-wins was the old rule).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (Knuckles, spark)",     # two machines
+    "B850-CLAUDE (spark, Knuckles)",     # same two, other order
+    "B850-CLAUDE (dgx spark)",           # unrecognised token, no node
+    "B850-CLAUDE (Knuckles @ spark)",    # unrecognised token, no node
+])
+def test_an_ambiguous_node_parenthetical_is_asked(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    reason = _ask_reason(result)
+    assert reason and owner in reason, (
+        f"{owner!r} names no single node, and the gate decided one silently\n"
+        f"{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (spark, some lane nobody declared)",  # node + unknown: decided
+    "B850-CLAUDE (Knuckles, opus 4.7 1M)",             # node + known model
+])
+def test_a_single_node_with_annotations_is_decided_not_asked(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+# Re-review P3-1: the model (and a role) is an annotation, never a node.
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (Opus 5.5)",
+    "B850-CLAUDE (Claude Opus 5.5 1M context)",
+    "B850-CLAUDE (reviewer)",
+    "CLAUDE-OPUS (Opus 5.5)",                 # no-home identity, model only
+])
+def test_a_model_or_role_annotation_is_not_asked_about(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+# Kilo r4221570771: "contains a digit" is not "is a model". An unknown node
+# spelled with a digit must not be waved through as an annotation.
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (nano-2)", "B850-CLAUDE (z890-mirror-2)", "B850-CLAUDE (dgx spark 2)",
+])
+def test_an_unknown_digit_bearing_node_still_asks(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert owner in _ask_reason(result), (
+        f"{owner!r} folded home silently -- a digit is not a version\n{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("owner, node", [
+    ("B850-CLAUDE (4090)", "4090"), ("B850-CLAUDE (kvm4-2)", "kvm4-2"),
+])
+def test_known_digit_nodes_still_resolve_as_nodes(tmp_path, owner, node):
+    """A digit-named node is still a node: its session is distinct from home."""
+    result = run_hook(tmp_path, _claim(owner, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK, (
+        f"{owner!r} read as the home session\n{result.stdout!r}"
+    )
+
+
+def test_a_node_shaped_unknown_token_still_asks_and_says_how_to_fix_it(tmp_path):
+    result = run_hook(tmp_path, _claim("B850-CLAUDE (dgx spark)", branch="feat/fresh",
+                                       ts="2026-01-03T00:00:00Z"))
+    reason = _ask_reason(result)
+    assert reason and "Add your node token" in reason, result.stdout
+
+
+# Re-review P3-2: baton-from holders and co-owner names are keyed too.
+def test_an_ambiguous_baton_from_holder_is_asked(tmp_path):
+    """A homeless signer passing a baton on behalf of a holder whose node
+    cannot be decided: the baton closes THAT holder's lanes, so ask."""
+    row = ("- `2026-01-03T00:00:00Z` RELEASE `CRUSH (Knuckles)` branch: `feat/fresh` "
+           "\u00b7 baton-from: `CLAUDE-OPUS (dgx spark)` \u00b7 scope: passing.\n")
+    result = run_hook(tmp_path, EXISTING + row, EXISTING)
+    assert "CLAUDE-OPUS (dgx spark)" in _ask_reason(result), result.stdout
+
+
+def test_an_ambiguous_co_owner_name_is_asked(tmp_path):
+    row = ("- `2026-01-03T00:00:00Z` CLAIM `CRUSH (Knuckles)` branch: `feat/fresh` "
+           "\u00b7 co-owners: `B850-CLAUDE (Knuckles, spark)` \u00b7 scope: s.\n")
+    result = run_hook(tmp_path, row)
+    assert "B850-CLAUDE (Knuckles, spark)" in _ask_reason(result), result.stdout
+
+
+# Re-review P3-3: the override feeds only the hook's index; a node wearing()
+# resolves that the index lacks must be asked about, not folded home.
+def test_a_node_the_gate_index_lacks_is_asked(tmp_path, monkeypatch):
+    import yaml
+    real = REPO_ROOT / "pmoves" / "configs" / "node-vocabulary.yaml"
+    doc = yaml.safe_load(real.read_text(encoding="utf-8"))
+    doc["nodes"] = [n for n in doc["nodes"] if n.get("canonical") != "spark"]
+    trimmed = tmp_path / "nodes.yaml"
+    trimmed.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(trimmed))
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK or "does not know" in _ask_reason(result), (
+        f"a node outside the gate's index folded home silently\n{result.stdout!r}"
+    )
+
+
 def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
     """Fail-safe, not fail-open.
 
@@ -1786,3 +2149,94 @@ def test_a_quoted_delimiter_does_NOT_fold_its_terminator(tmp_path):
         "a quoted delimiter's terminator was folded, so body content was parsed "
         f"as a command:\n{cmd}\nstderr={r.stderr}"
     )
+
+
+# ---------------------------------------------------------------------------
+# sys.modules hygiene for the tool modules the hook loads (#3313 review, P3).
+# In-process on purpose: what is under test is interpreter state, which a
+# subprocess would discard before it could be asserted on.
+# ---------------------------------------------------------------------------
+
+def _fresh(name: str, path: Path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def clean_tool_modules():
+    saved = {k: sys.modules.get(k) for k in ("identity_lineage", "node_identity",
+                                             "claim_gate_under_test")}
+    yield
+    for k, v in saved.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
+
+
+def test_the_hook_reuses_an_already_loaded_node_identity(clean_tool_modules):
+    """Loading the node half must not replace a node_identity module that is
+    already this exact file -- two module objects for one file is how a
+    caller ends up holding a different Node class than the gate compares."""
+    already = _fresh("node_identity", REPO_ROOT / "pmoves" / "tools" / "node_identity.py")
+    gate = _fresh("claim_gate_under_test", HOOK)
+    assert gate._load_nodes() is not None
+    assert sys.modules["node_identity"] is already, (
+        "the hook replaced an already-loaded node_identity with a second copy"
+    )
+
+
+def test_a_malformed_node_relations_row_is_not_cached_half_built(
+        tmp_path, monkeypatch, clean_tool_modules):
+    """One bad row (no `token`) must raise on EVERY call, not once and then
+    hand out a half-built table whose KeyError names the wrong defect."""
+    lineage = _fresh("identity_lineage", REPO_ROOT / "pmoves" / "tools" / "identity_lineage.py")
+    bad = tmp_path / "vocab.yaml"
+    bad.write_text("identities: []\nnode_relations:\n  - node: '5090'\n", encoding="utf-8")
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(bad))
+    monkeypatch.setattr(lineage, "_TABLES", None)
+    for attempt in (1, 2):
+        with pytest.raises(KeyError) as exc:
+            lineage._tables()
+        assert exc.value.args == ("token",), (
+            f"attempt {attempt}: expected the real defect (missing `token`), "
+            f"got {exc.value!r}"
+        )
+    assert lineage._TABLES is None
+
+
+def test_a_failed_node_identity_import_leaves_no_half_built_module(
+        tmp_path, monkeypatch, clean_tool_modules):
+    """A node_identity that fails to execute must not stay in sys.modules."""
+    lineage = _fresh("identity_lineage", REPO_ROOT / "pmoves" / "tools" / "identity_lineage.py")
+    broken_root = tmp_path / "repo"
+    (broken_root / "pmoves" / "tools").mkdir(parents=True)
+    (broken_root / "pmoves" / "tools" / "node_identity.py").write_text(
+        "raise RuntimeError('half-built')\n", encoding="utf-8")
+    sentinel = type(sys)("node_identity")
+    sentinel.__file__ = str(tmp_path / "elsewhere" / "node_identity.py")
+    sys.modules["node_identity"] = sentinel
+    monkeypatch.setattr(lineage, "REPO_ROOT", broken_root)
+    monkeypatch.setattr(lineage, "_TABLES", None)
+    lineage._tables()  # node vocab is optional to _tables(): swallowed there
+    assert sys.modules.get("node_identity") is sentinel, (
+        "a failed exec left a half-built node_identity in sys.modules"
+    )
+
+
+@pytest.mark.parametrize("raw", [
+    "b850-claude`@spark", "b850-claude``@spark", "x`@y", "`@", "b850-claude @ spark",
+])
+def test_no_raw_owner_string_equals_a_constructed_key(raw, clean_tool_modules):
+    """Even through an API that hands canonical_owner() a string with a
+    backtick in it (no row regex can -- they all capture [^`]+), a raw owner
+    never lands on a constructed `<identity>`@<node>` key."""
+    gate = _fresh("claim_gate_under_test", HOOK)
+    constructed = {gate.canonical_owner(o) for o in (
+        "B850-CLAUDE (spark)", "Z890-CLAUDE (Z890-mirror-on-5090)")}
+    assert len(constructed) == 2
+    assert gate.canonical_owner(raw) not in constructed

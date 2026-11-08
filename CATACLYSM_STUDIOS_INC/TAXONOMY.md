@@ -1,6 +1,8 @@
 # Cataclysm Studios Inc -- Taxonomy & Progression Map
 
 > From research napkin to production DAO -- every document filed by maturity tier.
+>
+> **Inventory: 148 files (measured 2026-10-10 at origin/main)** — L1 6 · L2 19 · L3 9 · L4 82 · L5 4 · evidence 18 · root + PMOVES-PROVISIONS 10. The 2026-10-10 audit’s 149 includes `FORDHAM_HILL_SHAREHOLDER_BRIEF_2026-10-10.md` (landed server-side, 2026-10-10).
 
 ---
 
@@ -11,7 +13,7 @@
 | **L1** | Foundation | Signal Discovery | Early research | Raw research, articles, case studies, FAQ |
 | **L2** | Design | Protocol Architecture | Design phase | Tokenomics models, DAO constitution, charters, proposals |
 | **L3** | Pilot | Community Proof | Fordham Hill pilot | MVP validation, Bronx cooperative field notes |
-| **L4** | Platform | Technical Engine | PMOVES.AI build | 60+ microservices, projections, infra-as-code, provisions |
+| **L4** | Platform | Technical Engine | PMOVES.AI build | ~100 service directories (101 dirs measured 2026-10-10), projections, infra-as-code, provisions |
 | **L5** | Legendary | DAO + Attribution | Audit & scale | Production audit, DAO governance, Shape Attribution |
 
 ---
@@ -55,7 +57,7 @@ Research inputs, case studies, and early signal discovery.
 
 ---
 
-## L2 -- Design (15 files across 5 subdirs)
+## L2 -- Design (19 files across 5 subdirs, incl. companion .md files — measured 2026-10-10)
 
 Protocol architecture: tokenomics, governance structures, and strategic proposals.
 
@@ -106,7 +108,7 @@ Protocol architecture: tokenomics, governance structures, and strategic proposal
 
 ---
 
-## L3 -- Pilot (8 files)
+## L3 -- Pilot (9 files — measured 2026-10-10; includes fordham/elders_walk_brief_2026-07-27.html)
 
 MVP implementation and real-world validation at the Fordham Hill cooperative (Bronx, NY).
 
@@ -115,7 +117,7 @@ MVP implementation and real-world validation at the Fordham Hill cooperative (Br
 | `Cataclsymstudios_MVP_&_Community_Engagement.md` | MVP scope and community engagement strategy |
 | `Cataclysmstudios_MVP_and_CONTENT.md` | Content production plan for MVP launch |
 
-### fordham/ (6 files)
+### fordham/ (8 files)
 
 | File | Description |
 |------|-------------|
@@ -133,7 +135,7 @@ MVP implementation and real-world validation at the Fordham Hill cooperative (Br
 
 ---
 
-## L4 -- Platform (100+ files across 4 subdirs)
+## L4 -- Platform (82 files across 4 subdirs — measured 2026-10-10)
 
 Production system: the PMOVES.AI technical engine, financial projections, and infrastructure code.
 
@@ -150,7 +152,7 @@ Compiled reports include 5-Year Business Projections, Community Wealth Building,
 
 The `data/` subdirectory contains CSV datasets, Python chart scripts, and prompt files for each projection model.
 
-### provisions/ (~50 files)
+### provisions/ (26 files — measured 2026-10-10)
 
 Complete infrastructure-as-code tree inherited from PMOVES-PROVISIONS:
 - `backup/` -- Linux and Windows backup scripts
@@ -172,11 +174,11 @@ Complete infrastructure-as-code tree inherited from PMOVES-PROVISIONS:
 **Cross-references (ToKenism-Multi):**
 - NATS event bus: `integrations/nats/nats-client.ts`
 - Event-driven architecture: `integrations/event-bus/event-bus.ts`, `schema-validator.ts`
-- Provisions infra supports the 60+ microservice deployment documented in `.claude/CLAUDE.md`
+- Provisions infra supports the ~100-service deployment (101 service directories under `pmoves/services/`, measured 2026-10-10; previously cited as “60+” from `.claude/CLAUDE.md`)
 
 ---
 
-## L5 -- Legendary (2 files)
+## L5 -- Legendary (4 files — measured 2026-10-10; includes the .md export)
 
 Production DAO governance, organizational audit, and attribution systems.
 
@@ -196,7 +198,7 @@ Production DAO governance, organizational audit, and attribution systems.
 
 ---
 
-## Evidence Layer (15 files)
+## Evidence Layer (18 files — measured 2026-10-10)
 
 Raw research outputs proving the journey from idea to implementation. See `evidence/README.md` for the full inventory.
 
@@ -205,6 +207,8 @@ Raw research outputs proving the journey from idea to implementation. See `evide
 | Audio recordings | 2 | Hybrid Utility Tokens podcast (.mp3, .wav) |
 | Simulation theory papers | 4 | Holographic models research (.docx, .pdf) |
 | PDF exports of research chats | 9 | Research conversation snapshots |
+| Session logs | 2 | `sessions/cli-session-1.txt`, `sessions/cli-session-2.txt` |
+| Inventory | 1 | `README.md` evidence-tree index |
 
 ---
 

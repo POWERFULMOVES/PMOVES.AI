@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://host.docker.internal:54321")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 PORT = int(os.environ.get("PORT", "8110"))
 MODEL_REGISTRY_API_KEY = os.environ.get("MODEL_REGISTRY_API_KEY", "")
 

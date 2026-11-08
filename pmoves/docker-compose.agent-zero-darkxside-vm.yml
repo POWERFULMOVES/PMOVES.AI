@@ -1,0 +1,40 @@
+##############################################################################
+# PMOVES.AI - Agent Zero lightweight VM instance (DARKSIDE)
+##############################################################################
+# Registers the DARKSIDE lightweight Agent Zero VM instance as a tracked
+# compose service. Modeled exactly on docker-compose.agent-zero-instances.yml
+# (PR #3319). IMAGE-only: no build stanzas -> compose-provenance-audit
+# untouched. Deploy target: standalone VMs.
+##############################################################################
+services:
+  agent-zero-darkxside-vm:
+    image: ${AGENT_ZERO_IMAGE:-ghcr.io/powerfulmoves/pmoves-agent-zero:pmoves-latest}
+    container_name: pmoves-agent-zero-darkxside-vm
+    hostname: agent-zero-darkxside-vm
+    restart: unless-stopped
+    labels:
+      a0.launcher.managed: "true"
+      a0.launcher.instanceName: DARKSIDE-VM
+      a0.launcher.role: vm-instance
+    environment:
+      - PORT=80
+      - DOCKED_MODE=false
+      - TOPOLOGY_MODE=standalone
+      - PARENT_SYSTEM=PMOVES.AI
+    volumes:
+      - ${A0VM_USR_DIR:-./data/agent-zero-darkxside-vm/usr}:/a0/usr
+    ports:
+      - ${A0VM_BIND:-127.0.0.1}:${A0VM_PORT:-60938}:80
+    networks:
+      - pmoves-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  pmoves-net:
+    external: true
+    name: pmoves-net

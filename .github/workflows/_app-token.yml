@@ -24,7 +24,7 @@ name: _app-token
 #         permission-pull-requests: write
 #     work:
 #       needs: token
-#       runs-on: ubuntu-latest
+#       runs-on: ubuntu-24.04
 #       steps:
 #         - env:
 #             GH_TOKEN: ${{ needs.token.outputs.token }}
@@ -91,7 +91,7 @@ permissions: {}
 
 jobs:
   mint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       token: ${{ steps.mint.outputs.token }}
     steps:

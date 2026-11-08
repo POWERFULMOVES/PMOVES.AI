@@ -47,7 +47,7 @@ def shape_mod():
 @pytest.fixture
 def worker(shape_mod):
     return shape_mod.ShapeWorker(
-        nats_url="nats://nats:pmoves@nats:4222",
+        nats_url="nats://nats:4222",
         shape_secret="shape-secret",
         mesh_passphrase="mesh-passphrase",
     )

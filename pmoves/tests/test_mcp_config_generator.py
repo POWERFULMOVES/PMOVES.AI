@@ -389,3 +389,63 @@ def test_openclaw_scope_check_passes_for_canonical(
         assert scopes.main(["--check"]) == 0
     finally:
         scopes.SCOPES_DIR = orig_dir
+
+
+def _one_server_inventory(tmp_path: Path, server: dict) -> dict:
+    path = tmp_path / "inv.json"
+    path.write_text(json.dumps({"version": 1, "groups": {"g": {"servers": [server]}}}), encoding="utf-8")
+    return gen.load_inventory(path)
+
+
+def test_client_args_override_applies_to_that_client_only(tmp_path: Path, context: dict[str, str]) -> None:
+    inventory = _one_server_inventory(tmp_path, {
+        "key": "db", "transport": "stdio", "command": "uvx",
+        "args": ["postgres-mcp", "--access-mode=unrestricted"],
+        "client_args": {"kilocode": ["postgres-mcp", "--access-mode=restricted"]},
+    })
+    kilo = gen.generate_for_client("kilocode", inventory=inventory, context=context)
+    claude = gen.generate_for_client("claude", inventory=inventory, context=context)
+    assert kilo["mcp"]["db"]["command"] == ["uvx", "postgres-mcp", "--access-mode=restricted"]
+    assert claude["mcpServers"]["db"]["args"] == ["postgres-mcp", "--access-mode=unrestricted"]
+
+
+def test_kilocode_disabled_server_uses_schema_enabled_false(tmp_path: Path, context: dict[str, str]) -> None:
+    inventory = _one_server_inventory(tmp_path, {
+        "key": "off", "transport": "http", "url": "http://example.invalid/mcp", "disabled": True,
+    })
+    entry = gen.generate_for_client("kilocode", inventory=inventory, context=context)["mcp"]["off"]
+    assert entry["enabled"] is False
+    assert "disabled" not in entry
+
+
+def test_tracked_kilo_json_runs_supabase_db_restricted() -> None:
+    kilo = json.loads((gen.PROJECT_ROOT / "kilo.json").read_text(encoding="utf-8"))
+    assert kilo["mcp"]["supabase-db"]["command"][-1] == "--access-mode=restricted"
+
+
+def test_disabled_clients_disables_for_that_client_only(tmp_path: Path, context: dict[str, str]) -> None:
+    inventory = _one_server_inventory(tmp_path, {
+        "key": "rest", "transport": "stdio", "command": "npx", "args": ["srv", "--apiKey", "${SERVICE_ROLE_KEY}"],
+        "client_args": {"kilocode": ["srv", "--apiKey", "${ANON_KEY}"]},
+        "disabled_clients": ["kilocode"],
+    })
+    kilo = gen.generate_for_client("kilocode", inventory=inventory, context=context)["mcp"]["rest"]
+    claude = gen.generate_for_client("claude", inventory=inventory, context=context)["mcpServers"]["rest"]
+    assert kilo["enabled"] is False
+    assert "disabled" not in claude
+
+
+def test_tracked_kilo_json_never_hands_kilocode_the_service_role_key() -> None:
+    # Supabase: the service_role key bypasses Row Level Security
+    # (https://supabase.com/docs/guides/api/api-keys); kilocode auto-allows
+    # pmoves-supabase_* and can run under `kilo run --auto`.
+    entry = json.loads((gen.PROJECT_ROOT / "kilo.json").read_text(encoding="utf-8"))["mcp"]["pmoves-supabase"]
+    command = " ".join(entry["command"])
+    assert entry["enabled"] is False
+    for name in ("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SERVICE_ROLE_KEY"):
+        assert name not in command
+    assert "${ANON_KEY}" in command
+    server = next(s for g in gen.load_inventory(gen.INVENTORY_PATH)["groups"].values()
+                  for s in g["servers"] if s["key"] == "pmoves-supabase")
+    assert "kilocode" in server["disabled_clients"]
+    assert "${ANON_KEY}" in server["client_args"]["kilocode"]

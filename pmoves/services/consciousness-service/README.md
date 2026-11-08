@@ -1,6 +1,6 @@
 # consciousness-service — Topology Bridge
 
-Maps consciousness topology via Compressed Geometric Packets (CGP). Bridges the Tokenism Simulator and the Geometry Bus, encoding agent interactions, swarm dynamics, and attribution chains into CHIT-compatible geometric structures stored in Neo4j.
+Maps consciousness topology via Compressed Geometric Packets (CGP). Bridges the Tokenism Simulator and the Geometry Bus, encoding agent interactions, swarm dynamics, and attribution chains into CHIT-compatible geometric structures. (It does not store them in Neo4j: the service has no Neo4j driver and no compose dependency on it; see `docs/TAC/TAC_NEO4J.md`.)
 
 > **Canonical TAC reference**: `pmoves/docs/TAC/TAC_CONSCIOUSNESS.md` (richer architectural treatment; this README is the operator quick-reference).
 
@@ -9,7 +9,7 @@ Maps consciousness topology via Compressed Geometric Packets (CGP). Bridges the 
 - **Port**: `:8106`
 - **Health**: `GET /healthz`
 - **Team**: Orchestration (`pmoves/configs/agent-teams.yaml`)
-- **Dependencies**: Tokenism Simulator (`:8103`), NATS (`:4222`), Neo4j (`:7474` HTTP / `:7687` Bolt)
+- **Dependencies**: Tokenism Simulator (`:8103`), NATS (`:4222`). Not Neo4j (no driver in the service; corrected 2026-10-01)
 - **CHIT integration**: **Full** target (5/5 toggles per `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md`)
 - **CGP schema**: `chit.cgp.v1.0` (payload canonical), transported via `geometry.cgp.v1` NATS subject
 
@@ -25,7 +25,7 @@ Maps consciousness topology via Compressed Geometric Packets (CGP). Bridges the 
                   CGP  CHIT  Graph
                 Encode Sign  Store
                    │    │    │
-                   └─┬──┴────┴─► Neo4j (7474)
+                   └─┬──┴────┴─► (no graph write)
                      ▼
               geometry.cgp.v1 ──► Tokenism Simulator (8103)
                                        │

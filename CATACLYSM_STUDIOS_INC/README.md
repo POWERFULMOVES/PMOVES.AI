@@ -17,6 +17,8 @@ This directory captures the full arc from early cooperative economics research t
 
 For the full file inventory, tier definitions, and cross-references to the PMOVES.AI codebase, see **[TAXONOMY.md](TAXONOMY.md)**.
 
+Practice status (2026-10-10): **[CHIT_SETTLEMENT_PRACTICE_STATUS.md](CHIT_SETTLEMENT_PRACTICE_STATUS.md)** (theory → measured artifact + gated live path) · **[COUNCIL_DECISIONS_CREATOR_PIPELINE.md](COUNCIL_DECISIONS_CREATOR_PIPELINE.md)** (council decisions → live creator-pipeline artifacts).
+
 ## Relationship to PMOVES.AI
 
 This knowledge base documents the organizational journey that produced the PMOVES.AI platform:

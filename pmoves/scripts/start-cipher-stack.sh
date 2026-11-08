@@ -16,29 +16,51 @@ echo "=== Starting minimal Cipher stack for Elder-Melchor ==="
 # Create network if needed
 docker network create pmoves-net 2>/dev/null || true
 
-# Start Neo4j
+# Neo4j: this script no longer removes or starts it.
+# It used to force-remove any container named pmoves-neo4j and `docker run` a
+# replacement with NO data volume. Run on a node whose live graph ran under
+# that name (Knuckles, 2026-09), that deletes the running database's container
+# and brings up an empty graph in its place. Neo4j is started by compose, on
+# the named volume pmoves_neo4j-data, and this script only checks it is there.
 echo "--- Neo4j ---"
-docker rm -f pmoves-neo4j 2>/dev/null || true
-docker run -d --name pmoves-neo4j \
-  --network pmoves-net \
-  -e NEO4J_AUTH=neo4j/pmoves2026 \
-  -e NEO4J_PLUGINS='["apoc"]' \
-  -e NEO4J_server_memory_heap_initial__size=512m \
-  -e NEO4J_server_memory_heap_max__size=1G \
-  -e NEO4J_server_memory_pagecache_size=512m \
-  -p 7474:7474 -p 7687:7687 \
-  --memory 2g \
-  neo4j:5.26.22 2>&1
-echo "Neo4j starting on bolt://localhost:7687 (web UI: http://localhost:7474)"
+NEO4J_CONTAINER="$(python3 "$SCRIPT_DIR/neo4j_container.py")" || {
+  echo "❌ could not determine the Neo4j container name (see above)" >&2
+  exit 3
+}
+if docker ps --format '{{.Names}}' | grep -qxF "$NEO4J_CONTAINER"; then
+  echo "Neo4j already running as $NEO4J_CONTAINER; leaving it untouched."
+else
+  echo "❌ Neo4j ($NEO4J_CONTAINER) is not running, and this script does not start it." >&2
+  echo "   Start it under compose, on its named volume:" >&2
+  echo "     make -C pmoves up-data-tier DATA_SERVICES=neo4j" >&2
+  exit 1
+fi
 
 # Start NATS
+# The credential comes from the caller's environment, never from this file.
+# It used to be `--pass` with the published default, and the ready banner
+# echoed it back, so anyone who could read this repo could authenticate to the
+# bus. There is no default now: a missing NATS_PASSWORD stops here instead of
+# silently starting a server on the public value.
+# `-e NATS_PASSWORD` with no value copies it from this shell, so it never
+# appears on the docker command line; the server reads it inside the container.
 echo "--- NATS ---"
+NATS_USER="${NATS_USER:-nats}"
+if [ -z "${NATS_PASSWORD:-}" ]; then
+  echo "❌ NATS_PASSWORD is not set, and this script carries no default." >&2
+  echo "   Run it with the tier env loaded so the funnel-provisioned value is used" >&2
+  echo "   (make -C pmoves secrets-funnel provisions NATS_PASSWORD)." >&2
+  exit 1
+fi
+export NATS_USER NATS_PASSWORD
 docker rm -f pmoves-nats 2>/dev/null || true
 docker run -d --name pmoves-nats \
   --network pmoves-net \
   -p 4222:4222 -p 8222:8222 \
+  -e NATS_USER -e NATS_PASSWORD \
+  --entrypoint sh \
   nats:2.11.8-alpine \
-  -js -m 8222 --user nats --pass pmoves 2>&1
+  -c 'exec nats-server -js -m 8222 --user "$NATS_USER" --pass "$NATS_PASSWORD"' 2>&1
 echo "NATS starting on nats://localhost:4222 (monitor: http://localhost:8222)"
 
 # Wait for health
@@ -55,14 +77,14 @@ done
 if [ "$NEO4J_OK" = "yes" ] && [ "$NATS_OK" = "yes" ]; then
   echo ""
   echo "✅ Cipher stack ready!"
-  echo "   Neo4j: bolt://localhost:7687 (user: neo4j, pass: pmoves2026)"
-  echo "   NATS:  nats://localhost:4222 (user: nats, pass: pmoves)"
+  echo "   Neo4j: bolt://localhost:7687 (user: neo4j, password: <NEO4J_PASSWORD in env.shared>)"
+  echo "   NATS:  nats://localhost:4222 (user: $NATS_USER, password: <NATS_PASSWORD in env.shared>)"
   echo "   Cipher: via Hermes stdio MCP (already configured in pmoves-hermes-elder profile)"
   echo ""
   echo "   To verify: hermes mcp test pmoves-cipher-local"
 else
   echo "❌ Services not ready. Check docker logs:"
-  echo "   docker logs pmoves-neo4j"
+  echo "   docker logs $NEO4J_CONTAINER"
   echo "   docker logs pmoves-nats"
   exit 1
 fi

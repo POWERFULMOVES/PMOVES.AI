@@ -4,8 +4,8 @@
 
 **Launch date:** `[launch date]`
 **Founder:** DARKXSIDE
-**Primary link:** `[site-link]` (placeholder — swap at publish)
-**Supporting links:** `[yt-playlist]` · `[discord-invite]` · `[enterprise-contact]`
+**Primary link:** https://pmoves.ai (LIVE — measured 200 on 2026-10-10)
+**Supporting links:** `https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8` · `[discord-invite]` · `[enterprise-contact]`
 
 ---
 
@@ -33,9 +33,9 @@ Who this is for:
 
 This isn't an announcement. It's a line in the sand. It's been a good run, centralized AI. It's been a good run, ISPs.
 
-Site: `[site-link]`
+Site: `https://pmoves.ai`
 Enterprise inquiries: `[enterprise-contact]`
-YouTube (watch us build live): `[yt-playlist]`
+YouTube (watch us build live): `https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`
 
 **CTA:** Visit the site. DM for enterprise. Subscribe to the playlist.
 **Success metric:** 500+ reactions, 50+ DMs, 25+ site signups in first 48 hours.
@@ -61,7 +61,7 @@ Creators: free schools on YouTube + Discord.
 One architecture. Four markets. Community-owned.
 
 **Slide 5 — What's Next + CTA**
-Mobile node rolling out this quarter — live demos in cities we visit. Proposals out to UN/NGO this week. Site live: `[site-link]`. Join the Discord: `[discord-invite]`. Subscribe for build-in-public: `[yt-playlist]`.
+Mobile node rolling out this quarter — live demos in cities we visit. Proposals out to UN/NGO this week. Site live: `https://pmoves.ai`. Join the Discord: `[discord-invite]`. Subscribe for build-in-public: `https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`.
 
 **CTA:** Slide 5 carries the triple-link CTA. Save + share slide 2 or 3.
 **Success metric:** 3,000+ slide-deck impressions, 10%+ click-through to site.
@@ -131,13 +131,13 @@ Local business demos. Community workshops. Free.
 Everything I know about building this is on YouTube.
 Cloudflare School.
 DARKXSIDE'S SCHOOL OF POWERFULMOVES.
-Free, in public, as I build: `[yt-playlist]`
+Free, in public, as I build: `https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`
 
 **11/**
 It's been a good run, ISPs.
 It's been a good run, centralized AI.
 
-Site: `[site-link]`
+Site: `https://pmoves.ai`
 Discord: `[discord-invite]`
 Enterprise: `[enterprise-contact]`
 
@@ -149,13 +149,13 @@ Enterprise: `[enterprise-contact]`
 ## 4. Short-Form Captions (Instagram / TikTok / Threads)
 
 **(a) Zero-retention moat — 138 chars**
-Centralized AI *promises* not to keep your data. We *can't* keep it. Firecracker microVMs. 150ms boot. Gone after response. `[site-link]`
+Centralized AI *promises* not to keep your data. We *can't* keep it. Firecracker microVMs. 150ms boot. Gone after response. `https://pmoves.ai`
 
 **(b) Voice agents through walls — 147 chars**
-Voice AI through walls. Miles of range. No cell tower, no ISP. Sub-GHz mesh. This is what community-owned infra actually looks like. `[site-link]`
+Voice AI through walls. Miles of range. No cell tower, no ISP. Sub-GHz mesh. This is what community-owned infra actually looks like. `https://pmoves.ai`
 
 **(c) Mobile node growth loop — 144 chars**
-The PMOVES mobile node is rolling out. When it shows up in your city, you can try community-owned AI live. Reply with your town. `[site-link]`
+The PMOVES mobile node is rolling out. When it shows up in your city, you can try community-owned AI live. Reply with your town. `https://pmoves.ai`
 
 **CTA (per post):** Save + share the one that hits your stack.
 **Success metric:** Combined 10k views across platforms, 200+ saves, 50+ "which city" replies.
@@ -168,7 +168,7 @@ hey team 👁️
 
 it's done. well — the public part is done. the real work is just starting.
 
-PMOVES.AI is live at `[site-link]` as of `[launch date]`. Four months ago I told a few of you "give me until spring." Here we are.
+PMOVES.AI is live at `https://pmoves.ai` as of `[launch date]`. Four months ago I told a few of you "give me until spring." Here we are.
 
 What's actually live today:
 
@@ -177,7 +177,7 @@ What's actually live today:
 - **The mesh.** OpenMANET sub-GHz radio layer is operational on the test nodes. Fordham Hill pilot config is locked. St. Maarten blueprint is drafted.
 - **Hi-RAG v2.** Vectors + graph + full-text + cross-encoder reranking. The RAG people in here know what's up — this is the real one.
 - **Agent Zero + ClawZ.** Multi-agent orchestration running tonight on the Z890 + the KVM fleet.
-- **DARKXSIDE'S SCHOOL OF POWERFULMOVES.** YouTube playlist is live: `[yt-playlist]`. I build, you watch, we argue in the comments. That's the deal.
+- **DARKXSIDE'S SCHOOL OF POWERFULMOVES.** YouTube playlist is live: `https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`. I build, you watch, we argue in the comments. That's the deal.
 
 What's not live yet:
 - Mobile node tour — ships this quarter. If you want it in your city, drop a pin in #mobile-node-stops.
@@ -186,7 +186,7 @@ What's not live yet:
 
 How you can help today:
 
-1. **Share `[site-link]`** — your network > my network. LinkedIn, X, wherever you live online.
+1. **Share `https://pmoves.ai`** — your network > my network. LinkedIn, X, wherever you live online.
 2. **Drop city suggestions in #mobile-node-stops** — we route the van by community density + demand. Your neighborhood counts.
 3. **Recommend the YouTube playlist** — especially to anyone learning to build. It's free, it's the real process, no sponsor breaks.
 4. **Beta testers needed** — I want 20 people to run hammer tests on the zero-retention API this week. React 🔒 to this message if you want in.
@@ -234,8 +234,8 @@ Four months ago I told you I was building something. Today it's live.
 
 **What changes for you today:**
 
-- The site is live: `[site-link]`
-- The YouTube build-in-public playlist: `[yt-playlist]`
+- The site is live: `https://pmoves.ai`
+- The YouTube build-in-public playlist: `https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`
 - The Discord community: `[discord-invite]`
 - Enterprise / NGO inquiries: `[enterprise-contact]`
 
@@ -252,7 +252,7 @@ It's been a good run, centralized AI.
 — DARKXSIDE
 Cataclysm Studios Inc.
 
-**CTA:** Click through to `[site-link]`. Reply with your city for the mobile node.
+**CTA:** Click through to `https://pmoves.ai`. Reply with your city for the mobile node.
 **Success metric:** 40%+ open rate, 10%+ CTR on site link, 50+ reply-with-city responses.
 
 ---
@@ -290,7 +290,7 @@ Embargo lifts `[launch date]`. Happy to route an on-record call.
 
 Team — today we go public.
 
-`[site-link]` is live. The LinkedIn post drops at `[launch date] 09:00 ET`, X thread at 09:15, email blast at 10:00.
+`https://pmoves.ai` is live. The LinkedIn post drops at `[launch date] 09:00 ET`, X thread at 09:15, email blast at 10:00.
 
 We earned this. Four months of heads-down work, uncountable late nights, every single one of you caught something I would have shipped broken. Thank you.
 
@@ -314,7 +314,7 @@ It's been a good run. Let's start another one.
 
 — DARKXSIDE
 
-**CTA:** Push `[site-link]` to your own networks today.
+**CTA:** Push `https://pmoves.ai` to your own networks today.
 **Success metric:** 100% operator team reposts within 24h, 5+ UN/NGO inbound leads in week 1.
 
 ---

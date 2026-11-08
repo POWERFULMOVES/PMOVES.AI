@@ -63,7 +63,7 @@ export function HomeRoomLauncher({ rooms }: HomeRoomLauncherProps) {
 
   if (!selectedRoom) {
     return (
-      <div className="mt-10 max-w-3xl border border-border-subtle bg-void-elevated/80 p-5">
+      <div data-testid="home-room-launcher-empty" className="mt-10 max-w-3xl border border-border-subtle bg-void-elevated/80 p-5">
         <div className="font-pixel text-[8px] uppercase tracking-[0.2em] text-ink-muted">[ Room Launch ]</div>
         <p className="mt-3 text-sm text-ink-secondary">
           Room manifests are not available yet. Open the catalog once the room seeds are present.
@@ -78,7 +78,10 @@ export function HomeRoomLauncher({ rooms }: HomeRoomLauncherProps) {
   const accent = selectedRoom.accentColor ?? '#22C55E';
 
   return (
-    <section className="mt-10 max-w-4xl border border-cata-cyan/20 bg-void-elevated/80 p-5 backdrop-blur-sm sm:p-6">
+    <section
+      data-testid="home-room-launcher"
+      className="mt-10 max-w-4xl border border-cata-cyan/20 bg-void-elevated/80 p-5 backdrop-blur-sm sm:p-6"
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="font-pixel text-[8px] uppercase tracking-[0.2em] text-cata-cyan">[ Room Launch ]</div>
@@ -99,6 +102,8 @@ export function HomeRoomLauncher({ rooms }: HomeRoomLauncherProps) {
             <button
               key={room.roomId}
               type="button"
+              data-testid="home-room-option"
+              data-room-id={room.roomId}
               aria-pressed={active}
               onClick={() => setSelectedRoomId(room.roomId)}
               className="border px-3 py-2 text-left font-mono text-xs uppercase tracking-wider transition-all"

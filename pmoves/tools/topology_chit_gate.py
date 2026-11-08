@@ -11,9 +11,9 @@ Checks:
 
 2) Archon topology acknowledgement:
    - archon container exists/running
-   - archon has host port 8091 published
-   - archon has host port 3737 published for the consolidated UI
-   - archon API (/healthz) and UI (/) are reachable
+   - archon (0.6.0+) publishes its single container port 3090 on the host
+     (expected host aliases: 8091 for the API, 3737 for the UI)
+   - archon API (/api/health, JSON) and UI (/) are reachable
 
 3) CHIT sync acknowledgement:
    - v1 CHIT manifest is in sync with v2 source
@@ -24,6 +24,7 @@ Checks:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import subprocess
 import sys
@@ -31,7 +32,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -275,25 +276,6 @@ def _ports_published(inspect_data: Mapping[str, object], container_port: int) ->
     return isinstance(value, list) and len(value) > 0
 
 
-def _published_host_port(inspect_data: Mapping[str, object], container_port: int) -> str | None:
-    net = inspect_data.get("NetworkSettings")
-    if not isinstance(net, Mapping):
-        return None
-    ports = net.get("Ports")
-    if not isinstance(ports, Mapping):
-        return None
-    value = ports.get(f"{container_port}/tcp")
-    if not isinstance(value, list) or not value:
-        return None
-    first = value[0]
-    if not isinstance(first, Mapping):
-        return None
-    host_port = first.get("HostPort")
-    if not isinstance(host_port, str) or not host_port.strip():
-        return None
-    return host_port.strip()
-
-
 def _published_bindings(inspect_data: Mapping[str, object]) -> List[tuple[str, str, str]]:
     net = inspect_data.get("NetworkSettings")
     if not isinstance(net, Mapping):
@@ -323,27 +305,6 @@ def _container_networks(inspect_data: Mapping[str, object]) -> List[str]:
     if not isinstance(networks, Mapping):
         return []
     return [str(name) for name in networks.keys()]
-
-
-def _http_code(url: str, *, retries: int = 1, delay_s: float = 0.0) -> int:
-    for attempt in range(retries):
-        try:
-            req = Request(url, method="GET")
-            with urlopen(req, timeout=5) as resp:
-                return int(getattr(resp, "status", 200))
-        except HTTPError as exc:
-            return int(exc.code)
-        except URLError:
-            if attempt < retries - 1 and delay_s > 0:
-                time.sleep(delay_s)
-                continue
-            return 0
-        except TimeoutError:
-            if attempt < retries - 1 and delay_s > 0:
-                time.sleep(delay_s)
-                continue
-            return 0
-    return 0
 
 
 def _env_map(inspect_data: Mapping[str, object]) -> Dict[str, str]:
@@ -568,6 +529,79 @@ def _check_project_topology(
         )
 
 
+ARCHON_CONTAINER_PORT = 3090
+ARCHON_API_HOST_PORT = "8091"
+ARCHON_UI_HOST_PORT = "3737"
+ARCHON_HEALTH_PATH = "/api/health"
+ARCHON_UI_TITLE = "Archon"
+
+
+def _published_host_ports(inspect_data: Mapping[str, object], container_port: int) -> List[str]:
+    net = inspect_data.get("NetworkSettings")
+    if not isinstance(net, Mapping):
+        return []
+    ports = net.get("Ports")
+    if not isinstance(ports, Mapping):
+        return []
+    value = ports.get(f"{container_port}/tcp")
+    if not isinstance(value, list):
+        return []
+    out: List[str] = []
+    for binding in value:
+        if isinstance(binding, Mapping):
+            host_port = binding.get("HostPort")
+            if isinstance(host_port, str) and host_port.strip() and host_port.strip() not in out:
+                out.append(host_port.strip())
+    return out
+
+
+def _json_health_ok(
+    url: str, *, retries: int = 1, delay_s: float = 0.0, expect_title: str | None = None
+) -> tuple[bool, str]:
+    """GET url; ok only for 200 + JSON body reporting {"ok": true} or {"status": "ok"}.
+
+    With expect_title, ok instead requires 200 + an HTML page with that exact <title>.
+
+    Archon 0.6.0's SPA catch-all answers 200 HTML for any unknown path, so a bare
+    status-code check cannot tell a live health route from a dead one.
+    """
+    detail = "0"
+    for attempt in range(retries):
+        try:
+            with urlopen(Request(url, method="GET"), timeout=5) as resp:
+                code = int(getattr(resp, "status", 200))
+                ctype = resp.headers.get("content-type", "") or ""
+                body = resp.read().decode("utf-8", errors="ignore")
+        except HTTPError as exc:
+            return False, str(exc.code)
+        # OSError: URLError, timeouts, ConnectionResetError, RemoteDisconnected.
+        # HTTPException: IncompleteRead and friends raised mid-body by resp.read().
+        except (OSError, http.client.HTTPException):
+            if attempt < retries - 1 and delay_s > 0:
+                time.sleep(delay_s)
+                continue
+            return False, "0"
+        detail = str(code)
+        if code != 200:
+            return False, detail
+        if expect_title is not None:
+            if "html" in ctype.lower() and f"<title>{expect_title}</title>" in body:
+                return True, detail
+            return False, f"{code} not an HTML page titled {expect_title!r}"
+        if "json" not in ctype.lower():
+            return False, f"{code} non-JSON ({ctype or 'no content-type'})"
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            return False, f"{code} invalid JSON"
+        if isinstance(payload, dict) and (
+            payload.get("ok") is True or str(payload.get("status", "")).lower() == "ok"
+        ):
+            return True, detail
+        return False, f"{code} JSON not ok"
+    return False, detail
+
+
 def _check_archon_topology(
     inspections: Mapping[str, Mapping[str, object]], *, warnings: List[str], errors: List[str]
 ) -> None:
@@ -579,22 +613,32 @@ def _check_archon_topology(
 
     archon, archon_info = archon_hit
 
-    if not _ports_published(archon_info, 8091):
-        errors.append(f"{archon} is missing host publish for 8091/tcp")
+    # Archon 0.6.0+ serves API and UI from one container port (3090); the host
+    # publishes it under aliases (8091 API, 3737 UI). The pre-0.6.0 layout had
+    # container ports 8091 (API) and 3737 (UI) and a /healthz route; neither exists now.
+    host_ports = _published_host_ports(archon_info, ARCHON_CONTAINER_PORT)
+    if not host_ports:
+        errors.append(f"{archon} is missing host publish for {ARCHON_CONTAINER_PORT}/tcp")
+        return
 
-    # UI port 3737 is host-side; check via _published_host_port (not container port)
-    ui_host_port = _published_host_port(archon_info, 3737) or "3737"
+    for alias in (ARCHON_API_HOST_PORT, ARCHON_UI_HOST_PORT):
+        if alias not in host_ports:
+            warnings.append(
+                f"{archon} does not publish {ARCHON_CONTAINER_PORT}/tcp on host port {alias} "
+                f"(published: {', '.join(host_ports)})"
+            )
 
-    api_host_port = _published_host_port(archon_info, 8091) or "8091"
-    api_url = f"http://localhost:{api_host_port}/healthz"
-    archon_code = _http_code(api_url, retries=2, delay_s=1.0)
-    if archon_code != 200:
-        errors.append(f"archon API health check failed: {api_url} => {archon_code}")
+    api_host_port = ARCHON_API_HOST_PORT if ARCHON_API_HOST_PORT in host_ports else host_ports[0]
+    api_url = f"http://localhost:{api_host_port}{ARCHON_HEALTH_PATH}"
+    api_ok, api_detail = _json_health_ok(api_url, retries=2, delay_s=1.0)
+    if not api_ok:
+        errors.append(f"archon API health check failed: {api_url} => {api_detail}")
 
+    ui_host_port = ARCHON_UI_HOST_PORT if ARCHON_UI_HOST_PORT in host_ports else host_ports[0]
     ui_url = f"http://localhost:{ui_host_port}/"
-    ui_code = _http_code(ui_url, retries=6, delay_s=2.0)
-    if ui_code != 200:
-        errors.append(f"archon UI health check failed: {ui_url} => {ui_code}")
+    ui_ok, ui_detail = _json_health_ok(ui_url, retries=6, delay_s=2.0, expect_title=ARCHON_UI_TITLE)
+    if not ui_ok:
+        errors.append(f"archon UI health check failed: {ui_url} => {ui_detail}")
 
 
 def _check_chit_sync(

@@ -14,7 +14,7 @@
 # Source of truth: agent_registry.yaml entry `claude_b850`
 #   signature: b850-claude
 #   node_affinity: [pmoves-b850, ...]
-#   description: B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux workloads, with an infra + governance lane -- a preference, not an exclusive claim. Admin over the node_steward role it launches into.
+#   description: B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux workloads, with an infra + governance lane -- a preference, not an exclusive claim. claude-pmoves launches it as the main session with full tools; it delegates coordination to the node_steward role.
 #
 # Wezterm sets per-pane env via `set-pane-environment-variables`; this is
 # the PMOVES equivalent for a CLI surface.  The identity pin is the LAST

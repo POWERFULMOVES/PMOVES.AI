@@ -6,7 +6,7 @@ This is the transform that used to live as a heredoc inside
 twin). It moved out here for two reasons: a heredoc cannot be tested, and a
 transform that exists twice drifts. Both launchers now call this.
 
-Four passes, in order:
+Five passes, in order:
 
 P2  Drop servers whose key starts with ``_``. ``_disabled`` is a note, not an
     off-switch, so Claude would otherwise launch the broken duplicate.
@@ -15,6 +15,10 @@ P3  Rewrite repo-relative ``./…`` command and arg paths to absolute, so
 P4  Expand ``${VAR}`` in ``url``, ``headers`` and ``env``.
 P5  Act on what would not expand -- DROP a server whose ``url`` is
     unresolvable, WARN about one whose ``headers``/``env`` are.
+P6  Host reachability: in the ``env`` of a stdio server that runs on the HOST
+    (not via ``docker``/``podman``), rewrite a URL whose host is a compose
+    service name (``nats``) to that service's published loopback port. The env
+    files are written for containers; a host process cannot resolve ``nats``.
 
 P4/P5 are the new ones, and they are the point of the file. Claude Code's
 documented behaviour for an unresolvable reference is to warn and then *use the
@@ -62,6 +66,21 @@ _DROP_FIELDS = ("url",)
 _WARN_FIELDS = ("headers", "env")
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# P6 -- compose service names that a HOST process cannot resolve, mapped to
+# (env var naming the port the service publishes on the host, container port).
+# Only names whose host publish is measured belong here: `nats` publishes
+# ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222 (pmoves/docker-compose.yml,
+# docker-compose.core.yml; docker-compose.z890.yml binds 127.0.0.1). Loopback
+# reaches either bind. A URL on any OTHER port of the same name (6222 cluster,
+# 8222 monitor) is not the published listener and is left alone.
+_IN_STACK_HOSTS: dict[str, tuple[str, int]] = {"nats": ("NATS_PORT", 4222)}
+# 127.0.0.1, not `localhost`: `localhost` may resolve to ::1 first, and the
+# compose publishes above are IPv4 binds.
+_HOST_LOOPBACK = "127.0.0.1"
+# A stdio server launched through one of these runs INSIDE a container, and
+# `docker run -e NAME` forwards the value there, where the service name is right.
+_CONTAINER_LAUNCHERS = ("docker", "podman")
 
 _OUT_PREFIX = "claude-pmoves-mcp-roster."
 _OUT_SUFFIX = ".json"
@@ -193,14 +212,66 @@ def _abs_path(value: Any, root: str) -> Any:
     return value
 
 
+def _runs_on_host(cfg: Mapping[str, Any]) -> bool:
+    """A stdio server is a host process unless it is launched into a container."""
+    cmd = cfg.get("command")
+    if not isinstance(cmd, str):
+        return False
+    base = re.split(r"[\\/]", cmd)[-1].lower()
+    if base.endswith(".exe"):
+        base = base[:-4]
+    return base not in _CONTAINER_LAUNCHERS
+
+
+def _host_reachable_url(url: str, environ: Mapping[str, str]) -> tuple[str, str | None]:
+    """Return ``(url, from_host)``; *from_host* is set only when rewritten.
+
+    Only the host and port change -- scheme, userinfo and path are carried over
+    byte-for-byte, so the credential is never parsed, decoded or re-encoded.
+    """
+    m = re.match(r"^([a-z][a-z0-9+.-]*://)((?:[^@/]*@)?)([^:/?#]+)(?::(\d+))?(.*)$", url, re.I)
+    if not m:
+        return url, None
+    scheme, userinfo, host, port, rest = m.groups()
+    entry = _IN_STACK_HOSTS.get(host.lower())
+    if entry is None:
+        return url, None
+    port_var, container_port = entry
+    if port is not None and int(port) != container_port:
+        return url, None
+    published = (environ.get(port_var) or "").strip()
+    host_port = published if published.isdigit() else str(container_port)
+    return f"{scheme}{userinfo}{_HOST_LOOPBACK}:{host_port}{rest}", host
+
+
+def _host_reachable(value: str, environ: Mapping[str, str]) -> tuple[str, list[str]]:
+    """Apply :func:`_host_reachable_url` to each entry of a comma-separated
+    server list (the NATS client accepts one). Returns ``(value, from_hosts)``."""
+    out: list[str] = []
+    hosts: list[str] = []
+    for part in value.split(","):
+        lead = part[: len(part) - len(part.lstrip())]
+        new, host = _host_reachable_url(part.strip(), environ)
+        out.append(lead + new)
+        if host:
+            hosts.append(host)
+    return ",".join(out), hosts
+
+
 def normalize(
     data: Mapping[str, Any],
     root: str,
     environ: Mapping[str, str],
+    rewritten: list[dict[str, str]] | None = None,
 ) -> tuple[dict[str, Any], list[tuple[str, list[str]]], list[tuple[str, list[str]]]]:
     """Return ``(roster, dropped, degraded)``.
 
     *dropped* and *degraded* are ``[(server, [missing_names]), ...]``.
+
+    *rewritten*, when given, receives one ``{server, field, from_host,
+    to_host}`` record per P6 rewrite -- hostnames only, never the value, which
+    may carry a credential. It is an out-parameter rather than a fourth return
+    value so every existing ``clean, dropped, degraded = ...`` caller is intact.
 
     Note there is no special case for a ``"disabled": true`` server. That key
     is a Cline/Roo convention and is not in Claude Code's documented .mcp.json
@@ -248,6 +319,24 @@ def normalize(
             continue
         if soft:
             degraded.append((name, sorted(set(soft))))
+
+        # P6 -- host reachability. env.shared is written for CONTAINERS
+        # (NATS_URL's host is the compose service `nats`), but a stdio server
+        # launched by `uv`/`npx`/... is a host process, where that name does not
+        # resolve. Point it at the service's published loopback port instead.
+        env_block = cfg.get("env")
+        if _runs_on_host(cfg) and isinstance(env_block, dict):
+            for key, value in env_block.items():
+                if not isinstance(value, str):
+                    continue
+                new, hosts = _host_reachable(value, environ)
+                if not hosts:
+                    continue
+                env_block[key] = new
+                if rewritten is not None:
+                    for host in hosts:
+                        rewritten.append({"server": name, "field": f"env.{key}",
+                                          "from_host": host, "to_host": _HOST_LOOPBACK})
         clean[name] = cfg
 
     out = dict(data)
@@ -547,7 +636,8 @@ def main(argv: list[str] | None = None) -> int:
     with open(args.src, encoding="utf-8-sig") as fh:
         data = json.load(fh)
 
-    payload, dropped, degraded = normalize(data, args.root, os.environ)
+    rewritten: list[dict[str, str]] = []
+    payload, dropped, degraded = normalize(data, args.root, os.environ, rewritten)
 
     # The durable half of the announcement. stderr still gets the human-facing
     # lines; this key is what survives the TUI for the session/agent that has to
@@ -562,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
         "degraded": [
             {"server": server, "missing": missing} for server, missing in degraded
         ],
+        "rewritten": rewritten,
         "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
@@ -576,6 +667,11 @@ def main(argv: list[str] | None = None) -> int:
             f"WARN: MCP server '{server}' kept but degraded — unset variable(s): "
             + ", ".join(missing),
             "      it may run unauthenticated, or fail on first call.",
+        ])
+    for rec in rewritten:
+        _warn(args.label, [
+            f"MCP server '{rec['server']}' runs on the host: {rec['field']} host "
+            f"'{rec['from_host']}' (compose-internal) -> '{rec['to_host']}' (published port)",
         ])
 
     # One process-table scan, reused across every directory in scope.

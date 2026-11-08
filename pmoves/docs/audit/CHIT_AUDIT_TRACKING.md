@@ -89,7 +89,7 @@ CHIT_T5_MODEL=optional
 
 | File | Hardened | v3-clean | Status |
 |------|----------|----------|--------|
-| `pmoves/neo4j/cypher/003_seed_chit_mindmap.cypher` | ✅ | ✅ | ✅ PRESENT |
+| `pmoves/neo4j/cypher/003_seed_chit_mindmap.cypher` | ✅ | ✅ | REMOVED 2026-10 (duplicated 010 and created unlabeled nodes; see `docs/TAC/TAC_NEO4J.md` section 6) |
 | `pmoves/neo4j/cypher/010_chit_geometry_fixture.cypher` | ✅ | ✅ | ✅ PRESENT |
 | `pmoves/neo4j/cypher/011_chit_geometry_smoke.cypher` | ✅ | ✅ | ✅ PRESENT |
 
