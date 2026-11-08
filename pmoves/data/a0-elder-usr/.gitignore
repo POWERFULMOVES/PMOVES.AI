@@ -1,0 +1,4 @@
+*
+!presets-seed/
+!presets-seed/**
+!.gitignore
