@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -60,12 +61,33 @@ def test_a_scan_that_matches_no_files_fails(tmp_path):
     assert "skipped" not in r.stderr
 
 
+def _child_env(tmp_path: Path) -> dict:
+    """A child environment with a MINIMAL PATH, but everything else inherited.
+
+    The auditor shells out to `make`, `curl` and `git`, so the PATH has to be
+    constrained to prove the probes do not depend on an inherited PATH. But a
+    wholesale `env={"PATH": ...}` drops `%ComSpec%` and `%SystemRoot%` on
+    Windows, and `subprocess` then cannot spawn a shell at all
+    ("shell not found: neither %ComSpec% nor %SystemRoot% is set"). That made
+    these two tests fail on Windows while passing on CI's ubuntu runner —
+    the same platform-blindness class as a POSIX-only `os.geteuid()` at module
+    scope: a defect CI cannot see because CI runs Linux.
+
+    So: inherit the environment, then OVERRIDE PATH. The assertion is still
+    that the auditor works with a bare-bones PATH.
+    """
+    env = dict(os.environ)
+    env["PATH"] = "/usr/bin:/bin"
+    env["RUNBOOK_DRIFT_ROOT"] = str(tmp_path)
+    return env
+
+
 def test_a_scan_of_only_the_register_fails_and_says_why(tmp_path):
     docs = tmp_path / "docs"; docs.mkdir()
     (docs / "AGNOTE4482PHI.t1.md").write_text("Run `scripts/nope.py`.\n")
     r = subprocess.run([sys.executable, str(SCRIPT), "--no-jev", "--globs", "docs/*.md",
                         "--out", str(tmp_path / "report.json")], capture_output=True, text=True,
-                       timeout=60, env={"PATH": "/usr/bin:/bin", "RUNBOOK_DRIFT_ROOT": str(tmp_path)})
+                       timeout=60, env=_child_env(tmp_path))
     assert r.returncode == 2, r.stdout + r.stderr
     assert "matched no auditable files" in r.stderr
     assert "1 AGNOTE4482PHI register file(s) matched and skipped" in r.stderr
@@ -77,7 +99,7 @@ def test_a_real_scan_reads_files(tmp_path):
     out = tmp_path / "report.json"
     r = subprocess.run([sys.executable, str(SCRIPT), "--no-jev", "--globs", "docs/*.md",
                         "--out", str(out)], capture_output=True, text=True, timeout=60,
-                       env={"PATH": "/usr/bin:/bin", "RUNBOOK_DRIFT_ROOT": str(tmp_path)})
+                       env=_child_env(tmp_path))
     assert r.returncode == 0, r.stderr
     report = json.loads(out.read_text())
     assert report["files_scanned"] == 1 and len(report["records"]) == 1

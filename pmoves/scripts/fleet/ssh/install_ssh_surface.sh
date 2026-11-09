@@ -52,11 +52,19 @@ trap 'rm -rf "$BACKUP"' EXIT
 for f in "$CA_DST" "$KRL_DST" "$CONF"; do
   if [[ -e "$f" ]]; then cp -p "$f" "$BACKUP/$(basename "$f")"; fi
 done
+CREATED_DROPIN_DIR=0
+[[ -d "$SSH_ETC/sshd_config.d" ]] || CREATED_DROPIN_DIR=1
 rollback() {
   for f in "$CA_DST" "$KRL_DST" "$CONF"; do
     b="$BACKUP/$(basename "$f")"
     if [[ -e "$b" ]]; then cp -p "$b" "$f"; else rm -f "$f"; fi
   done
+  # A failed FIRST install must not leave the drop-in directory behind.
+  if [[ "$CREATED_DROPIN_DIR" == 1 ]]; then rmdir "$SSH_ETC/sshd_config.d" 2>/dev/null || true; fi
+}
+# Debian/Ubuntu name the unit `ssh`; RHEL/Arch name it `sshd`.
+restart_sshd() {
+  systemctl restart sshd 2>/dev/null || systemctl restart ssh || service ssh restart
 }
 
 # --- Apply ---
@@ -77,7 +85,7 @@ fi
 # `sshd -t` passes even when the drop-in is never read (sshd_config has no
 # Include for sshd_config.d) or is shadowed (an earlier TrustedUserCAKeys
 # wins). Only the effective config proves the CA is trusted.
-EFFECTIVE="$(sshd -T -f "$SSHD_CONFIG" 2>/dev/null || true)"
+EFFECTIVE="$(sshd -T -f "$SSHD_CONFIG" 2>"$BACKUP/sshd-T.err" || true)"
 want=("trustedusercakeys $CA_DST")
 if [[ -n "$KRL" || "$KEEP_KRL" == 1 ]]; then want+=("revokedkeys $KRL_DST"); fi
 for line in "${want[@]}"; do
@@ -86,10 +94,19 @@ for line in "${want[@]}"; do
     echo "sshd -T does not show '$line' — the drop-in is not effective." >&2
     echo "Check that $SSHD_CONFIG has 'Include $SSH_ETC/sshd_config.d/*.conf'" >&2
     echo "before any Match block and sets no TrustedUserCAKeys/RevokedKeys of its own." >&2
+    if [[ -s "$BACKUP/sshd-T.err" ]]; then
+      echo "sshd -T reported:" >&2
+      sed 's/^/  /' "$BACKUP/sshd-T.err" >&2
+    fi
     echo "Previous state restored, no changes committed." >&2
     exit 1
   fi
 done
 
-systemctl restart sshd 2>/dev/null || service ssh restart
+if ! restart_sshd; then
+  rollback
+  restart_sshd || true  # bring sshd back up on the restored config
+  echo "sshd restart FAILED — previous state restored, no changes committed" >&2
+  exit 1
+fi
 echo "fleet SSH CA trust installed ($CONF)"
