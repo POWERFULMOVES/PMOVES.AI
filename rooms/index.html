@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rooms — PMOVES.AI</title>
+<meta name="description" content="The 16 rooms on the PMOVES.AI stage — live and in rehearsal. Generated from the room catalog; every room links to its manifest in the repo.">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .rooms-hero { padding: 4rem 1.5rem 2rem; max-width: 1080px; margin: 0 auto; }
+  .rooms-hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin: 0.5rem 0; }
+  .rooms-hero .tagline { color: var(--text-dim, #9aa3b2); max-width: 46rem; }
+  .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; padding: 1.5rem; max-width: 1080px; margin: 0 auto 3rem; }
+  .room-card { border: 1px solid rgba(148,163,184,.18); border-radius: 14px; padding: 1.1rem 1.2rem; background: rgba(148,163,184,.04); display: flex; flex-direction: column; gap: .5rem; }
+  .room-card h3 { margin: 0; font-size: 1.05rem; }
+  .room-card .meta { font-size: .8rem; color: var(--text-dim, #9aa3b2); }
+  .room-card p { margin: 0; font-size: .9rem; line-height: 1.45; }
+  .badge { display: inline-block; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; padding: .18rem .55rem; border-radius: 999px; border: 1px solid; }
+  .badge.live { color: #34d399; border-color: rgba(52,211,153,.5); background: rgba(52,211,153,.08); }
+  .badge.rehearsal { color: #fbbf24; border-color: rgba(251,191,36,.5); background: rgba(251,191,36,.06); }
+  .room-card a.manifest { font-size: .78rem; color: #7dd3fc; text-decoration: none; }
+  .room-card a.manifest:hover { text-decoration: underline; }
+  .provenance { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem 3rem; font-size: .8rem; color: var(--text-dim, #9aa3b2); }
+  .provenance code { font-size: .75rem; }
+  .filters { padding: 0 1.5rem; max-width: 1080px; margin: 0 auto; display: flex; gap: .5rem; }
+  .filters button { background: none; border: 1px solid rgba(148,163,184,.3); color: inherit; border-radius: 999px; padding: .3rem .9rem; cursor: pointer; font-size: .8rem; }
+  .filters button.active { border-color: #8b5cf6; color: #a78bfa; }
+</style>
+</head>
+<body>
+<header>
+  <nav style="display:flex;gap:1.25rem;padding:1rem 1.5rem;align-items:center">
+    <a href="/" style="font-weight:700;text-decoration:none;color:inherit">◆ PMOVES.AI</a>
+    <a href="/stage/">Stage</a>
+    <a href="/rooms/" aria-current="page">Rooms</a>
+    <a href="/chit-tour/">CHIT — Visual Tour</a>
+  </nav>
+</header>
+
+<section class="rooms-hero">
+  <div class="eyebrow" style="letter-spacing:.12em;text-transform:uppercase;font-size:.72rem;color:#a78bfa">CATACLYSM STUDIOS INC · DARKXSIDE</div>
+  <h1>The Rooms.</h1>
+  <p class="tagline">Sixteen rooms on one stage — each a working space where an agent lives, rehearses, and goes live. This page is generated from the room catalog; every card links to the room's manifest in the repo. Nothing hand-written, nothing promised: if a room says <strong>live</strong>, there's a P7 transition behind it.</p>
+</section>
+
+<div class="filters" role="group" aria-label="Filter rooms">
+  <button data-f="all" class="active">All <span id="c-all"></span></button>
+  <button data-f="live">Live <span id="c-live"></span></button>
+  <button data-f="rehearsal">Rehearsal <span id="c-rehearsal"></span></button>
+</div>
+
+<main class="room-grid" id="grid" aria-live="polite">
+  <noscript>Enable JavaScript to view the room catalog, or read the manifest files directly in the repository under pmoves/config/rooms/.</noscript>
+</main>
+
+<div class="provenance">
+  <p>Generated <span id="gen-at"></span> from <code>pmoves/config/rooms/catalog.json</code> · sha256 <span id="sha"></span> · generator: <code>scripts/generate_rooms_page.py</code>. Stage labels follow the P7 sourcing discipline: <em>live</em> means a recorded P7 transition or manifest declaration — never a “typical stage” table.</p>
+</div>
+
+<script src="/rooms/data.js"></script>
+<script>
+(function () {
+  const D = window.PMOVES_ROOMS;
+  const grid = document.getElementById('grid');
+  document.getElementById('gen-at').textContent = D.generated_at;
+  document.getElementById('sha').textContent = D.catalog_sha256.slice(0, 12) + '…';
+  document.getElementById('c-all').textContent = '(' + D.counts.total + ')';
+  document.getElementById('c-live').textContent = '(' + D.counts.live + ')';
+  document.getElementById('c-rehearsal').textContent = '(' + D.counts.rehearsal + ')';
+  const cards = D.rooms.map(r => {
+    const el = document.createElement('article');
+    el.className = 'room-card';
+    el.dataset.stage = r.stage === 'live' ? 'live' : 'rehearsal';
+    const badge = r.stage === 'live' ? '<span class="badge live">● live</span>' : '<span class="badge rehearsal">◌ rehearsal</span>';
+    el.innerHTML =
+      badge +
+      '<h3>' + r.display_name + '</h3>' +
+      '<div class="meta">' + r.room_id + ' · agent ' + r.agent_id + (r.alter ? ' / ' + r.alter : '') + '</div>' +
+      '<p>' + r.summary + '</p>' +
+      '<a class="manifest" target="_blank" rel="noopener" href="' + r.manifest_url + '">manifest ↗</a>';
+    return el;
+  });
+  cards.forEach(c => grid.appendChild(c));
+  document.querySelectorAll('.filters button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.filters button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const f = b.dataset.f;
+      cards.forEach((c, i) => {
+        const r = D.rooms[i];
+        c.style.display = (f === 'all' || (f === 'live') === (r.stage === 'live')) ? '' : 'none';
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

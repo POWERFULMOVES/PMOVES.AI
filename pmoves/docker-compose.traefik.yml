@@ -57,7 +57,7 @@ services:
       # See docs/handoffs/traefik-cloudflare-dns-token-varname-2026-08-18.md
       CLOUDFLARE_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
       CF_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
-    ports: ["443:443", "80:80"]
+    ports: ["${TRAEFIK_443_PORT:-443}:443", "${TRAEFIK_80_PORT:-80}:80"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro

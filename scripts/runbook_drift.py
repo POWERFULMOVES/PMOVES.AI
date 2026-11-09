@@ -15,6 +15,18 @@ v3 lessons (each version exists because the previous failed on something real):
       (git show / git grep): exists-on-main => UNDECIDED (stale-checkout), not DRIFTED.
   v3: historical lines (destroyed/superseded/deprecated) are records, not claims;
       DRAFT docs get intent-tagged; dated --out reports; --globs scope override.
+  v3 fix: the file probe resolved a missing path with `git grep -l` — a CONTENT
+      search — so it cited files that merely MENTIONED the basename as if they
+      were the file. 47 of 57 UNDECIDED file_path claims had a file of that exact
+      name sitting in the tree. Resolution is now by NAME over the git tree
+      listing (and a bounded working-tree walk), and the evidence names the file
+      that actually matched.
+  v3 fix 2: name resolution must respect the SHAPE of the claim. A bare
+      basename (`agent_registry.yaml`) may match any file of that name; a PATH
+      claim (`PMOVES-Archon/README.md`) may only match a path ENDING that way.
+      Matching a path claim on its basename let 210 unrelated README.md files
+      satisfy it. A path claim that points INTO a submodule, or that is
+      git-ignored, is UNDECIDED — absence proves nothing for either.
 
 No AI model calls — the harness IS the intelligence. Read-only vs repo and network.
 """
@@ -46,6 +58,137 @@ def on_origin_main(git_query):
     """True if a `git <query> origin/main` succeeds (path exists / grep hits)."""
     rc, _, _ = sh(git_query, timeout=20)
     return rc == 0
+
+# ---- name resolution (NAME queries, never content greps) ------------------
+# The file probe must answer "is there a file with THIS NAME?" with a name
+# query. `git grep -l <string>` answers a different question -- "which files
+# mention this string?" -- and citing those as the artifact is a lie.
+_NAME_INDEX_CACHE = {}
+
+def _origin_main_paths():
+    """Every file path recorded on origin/main (a tree listing, not a search).
+
+    Paths come back relative to the probed root, the same frame the claim was
+    written in and the same frame the `exists:` evidence uses.
+    """
+    if "origin/main" not in _NAME_INDEX_CACHE:
+        rc, out, _ = sh("git ls-tree -r --name-only origin/main", timeout=60)
+        paths = out.splitlines() if rc == 0 else []
+        _NAME_INDEX_CACHE["origin/main"] = paths
+    return _NAME_INDEX_CACHE["origin/main"]
+
+def _working_tree_paths():
+    """Every file path in the working tree, bounded; git index first, walk as fallback."""
+    if "worktree" not in _NAME_INDEX_CACHE:
+        paths = []
+        rc, out, _ = sh("git ls-files --cached --others --exclude-standard", timeout=60)
+        if rc == 0 and out:
+            paths = out.splitlines()
+        else:
+            # Not a git checkout (or git failed): walk the tree, skipping .git.
+            skip = {".git", "node_modules", "__pycache__", ".venv", "venv",
+                    ".mypy_cache", ".pytest_cache"}
+            for dirpath, dirnames, filenames in os.walk(ROOT):
+                dirnames[:] = [d for d in dirnames if d not in skip]
+                for fn in filenames:
+                    full = Path(dirpath) / fn
+                    try:
+                        paths.append(str(full.relative_to(ROOT)).replace(os.sep, "/"))
+                    except ValueError:
+                        continue
+        _NAME_INDEX_CACHE["worktree"] = paths
+    return _NAME_INDEX_CACHE["worktree"]
+
+def _paths_named(paths, rel):
+    """Paths whose FILE NAME equals the claim's basename, case-insensitively.
+
+    Case-folding matches the repo's own convention: fork names are
+    case-insensitive-unique (PMOVES-pinokio vs pmoves-pinokio), the same
+    reason pmoves/tools/fork_registry_ratchet.py keys on .casefold().
+
+    Only for a BARE basename claim: the claim did not name a directory, so
+    any file of that name is a candidate.
+    """
+    basename = rel.rsplit("/", 1)[-1]
+    target = basename.casefold()
+    return [p for p in paths if p.rsplit("/", 1)[-1].casefold() == target]
+
+def _paths_ending(paths, rel):
+    """Paths whose TAIL is exactly the claim path (on a directory boundary).
+
+    A claim that names a directory is a PATH claim, not a basename claim.
+    `PMOVES-Archon/README.md` is only satisfied by a path ending in
+    `/PMOVES-Archon/README.md` -- never by one of the 210 unrelated
+    `README.md` files elsewhere in the tree. Matching a path claim on its
+    basename alone is the same category error as the content grep: it
+    answers a different question and cites an artefact the claim never
+    named.
+    """
+    target = rel.casefold()
+    return [p for p in paths
+            if p.casefold() == target or p.casefold().endswith("/" + target)]
+
+def _submodule_paths():
+    """Submodule PATHS from .gitmodules.
+
+    A claim whose FIRST path component is a submodule path points into
+    ANOTHER repository. The parent tree records a gitlink, not the
+    submodule's files, so their absence here proves nothing.
+    """
+    if "submodules" not in _NAME_INDEX_CACHE:
+        paths = set()
+        gm = ROOT / ".gitmodules"
+        if gm.exists():
+            try:
+                for raw in gm.read_text(encoding="utf-8", errors="replace").splitlines():
+                    line = raw.strip()
+                    if line.startswith("path") and "=" in line:
+                        _, _, val = line.partition("=")
+                        val = val.strip().rstrip("/")
+                        if val:
+                            paths.add(val)
+            except OSError:
+                pass
+        _NAME_INDEX_CACHE["submodules"] = paths
+    return _NAME_INDEX_CACHE["submodules"]
+
+def _owning_submodule(claim):
+    """The declared submodule path that CONTAINS `claim`, if any.
+
+    A claim can point into a NESTED submodule -- `pmoves/integrations/archon`
+    and `skills/PMOVES-skills` are both declared paths, and their files live
+    in ANOTHER repository. Comparing only the claim's FIRST component against
+    the complete submodule path never matched them: `head` was `pmoves` or
+    `skills`, and neither is a declared path, so a claim under a nested
+    submodule was reported DRIFTED -- the one verdict that is definitely
+    wrong, because the parent tree records a gitlink, not the submodule's
+    files.
+
+    The LONGEST match wins: nested submodule paths share prefixes, and the
+    innermost submodule is the one that owns the claim.
+    """
+    owner = ""
+    for path in _submodule_paths():
+        if claim == path or claim.startswith(path + "/"):
+            if len(path) > len(owner):
+                owner = path
+    return owner
+
+
+def _is_gitignored(rel):
+    """True / False / None(unknown) for whether `rel` is excluded by .gitignore.
+
+    A git-ignored path is a LOCAL artifact: it is absent from the tree by
+    design, so its absence says nothing about whether the doc is wrong.
+    `None` means the question could not be answered (git failed), which is
+    not the same as "not ignored".
+    """
+    rc, _, _ = sh(f'git check-ignore -q -- "{rel}"', timeout=20)
+    if rc == 0:
+        return True
+    if rc == 1:
+        return False
+    return None  # git error: cannot decide
 
 # ---- claim extractors (A-side) -------------------------------------------
 RE_MAKE = re.compile(r"make\s+(?:-C\s+pmoves\s+)?([a-z0-9][a-z0-9_-]*)")
@@ -106,16 +249,63 @@ def probe_file(rel):
     for base in [ROOT, ROOT / "pmoves"]:
         p = base / rel
         if p.exists():
-            return "VERIFIED", f"exists: {p.relative_to(ROOT)}"
+            # Forward slashes: a claim NEVER contains a backslash (RE_PATH
+            # admits only [a-zA-Z0-9_./-]), so the evidence must speak the same
+            # frame as the claim it answers.
+            shown = str(p.relative_to(ROOT)).replace(os.sep, "/")
+            return "VERIFIED", f"exists: {shown}"
     if on_origin_main(f"git show origin/main:{rel} -- >/dev/null 2>&1 || git cat-file -e origin/main:{rel}"):
         return "UNDECIDED", (f"as-written path missing locally but exists on origin/main "
                              f"({rel}) — stale local checkout, not doc drift (v3)")
-    rc, out, _ = sh(f"git grep -l --fixed-strings '{os.path.basename(rel)}' origin/main -- | head -3", timeout=30)
-    if rc == 0 and out:
-        return "UNDECIDED", f"as-written path missing; basename found on origin/main at: {out.splitlines()[0]}"
-    rc, out, _ = sh(f"find . -name '{os.path.basename(rel)}' -not -path '*/.git/*' | head -3", timeout=30)
-    if rc == 0 and out:
-        return "UNDECIDED", f"as-written path missing; basename found locally at: {out.splitlines()[0]}"
+    claim = rel.replace("\\", "/").strip("/")
+    if not claim or "/" not in claim:
+        # A BARE basename: the claim named no directory, so any file of that
+        # name is a candidate. (The old probe ran `git grep -l --fixed-strings
+        # <basename>`, a CONTENT query, and cited the first file that merely
+        # MENTIONED the name -- 47 of 57 UNDECIDED file_path claims had a file
+        # of that exact name in the tree.)
+        for paths, source in ((_origin_main_paths(), "origin/main"),
+                               (_working_tree_paths(), "working tree")):
+            hits = _paths_named(paths, claim)
+            if hits:
+                if len(hits) == 1:
+                    return "VERIFIED", f"exists as {hits[0]} (name match on {source})"
+                # Several files share the name: name them (up to 3), and say how
+                # many, rather than silently picking one.
+                shown = hits[:3]
+                return "VERIFIED", (f"exists as {', '.join(shown)} "
+                                    f"(name match on {source}; "
+                                    f"{len(hits)} files share this basename)")
+        return "DRIFTED", "path not found in working tree or origin/main"
+
+    # A PATH claim: the directory is part of the claim, so it must be matched
+    # on the PATH. Matching it on the basename alone would let
+    # `PMOVES-Archon/README.md` be satisfied by any of the 210 unrelated
+    # README.md files in the tree — a VERIFIED verdict citing an artefact the
+    # claim never named.
+    for paths, source in ((_origin_main_paths(), "origin/main"),
+                           (_working_tree_paths(), "working tree")):
+        hits = _paths_ending(paths, claim)
+        if hits:
+            if len(hits) == 1:
+                return "VERIFIED", f"exists as {hits[0]} (path match on {source})"
+            shown = hits[:3]
+            return "VERIFIED", (f"exists as {', '.join(shown)} "
+                                f"(path match on {source}; "
+                                f"{len(hits)} files end with this path)")
+    # No path match. Before calling it drift, ask the two questions that make
+    # absence meaningless: does the claim point INTO a submodule, and is the
+    # path a git-ignored local artifact?
+    owner = _owning_submodule(claim)
+    if owner:
+        return "UNDECIDED", (f"path points into the '{owner}' submodule — its files live in "
+                             f"another repository, so absence here proves nothing ({claim})")
+    ignored = _is_gitignored(claim)
+    if ignored is True:
+        return "UNDECIDED", (f"path is git-ignored ({claim}) — a local artifact that is absent "
+                             "from the tree by design, so absence proves nothing")
+    if ignored is None:
+        return "UNDECIDED", f"could not determine git-ignore status for {claim}"
     return "DRIFTED", "path not found in working tree or origin/main"
 
 def probe_endpoint(url):
