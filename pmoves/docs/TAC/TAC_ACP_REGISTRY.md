@@ -36,7 +36,7 @@
 | ACP↔PMOVES mapper | `pmoves/tools/acp_registry_map.py` → `pmoves/configs/acp_registry_map.json` | **No upstream equivalent.** Conservative matching (explicit bridges + exact repo basenames; substring search forbidden). Live: `kilo → kilocode_glm` |
 | Launcher probe | `pmoves/tools/acp_launcher_probe.py` | **Port of upstream's client.py contract** (initialize shape verbatim, env allowlist from `AGENT_ENV_PASSTHROUGH`, authMethods parsing) with 3 documented divergences: thread reads (Windows pipes), continuously-drained stderr (npx cold-install deadlock), `taskkill /T` tree kill |
 | Make targets | `infra.mk` `acp-registry-map` (write), `acp-registry-map-check` (drift: exit 1) | Generator fails closed (exit 2) on a missing **or empty** registry and stamps `registry_commit` in the artifact |
-| Explicit bridges | `acp_registry_map.py:39` | `spynel → PMOVES-spynel` is **dead** — no `spynel/` entry exists in the registry (see Branch E) |
+| Explicit bridges | `acp_registry_map.py` `EXPLICIT_BRIDGES` | `spynel → PMOVES-spynel` is **dead** — no `spynel/` entry exists in the registry (see Branch E) |
 
 ## Measured State — 2026-09-16, POWERFULMOVES (windows-x86_64)
 

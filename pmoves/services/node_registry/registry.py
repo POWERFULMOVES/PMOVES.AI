@@ -613,7 +613,7 @@ async def run_registry(
 async def run_with_api(
     nats_url: str = "nats://nats:4222",
     api_host: str = "0.0.0.0",
-    api_port: int = 8082,
+    api_port: int = 8115,
     supabase_url: Optional[str] = None,
     supabase_key: Optional[str] = None,
 ):

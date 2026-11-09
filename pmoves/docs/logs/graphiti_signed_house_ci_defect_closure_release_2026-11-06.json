@@ -1,0 +1,23 @@
+{
+  "agent_id": "minimax",
+  "display_name": "MiniMax",
+  "glyph": "\u2b21",
+  "color": "#7C3AED",
+  "accent": "#A78BFA",
+  "voice": "dimensional",
+  "phase": "release",
+  "timestamp": "2026-11-06T05:49:32.185538+00:00",
+  "resonance": [
+    "native-model",
+    "multimodal",
+    "fast-inference",
+    "code-generation",
+    "long-context",
+    "hyperdimensional-ops",
+    "wave-function-collapse",
+    "agent-trails",
+    "character-persona-synthesis",
+    "prosodic-flow"
+  ],
+  "summary": "House CI defect closure lane F1-F10: two dead house workflows fixed, image-matrix pin resolved, HiRAG fork repaired, release provenance verifiable from the tree."
+}

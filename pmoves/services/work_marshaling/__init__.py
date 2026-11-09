@@ -9,7 +9,7 @@ Usage:
     # Run as standalone service
     await run_marshaling(
         nats_url="nats://nats:4222",
-        registry_url="http://localhost:8082",
+        registry_url="http://localhost:8115",
     )
 
 NATS Subjects:
@@ -147,7 +147,7 @@ class WorkMarshaling:
     def __init__(
         self,
         nats_url: str = "nats://nats:4222",
-        registry_url: str = "http://localhost:8082",
+        registry_url: str = "http://localhost:8115",
         assignment_timeout_seconds: int = 30,
         max_retries: int = 3,
         stale_check_interval_seconds: int = 60,
@@ -862,7 +862,7 @@ class WorkMarshaling:
 
 async def run_marshaling(
     nats_url: str = "nats://nats:4222",
-    registry_url: str = "http://localhost:8082",
+    registry_url: str = "http://localhost:8115",
     assignment_timeout_seconds: int = 30,
     max_retries: int = 3,
 ):
@@ -915,7 +915,7 @@ if __name__ == "__main__":
     )
 
     nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
-    registry_url = os.environ.get("NODE_REGISTRY_URL", "http://localhost:8082")
+    registry_url = os.environ.get("NODE_REGISTRY_URL", "http://localhost:8115")
 
     try:
         asyncio.run(run_marshaling(nats_url, registry_url))
