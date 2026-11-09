@@ -34,12 +34,14 @@ Vocabulary verified in-repo this session:
 |---|---|---|
 | Separate premium each home pays today | **$35.00/mo** ($420/yr) | Given field datum |
 | Pooled member due (flat monthly `Deposit`) | **$10.00/mo** ($120/yr) | Illustrative — not an adopted rate |
-| KVM exit-node hosting | **$54.00/mo** = 3 nodes × $18/mo | Illustrative Hostinger KVM price; real invoice **not in repo** |
+| KVM exit-node hosting | **$54.00/mo** = 3 nodes × $18/mo | Deliberate **conservative** what-if basis (higher retail Hostinger KVM price); differs from the $10/mo/node planning figure in `01-capacity-comparison.md` + `TOPOLOGY.md:20` — real invoice **not in repo** |
 | Operating incidentals | **$16.00/mo** | Illustrative (domain, TLS, monitoring) |
 | Home count *N* | **25** and **100** | Parametric, per task |
 | KVM exit nodes | 3 (kvm2, kvm4-1, kvm4-2) | Given field datum |
 
 Why a handful of nodes serves the whole building: measured household **peak** demand ~50 Mbps but busy-hour **average** is ~2–6 Mbps, so a few datacenter uplinks (kvm4-1 raw 845/347, kvm4-2 683/704 Mbps) cover the mesh — the same oversubscription logic ISPs use. This is why per-home cost collapses as homes join.
+
+> **Node-cost basis (read before comparing across docs):** every table below ties out internally at **$18/mo/node** (the conservative retail anchor above). `01-capacity-comparison.md` and `TOPOLOGY.md:20` instead use **$10/mo/node**. These are the same expense line at two illustrative anchors — the surplus/balance figures here will NOT reconcile with the capacity doc until the co-op adopts one node-cost basis (an **Open Operator Decision → ADOPTED RATE**, routed to the Legal Review Register).
 
 ---
 

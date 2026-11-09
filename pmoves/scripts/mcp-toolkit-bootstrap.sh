@@ -62,12 +62,24 @@ if ! docker mcp profile show "${PROFILE_ID}" >/dev/null 2>&1; then
 fi
 
 info "Bootstrap complete. Profile '${PROFILE_ID}' is available."
+
+# Write agent-stack MCP configs (Cipher, Agent Zero, NATS, Supabase, etc.)
+# so that clients see both the Docker Toolkit profile and the core PMOVES stack.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+info "Writing PMOVES MCP configs for Kimi + KiloCode"
+if make -C "${REPO_ROOT}/pmoves" --no-print-directory mcp-config-bootstrap; then
+  info "PMOVES MCP configs updated"
+else
+  warn "PMOVES MCP config update reported errors — continuing"
+fi
+
 echo
 echo "Next steps:"
 echo "  • Populate secrets non-interactively: make mcp-toolkit-secrets-sync"
 echo "  • Inspect connection state:           make mcp-toolkit-status"
 echo "  • Connect Claude Code to profile:     docker mcp client connect claude-code --profile ${PROFILE_ID}"
 echo "    (this mutates .claude/mcp.json — review the diff before committing)"
+echo "  • Bootstrap Hermes + Crush configs:   make -C pmoves hermes-crush-bootstrap"
 echo
 echo "OAuth-mediated Cloudflare servers (13 of 25) need a one-time interactive"
 echo "browser authorize per node. See pmoves/docs/operations/MCP_TOOLKIT.md § 5."

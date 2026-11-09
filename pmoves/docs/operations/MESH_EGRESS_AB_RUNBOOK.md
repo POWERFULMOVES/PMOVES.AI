@@ -44,7 +44,7 @@ bash deploy/provision/mesh-egress-ab.sh compare direct.json viakvm.json
 
 This is the flow that captures the **degraded-link win** for the pilot: on Starlink, `via-kvm4-1` should show higher throughput than `starlink-direct`.
 
-> Termux setup on SLATE: `pkg install curl coreutils` (awk + curl). No root needed.
+> Termux setup on SLATE: `pkg install curl coreutils gawk` (curl + `head`/`seq` from coreutils + awk from gawk — Termux's `coreutils` does **not** bundle awk). No root needed.
 
 ### C. Capacity planning
 

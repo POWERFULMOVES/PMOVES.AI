@@ -8,7 +8,24 @@ PMOVES.AI uses git submodules to integrate external projects and specialized ser
 
 **Repository:** `https://github.com/POWERFULMOVES/PMOVES.AI`
 **Branch tracking:** All submodules track `PMOVES.AI-Edition-Hardened`
-**Total submodules:** 54 (including vendor/legacy dual-mounts; +5 in `skills/` after Phase 2)
+**Submodule counts (2026-08-19) — three surfaces, three numbers, and that is the finding:**
+
+| measure | count | what it is |
+|---|---:|---|
+| `.gitmodules` entries | 72 | what git actually tracks — the authoritative number |
+| `pmoves/configs/submodule_skill_registry.json` | 61 | what carries `context_tier` / `domain_tags` |
+| rows in this file | 52 | what is documented below |
+
+They are not three views of one set. **20 tracked submodules have no registry entry**
+(`PMOVES-hermes-agent`, `PMOVES-nats-server`, `pmoves-keygen`, `PMOVES-ollama`,
+`pmoves-cipher-mcp`, `pmoves-hirag-mcp` among them), so they carry no context tier and
+an agent loading context by tier cannot see them. **9 registry entries name paths that
+are no longer tracked** — 7 are `pmoves/vendor/*` leftovers from the vendor-to-fork
+migration, plus `research/A2UI` and `pmoves-surf`.
+
+Reconciling those 29 is an ownership decision (do vendor paths still belong? should all
+20 be registered, and at which tier?), not a mechanical edit — see issue #2573 finding 4.
+Previously this line read "Total submodules: 54", a number that matched none of the three.
 
 ## Fork Architecture (Vendor-to-Fork Migration)
 
@@ -92,13 +109,19 @@ This tier holds the canonical reference for the **AGENTS.md open format** (unive
 - **Tier:** **Tier-2 always-relevant** (load when format/taxonomy/persona work touches the conversation)
 - **Cross-refs:** Root `AGENTS.md` follows this format; `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` and `PMOVES_AGENT_TOPOLOGY.md` are taxonomy docs that may migrate here (gated on user confirmation)
 
+**Submodule table entry** (mirrors the `skills/*` table format below for scannability):
+
+| Submodule | Upstream | Purpose |
+|-----------|----------|---------|
+| `PMOVES-agents.md/` | [agentsmd/agents.md](https://agents.md) | AGENTS.md open format reference + agent taxonomy + persona schema (Tier-2 always-relevant) |
+
 ### skills/ — Skills Constellation
 
 POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested submodules under `skills/`. Load `skills/README.md` first; load a specific skill submodule's CLAUDE.md / README only when working in that skill's domain.
 
 | Submodule | Upstream | Purpose |
 |-----------|----------|---------|
-| `skills/Pmoves-skills/` | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's official skills library — reference for skill authoring patterns |
+| `skills/PMOVES-skills/` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | The skills **package** (`npx skills add`). Tracks `PMOVES.AI-Edition-Hardened`, whose `sources/` overlay holds the skill-source forks — including `Pmoves-Claude-skills` ([anthropics/skills](https://github.com/anthropics/skills)) and `Pmoves-Minimax-skills` ([MiniMax-AI/skills](https://github.com/MiniMax-AI/skills)) |
 | `skills/PMOVES-awesome-agent-skills/` | [heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills) | Curated index of skills/tools/tutorials for AI coding agents |
 | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work |
 | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents |
@@ -137,6 +160,19 @@ Activation paths and cross-references live in `skills/README.md`.
   - Supabase for session logging
 - **Relevant Skills:** `/botz:init`, `/botz:mcp`, `/botz:profile`, `/botz:secrets`
 - **README:** [PMOVES-BoTZ/README.md](../../../PMOVES-BoTZ/README.md)
+
+### PMOVES-MiniMax-MCP
+- **Path:** `PMOVES-MiniMax-MCP/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
+- **Branch:** `main`
+- **Purpose:** MCP server that bridges Claude Code / Agent Zero to the MiniMax model suite — replaces ad-hoc CLI shelling with a proper MCP surface so agents can consume models as tools
+- **Upstream:** [MiniMax-AI/MiniMax-MCP](https://github.com/MiniMax-AI/MiniMax-MCP)
+- **Integration Points:**
+  - Exposes model-provider tools through the MCP protocol (model/load, model/invoke, etc.)
+  - Consumed by the Mavis orchestrator + the harness v0 follow-ups publisher
+  - Routes through PMOVES-tensorzero when model routing is enabled
+- **Relevant Skills:** `/mcp:connect`, `/mcp:list-tools`, `/mcp:invoke`
+- **README:** [PMOVES-MiniMax-MCP/README.md](../../../PMOVES-MiniMax-MCP/README.md)
 
 ---
 
@@ -230,6 +266,30 @@ Activation paths and cross-references live in `skills/README.md`.
   - Indexed via LangExtract and Extract Worker
 - **Relevant Skills:** `/search:deepresearch`, `/db:query`, `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Open-Notebook/README.md](../../../PMOVES-Open-Notebook/README.md)
+
+### PMOVES-OpenRoom
+- **Path:** `PMOVES-OpenRoom/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
+- **Branch:** `PMOVES.AI-Edition-Hardened`
+- **Purpose:** Room-experience shell — browser desktop where an agent operates a room's apps (fork of MiniMax-AI/OpenRoom). The missing fourth layer of rooms-on-a-stage: manifests/catalog + P7 lifecycle + stage cards exist; this is the desktop you enter.
+- **Integration Points:**
+  - `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room manifest is the browser-desktop declaration layer (`shell.layout` → window/panel composition, `apps[]` → operable apps)
+  - P7 room sessions (#2158) — entering a room should open a P7 session on the existing control plane
+  - `/stage/` catalog cards — the "enter room" action targets this shell
+- **Status:** Wired 2026-07-20; adapter work UNSTARTED — lane assigned to Mavis-5090 (operator-directed)
+- **README:** [PMOVES-OpenRoom/README.md](../../../PMOVES-OpenRoom/README.md)
+
+### Pmoves-pretext
+- **Path:** `Pmoves-pretext/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-pretext.git
+- **Branch:** `PMOVES.AI-Edition-Hardened`
+- **Purpose:** Deterministic text-layout engine (fork of chenglou/pretext) — the layout half of the Remotion+Pretext combo that gives living docs their animated qualities: browser-accurate wrap, caption fit, and living-doc overlays inside the A2UI Renderer's Remotion runtime.
+- **Integration Points:**
+  - `pmoves/services/a2ui-renderer/src/remotion/pretextLayout.ts` — runtime consumer (currently via npm `@chenglou/pretext@0.0.6`; the submodule is the alignment/patch surface until fork releases replace the npm dep)
+  - `pmoves/docs/CREATOR_PIPELINE.md` §2a Living Docs Text Layout — the lane contract (`text_layout.engine=pretext`, `POST /render/provenance`, `ProvenanceLivingDoc`)
+  - Living-doc animated render proof: `npm run render:provenance:still` / `:file` in `pmoves/services/a2ui-renderer/` (verified 2026-07-25: 411-frame 1080p MP4 + still)
+- **Status:** Wired 2026-07-25 (hardened branch minted @ upstream main `bb224e08`); fork patches + npm-dep replacement are follow-up lane work
+- **README:** [Pmoves-pretext/README.md](../../../Pmoves-pretext/README.md)
 
 ---
 
@@ -381,8 +441,8 @@ Activation paths and cross-references live in `skills/README.md`.
 
 ### PMOVES-n8n
 - **Path:** `PMOVES-n8n/`
-- **Repository:** https://github.com/POWERFULMOVES/PMOVES-n8n.git
-- **Branch:** `main`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-n8n-FlooS.git (first-party workflows + a thin runtime Dockerfile `FROM n8nio/n8n`; no upstream sync). The full n8n source fork is `POWERFULMOVES/PMOVES-N8N` at path `PMOVES-N8N-Auto/`.
+- **Branch:** `PMOVES.AI-Edition-Hardened`
 - **Purpose:** n8n workflow automation for PMOVES.AI platform
 - **Key Workflows:**
   - `echo_publisher.json` - Discord echo publishing
@@ -418,6 +478,58 @@ Activation paths and cross-references live in `skills/README.md`.
   - MCP-compatible for tool extensions
 - **Relevant Skills:** `/crush:setup`, `/crush:status`
 - **README:** [PMOVES-crush/README.md](../../../PMOVES-crush/README.md)
+
+### PMOVES-registry
+- **Path:** `PMOVES-registry/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-registry.git
+- **Branch:** `main` (fork of `agentclientprotocol/registry`, tracks parity)
+- **Purpose:** Registry of agents implementing the Agent Client Protocol (ACP) — the ecosystem catalog Zed/JetBrains/Spynel-class clients launch agents from
+- **Features:**
+  - 57 agent entries (claude-acp, codex-acp, goose, opencode, kimi, ...) with schema-validated `agent.json` + icon per entry
+  - `crush-acp` entry added 2026-09-27 (binary distribution from PMOVES-crush releases)
+- **Integration Points:**
+  - Substrate for the cross-agent shared-registry vision (a0/archon/every agent discover each other); open wiring: map ACP entries to `pmoves/config/agent_registry.yaml`
+- **Overlay:** none (parity fork); fork-sync wired 2026-09-27
+
+### PMOVES-spynel
+- **Path:** `PMOVES-spynel/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-spynel.git
+- **Branch:** `PMOVES.AI-Edition-Hardened` (consumable; hardened ⊇ main enforced 2026-09-27)
+- **Purpose:** Fork of `agent0ai/spynel` (Go, "one chat, unlimited AI orchestration") — multi-agent TUI that orchestrates coding harnesses over ACP
+- **Features:**
+  - Harness catalog: Codex app-server, Claude Code print-mode, Agent Zero CLI (ACP), Pi RPC, and stable ACP v1 aliases (opencode, qwen-code, kimi, goose, cursor, gemini-cli, github-copilot, factory-droid, **crush** added 2026-09-27)
+  - Local API: loopback + constant-time bearer token; optional authenticated Unix socket
+  - Node-local runtime state in `.spynel/` (0600, gitignored)
+- **Integration Points:**
+  - Drives `crush acp` (PMOVES-crush v0.91.2-pmoves.1+) as a harness
+  - Source-build install only (F1): `go build -o spynel ./cmd/spynel`
+- **Review of record:** `pmoves/docs/services/spynel/REVIEW-REGISTRY.md` (PMOVES.AI#3047); overlay `PMOVES.AI_INTEGRATION.md` on the hardened branch
+
+### Pmoves-minimax-cli
+- **Path:** `Pmoves-minimax-cli/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git
+- **Branch:** `main`
+- **Purpose:** CLI wrapper around `PMOVES-MiniMax-MCP` — used by the sidecar lane (deployed via Pinokio on operator devices) to access the MiniMax model surface without a full MCP client
+- **Upstream:** [MiniMax-AI/cli](https://github.com/MiniMax-AI/cli)
+- **Integration Points:**
+  - Deployed via Pinokio on operator nodes (P10 XL fleet, Tab Ultra fleet)
+  - The WebUI/Agent-Zero side calls the MCP directly; the sidecar side calls this CLI
+  - Same model surface as PMOVES-MiniMax-MCP, just a different transport
+- **Relevant Skills:** `/minimax-cli:run`, `/minimax-cli:list-models`
+- **README:** [Pmoves-minimax-cli/README.md](../../../Pmoves-minimax-cli/README.md)
+
+### Pmoves-MiniMax-Provider-Verifier
+- **Path:** `Pmoves-MiniMax-Provider-Verifier/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier.git
+- **Branch:** `main`
+- **Purpose:** Provider conformance gate — validates that any third-party provider claiming MiniMax compatibility actually meets the contract. Load-bearing for adding new providers to the Mavis model cascade.
+- **Upstream:** [MiniMax-AI/MiniMax-Provider-Verifier](https://github.com/MiniMax-AI/MiniMax-Provider-Verifier)
+- **Integration Points:**
+  - Runs as a CI gate on PRs that add new provider configurations
+  - Validates the contract: model list shape, response format, token accounting, tool-call support
+  - A provider that passes the gate is allowed into the model cascade; a failure is a hard block
+- **Relevant Skills:** `/minimax-verify:provider`, `/minimax-verify:conformance`
+- **README:** [Pmoves-MiniMax-Provider-Verifier/README.md](../../../Pmoves-MiniMax-Provider-Verifier/README.md)
 
 ---
 
@@ -542,6 +654,8 @@ git submodule foreach 'echo $name: $(git rev-parse HEAD)'
 | PMOVES-ToKenism-Multi | N/A | Token economy simulator | N/A |
 | PMOVES-Wealth | varies | Finance tracking (Firefly III) | varies |
 | PMOVES-crush | N/A | Terminal AI assistant | N/A |
+| PMOVES-registry | N/A | ACP agent registry (fork) | N/A |
+| PMOVES-spynel | N/A | Multi-agent chat orchestration (Go TUI) | N/A |
 | PMOVES-n8n | varies | Workflow automation | varies |
 | PMOVES-supabase | 3010 | Postgres + pgvector | data |
 | PMOVES-tensorzero | 3030, 4000 | LLM gateway + observability | default |

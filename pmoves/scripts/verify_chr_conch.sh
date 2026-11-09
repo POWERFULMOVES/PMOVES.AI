@@ -44,15 +44,22 @@ echo ""
 # Phase 1.2: Verify Neo4j Entity nodes
 # =============================================================================
 echo "[1.2] Checking Neo4j Entity nodes..."
-if docker ps | grep -q pmoves-neo4j-1; then
+# The compose-declared name (pmoves/scripts/neo4j_container.py); pmoves-neo4j-1 matched nothing.
+NEO4J_CONTAINER=$(python3 pmoves/scripts/neo4j_container.py 2>/dev/null) || NEO4J_CONTAINER=pmoves-neo4j
+if docker ps --format '{{.Names}}' | grep -qxF "$NEO4J_CONTAINER"; then
     echo "  [INFO] Neo4j container is running"
-    NEO4J_PASSWORD="${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}"
-    ENTITY_COUNT=$(docker exec pmoves-neo4j-1 cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
-        "MATCH (e:Entity) RETURN count(e);" 2>/dev/null | grep -oE '[0-9]+' || echo "0")
-    if [ "$ENTITY_COUNT" -gt 0 ]; then
-        check_result 0 "Neo4j has $ENTITY_COUNT Entity nodes"
+    # Password by env only (never argv, never a fallback): unset or empty fails the check.
+    if [ -z "${NEO4J_PASSWORD:-}" ]; then
+        check_result 1 "NEO4J_PASSWORD is unset or empty; not falling back to a default password"
     else
-        check_result 1 "Neo4j has no Entity nodes (run load_neo4j_consciousness.sh)"
+        ENTITY_COUNT=$(NEO4J_USERNAME="${NEO4J_USER:-neo4j}" NEO4J_PASSWORD="$NEO4J_PASSWORD" \
+            docker exec -e NEO4J_USERNAME -e NEO4J_PASSWORD "$NEO4J_CONTAINER" cypher-shell \
+            "MATCH (e:Entity) RETURN count(e);" 2>/dev/null | grep -oE '[0-9]+' || echo "0")
+        if [ "$ENTITY_COUNT" -gt 0 ]; then
+            check_result 0 "Neo4j has $ENTITY_COUNT Entity nodes"
+        else
+            check_result 1 "Neo4j has no Entity nodes (run load_neo4j_consciousness.sh)"
+        fi
     fi
 else
     echo "  [SKIP] Neo4j container not running"

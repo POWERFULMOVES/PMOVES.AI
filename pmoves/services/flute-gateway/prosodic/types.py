@@ -11,9 +11,8 @@ enable sub-100ms Time-To-First-Speech (TTFS) while maintaining natural prosody.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING  # NamedTuple replaced with dataclass
 
 
 class BoundaryType(Enum):

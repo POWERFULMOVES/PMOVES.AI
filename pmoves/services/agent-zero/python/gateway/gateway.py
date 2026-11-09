@@ -22,7 +22,7 @@ import os
 import socket
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,7 +57,7 @@ class GatewayConfig:
     )
 
     # NATS for event coordination
-    NATS_URL: str = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    NATS_URL: str = os.environ.get("NATS_URL", "nats://nats:4222")
 
     # HiRAG for knowledge retrieval
     HIRAG_URL: str = os.environ.get("HIRAG_URL", "http://hirag:8086")
@@ -229,7 +229,7 @@ class Gateway:
         analysis = self.task_analyzer.analyze_task(task)
         thread_type = analysis["thread_type"]
 
-        logger.info(f"Analysis result:")
+        logger.info("Analysis result:")
         logger.info(f"  Thread type: {thread_type.value}")
         logger.info(f"  Agents: {analysis['agents']}")
         logger.info(f"  Estimated duration: {analysis['estimated_duration']}")

@@ -11,7 +11,6 @@ Following CHIT/Geometry Bus patterns:
 """
 
 import logging
-import os
 from typing import Any
 from datetime import datetime
 import json
@@ -19,6 +18,11 @@ import json
 import numpy as np
 
 from pmoves.tools.chit_security import sign_cgp as _sign_cgp, verify_cgp as _verify_cgp
+
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
 
 from models.simulation import (
     SimulationResult,
@@ -28,7 +32,7 @@ from models.simulation import (
 
 logger = logging.getLogger(__name__)
 
-_CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE") or os.environ.get("CHIT_SIGNING_KEY")
+_CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE") or get_secret("CHIT_SIGNING_KEY")
 
 
 class CHITEncoder:

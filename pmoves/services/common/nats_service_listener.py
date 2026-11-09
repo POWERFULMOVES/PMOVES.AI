@@ -38,9 +38,8 @@ import json
 import logging
 import os
 from datetime import timezone
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable
 
-import nats
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 

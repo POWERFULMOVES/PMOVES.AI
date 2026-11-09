@@ -32,9 +32,9 @@ services:
       - MEMORY_MAX_TRACES=100000
     ports:
       - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686"
-      - "14268:14268"
-      - "14250:14250"
-      - "4317:4317"
+      - "${JAEGER_14268_PORT:-14268}:14268"
+      - "${JAEGER_14250_PORT:-14250}:14250"
+      - "${JAEGER_4317_PORT:-4317}:4317"
     networks:
       - pmoves_monitoring
     healthcheck:
@@ -71,17 +71,29 @@ services:
       - "${OTEL_GRPC_PORT:-4327}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"
       - "${OTEL_METRICS_PORT:-8889}:8889"
+    # pmoves_monitoring: reach Jaeger/Tempo (the export backend) + Prometheus scrape.
+    # pmoves_app + pmoves_bus: the collector must be reachable BY the trace exporters,
+    # which live on those networks. agent-zero and archon set
+    # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://pmoves-otel-collector:4317 but sit on
+    # pmoves_app/pmoves_bus only (not pmoves_monitoring), so without this the collector
+    # DNS name never resolves for them and every span export silently fails. tensorzero
+    # already reaches it because it is multi-homed onto pmoves_monitoring. Multi-homing
+    # the collector fixes all app/bus exporters in one place (see handoff 2026-08-31).
     networks:
       - pmoves_monitoring
+      - pmoves_app
+      - pmoves_bus
     depends_on:
       jaeger:
         condition: service_healthy
+    # The otel-collector-contrib image is distroless: no /bin/sh, no wget/curl,
+    # so every exec-based healthcheck (CMD-SHELL /dev/tcp included) fails with
+    # "stat /bin/sh: no such file or directory" while the collector itself runs
+    # fine. Same constraint as invidious-companion — disable the Docker probe
+    # and rely on the collector's health_check extension (:13133) + Prometheus
+    # scraping of :8889 for liveness.
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      disable: true
     deploy:
       resources:
         limits:

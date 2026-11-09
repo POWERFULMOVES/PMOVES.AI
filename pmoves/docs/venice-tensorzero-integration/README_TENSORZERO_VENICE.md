@@ -13,7 +13,11 @@
    docker compose -f docker-compose.yml -f compose.overrides.tensorzero.yml -f compose.overrides.agents.yml up -d
 
 5) Point all OpenAI-compatible clients to TensorZero:
-   OPENAI_COMPAT_BASE_URL=http://tensorzero:3000
+   OPENAI_COMPAT_BASE_URL=http://tensorzero-gateway:3000
+   - The service is `tensorzero-gateway`, matching pmoves/docker-compose.yml.
+   - 3000 is the CONTAINER port, correct for container-to-container traffic.
+     From the host use ${TENSORZERO_PORT:-3030} instead — the gateway publishes
+     on 3030 so the container port is not put straight onto the host.
    - Agent Zero and Archon now only backfill `OPENAI_COMPATIBLE_BASE_URL*` values when they are unset. Set any per-surface overrides (LLM, embeddings, TTS, STT) before starting the services if you need split routing—those values will no longer be clobbered during startup.
 
 6) Set Venice key in `.env.tensorzero`:

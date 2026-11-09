@@ -90,7 +90,24 @@ def main() -> int:
             "ANON_KEY": anon_key,
             "SUPABASE_SERVICE_ROLE_KEY": service_role_key,
             "SERVICE_ROLE_KEY": service_role_key,
-            "SUPABASE_SECRET_KEY": service_role_key,
+            # NOTE: SUPABASE_SECRET_KEY is deliberately NOT set here, and neither is
+            # SUPABASE_PUBLISHABLE_KEY. Those two are Supabase's NEW opaque API-key
+            # model (sb_secret_… / sb_publishable_…), not aliases for the legacy
+            # JWTs. This line used to read
+            #     "SUPABASE_SECRET_KEY": service_role_key,
+            # which made Kong's declarative config declare the SAME key twice for
+            # the service_role consumer (once as $SUPABASE_SERVICE_KEY, once as
+            # $SUPABASE_SECRET_KEY). Kong requires keyauth_credentials.key to be
+            # globally unique, so it rejected the entire kong.yml with
+            #     uniqueness violation: 'keyauth_credentials' entity with key … already declared
+            # and crash-looped, taking every /rest/v1, /auth/v1 and /storage/v1
+            # route down with it.
+            # Upstream ships both EMPTY (PMOVES-supabase/docker/.env.example:47,49)
+            # and its entrypoint strips blank key entries (kong-entrypoint.sh:47),
+            # so leaving them unset is the SUPPORTED state, not an omission.
+            # Populate them only on a real migration to the opaque key model, with
+            # genuine sb_* values.
+            # See docs/handoffs/supabase-kong-declarative-config-boot-failure-2026-08-18.md
             "SUPABASE_JWT_SECRET": jwt_secret,
         }
     else:

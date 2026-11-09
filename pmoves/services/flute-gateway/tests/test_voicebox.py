@@ -9,7 +9,6 @@ and can be deselected with `pytest -m "not functional"`.
 """
 
 import io
-import json
 import os
 import sys
 import wave

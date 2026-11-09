@@ -53,7 +53,7 @@ def render_plain(cycle: int, started: float, rows: list[tuple[str, bool, int]]) 
     print("")
 
 
-def run(interval: float, max_seconds: int) -> int:
+def run(interval: float, max_seconds: int, strict: bool = False) -> int:
     try:
         from rich.live import Live
         from rich.table import Table
@@ -66,6 +66,7 @@ def run(interval: float, max_seconds: int) -> int:
 
     started = time.time()
     cycle = 0
+    all_ready = False
 
     def collect() -> list[tuple[str, bool, int]]:
         with cf.ThreadPoolExecutor(max_workers=min(24, len(ENDPOINTS))) as ex:
@@ -84,9 +85,10 @@ def run(interval: float, max_seconds: int) -> int:
             rows = collect()
             render_plain(cycle, started, rows)
             if rows and all(ok for _, ok, _ in rows):
+                all_ready = True
                 return 0
             time.sleep(interval)
-        return 0
+        return 1 if strict and not all_ready else 0
 
     table = Table(title="PMOVES Showtime Bring-Up", show_lines=False)
     table.add_column("Service", no_wrap=True)
@@ -116,18 +118,20 @@ def run(interval: float, max_seconds: int) -> int:
                 table.add_row(name, status, str(code))
             live.update(table)
             if rows and all(ok for _, ok, _ in rows):
+                all_ready = True
                 return 0
             time.sleep(interval)
 
-    return 0
+    return 1 if strict and not all_ready else 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--interval", type=float, default=1.5, help="Polling interval in seconds")
     parser.add_argument("--max-seconds", type=int, default=900, help="Maximum run duration")
+    parser.add_argument("--strict", action="store_true", help="Return non-zero if not all endpoints are ready when max-seconds elapses")
     args = parser.parse_args()
-    return run(interval=args.interval, max_seconds=args.max_seconds)
+    return run(interval=args.interval, max_seconds=args.max_seconds, strict=args.strict)
 
 
 if __name__ == "__main__":

@@ -1,24 +1,28 @@
 # MiniMax Edition Agent Profile
 # PMOVES.AI KiloCode MiniMax Edition
 #
-# Runs on 5090 (primary) or 4090 laptop (portable) nodes
-# for MiniMax M2.7/M2.1 inference via Token Plan.
+# Runs on 5090 (primary), SPARK (GB10 unified-memory), or 4090 laptop
+# (portable) nodes for MiniMax M2.7/M2.1 inference via Token Plan.
 # Complements GLM coding plan with long-context capabilities.
+# On SPARK, Mavis shares the node with SPARK-KIMI (Crush/GLM) — the
+# harness wire (pmoves.agent.task.v1 subscriber) is what actually makes
+# SPARK a dispatch target; affinity alone is a scheduling hint.
 
 name: minimax_edition
 role: minimax-kilocode-claw
-description: "MiniMax Edition KiloCode claw for M2.7/M2.1 inference with 1M/100K token context, character persona synthesis, and multimodal capabilities"
+description: "MiniMax Edition KiloCode claw for MiniMax-M3 inference (m2.7/m2.1 fallback) with long context, character persona synthesis, and multimodal capabilities"
 
 node_affinity:
   - 5090  # Primary - GPU node for character persona generation
+  - spark  # GB10 Grace-Blackwell 128GB unified - long-context overflow + edge dispatch
   - laptop-4090  # Portable - for mobile/field work
   - z890  # Fallback - when 5090 unavailable
 
 model:
   provider: minimax
-  model: minimax-m2.7
-  endpoint: https://api.minimax.chat/v1
-  fallback_model: minimax-m2.1
+  model: MiniMax-M3  # verifier default ID (Pmoves-MiniMax-Provider-Verifier m3_format_check); M3 since June 2026
+  endpoint: https://api.minimax.io/v1  # Token-Plan surface (OpenAI-compatible /v1/chat/completions; chatcompletion_v2 is deprecated)
+  fallback_model: minimax-m2.7  # previous primary — 1M-token long-context fallback
   token_plan_api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
 
 capabilities:
@@ -83,18 +87,21 @@ agent_zero:
   profile: minimax_edition
   inherit_context: true
   report_to: agent_zero
-  model_binding: minimax-m2.7
+  model_binding: MiniMax-M3
 
 # TensorZero integration
 tensorzero:
   enabled: true
   variants:
+    - name: minimax_m3_primary
+      model: MiniMax-M3
+      weight: 0.7
     - name: minimax_m27_longcontext
       model: minimax-m2.7
-      weight: 0.7
+      weight: 0.2
     - name: minimax_m21_efficient
       model: minimax-m2.1
-      weight: 0.3
+      weight: 0.1
 
 # Token Plan quota management
 token_plan:

@@ -21,7 +21,7 @@ routing = ["minimax"]
 [models."minimax-m2.7".providers.minimax]
 type = "openai-compatible"
 model_name = "MiniMax-M2.7"
-base_url = "https://api.minimax.chat/v1"
+base_url = "https://api.minimax.io/v1"
 
 [models."minimax-m2.7".parameters]
 max_tokens = 32000
@@ -37,7 +37,7 @@ routing = ["minimax"]
 [models."minimax-m2.1".providers.minimax]
 type = "openai-compatible"
 model_name = "MiniMax-M2.1"
-base_url = "https://api.minimax.chat/v1"
+base_url = "https://api.minimax.io/v1"
 
 [models."minimax-m2.1".parameters]
 max_tokens = 8000

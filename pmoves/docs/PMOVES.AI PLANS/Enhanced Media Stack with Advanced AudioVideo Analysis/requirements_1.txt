@@ -1,7 +1,7 @@
 
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-yt-dlp==2026.2.21
+yt-dlp==2026.7.4
 pydantic>=2.0.0
 aiofiles==23.2.1
-python-multipart>=0.0.26
+python-multipart>=0.0.32

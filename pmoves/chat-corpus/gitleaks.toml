@@ -1,0 +1,45 @@
+# PMOVES chat-corpus ruleset — SOURCED, not bespoke.
+# Engine: github.com/gitleaks/gitleaks v8.30.1 (MIT) at pmoves/tools/a0/bin (vendored, gitignored).
+# [extend] useDefault inherits the upstream-maintained 150+ rule ruleset.
+# Custom rules trace to evidence classes in pmoves/chat-corpus/ITERATIONS.md
+# (2026-09-27 incident findings). Dialect: Go RE2 — lookarounds forbidden.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "pmoves-jwt-escaped"
+description = "JWT incl. JSON-escaped (backslash-split) forms"
+regex = '''eyJ[A-Za-z0-9_\-\.]{12,}'''
+tags = ["pmoves", "jwt"]
+
+[[rules]]
+id = "pmoves-env-secret-assign"
+description = "NAME=VALUE secret assignments, unanchored (tool JSON dumps are single escaped lines); group 2 = value"
+regex = '''(?i)(\w*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|APIKEY|AUTH_KEY|PRIVATE_KEY|REFRESH|_KEY|_API)\w*(?:\"|'|')?\s*[:=](?:\"|'|')?\s*)([^\s\",';&]{4,})'''
+secretGroup = 2
+tags = ["pmoves", "env"]
+
+[[rules]]
+id = "pmoves-lan-ip"
+description = "RFC1918 LAN addresses; RE2-safe boundaries, IP in group 1"
+regex = '''(?m)(?:^|[^0-9.])((?:172\.(?:1[6-9]|2[0-9]|3[01])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3})(?:[^0-9.]|$)'''
+secretGroup = 1
+tags = ["pmoves", "network"]
+
+[[rules]]
+id = "pmoves-postgres-url"
+description = "Postgres URL embedded password; group 2 = password"
+regex = '''(?i)(postgres(?:ql)?://[^:\s/\"\\]+:)([^@\s/\"\\]{4,})@'''
+secretGroup = 2
+tags = ["pmoves", "db"]
+
+[[allowlists]]
+description = "Non-secret placeholders and already-redacted markers (scoped to pmoves custom rules; upstream rules stay authoritative)"
+regexTarget = "secret"
+rules = ["pmoves-jwt-escaped", "pmoves-env-secret-assign", "pmoves-lan-ip", "pmoves-postgres-url"]
+regexes = [
+  '''(?i)change_?me''',
+  '''interp-placeholder''',
+  '''(?i)your_secure_password_here''',
+  '''\[REDACTED''',
+]

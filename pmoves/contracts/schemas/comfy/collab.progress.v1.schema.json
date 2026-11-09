@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/comfy/collab.progress.v1.schema.json",
+  "title": "Comfy Collab Progress v1",
+  "description": "Progress update for a running ComfyUI workflow. Carries phase (queued/running/completed/failed), percent complete, current node, and step counters for diffusion-style workflows. Linked to a parent prompt via prompt_id.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "session_id",
+    "prompt_id",
+    "app_slug",
+    "phase",
+    "updated_at"
+  ],
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Room manifest identifier the workflow is running in."
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "P7 room session id the workflow belongs to."
+    },
+    "prompt_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The prompt this progress update is for. Matches a comfy.collab.prompt.v1.prompt_id."
+    },
+    "app_slug": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinokio app slug running the workflow (e.g. comfyui-desktop)."
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["queued", "running", "completed", "failed", "cancelled"],
+      "description": "High-level phase of the workflow."
+    },
+    "percent": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Optional 0-100 completion percent. Null when not applicable (queued, failed)."
+    },
+    "current_node": {
+      "type": ["string", "null"],
+      "description": "Current ComfyUI node id, when phase=running. Null for non-running phases."
+    },
+    "step": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Current step for diffusion-style workflows. Null when not applicable."
+    },
+    "total_steps": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Total steps planned for the workflow. Null when not applicable."
+    },
+    "message": {
+      "type": ["string", "null"],
+      "description": "Optional human-readable status message (e.g. error reason when phase=failed)."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of this progress update."
+    }
+  },
+  "additionalProperties": false
+}

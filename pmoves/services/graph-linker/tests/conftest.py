@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import os
 from typing import Generator
@@ -14,12 +13,6 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import Settings
-from models import (
-    NATSMessage,
-    GenImageResultMessage,
-    AnalysisTopicsMessage,
-    KBUpsertMessage,
-)
 from neo4j_client import Neo4jClient
 from nats_handler import NATSHandler
 
@@ -34,7 +27,7 @@ def test_settings() -> Settings:
         neo4j_user="neo4j",
         neo4j_password="test",
         neo4j_database="test",
-        nats_url="nats://nats:pmoves@nats:4222",
+        nats_url="nats://nats:4222",
         migrations_dir="migrations",
         subjects=[
             "gen.image.result.v1",
@@ -161,7 +154,7 @@ def app_client() -> Generator[TestClient, None, None]:
         mock_settings.return_value = Settings(
             neo4j_url="bolt://localhost:7687",
             neo4j_password="test",
-            nats_url="nats://nats:pmoves@nats:4222",
+            nats_url="nats://nats:4222",
         )
 
         neo4j_inst = MagicMock()

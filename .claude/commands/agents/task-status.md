@@ -1,64 +1,52 @@
-Query task completion status via Agent Zero's MCP API.
+Query task progress via Agent Zero's job log API.
 
-Check the status and results of tasks submitted via `/agents:execute` or the MCP API directly.
+Read back the progress of a task submitted via `/agents:execute` or `POST /tasks`.
 
 ## Usage
 
-Run this command with a task ID:
-- `/agents:task-status task-abc123` - Check specific task
-- `/agents:task-status` - List recent tasks
+Run this command with a context id:
+- `/agents:task-status <context_id>` — read that task's job log
 
 ## Implementation
 
 Execute the following steps:
 
-1. **Check Agent Zero MCP health:**
+1. **Check supervisor + runtime health:**
    ```bash
-   curl -sf http://localhost:8080/mcp/health \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" | jq .
+   curl -sf http://localhost:8080/healthz | jq '{status, runtime: .runtime.status}'
    ```
 
-2. **Query specific task (if task ID provided):**
+2. **Fetch the job log for a context id:**
    ```bash
-   curl -sf "http://localhost:8080/mcp/task/<task_id>" \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" | jq .
+   curl -sf "http://localhost:8080/jobs/{context_id}?length=100" | jq .
    ```
 
-   Returns task status, results, and execution metadata.
+   `<context_id>` is the `context_id` returned by `POST /tasks`.
+   `length` is 1-1000 (default 100). A 404 means the context was not found —
+   it expired, or the id is wrong.
 
-3. **List active agents and their tasks (if no task ID):**
-   ```bash
-   curl -sf http://localhost:8080/mcp/agents \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" | jq '{
-       supervisor: .supervisor.active_tasks,
-       subordinates: [.subordinates[] | {id, status, specialization}]
-     }'
-   ```
+3. **If no context id was given:** there is no list-tasks endpoint on this API.
+   Ask the user for the `context_id` from their `/agents:execute` run.
 
 4. **Report results to user:**
-   - Task status: `queued`, `running`, `completed`, `failed`, `timeout`
-   - Task results if completed
-   - Execution time
-   - Any errors if failed
+   - The log tail
+   - Whether the run reached a final assistant response
+   - Any errors surfaced in the log
 
 ## Authentication
 
-Requires `MCP_CLIENT_SECRET` environment variable.
+None. The supervisor declares no inbound auth dependency on these routes. It
+forwards `X-API-KEY` (`AGENT_ZERO_API_KEY`) to the A0 runtime on your behalf.
 
-## Task Status Values
+## Task status
 
-| Status | Description |
-|--------|-------------|
-| `queued` | Task accepted, waiting for agent runtime |
-| `running` | Agent is actively working on the task |
-| `completed` | Task finished successfully, results available |
-| `failed` | Task encountered an error |
-| `timeout` | Task exceeded `timeout_seconds` limit |
+The supervisor exposes **no task-status enum**. `GET /jobs/{context_id}` returns
+runtime log items; progress and completion are read from the log tail, not from
+a `status` field. There is no `queued`/`running`/`completed`/`failed`/`timeout`
+state machine on this API.
 
 ## Notes
 
-- Tasks are queued in NATS JetStream for reliable delivery
-- Completed task results are retained for a configurable period
-- Failed tasks include error details in the response
-- Monitor all tasks via Prometheus: `curl http://localhost:8080/metrics | grep task`
-- See `.claude/context/agent-zero-orchestration.md` for full API reference
+- Agent Zero publishes task events to NATS (`agentzero.task.v1`)
+- Monitor metrics: `curl -s http://localhost:8080/metrics | grep agentzero`
+- Canonical API surface: `pmoves/docs/operations/AGENT_ZERO_API.md`

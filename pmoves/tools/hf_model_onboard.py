@@ -368,7 +368,7 @@ def publish_nats_event(fragment: AgentCardFragment, candidate: Optional[Dict[str
         try:
             import nats
 
-            nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@localhost:4222")
+            nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
             nc = nats.NATS()
             await nc.connect(nats_url)
             event = {

@@ -3,7 +3,8 @@ from typing import Dict, Any
 import json
 import time
 from libs.langextract import extract_text, extract_xml
-import os, requests
+import os
+import requests
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -51,7 +52,7 @@ def extract_text_endpoint(body: Dict[str, Any] = Body(...)):
         LANGEXTRACT_REQUESTS.labels(endpoint="text", status="success").inc()
         _maybe_publish(out)
         return out
-    except Exception as e:
+    except Exception:
         LANGEXTRACT_REQUESTS.labels(endpoint="text", status="error").inc()
         raise
     finally:
@@ -73,7 +74,7 @@ def extract_xml_endpoint(body: Dict[str, Any] = Body(...)):
         LANGEXTRACT_REQUESTS.labels(endpoint="xml", status="success").inc()
         _maybe_publish(out)
         return out
-    except Exception as e:
+    except Exception:
         LANGEXTRACT_REQUESTS.labels(endpoint="xml", status="error").inc()
         raise
     finally:

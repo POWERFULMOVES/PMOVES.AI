@@ -14,11 +14,20 @@
 #   id: string            - Unique node identifier (dot-separated path)
 #   task: string          - Human-readable task description
 #   action: object        - Verification action
-#     type: string        - One of: file_exists, grep, command, manual
-#     target: string      - File path or command (relative to repo root)
+#     type: string        - One of: file_exists, grep, command, http, manual
+#     target: string      - File path or command (relative to repo root).
+#                           For http, also accepted as the endpoint (see url).
 #     pattern: string     - Regex pattern (for grep type)
 #     invert: boolean     - If true, finding the pattern means FAIL (negative grep). Default: false
-#     expect: string      - Expected result description
+#     multiline: boolean  - grep only. If true, `.` also matches newlines (re.DOTALL),
+#                           so a pattern may span lines. Opt-in: default false keeps
+#                           existing single-line patterns behaving as written.
+#     url: string         - http only. The endpoint to probe. Trees use both `url`
+#                           (16 nodes) and `target` (22); the runner accepts either.
+#     expect_status: int  - http only. Status code that means PASS. Default: 200.
+#                           This is the machine-readable assertion — `expect` is not.
+#     expect: string      - Expected result description. FREE-FORM PROSE, for humans
+#                           ("200 OK", "Prometheus metrics for ..."). Never parsed.
 #   context: string       - Where to look / additional guidance
 #   agent_hint: string    - Suggested agent for this task (e.g., "codex", "archon")
 #   status: string        - One of: pending, pass, fail, skip (default: pending)
@@ -30,6 +39,14 @@ schema:
     - file_exists    # Check if a file or directory exists
     - grep           # Search for a pattern in a file
     - command        # Run a shell command and check exit code
+    - http           # Liveness probe: unauthenticated GET, asserts on status code
+                     # only. http/https, no redirects, link-local blocked, body
+                     # never read. A node declaring method/headers/body/json/auth
+                     # or a content predicate (expect_body, expect_json,
+                     # expect_contains, expect_match, expect_jsonpath, assert) is
+                     # UNSUPPORTED and evaluates FAIL — the probe will not silently
+                     # send a different request and report PASS on the status alone.
+                     # Use `command` for anything needing a real request body.
     - manual         # Requires human review (always pending)
   statuses:
     - pending        # Not yet evaluated

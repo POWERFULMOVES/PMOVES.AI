@@ -112,6 +112,62 @@
       "group": "test",
       "presentation": { "panel": "shared", "reveal": "always" },
       "problemMatcher": []
+    },
+    {
+      "label": "Kimi: PMOVES session (kimi-pmoves)",
+      "type": "shell",
+      "command": "make -C pmoves kimi-pmoves",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Kimi: cipher preflight",
+      "type": "shell",
+      "command": "python3 pmoves/tools/cipher_preflight.py",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Register: status (my lanes)",
+      "type": "shell",
+      "command": "make -C pmoves register-status OWNER='PMOVES-KIMI-KNUCKLES-B850'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ClawZ: gateway up",
+      "type": "shell",
+      "command": "make -C pmoves clawz-up",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ClawZ: logs",
+      "type": "shell",
+      "command": "make -C pmoves clawz-logs",
+      "group": "test",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pinokio 8: creator-collab runtime",
+      "type": "shell",
+      "command": "make -C pmoves up-pinokio",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pinokio 8: bridge smoke",
+      "type": "shell",
+      "command": "make -C pmoves pinokio-bridge-smoke",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
     }
   ]
 }

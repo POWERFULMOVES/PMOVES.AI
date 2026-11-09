@@ -1,0 +1,216 @@
+{
+  "tenant": {
+    "id": "sint-maarten",
+    "name": "Sint Maarten Pre-Positioned Node",
+    "theme": "darkxside",
+    "tagline": "Disaster-resilient voice, mesh, and translation for Caribbean communities"
+  },
+  "components": [
+    {
+      "component": "pm-toast",
+      "props": {
+        "id": "sm-toast",
+        "position": "bottom-right",
+        "timeout": "5000"
+      }
+    },
+    {
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "When Irma came, the cell towers went down for 11 days. The mesh doesn't wait for a crew to fly in.",
+        "attribution": "Sint Maarten pilot resident",
+        "attributionRole": "community co-organizer"
+      }
+    },
+    {
+      "component": "pm-image",
+      "props": {
+        "src": "./assets/sint-maarten-placeholder.svg",
+        "alt": "Placeholder mark for the Sint Maarten pilot, photo pending sign-off",
+        "caption": "Placeholder pending photo — Sint Maarten pilot",
+        "credit": "Placeholder (PMOVES, pending photo sign-off)"
+      }
+    },
+    {
+      "component": "pm-project-card",
+      "props": {
+        "title": "Pre-positioned Pelican Node (5 units)",
+        "description": "Solar + battery + Starlink Mini + HaLow mesh in a Pelican case. Deployable in 15 min, runs 72 hours on internal battery.",
+        "status": "rehearsal",
+        "tags": [
+          "disaster",
+          "mesh",
+          "off-grid"
+        ],
+        "links": [
+          {
+            "label": "Field manual",
+            "href": "#manual"
+          },
+          {
+            "label": "Deployment kit",
+            "href": "#kit"
+          }
+        ]
+      }
+    },
+    {
+      "component": "pm-project-card",
+      "props": {
+        "title": "Voice translation EN / NL / FR / ES / HT",
+        "description": "Real-time voice translation in 5 languages. Built on the Flute-Gateway stack. Zero-retention by architecture.",
+        "status": "rehearsal",
+        "tags": [
+          "voice",
+          "translation",
+          "multilingual"
+        ]
+      }
+    },
+    {
+      "component": "pm-project-card",
+      "props": {
+        "title": "Community mesh pilot (Phase 2)",
+        "description": "Pre-positioned mesh for schools, clinics, and shelters. Coordinated with local government.",
+        "status": "rehearsal",
+        "tags": [
+          "community",
+          "mesh"
+        ]
+      }
+    },
+    {
+      "component": "pm-project-card",
+      "props": {
+        "title": "Solar microgrid for community hub",
+        "description": "12-panel foldable array + battery. Powers 1 hub for 4-7 days. Phase 3.",
+        "status": "planned",
+        "tags": [
+          "solar",
+          "off-grid",
+          "phase-3"
+        ]
+      }
+    },
+    {
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "DARKXSIDE",
+        "agentRole": "operator",
+        "glyph": "✦",
+        "presence": "live"
+      }
+    },
+    {
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "B850-CLAUDE",
+        "agentRole": "orchestrator",
+        "glyph": "◆",
+        "presence": "rehearsal"
+      }
+    },
+    {
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "SXM-RESCUE",
+        "agentRole": "field ops",
+        "glyph": "◆",
+        "presence": "live"
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Mesh uptime (rolling 7d) (pilot target)",
+        "value": "99.7",
+        "unit": "%",
+        "trend": "up",
+        "format": "percent"
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Active voice sessions (pilot target)",
+        "value": "12",
+        "trend": "up"
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Translation latency (p95) (pilot target)",
+        "value": "184",
+        "unit": "ms",
+        "trend": "down",
+        "format": "duration"
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Battery endurance (pilot target)",
+        "value": "72",
+        "unit": "h",
+        "trend": "flat",
+        "format": "duration"
+      }
+    },
+    {
+      "component": "pm-timeline",
+      "props": {
+        "events": [
+          {
+            "ts": "2026-07-15T12:00:00Z",
+            "title": "Pilot phase 1 deployed",
+            "body": "2 Pelican nodes online at the community hub + clinic. Mesh range 1.4 km.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-10T09:00:00Z",
+            "title": "Voice translation live",
+            "body": "EN / NL / FR / ES translation stack. HT (Haitian Creole) in rehearsal.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-01T15:00:00Z",
+            "title": "Irma anniversary 9 years",
+            "body": "Pre-positioned infrastructure honors the lesson: connectivity can't depend on a single carrier.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-06-15T10:00:00Z",
+            "title": "Solar array landed",
+            "body": "12-panel foldable solar + battery. Designed for 4-7 day autonomy.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2025-09-06T08:00:00Z",
+            "title": "Hurricane Irma (anniversary)",
+            "body": "September 6, 2017. Category 5. 11 days without cell service. The pilot began here.",
+            "icon": "◆"
+          }
+        ]
+      }
+    },
+    {
+      "component": "pm-voice-clip",
+      "props": {
+        "title": "Pilot resident (in Dutch): 'We learned the hard way' (placeholder audio — final clip pending)",
+        "speaker": "SXM-RESCUE",
+        "duration": "0:04",
+        "src": "./assets/sint-maarten-voice-placeholder.mp3",
+        "transcript": "Na Irma duurde het elf dagen voordat we weer bereik hadden. Elf dagen zonder contact met de buitenwereld. Met de mesh knooppunten hopen we dat nooit meer mee te maken."
+      }
+    },
+    {
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "The cell tower doesn't care about you. The mesh does.",
+        "attribution": "Pilot resident",
+        "attributionRole": "Sint Maarten"
+      }
+    }
+  ]
+}

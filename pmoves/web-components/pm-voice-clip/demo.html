@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-voice-clip&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack {
+      display: grid;
+      gap: 12px;
+      max-width: 640px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-voice-clip&gt; — v0.1 demo</h1>
+
+  <div class="stack">
+    <pm-voice-clip
+      title="DARKXSIDE: why mesh, why now"
+      speaker="DARKXSIDE"
+      duration="2:14"
+      src="https://archive.org/download/testmp3testfile/mpthreetest.mp3"
+      transcript="So the question I keep getting is why bother with mesh when 5G exists. The answer is simple: 5G is not a right, it's a subscription. When the cell tower goes down in St. Maarten, the block goes dark. When the mesh node goes down, the block fixes it."
+    ></pm-voice-clip>
+
+    <pm-voice-clip
+      title="Fordham Hill pilot announcement"
+      speaker="B850-CLAUDE"
+      duration="0:42"
+      src="https://archive.org/download/testmp3testfile/mpthreetest.mp3"
+    ></pm-voice-clip>
+  </div>
+
+  <script type="module" src="./pm-voice-clip.js"></script>
+</body>
+</html>

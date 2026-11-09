@@ -27,6 +27,7 @@ from pmoves.tools import (
     profile_loader,
     secrets_sync,
 )
+from pmoves.tools.bash_resolver import resolve_bash
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
@@ -90,6 +91,7 @@ agent_sdk_app = typer.Typer(help="PMOVES Agent SDK management")
 deps_app = typer.Typer(help="Host tooling dependency helpers")
 tailscale_app = typer.Typer(help="Tailscale helpers")
 env_app = typer.Typer(help="Environment management (tier layout)")
+claude_backend_app = typer.Typer(help="Switch Claude Code between Anthropic-direct and MiniMax-routed.")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(credentials_app, name="credentials")
 app.add_typer(profile_app, name="profile")
@@ -100,6 +102,7 @@ app.add_typer(agent_sdk_app, name="agent-sdk")
 app.add_typer(deps_app, name="deps")
 app.add_typer(tailscale_app, name="tailscale")
 app.add_typer(env_app, name="env")
+app.add_typer(claude_backend_app, name="claude-backend")
 
 
 DEPENDENCY_DEFINITIONS = {
@@ -484,7 +487,9 @@ def tailscale_join(
         env["TAILSCALE_FORCE_REAUTH"] = "true"
     # Respect saved secret file path default if set in env file
     # scripts/with-env.sh will populate env vars into this process
-    cmd = ["bash", "-lc", f". ./pmoves/scripts/with-env.sh '{env_file}'; bash '{script}'"]
+    # resolve_bash(), not "bash": on Windows a bare "bash" is System32's WSL
+    # stub, which would load the env and join the tailnet from inside WSL.
+    cmd = [resolve_bash(), "-lc", f". ./pmoves/scripts/with-env.sh '{env_file}'; bash '{script}'"]
     rc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env).returncode
     if rc != 0:
         raise typer.Exit(rc)
@@ -950,7 +955,7 @@ def credentials_fetch(
         if github_owner and github_repo:
             typer.echo(f"  GitHub: {github_owner}/{github_repo}")
         if include_docker:
-            typer.echo(f"  Docker: enabled")
+            typer.echo("  Docker: enabled")
 
     try:
         credentials = cf.fetch_credentials_to_env_shared(
@@ -1169,6 +1174,13 @@ def mcp_setup(tool_id: str) -> None:
         typer.echo(f"  - {step}")
 
 
+@mcp_app.command("serve", help="Run the PMOVES mini MCP stdio server for LLM agents.")
+def mcp_serve() -> None:
+    import asyncio
+    from pmoves.tools.mcp_server import main as mcp_main
+    asyncio.run(mcp_main())
+
+
 @automations_app.command("list", help="List n8n automations and channels.")
 def automations_list() -> None:
     automations = automation_loader.load_automations()
@@ -1282,7 +1294,6 @@ def env_init(
     ),
 ) -> None:
     """Initialize environment by decoding CHIT secrets and applying to tier files."""
-    import sys
     from pmoves.chit import decode_secret_map, load_cgp, apply_manifest_v2
 
     pmoves_dir = REPO_ROOT / "pmoves"
@@ -1375,7 +1386,6 @@ def env_doctor(
     import subprocess
     from pmoves.tools.env_validator import (
         validate_all_tiers,
-        run_connectivity_checks,
         TIER_DEFINITIONS,
     )
 
@@ -1541,12 +1551,12 @@ def env_migrate(
             written[tier] = len(tier_vars)
             typer.echo(f"   ✅ env.tier-{tier}: {len(tier_vars)} variables")
 
-    typer.echo(f"\n✅ Migration complete!")
+    typer.echo("\n✅ Migration complete!")
     typer.echo(f"   Migrated {sum(written.values())} variables to {len(written)} tier files")
-    typer.echo(f"\n💡 Next steps:")
-    typer.echo(f"   1. Run 'pmoves env validate' to check tier files")
-    typer.echo(f"   2. Run 'pmoves secrets encode' to update CHIT")
-    typer.echo(f"   3. Consider removing legacy .env.generated after verification")
+    typer.echo("\n💡 Next steps:")
+    typer.echo("   1. Run 'pmoves env validate' to check tier files")
+    typer.echo("   2. Run 'pmoves secrets encode' to update CHIT")
+    typer.echo("   3. Consider removing legacy .env.generated after verification")
 
 
 # Agent SDK Commands
@@ -1633,7 +1643,7 @@ def agent_sdk_create(
                     if 1 <= idx <= 5:
                         selected_role = role_map[idx]
                         break
-                    typer.echo(f"❌ Invalid choice. Please enter 1-5")
+                    typer.echo("❌ Invalid choice. Please enter 1-5")
                 except ValueError:
                     typer.echo("❌ Please enter a number.")
                 except KeyboardInterrupt:
@@ -1715,10 +1725,10 @@ def agent_sdk_create(
             typer.echo(f"   • {subagent}")
         typer.echo()
         typer.echo("📡 NATS Events:")
-        typer.echo(f"   • botz.agent.registered.v1 - Registration announcement")
-        typer.echo(f"   • botz.agent.heartbeat.v1 - Presence (every 30s)")
-        typer.echo(f"   • agent.task.start.v1 - Task execution start")
-        typer.echo(f"   • botz.work.completed.v1 - Task completion")
+        typer.echo("   • botz.agent.registered.v1 - Registration announcement")
+        typer.echo("   • botz.agent.heartbeat.v1 - Presence (every 30s)")
+        typer.echo("   • agent.task.start.v1 - Task execution start")
+        typer.echo("   • botz.work.completed.v1 - Task completion")
         typer.echo()
 
         # Usage example
@@ -1846,6 +1856,95 @@ def agent_sdk_list(
     """List existing PMOVES Agent instances."""
 
     typer.echo("Agent listing not yet implemented.")
+
+
+# ---------------------------------------------------------------------------
+# Claude Code backend selector (`pmoves-mini claude-backend ...`)
+#
+# Persistent switching between Anthropic-direct and MiniMax-routed Claude Code.
+# Writes ~/.claude/settings.json with backup-first semantics. The transient
+# per-launch override is `claude-pmoves --backend={auto|anthropic|minimax}`
+# (handled in deploy/provision/claude-pmoves.{sh,ps1}).
+#
+# Source of truth: pmoves/tools/claude_backend.py (parse/apply/backup/restore).
+# Templates:       pmoves/configs/claude_settings/{anthropic,minimax}.json.
+# ---------------------------------------------------------------------------
+@claude_backend_app.command("show", help="Print the current ~/.claude/settings.json state.")
+def claude_backend_show() -> None:
+    from pmoves.tools import claude_backend as _cb
+    settings_path = _cb._home_settings_path()
+    if not settings_path.exists():
+        typer.echo(f"(no settings.json at {settings_path})")
+        return
+    try:
+        data = _cb.read_settings(settings_path)
+    except (json.JSONDecodeError, ValueError) as e:
+        typer.echo(f"error: cannot parse {settings_path}: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(_cb._render_show(data))
+    typer.echo("")
+    _cb._print_backups(settings_path.parent)
+
+
+@claude_backend_app.command("set", help="Write a template to ~/.claude/settings.json.")
+def claude_backend_set(
+    backend: str = typer.Argument(..., help="One of: anthropic, minimax"),
+) -> None:
+    from pmoves.tools import claude_backend as _cb
+    if backend not in ("anthropic", "minimax"):
+        typer.echo(f"error: backend must be one of anthropic|minimax; got {backend!r}", err=True)
+        raise typer.Exit(2)
+    template = _cb._templates_dir() / f"{backend}.json"
+    if not template.exists():
+        typer.echo(f"error: no template at {template}", err=True)
+        raise typer.Exit(1)
+    data = _cb.read_settings(template)
+    settings_path = _cb._home_settings_path()
+    backup = _cb.write_settings_atomic(settings_path, data, backup=True)
+    if backup:
+        typer.echo(f"claude-backend now {backend} (backup at {backup.name})")
+    else:
+        typer.echo(f"claude-backend now {backend} (no prior settings.json to back up)")
+
+
+@claude_backend_app.command("backup", help="Snapshot ~/.claude/settings.json to a timestamped backup.")
+def claude_backend_backup() -> None:
+    from pmoves.tools import claude_backend as _cb
+    settings_path = _cb._home_settings_path()
+    if not settings_path.exists():
+        typer.echo(f"error: {settings_path} does not exist; nothing to back up", err=True)
+        raise typer.Exit(1)
+    backup = _cb.write_settings_atomic(settings_path, _cb.read_settings(settings_path), backup=True)
+    if backup is None:
+        typer.echo("error: backup failed", err=True)
+        raise typer.Exit(1)
+    typer.echo(str(backup))
+
+
+@claude_backend_app.command("restore", help="Restore ~/.claude/settings.json from a backup file.")
+def claude_backend_restore(
+    backup_file: str = typer.Argument(..., help="Path to a settings.json.bak.<ISO> file"),
+) -> None:
+    from pmoves.tools import claude_backend as _cb
+    backup = Path(backup_file)
+    if not backup.name.startswith("settings.json.bak."):
+        typer.echo(
+            f"warning: {backup} does not match the settings.json.bak.<ISO> naming; restoring anyway",
+            err=True,
+        )
+    settings_path = _cb._home_settings_path()
+    try:
+        written = _cb.restore_from_backup(backup, settings_path)
+    except FileNotFoundError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"restored from {backup} -> {written}")
+
+
+@claude_backend_app.command("list-backups", help="List existing settings.json backup files.")
+def claude_backend_list_backups() -> None:
+    from pmoves.tools import claude_backend as _cb
+    _cb._print_backups(_cb._home_settings_path().parent)
 
 
 def main() -> None:

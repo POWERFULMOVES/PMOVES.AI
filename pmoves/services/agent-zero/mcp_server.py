@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
+import requests
 import yaml
 
 # Bootstrap import paths using shared module

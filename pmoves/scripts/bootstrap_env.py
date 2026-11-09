@@ -25,7 +25,64 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
+CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Used only when neither the command line nor the registry declares an axis.
+DEFAULT_GEN_TYPE = "random_urlsafe"
+DEFAULT_GEN_LENGTH = 48
+
+
+def read_cleared_keys(path: Optional[Path] = None) -> List[str]:
+    """Keys deliberately held empty, in declaration order.
+
+    Line-parsed rather than YAML-parsed, matching pytest_ratchet.py and
+    hardening_ratchet.py: this runs inside a *bootstrap* script, which must not
+    acquire a pyyaml dependency to do its job. The file's leading comment block
+    is load-bearing documentation and a JSON file could not carry it.
+    """
+    target = path or CLEARED_KEYS_PATH
+    if not target.is_file():
+        return []
+    keys: List[str] = []
+    for line in target.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            key = line[2:].strip().strip("\"'")
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _write_cleared_keys(keys: List[str], path: Optional[Path] = None) -> None:
+    """Rewrite the tombstone list, preserving the explanatory header verbatim."""
+    target = path or CLEARED_KEYS_PATH
+    header: List[str] = []
+    if target.is_file():
+        for line in target.read_text(encoding="utf-8").splitlines():
+            if line.startswith("cleared_keys:"):
+                break
+            header.append(line)
+    body = ["cleared_keys: []"] if not keys else ["cleared_keys:"] + [
+        f'  - "{k}"' for k in sorted(keys)
+    ]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(header + body) + "\n", encoding="utf-8")
+
+
+def mark_key_cleared(key: str, path: Optional[Path] = None) -> None:
+    """Record *key* as deliberately empty so hydrate() cannot re-populate it."""
+    keys = read_cleared_keys(path)
+    if key not in keys:
+        keys.append(key)
+        _write_cleared_keys(keys, path)
+
+
+def unmark_key_cleared(key: str, path: Optional[Path] = None) -> None:
+    """Drop *key* from the tombstone — it now carries a real value again."""
+    keys = read_cleared_keys(path)
+    if key in keys:
+        _write_cleared_keys([k for k in keys if k != key], path)
 
 
 def _warn(msg: str) -> None:
@@ -106,6 +163,77 @@ def value_matches_spec(value: Optional[str], spec: Optional[Dict]) -> bool:
     return True
 
 
+def _registry_generator(key: str, registry_path: Optional[str] = None) -> Optional[dict]:
+    """The `generate` spec the bootstrap registry declares for *key*, if any.
+
+    Returns e.g. {"type": "random_hex", "length": 32}. None when the key is not
+    in the registry or declares no generator — callers then fall back to the
+    historical default.
+
+    Read failures are swallowed deliberately: a rotation must not be blocked by
+    an unreadable registry, it should just lose the type hint and say so by
+    printing nothing.
+    """
+    try:
+        import json as _json
+
+        path = Path(registry_path) if registry_path else DEFAULT_REGISTRY_PATH
+        data = _json.loads(path.read_text(encoding="utf-8"))
+        for service in data.get("services") or []:
+            for var in service.get("variables") or []:
+                if var.get("key") == key:
+                    gen = var.get("generate")
+                    return gen if isinstance(gen, dict) else None
+    except Exception:
+        return None
+    return None
+
+
+def _resolve_generator_axes(
+    key: str,
+    registry_path: Optional[str],
+    gen_type: Optional[str],
+    length: Optional[int],
+) -> Tuple[str, int, str, str]:
+    """Resolve (gen_type, length) for a rotation, one axis at a time.
+
+    Returns (gen_type, length, type_source, length_source), where each *source*
+    is the provenance string the log line reports for that axis.
+
+    THE TWO AXES ARE INDEPENDENT. Naming one on the command line must not
+    discard the registry's declaration of the other. The previous version put
+    the whole registry lookup under ``if gen_type is None``, so
+    ``--rotate VAULT_ENC_KEY --gen-type random_hex`` skipped the lookup entirely
+    and fell through to the built-in 48 -- while the registry declares 32 and
+    the yt OAuth flow does bytes.fromhex() on the result. That turned the flag
+    an operator would reach for to *avoid* the corruption into a second way to
+    reproduce it, and did so silently: the provenance line lived inside the
+    same skipped branch, so nothing was printed at all.
+
+    `passphrase` sizes itself from ``words`` and ignores ``length``, so
+    inheriting a declared length across an explicit type change is inert
+    rather than wrong.
+    """
+    type_source = "--gen-type" if gen_type is not None else ""
+    length_source = "--length" if length is not None else ""
+
+    if gen_type is None or length is None:
+        declared = _registry_generator(key, registry_path) or {}
+        if gen_type is None and declared.get("type"):
+            gen_type = declared["type"]
+            type_source = "bootstrap registry"
+        if length is None and declared.get("length"):
+            length = int(declared["length"])
+            length_source = "bootstrap registry"
+
+    if gen_type is None:
+        gen_type, type_source = DEFAULT_GEN_TYPE, "built-in default"
+    if length is None:
+        length, length_source = DEFAULT_GEN_LENGTH, "built-in default"
+
+    return gen_type, length, type_source, length_source
+
+
 def rotate_secret(
     key: str,
     *,
@@ -113,6 +241,7 @@ def rotate_secret(
     length: int = 48,
     gen_type: str = "random_urlsafe",
     env_path: Optional[Path] = None,
+    allow_empty: bool = False,
 ) -> str:
     """Surgically rotate a single secret in env.shared (the secrets-funnel source).
 
@@ -127,6 +256,17 @@ def rotate_secret(
     ``make -C pmoves chit-export`` (encode env.shared -> CGP bundle) then
     ``make -C pmoves secrets-funnel`` to propagate to the tier env files.
 
+    *allow_empty* permits writing ``KEY=`` (the empty value). It is off by
+    default and must be asked for explicitly, because an empty value is
+    indistinguishable from an unset shell variable at the call site — without
+    this gate, ``--value "$SOME_UNSET_VAR"`` would silently blank a live
+    credential. Empty is a legitimate *configured state* for some keys, not an
+    absence: Supabase ships ``SUPABASE_SECRET_KEY`` and
+    ``SUPABASE_PUBLISHABLE_KEY`` empty on purpose and its Kong entrypoint
+    strips blank key entries, so a populated one is what breaks the deployment
+    (see #2593/#2595 — a duplicate key crash-looped Kong 3,924 times). Before
+    this parameter existed the pipeline could not express that state at all.
+
     Returns the new value; callers MUST NOT log it.
     """
     target = env_path or ENV_SHARED_PATH
@@ -134,11 +274,14 @@ def rotate_secret(
         raise ValueError(
             f"invalid env key (must match [A-Za-z_][A-Za-z0-9_]*): {key!r}"
         )
-    if value is None:
+    if value is None and not allow_empty:
         value = generate_value({"type": gen_type, "length": length})
-    if not value:
+    if value is None:
+        value = ""
+    if not value and not allow_empty:
         raise ValueError(
-            f"no value to rotate {key!r}: pass --value, or use a generatable --gen-type"
+            f"no value to rotate {key!r}: pass --value, or use a generatable "
+            f"--gen-type. To deliberately blank it, use --clear {key}."
         )
     if "\n" in value or "\r" in value:
         raise ValueError(
@@ -174,6 +317,160 @@ def rotate_secret(
         text += "\n"
     target.write_text(text, encoding="utf-8")
     return value
+
+
+def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
+    """Return the value of *key* in an env file, or None when absent.
+
+    Last-wins, matching ``chit_encode_secrets``' parser: a duplicate later line
+    is what the funnel would actually read, so that is what "is it set?" must
+    answer against.
+    """
+    target = env_path or ENV_SHARED_PATH
+    if not target.exists():
+        return None
+    found: Optional[str] = None
+    for raw in target.read_text(encoding="utf-8").splitlines():
+        stripped = raw.lstrip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        name, _, value = stripped.partition("=")
+        if name.strip() == key:
+            found = value
+    return found
+
+
+def _unquote(value: str) -> str:
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+        v = v[1:-1]
+    return v
+
+
+def pinned_variables(registry: Dict) -> List[Dict]:
+    """Registry variables declared ``"pinned": true`` -- value is ALWAYS the default.
+
+    The CA leak guards (SSL_CERT_FILE, SSL_CERT_DIR, *_CA_BUNDLE,
+    NODE_EXTRA_CA_CERTS) are declared
+    "Always empty" so a Windows host path never reaches a Linux container. The
+    declaration was only ever applied at first bootstrap: ``bootstrap()`` keeps
+    an existing value, the preserve allowlist keeps the key, and every funnel
+    merges around it. Measured on Z890 2026-11-06: env.shared carried
+    ``SSL_CERT_FILE=<miniconda3>\\Library\\ssl\\...`` -- a host path from an
+    install since removed -- so every launcher session exported a CA file that
+    does not exist and python/Node TLS in it could not verify anything.
+
+    NOT the proxies (Codex #3459): env.shared.example says to leave
+    HTTP(S)_PROXY / NO_PROXY UNSET or set to a VALID proxy, never empty --
+    an empty proxy crashes Vector and other Rust tools, and a node behind a
+    corporate proxy needs a real value.
+    """
+    out: List[Dict] = []
+    for svc in registry.get("services", []):
+        for var in svc.get("variables", []):
+            if var.get("pinned"):
+                out.append(var)
+    return out
+
+
+def enforce_pinned(
+    registry: Dict, *, env_path: Optional[Path] = None, dry_run: bool = False
+) -> List[str]:
+    """Reset every pinned key whose value in env.shared differs from its default.
+
+    Returns the drifted key NAMES (never values). An ABSENT key is drift too
+    (Codex #3459): the loaders keep an inherited process value unless the file
+    assigns the key (with-env.sh, the launchers), so a missing ``SSL_CERT_FILE=``
+    lets a stale host value straight through -- it is appended with its default.
+    With *dry_run* nothing is written. Only env.shared-scoped pins are supported; any other ``file`` is a
+    registry error, raised rather than skipped so it cannot pass silently.
+    """
+    target = env_path or ENV_SHARED_PATH
+    drifted: List[str] = []
+    if not target.exists():
+        # Nothing to enforce yet; ensure-env-shared seeds the file from the
+        # template, which already carries every pin at its default.
+        return drifted
+    for var in pinned_variables(registry):
+        if var.get("file") != "pmoves/env.shared":
+            raise ValueError(
+                f"pinned key {var.get('key')!r} declares file {var.get('file')!r}; "
+                "only pmoves/env.shared pins are enforced"
+            )
+        key = var["key"]
+        want = str(var.get("default", ""))
+        have = read_env_value(key, target)
+        if have is not None and _unquote(have) == want:
+            continue
+        drifted.append(key)
+        if not dry_run:
+            rotate_secret(key, value=want, allow_empty=True, env_path=target)
+    return drifted
+
+
+def ensure_secret(
+    key: str,
+    *,
+    env_path: Optional[Path] = None,
+    registry_path: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """Mint *key* into env.shared **only when it is absent or empty**.
+
+    Returns ``(generated, reason)``. ``generated`` is False when the slot
+    already held a value, and in that case the file is not touched at all.
+
+    Why this exists, and why it is not ``bootstrap()``
+    --------------------------------------------------
+    A handful of Supabase secrets (SECRET_KEY_BASE, VAULT_ENC_KEY, the two
+    LOGFLARE tokens) are declared ``required: true`` in the bootstrap registry
+    WITH correct generators, and ``required: true`` in the CHIT manifest -- yet
+    nothing in ``make secrets-funnel`` ever ran a generator for them. So they
+    were never minted into env.shared, never reached the CGP bundle, and
+    ``secrets_sync`` then classified them as operator-missing. Because
+    ``SECRETS_ALLOW_MISSING`` defaults to 1 that was only a *warning*, and
+    because ``build_outputs`` puts a missing required entry into ``rejected_out``
+    the funnel actively DELETED those keys from the generated tier file.
+    Compose's ``${SECRET_KEY_BASE:?}`` then failed -- and compose interpolates
+    the whole project before acting, so four unset Supabase variables blocked
+    ``up -d cipher-api`` and every other unrelated service on the node.
+
+    Deliberately NOT ``bootstrap(..., accept_defaults=True)``:
+
+    * ``bootstrap`` also regenerates a slot whose existing value fails
+      ``value_matches_spec``. That self-heal is a real recovery path but must
+      stay operator-invoked (``make env-setup``) rather than fire implicitly on
+      every funnel run: it rewrites a ``random_hex`` slot on format failure, and
+      VAULT_ENC_KEY is read with ``bytes.fromhex()`` by the yt OAuth vault, so an
+      implicit reshape is a data-loss event for stored OAuth cookies.
+    * ``bootstrap`` walks every service and errors in non-interactive mode on any
+      required slot that has no generator (operator-supplied API keys), which
+      would turn the funnel into a hard failure on partially-provisioned nodes.
+
+    This fills absent-or-empty slots and nothing else, so it is idempotent and
+    can never rotate live cryptographic material.
+    """
+    existing = read_env_value(key, env_path)
+    if existing not in (None, ""):
+        return False, "already set"
+
+    declared = _registry_generator(key, registry_path)
+    if not declared:
+        return False, "no generator declared in bootstrap registry"
+
+    gen_type = declared.get("type") or "random_urlsafe"
+    length = declared.get("length")
+    rotate_secret(
+        key,
+        value=None,
+        length=int(length) if length else 48,
+        gen_type=gen_type,
+        env_path=env_path,
+    )
+    # A freshly minted key is no longer deliberately empty; leaving the
+    # tombstone would permanently block secrets-local-hydrate from it.
+    unmark_key_cleared(key)
+    detail = gen_type + (f" length {length}" if length else "")
+    return True, f"generated ({detail})"
 
 
 def normalize_bool(value: str) -> str:
@@ -588,6 +885,54 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "Then run: make -C pmoves chit-export && make -C pmoves secrets-funnel.",
     )
     parser.add_argument(
+        "--clear",
+        metavar="KEY",
+        help="Set a single key in env.shared to the EMPTY value (surgical in-place). "
+        "Empty is a real configured state for some keys — Supabase ships "
+        "SUPABASE_SECRET_KEY / SUPABASE_PUBLISHABLE_KEY empty and its Kong "
+        "entrypoint strips blank entries — and --rotate cannot express it. "
+        "Separate flag rather than --value '' so blanking a credential is always "
+        "deliberate, never the result of an unset shell variable. "
+        "Then run: make -C pmoves chit-export && make -C pmoves secrets-funnel.",
+    )
+    parser.add_argument(
+        "--ensure",
+        metavar="KEY",
+        action="append",
+        default=None,
+        help="Mint KEY into env.shared ONLY if it is absent or empty, using the "
+        "generator the bootstrap registry declares for it. Repeatable. Never "
+        "overwrites an existing value and never reshapes one that fails a format "
+        "check (that self-heal stays with --accept-defaults). This is what "
+        "`make secrets-funnel` runs so registry-generatable secrets reach the CGP "
+        "bundle instead of being reported missing and deleted from the tier files.",
+    )
+    parser.add_argument(
+        "--ensure-dry-run",
+        action="store_true",
+        default=False,
+        help="With --ensure: report only, write nothing, and exit 1 if any key is "
+        "still unprovisioned. This is the gate for the class of defect where a "
+        "secret is `required: true` in both the registry and the CHIT manifest, "
+        "compose declares it ${VAR:?}, and the funnel nonetheless exits 0 with a "
+        "warning — so the whole compose project fails to interpolate.",
+    )
+    parser.add_argument(
+        "--enforce-pinned",
+        action="store_true",
+        default=False,
+        help="Reset every registry key declared \"pinned\": true (the CA host-leak "
+        "guards: SSL_CERT_FILE, SSL_CERT_DIR, *_CA_BUNDLE, NODE_EXTRA_CA_CERTS) to its declared default "
+        "in env.shared. Prints key NAMES only. Run by `make env-shared-repair`, "
+        "the first step of every secrets-funnel.",
+    )
+    parser.add_argument(
+        "--enforce-pinned-check",
+        action="store_true",
+        default=False,
+        help="Like --enforce-pinned but writes nothing; exit 1 if any pinned key drifted.",
+    )
+    parser.add_argument(
         "--value",
         help="Explicit new value for --rotate (e.g. an externally-minted API key). "
         "If omitted, a value is generated from --gen-type/--length. "
@@ -602,19 +947,133 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--length",
         type=int,
-        default=48,
-        help="Length of the generated --rotate value (default: 48).",
+        default=None,
+        help=(
+            "Length of the generated --rotate value. "
+            "Default: the length the registry declares for this key, else 48."
+        ),
     )
     parser.add_argument(
         "--gen-type",
-        default="random_urlsafe",
-        help="Generator type for --rotate (random_urlsafe | random_hex | passphrase).",
+        default=None,
+        help=(
+            "Generator type for --rotate (random_urlsafe | random_hex | passphrase). "
+            "Default: the type the registry declares for this key, else random_urlsafe."
+        ),
     )
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
+
+    # Validate BEFORE any branch runs: each operation returns from its own
+    # branch, so a check placed later never sees a mixed call -- `--clear K
+    # --enforce-pinned-check` used to clear K and exit 0 (Codex #3459).
+    if args.enforce_pinned or args.enforce_pinned_check:
+        if args.clear or args.rotate or args.ensure or (args.enforce_pinned and args.enforce_pinned_check):
+            _error("--enforce-pinned / --enforce-pinned-check take no other key operation "
+                   "and not each other: pick one")
+            return 2
+
+    if args.clear and args.rotate:
+        _error("--clear and --rotate are mutually exclusive: pick one key operation")
+        return 2
+
+    if args.ensure and (args.clear or args.rotate):
+        _error("--ensure is mutually exclusive with --clear/--rotate: pick one key operation")
+        return 2
+
+    if args.clear:
+        try:
+            rotate_secret(args.clear, value="", allow_empty=True)
+        except (ValueError, FileNotFoundError) as exc:
+            _error(str(exc))
+            return 2
+        # Tombstone BEFORE reporting success. secrets-funnel runs
+        # secrets-local-hydrate as its second step, and hydrate() treats the
+        # empty string as a placeholder (it is the first entry in
+        # PLACEHOLDER_VALUES), so without this record the very next funnel run
+        # overlays the stale local.env value back on top and silently undoes
+        # the clear.
+        mark_key_cleared(args.clear)
+        _info(
+            f"Cleared {args.clear} in env.shared (now empty) and recorded it in "
+            f"{CLEARED_KEYS_PATH.name} so secrets-local-hydrate cannot restore it. "
+            "Next: make -C pmoves chit-export && make -C pmoves secrets-funnel, "
+            "then restart the affected consumers."
+        )
+        return 0
+
+    if args.ensure:
+        # Runs inside secrets-funnel BEFORE chit-export, so a freshly minted
+        # value is encoded into the CGP bundle in the same pass and reaches the
+        # generated tier files through the normal manifest path.
+        rc = 0
+        minted: List[str] = []
+        if args.ensure_dry_run:
+            unprovisioned = []
+            for key in args.ensure:
+                value = read_env_value(key)
+                if value in (None, ""):
+                    unprovisioned.append(key)
+                    _error(f"{key}: UNPROVISIONED (absent or empty in env.shared)")
+                else:
+                    print(f"{key}: provisioned")
+            if unprovisioned:
+                _error(
+                    "Unprovisioned stack-generated secrets: "
+                    + ", ".join(unprovisioned)
+                    + ". Compose declares these ${VAR:?}, and compose interpolates "
+                    "the ENTIRE project before acting — so these block `up` for every "
+                    "service, not just their own. Fix: make -C pmoves secrets-funnel"
+                )
+                return 1
+            return 0
+        for key in args.ensure:
+            try:
+                generated, reason = ensure_secret(key, registry_path=args.registry)
+            except (ValueError, FileNotFoundError) as exc:
+                _error(f"--ensure {key}: {exc}")
+                rc = 2
+                continue
+            if generated:
+                _info(f"{key}: {reason}")
+                # An EMPTY slot does not prove the value was never in use. On
+                # B850 (measured 2026-09-02) supabase-pooler and
+                # supabase-analytics were running with all four of these set at
+                # exactly the declared lengths while every env file had lost
+                # them -- because a missing required entry lands in
+                # secrets_sync's rejected_out and write_env_files DELETES it.
+                # Minting a fresh value there is correct for a virgin node and
+                # WRONG for that one: Supavisor encrypts tenant credentials at
+                # rest with VAULT_ENC_KEY (Cloak AES.GCM), so a new key means
+                # the pooler cannot decrypt existing rows once recreated.
+                # We cannot tell the two apart from the env file alone, so say
+                # so instead of guessing.
+                minted.append(key)
+            elif reason == "already set":
+                # Not noise: the no-op is the safety property being asserted.
+                print(f"{key}: already set — left untouched")
+            else:
+                _warn(f"{key}: {reason} — cannot mint, still unprovisioned")
+                rc = 2
+        if minted:
+            _warn(
+                "Minted a FRESH value for: " + ", ".join(minted) + ". "
+                "If a service is ALREADY RUNNING with a different value for one "
+                "of these, recreating it against the new value is a desync, not a "
+                "fix -- VAULT_ENC_KEY decrypts Supavisor tenant credentials at "
+                "rest. Check before recreating:\n"
+                "  docker inspect <container> | python -c \"import json,sys; "
+                "print({k.split(chr(61))[0] for k in "
+                "json.load(sys.stdin)[0]['Config']['Env']})\"\n"
+                "If it is set there, HARVEST the live value instead of keeping "
+                "this one:\n"
+                "  export PMOVES_ROTATE_VALUE=<live value>\n"
+                "  make -C pmoves secrets-rotate KEY=<KEY>"
+            )
+        return rc
 
     if args.rotate:
         rotate_value = args.value
@@ -623,19 +1082,70 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             if rotate_value is None:
                 _error(f"--value-env {args.value_env}: environment variable not set")
                 return 2
+        # HONOUR THE REGISTRY'S DECLARED GENERATOR.
+        #
+        # This defaulted to random_urlsafe regardless of what the key IS, and
+        # `make secrets-rotate` never passed --gen-type. So rotating a key the
+        # registry declares as {"type": "random_hex", "length": 32} produced a
+        # 48-char urlsafe value instead.
+        #
+        # That is not hypothetical: it is how VAULT_ENC_KEY got corrupted on the
+        # 4090 (measured 2026-09-01 -- len 48, urlsafe charset, not hex). The
+        # yt OAuth flow does bytes.fromhex() on it, raised ValueError, swallowed
+        # it, and reported "Encryption is unavailable" with the key set. A
+        # completed browser consent was discarded as a result.
+        #
+        # Rotating to repair it would have regenerated urlsafe again and
+        # reproduced the same defect, which is the trap this closes.
+        # BOTH AXES COME FROM THE REGISTRY, OR NEITHER DOES.
+        #
+        # The first version of this block resolved `type` from the registry but
+        # left `--length` defaulting to 48, so `gen_length` was never None and
+        # the length branch below could not fire. The registry's declared length
+        # was read, printed, and discarded.
+        #
+        # Measured 2026-09-02: rotating SECRET_KEY_BASE (registry: 96) emitted a
+        # 48-char value, and supabase-realtime stayed in its crash loop
+        # ("cookie store expects conn.secret_key_base to be at least 64 bytes").
+        # The same hole meant VAULT_ENC_KEY would rotate to 48 hex chars where
+        # Supabase documents "exactly 32 characters" -- a value Supavisor
+        # rejects.
+        #
+        # `--gen-type` and `--length` therefore BOTH default to None: None means
+        # "not specified, ask the registry", and an explicit flag always wins.
+        gen_type, gen_length, type_source, length_source = _resolve_generator_axes(
+            args.rotate, args.registry, args.gen_type, args.length
+        )
+        # Attribute each axis to where it actually came from, and print it
+        # unconditionally. Claiming "from bootstrap registry" over a value the
+        # registry did not supply -- or printing nothing at all because an
+        # explicit flag was given -- is the step-report defect this file
+        # exists to avoid.
+        if rotate_value is None:
+            print(
+                f"generator for {args.rotate}: "
+                f"{gen_type} (from {type_source}), "
+                f"length {gen_length} (from {length_source})"
+            )
         try:
             rotate_secret(
                 args.rotate,
                 value=rotate_value,
-                length=args.length,
-                gen_type=args.gen_type,
+                length=gen_length,
+                gen_type=gen_type,
             )
         except (ValueError, FileNotFoundError) as exc:
             _error(str(exc))
             return 2
+        # A key that now carries a real value is no longer deliberately empty.
+        # Leaving the tombstone would permanently block hydrate() from ever
+        # overlaying this key again — a clear followed by a rotate must not
+        # leave a latent trap behind.
+        unmark_key_cleared(args.rotate)
         source = (
-            "supplied value" if (args.value or args.value_env)
-            else f"generated {args.gen_type}"
+            "supplied value"
+            if (args.value or args.value_env)
+            else f"generated {gen_type}, length {gen_length}"
         )
         _info(
             f"Rotated {args.rotate} in env.shared ({source}). "
@@ -645,6 +1155,26 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         return 0
 
     registry = load_registry(args.registry)
+
+    if args.enforce_pinned or args.enforce_pinned_check:
+        check = args.enforce_pinned_check
+        try:
+            drifted = enforce_pinned(registry, dry_run=check)
+        except (ValueError, FileNotFoundError) as exc:
+            _error(str(exc))
+            return 2
+        if not drifted:
+            _info("pinned keys: all at their declared defaults")
+            return 0
+        verb = "drifted (not written)" if check else "reset to the registry default"
+        _warn(f"pinned keys {verb}: {', '.join(drifted)}")
+        if not check:
+            _info(
+                "A host value in a pinned key leaks into every launcher session and "
+                "container; see 'pinned' in pmoves/bootstrap/registry.json."
+            )
+        return 1 if check else 0
+
     try:
         services = select_services(registry, args.services)
     except ValueError as exc:

@@ -104,6 +104,39 @@ async function boot() {
   const processor = v0_8.Data.createSignalA2uiMessageProcessor();
   processor.processMessages(messages);
 
+  // P3 (openroom-realization slice 2): the room cards emit an `a2ui.action`
+  // event with name="openroom.enter" and context.room_id when the Enter
+  // button is clicked. We catch the event on the surface host (which is an
+  // ancestor of every a2ui-surface child) and navigate to
+  // `${OPENROOM_BASE_URL}/?room=<room_id>`. OPENROOM_BASE_URL is set via
+  // <meta name="pmoves-openroom-base-url"> in index.html (defaults to
+  // http://localhost:5173/webuiapps/ for local dev).
+  const openroomBaseUrl =
+    document
+      .querySelector('meta[name="pmoves-openroom-base-url"]')
+      ?.getAttribute("content")
+      ?.trim()
+      ?.replace(/\/+$/, "") || "http://localhost:5173/webuiapps";
+
+  host.addEventListener("a2ui.action", (ev) => {
+    const action = ev.detail?.action;
+    if (!action || action.name !== "openroom.enter") return;
+    const roomIdCtx = (action.context || []).find((c) => c.key === "room_id");
+    const roomId = roomIdCtx?.value?.literalString;
+    if (!roomId) {
+      console.warn("[stage] openroom.enter without room_id context", action);
+      return;
+    }
+    const target = `${openroomBaseUrl}/?room=${encodeURIComponent(roomId)}`;
+    // Defensive: validate the room id matches the A2UI adapter's contract
+    // (room_adapter.ts getRoomIdFromUrl() allows [a-z0-9._-]).
+    if (!/^[a-z0-9._-]+$/i.test(roomId)) {
+      console.warn("[stage] refusing to navigate to suspicious room id", roomId);
+      return;
+    }
+    window.location.assign(target);
+  });
+
   for (const [surfaceId, surface] of processor.getSurfaces()) {
     const el = document.createElement("a2ui-surface");
     el.surfaceId = surfaceId;

@@ -1,0 +1,50 @@
+services:
+  sso-auth:
+    build: { context: ., dockerfile: services/sso-auth/Dockerfile }
+    image: ${SSO_AUTH_IMAGE:-pmoves/sso-auth:local}
+    container_name: pmoves-sso-auth
+    restart: unless-stopped
+    environment:
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
+      # Server-to-server only: token exchange, code exchange, logout. A compose
+      # service name is correct here and no browser ever sees it.
+      GOTRUE_URL: ${GOTRUE_URL:-http://supabase-gotrue:9999}
+      # Browser-facing GoTrue origin, used ONLY to build the external-provider
+      # /authorize link rendered on the login page. Must be an address the user's
+      # BROWSER can reach. Unset falls back to GOTRUE_URL, which is why the
+      # "Sign in with GitHub" button pointed at http://supabase-gotrue:9999 —
+      # a link that renders fine and dies on click. There is deliberately no
+      # public default: the operator must publish a GoTrue route (Supabase Kong
+      # at /auth/v1, or a Traefik route on auth.pmoves.ai) and name it here.
+      GOTRUE_PUBLIC_URL: ${GOTRUE_PUBLIC_URL:-}
+      PUBLIC_BASE_URL: ${SSO_PUBLIC_BASE_URL:-https://auth.pmoves.ai}
+      SSO_COOKIE_DOMAIN: ${SSO_COOKIE_DOMAIN:-.pmoves.ai}
+      JELLYFIN_OIDC_CLIENT_ID: ${JELLYFIN_OIDC_CLIENT_ID}
+      JELLYFIN_OIDC_CLIENT_SECRET: ${JELLYFIN_OIDC_CLIENT_SECRET}
+      JELLYFIN_OIDC_REDIRECT_URIS: ${JELLYFIN_OIDC_REDIRECT_URIS:-https://media.pmoves.ai/sso/OID/redirect/pmoves}
+      # Layer-2 proof-of-proxy secret (must be listed here or it never reaches the
+      # container — compose only injects env vars declared in this block).
+      SSO_FORWARD_AUTH_SECRET: ${SSO_FORWARD_AUTH_SECRET:-}
+      # Optional explicit RSA signing-key override; empty => self-provision to /data.
+      OIDC_SIGNING_KEY: ${OIDC_SIGNING_KEY:-}
+    # pmoves_api: GoTrue (supabase-gotrue) lives there — required to reach it for
+    # login/callback/logout. pmoves_external: Traefik edge. pmoves_app: fleet peers.
+    networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {}, pmoves_api: {} }
+    volumes: [sso-oidc-key:/data]   # persist the self-provisioned OIDC signing key across recreates
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # Traefik MUST see this container to resolve `sso-auth@docker` — the service
+    # the auth.pmoves.ai router (defined on the traefik container) points at.
+    # Under exposedbydefault=false a container is invisible without
+    # traefik.enable=true, and dual-homed it needs the explicit network. Without
+    # these the login page never registers and SSO breaks at the front door.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.services.sso-auth.loadbalancer.server.port=8080
+networks:
+  pmoves_app: { external: true }
+  pmoves_external: { external: true }
+  pmoves_api: { external: true }
+volumes:
+  sso-oidc-key: {}

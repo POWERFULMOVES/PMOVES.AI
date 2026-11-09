@@ -43,3 +43,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
     CMD curl -fsS http://localhost:8004/healthz || exit 1
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8004"]
+
+# Non-root runtime (house pattern; restores #2285 intent without truncating)
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+USER pmoves

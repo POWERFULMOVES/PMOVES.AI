@@ -9,14 +9,11 @@ Hot-swap via swap_embedding_model() or POST /hirag/admin/embedding/model.
 """
 
 import threading
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
 from config import (
-    EMBEDDING_MODEL,
-    EMBEDDING_MODEL_TYPE,
-    EMBEDDING_DIMENSION,
     DEVICE,
     logger,
     _embed_via_providers,

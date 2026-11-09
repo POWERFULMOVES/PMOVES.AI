@@ -10,7 +10,7 @@ Capture the logic for the horizontal bar chart ranking 2029 risk-adjusted ROI by
 
 ## Regeneration Options
 1. **Scripted chart**  
-   `python "CATACLYSM_STUDIOS_INC/ABOUT/notes/5-Year Business Projections_ AI - Tokenomics Model/chart_script_1.py"`  
+   `python "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/5-Year Business Projections_ AI - Tokenomics Model/chart_script_1.py"`  
    Generates `risk_adjusted_roi_comparison.png`
 2. **Creator pipeline prompt**  
    ```

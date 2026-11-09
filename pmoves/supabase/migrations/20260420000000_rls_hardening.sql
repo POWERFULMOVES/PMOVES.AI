@@ -36,39 +36,56 @@ ALTER TABLE IF EXISTS pmoves_core.event_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS agent_anon_all ON pmoves_core.agent;
 
 -- Anon deny-all policies
-CREATE POLICY IF NOT EXISTS "pmoves_core_anon_deny_agent" ON pmoves_core.agent
+-- Postgres has no CREATE POLICY IF NOT EXISTS, so each policy is dropped first
+-- (DROP POLICY IF EXISTS) then re-created — idempotent and re-runnable.
+DROP POLICY IF EXISTS "pmoves_core_anon_deny_agent" ON pmoves_core.agent;
+CREATE POLICY "pmoves_core_anon_deny_agent" ON pmoves_core.agent
   FOR ALL TO anon USING (false) WITH CHECK (false);
-CREATE POLICY IF NOT EXISTS "pmoves_core_anon_deny_session" ON pmoves_core.session
+DROP POLICY IF EXISTS "pmoves_core_anon_deny_session" ON pmoves_core.session;
+CREATE POLICY "pmoves_core_anon_deny_session" ON pmoves_core.session
   FOR ALL TO anon USING (false) WITH CHECK (false);
-CREATE POLICY IF NOT EXISTS "pmoves_core_anon_deny_message" ON pmoves_core.message
+DROP POLICY IF EXISTS "pmoves_core_anon_deny_message" ON pmoves_core.message;
+CREATE POLICY "pmoves_core_anon_deny_message" ON pmoves_core.message
   FOR ALL TO anon USING (false) WITH CHECK (false);
-CREATE POLICY IF NOT EXISTS "pmoves_core_anon_deny_memory" ON pmoves_core.memory
+DROP POLICY IF EXISTS "pmoves_core_anon_deny_memory" ON pmoves_core.memory;
+CREATE POLICY "pmoves_core_anon_deny_memory" ON pmoves_core.memory
   FOR ALL TO anon USING (false) WITH CHECK (false);
-CREATE POLICY IF NOT EXISTS "pmoves_core_anon_deny_event_log" ON pmoves_core.event_log
+DROP POLICY IF EXISTS "pmoves_core_anon_deny_event_log" ON pmoves_core.event_log;
+CREATE POLICY "pmoves_core_anon_deny_event_log" ON pmoves_core.event_log
   FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- Service role full access policies
-CREATE POLICY IF NOT EXISTS "pmoves_core_svc_agent" ON pmoves_core.agent
+DROP POLICY IF EXISTS "pmoves_core_svc_agent" ON pmoves_core.agent;
+CREATE POLICY "pmoves_core_svc_agent" ON pmoves_core.agent
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_svc_session" ON pmoves_core.session
+DROP POLICY IF EXISTS "pmoves_core_svc_session" ON pmoves_core.session;
+CREATE POLICY "pmoves_core_svc_session" ON pmoves_core.session
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_svc_message" ON pmoves_core.message
+DROP POLICY IF EXISTS "pmoves_core_svc_message" ON pmoves_core.message;
+CREATE POLICY "pmoves_core_svc_message" ON pmoves_core.message
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_svc_memory" ON pmoves_core.memory
+DROP POLICY IF EXISTS "pmoves_core_svc_memory" ON pmoves_core.memory;
+CREATE POLICY "pmoves_core_svc_memory" ON pmoves_core.memory
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_svc_event_log" ON pmoves_core.event_log
+DROP POLICY IF EXISTS "pmoves_core_svc_event_log" ON pmoves_core.event_log;
+CREATE POLICY "pmoves_core_svc_event_log" ON pmoves_core.event_log
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Authenticated read-only policies
-CREATE POLICY IF NOT EXISTS "pmoves_core_auth_read_agent" ON pmoves_core.agent
+DROP POLICY IF EXISTS "pmoves_core_auth_read_agent" ON pmoves_core.agent;
+CREATE POLICY "pmoves_core_auth_read_agent" ON pmoves_core.agent
   FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_auth_read_session" ON pmoves_core.session
+DROP POLICY IF EXISTS "pmoves_core_auth_read_session" ON pmoves_core.session;
+CREATE POLICY "pmoves_core_auth_read_session" ON pmoves_core.session
   FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_auth_read_message" ON pmoves_core.message
+DROP POLICY IF EXISTS "pmoves_core_auth_read_message" ON pmoves_core.message;
+CREATE POLICY "pmoves_core_auth_read_message" ON pmoves_core.message
   FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_auth_read_memory" ON pmoves_core.memory
+DROP POLICY IF EXISTS "pmoves_core_auth_read_memory" ON pmoves_core.memory;
+CREATE POLICY "pmoves_core_auth_read_memory" ON pmoves_core.memory
   FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "pmoves_core_auth_read_event_log" ON pmoves_core.event_log
+DROP POLICY IF EXISTS "pmoves_core_auth_read_event_log" ON pmoves_core.event_log;
+CREATE POLICY "pmoves_core_auth_read_event_log" ON pmoves_core.event_log
   FOR SELECT TO authenticated USING (true);
 
 -- =============================================================================

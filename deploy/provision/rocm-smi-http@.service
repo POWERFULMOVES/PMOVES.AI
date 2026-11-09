@@ -1,0 +1,7 @@
+[Unit]
+Description=rocm-smi exporter HTTP responder
+
+[Service]
+ExecStart=/usr/local/bin/rocm-smi-http-responder.sh
+StandardInput=socket
+StandardOutput=socket

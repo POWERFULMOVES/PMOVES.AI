@@ -20,7 +20,7 @@ This is a step toward a *universal, high‑bandwidth language of ideas* that hum
 
 ## The 10‑second pitch
 
-> **CHIT (Cymatic‑Holographic Information Transfer)** encodes meaning as *geometry* instead of long token streams. We test whether a small “shape packet” can reliably reconstruct or generate the same meaning on the other side. If it works, humans and AIs can communicate more directly, with better compression and less confusion.
+> **CHIT (Cymatic Holographic Information Theory)** encodes meaning as *geometry* instead of long token streams. We test whether a small “shape packet” can reliably reconstruct or generate the same meaning on the other side. If it works, humans and AIs can communicate more directly, with better compression and less confusion.
 
 ---
 

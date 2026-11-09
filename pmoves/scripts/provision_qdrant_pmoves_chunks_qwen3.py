@@ -53,7 +53,7 @@ def main() -> int:
         return 3
 
     url = os.environ.get("QDRANT_URL", "http://qdrant:6333")
-    api_key = os.environ.get("QDRANT_API_KEY", "") or None
+    api_key = os.environ.get("QDRANT_API_KEY") or os.environ.get("QDRANT__API_KEY", "") or None
 
     print(f"[provision] Target: {url}/collections/{COLLECTION} (dim={DIM}, distance={DISTANCE})")
 

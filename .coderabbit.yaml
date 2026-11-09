@@ -6,12 +6,60 @@ language: "en-US"
 reviews:
   review_status: true
 
-  # Ensure CodeRabbit runs automatically on PR updates and non-draft PRs.
+  # ON DEMAND, not automatic -- because automatic is not available here.
+  #
+  # Measured 2026-08-29: CodeRabbit posts the same skip notice on every PR
+  # regardless of branch --
+  #
+  #     "This repository does not receive automatic reviews because it has
+  #      fewer than 10 stars."
+  #
+  # Checked across docs/, feat/ and chore/ branches (#2811, #2807, #2812,
+  # #2818): identical notice on each, and ZERO inline review comments on any of
+  # them. Every review in that window came from Codex alone.
+  #
+  # `enabled: true` therefore claimed a capability the account does not have,
+  # and the branch list below read as coverage that was never delivered. That
+  # is worse than no config: a reader checking "is this branch reviewed?" got
+  # yes.
+  #
+  # Set false to match reality. Review is still available and is TRIGGERED PER
+  # PR, from the checkbox in CodeRabbit's own comment:
+  #
+  #     - [ ] 🔍 Trigger review
+  #
+  # Two documented ways to ask for one, per
+  # docs.coderabbit.ai/configuration/auto-review:
+  #
+  #   1. LABEL OPT-IN. "Positive label matches also trigger reviews when
+  #      `enabled: false`. This lets you build label-driven opt-in workflows."
+  #      Add `coderabbit` to a PR and it gets reviewed. This repo already
+  #      labels by agent (`codex`, `kilo-*`), so the convention fits.
+  #
+  #   2. ON DEMAND, per PR: comment `@coderabbitai review` (incremental) or
+  #      `@coderabbitai full review` (from scratch). The docs are explicit that
+  #      this works "regardless of any auto-review configuration".
+  #
+  # Use when the diff warrants it -- in scope, like any other resource, rather
+  # than always-on.
   auto_review:
-    enabled: true
+    enabled: false
     drafts: false
+    # Opt-in trigger while `enabled: false`. A NEGATIVE-only list (`!wip`)
+    # would not work here: the docs note that negative-only labels stay
+    # exclusion filters and cannot themselves trigger a review.
+    labels:
+      - "coderabbit"
 
-  # Hardened/default delivery branches and active work prefixes.
+  # Kept for when auto-review becomes available (10+ stars, or a paid plan).
+  # Inert today -- see the note above -- and left in place rather than deleted
+  # so the intended scope is not lost, but it does NOT describe what happens now.
+  #
+  # Whether this list and `path_instructions` below constrain a MANUALLY
+  # triggered review is NOT stated in the CodeRabbit docs, which discuss both
+  # only as automatic-review scope. Treated as unknown rather than assumed --
+  # an earlier draft of this file asserted that path_instructions always apply,
+  # which was inference, not documentation.
   branches:
     - "PMOVES.AI-Edition-Hardened"
     - "PMOVES.AI-Edition-Hardened-Integrations"

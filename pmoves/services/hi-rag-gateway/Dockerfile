@@ -11,9 +11,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # --- CUDA-enabled Torch for Qwen reranker (optional) ---
 # If the host uses NVIDIA runtime, install CUDA wheels (cu121). This is safe on CPU-only hosts too,
 # but you can skip by setting TORCH_SKIP_CUDA=1 at build time.
+# x86_64 only: the cu121 index carries no modern aarch64 torch, so on ARM hosts the
+# unpinned install silently resolves to torch 2.0.1 and clobbers the locked 2.9.x
+# (observed on GB10/SPARK 2026-08-22: transformers 4.57.3 then dies on torch.compiler).
 ARG TORCH_CUDA_VERSION=cu121
 ARG TORCH_SKIP_CUDA=0
-RUN if [ "$TORCH_SKIP_CUDA" != "1" ]; then pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA_VERSION} torch torchvision torchaudio || true ; else echo "Skipping CUDA Torch install"; fi
+RUN if [ "$TORCH_SKIP_CUDA" != "1" ] && [ "$(uname -m)" = "x86_64" ]; then pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA_VERSION} torch torchvision torchaudio || true ; else echo "Skipping CUDA Torch install"; fi
 
 # Copy service code and shared libraries
 COPY services/hi-rag-gateway/ .

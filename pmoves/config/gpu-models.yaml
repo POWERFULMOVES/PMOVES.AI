@@ -398,7 +398,13 @@ gb10:
   platform: "arm64"
   total_vram_mb: 131072           # 128 GB unified LPDDR5X (CPU + GPU share the pool)
   system_reserve_mb: 16384        # Leave ~16 GB for Arm host OS and inference runtime
-  compute_capability: "11.0"      # SM_110 Blackwell
+  compute_capability: "12.1"      # SM_121 — unique to GB10, NOT sm_120 and NOT sm_110.
+                                  # Read from NVML on the node (ollama "inference compute"
+                                  # log: compute=12.1, cc=1210, description="NVIDIA GB10",
+                                  # driver=13.0). sm_110 is Jetson THOR, a different part.
+                                  # Needs CUDA >= 12.9 to compile for; the node ships 13.0.
+                                  # This disagreed with profiles/dgx-spark-grace-blackwell.yaml,
+                                  # which already said 12.1 — two sources of truth, one wrong.
   cpu_companion: "20-core Arm (10x Cortex-X925 + 10x Cortex-A725)"
   inference_backend: "ollama"     # Ollama ARM64 build with CUDA-on-ARM (DGX OS stock)
   hostname: "pmoves-gb10-spark"

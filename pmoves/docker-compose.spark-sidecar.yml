@@ -9,8 +9,14 @@
 # Agent Zero sidecar points to local Ollama, not host.docker.internal.
 #
 # Usage:
-#   docker compose -f docker-compose.spark-sidecar.yml up -d
-#   docker compose -f docker-compose.spark-sidecar.yml down
+#   cp pmoves/env.spark-sidecar.example pmoves/env.spark-sidecar   # one-time, then edit
+#   docker compose -f pmoves/docker-compose.spark-sidecar.yml --env-file pmoves/env.spark-sidecar up -d
+#   docker compose -f pmoves/docker-compose.spark-sidecar.yml --env-file pmoves/env.spark-sidecar down
+#
+# The `--env-file pmoves/env.spark-sidecar` flag is REQUIRED so PMOVES_OLLAMA_IMAGE
+# (and the topology / DNS / model defaults) are loaded for `${VAR:-default}` interpolation.
+# Without it, the compose falls back to the in-file default
+# (ollama/ollama:0.31.2@sha256:509fdf54...) — still pinned, but operator overrides ignored.
 #
 # Prerequisites:
 #   - NVIDIA Container Toolkit installed (nvidia-container-runtime)
@@ -19,7 +25,7 @@
 ##############################################################################
 services:
   pmoves-ollama:
-    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0}
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a}
     container_name: pmoves-ollama-spark
     hostname: ollama-spark
     restart: unless-stopped
@@ -66,7 +72,7 @@ services:
           cpus: '16.0'
           memory: 96G
     ports:
-    - "127.0.0.1:11434:11434"
+    - "127.0.0.1:${PMOVES_OLLAMA_PORT:-11434}:11434"
     networks:
     - spark_net
     healthcheck:
@@ -96,6 +102,13 @@ services:
     environment:
     # Supervisor listens on this port (inner AZ runs on :5000 internally)
     - PORT=8080
+    # --dockerized=true is REQUIRED on A0 2.5 (dev-mode inner RFC-calls fail
+    # in-container with "No RFC password") — see docker-compose.yml agent-zero.
+    - AGENT_ZERO_EXTRA_ARGS=--dockerized=true
+    # Same probe-base override as the DARKXSIDE sidecar: the 2026-03 image
+    # defaults its readiness probe to 127.0.0.1:80, but the inner AZ serves
+    # on :5000 — without this the supervisor times out and restart-loops.
+    - AGENT_ZERO_API_BASE=http://127.0.0.1:5000
     - AGENT_FORM=SPARK
     - TOPOLOGY_MODE=standalone
     - DOCKED_MODE=false
@@ -122,7 +135,7 @@ services:
     # CHIT dev mode (standalone)
     - CHIT_REQUIRE_SIGNATURE=false
     - CHIT_DECRYPT_ANCHORS=false
-    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-dev-local-sidecar-override}
+    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:?set CHIT_PASSPHRASE via secrets funnel}
     # JetStream disabled in standalone
     - AGENTZERO_JETSTREAM=false
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=999

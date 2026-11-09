@@ -254,7 +254,7 @@ def check_file_operation(
     protected_paths = config.get("protected_paths", {})
     zero_access = protected_paths.get("zero_access", [])
     read_only = protected_paths.get("read_only", [])
-    no_delete = protected_paths.get("no_delete", [])
+    protected_paths.get("no_delete", [])
 
     # Normalize path
     normalized = os.path.normpath(file_path)

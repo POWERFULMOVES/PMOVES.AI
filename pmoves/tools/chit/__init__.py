@@ -1,5 +1,5 @@
 """
-CHIT (Cymatic-Holographic Information Transfer) Tools
+CHIT (Cymatic Holographic Information Theory) Tools
 
 This package provides decoder utilities for CHIT Geometry Packets (CGP):
 - chit_decoder: Basic text decoder (exact + geometry modes)

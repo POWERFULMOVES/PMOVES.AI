@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     neo4j_max_transaction_retry_time: float = 30.0
 
     # -- NATS -----------------------------------------------------------
-    nats_url: str = "nats://nats:pmoves@nats:4222"
+    nats_url: str = "nats://nats:4222"
     nats_name: str = "graph-linker"
     nats_reconnect_wait: float = 2.0
     nats_max_reconnect_attempts: int = 60

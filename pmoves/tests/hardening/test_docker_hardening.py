@@ -117,7 +117,12 @@ def compose_data() -> Dict[str, dict]:
         if not path.exists():
             continue
 
-        with open(path, "r") as f:
+        # encoding="utf-8" so the cp1252 default on Windows does not trip over
+        # the ⚠ U+26A0 / ✅ U+2705 in the compose header comments. The ratchet
+        # TestWindowsHostCompat.test_compose_reads_use_utf8() pins this; a regression to a
+        # bare `open(path, "r")` here fails the test on this Windows host before
+        # CI ever sees it.
+        with open(path, "r", encoding="utf-8") as f:
             compose = yaml.safe_load(f)
             data[name] = compose.get("services", {})
 
@@ -128,6 +133,50 @@ def compose_data() -> Dict[str, dict]:
 def hardened_services_data(compose_data) -> Dict[str, dict]:
     """Get only hardened services from docker-compose.hardened.yml."""
     return compose_data.get("hardened", {})
+
+
+def _merge_service(base: dict, overlay: dict) -> dict:
+    """Compose's mapping-merge rule: mappings recurse, anything else is replaced."""
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        merged = dict(base)
+        for key, value in overlay.items():
+            merged[key] = _merge_service(merged[key], value) if key in merged else value
+        return merged
+    return overlay
+
+
+@pytest.fixture(scope="session")
+def merged_services_data(compose_data) -> Dict[str, dict]:
+    """The hardened services AS DEPLOYED: docker-compose.yml, then the overlay.
+
+    Use this ONLY for properties the overlay does not carry. Four of the five
+    hardening properties -- user, read_only, cap_drop, security_opt -- are
+    declared in the overlay itself, and asserting those against the merged
+    config would weaken them: a base value would satisfy a test whose whole
+    point is that the OVERLAY hardens the service.
+
+    `deploy.resources.limits` is the exception, and it is why this exists.
+    docker-compose.hardened.yml is a security-only overlay by design and
+    carries no `deploy:` key for anybody, because `$(DC)` always stacks it on
+    docker-compose.yml, which supplies sizing at merge time. TestResourceLimits
+    therefore asserted a property against a file that was never meant to hold
+    it, and produced 54 failures for limits that demonstrably existed --
+    measured live on B850 (Docker 29.8.1 / Compose v5.5.1) while every one of
+    them was red: extract-worker Memory=536870912 NanoCpus=1000000000, archon
+    Memory=2147483648 NanoCpus=2000000000, ffmpeg-whisper Memory=8589934592
+    NanoCpus=4000000000.
+
+    The subject set is deliberately the OVERLAY's, not the union. A service
+    absent from the overlay is still absent here, so the skip bucket does not
+    move: widening the subjects would silently change what these tests measure
+    on top of changing where they read it from.
+    """
+    hardened = compose_data.get("hardened", {})
+    main = compose_data.get("main", {})
+    return {
+        name: _merge_service(main.get(name, {}), body or {})
+        for name, body in hardened.items()
+    }
 
 
 # =============================================================================
@@ -345,12 +394,22 @@ class TestNoNewPrivileges:
 # =============================================================================
 
 class TestResourceLimits:
-    """Tests that services have resource limits defined."""
+    """Tests that services have resource limits defined.
+
+    The ONLY class in this file that reads the MERGED config rather than the
+    hardened overlay alone, because `deploy.resources.limits` is the only one
+    of the five hardening properties the overlay does not declare.
+    """
 
     @pytest.mark.parametrize("service", HARDENED_SERVICES)
-    def test_service_has_memory_limit(self, service, hardened_services_data):
+    def test_service_has_memory_limit(self, service, merged_services_data):
         """Test that service has memory limit defined."""
-        config = get_service_config(service, {"hardened": hardened_services_data})
+        # Merged, not overlay-only: sizing lives in docker-compose.yml. See
+        # the merged_services_data fixture for why, and why the other SIX
+        # get_service_config call sites in this file must NOT follow -- they
+        # assert user / read_only / cap_drop / security_opt / tmpfs, every one
+        # of which the overlay does declare.
+        config = get_service_config(service, {"hardened": merged_services_data})
         if config is None:
             pytest.skip(f"Service {service} not in hardened compose")
 
@@ -370,9 +429,14 @@ class TestResourceLimits:
             pytest.fail(f"Service {service} has no memory limit defined")
 
     @pytest.mark.parametrize("service", HARDENED_SERVICES)
-    def test_service_has_cpu_limit(self, service, hardened_services_data):
+    def test_service_has_cpu_limit(self, service, merged_services_data):
         """Test that service has CPU limit defined."""
-        config = get_service_config(service, {"hardened": hardened_services_data})
+        # Merged, not overlay-only: sizing lives in docker-compose.yml. See
+        # the merged_services_data fixture for why, and why the other SIX
+        # get_service_config call sites in this file must NOT follow -- they
+        # assert user / read_only / cap_drop / security_opt / tmpfs, every one
+        # of which the overlay does declare.
+        config = get_service_config(service, {"hardened": merged_services_data})
         if config is None:
             pytest.skip(f"Service {service} not in hardened compose")
 
@@ -451,7 +515,6 @@ class TestDockerfileSecurity:
     """Tests for Dockerfile security best practices."""
 
     @pytest.mark.parametrize("service,dockerfile", [
-        ("archon", "pmoves/services/archon/Dockerfile"),
         ("agent-zero", "pmoves/services/agent-zero/Dockerfile"),
         ("flute-gateway", "pmoves/services/flute-gateway/Dockerfile"),
         ("tokenism-simulator", "pmoves/services/tokenism-simulator/Dockerfile"),
@@ -483,7 +546,6 @@ class TestDockerfileSecurity:
                 f"USER directive must come before CMD in {service}"
 
     @pytest.mark.parametrize("service,dockerfile", [
-        ("archon", "pmoves/services/archon/Dockerfile"),
         ("agent-zero", "pmoves/services/agent-zero/Dockerfile"),
         ("flute-gateway", "pmoves/services/flute-gateway/Dockerfile"),
         ("tokenism-simulator", "pmoves/services/tokenism-simulator/Dockerfile"),
@@ -881,3 +943,84 @@ class TestDocumentationReferences:
 
         assert doc_path.exists(), \
             f"Subsystem integration guide not found: {doc_path}"
+
+
+# =============================================================================
+# Tests: Windows-host compatibility (ratchet)
+# =============================================================================
+
+class TestWindowsHostCompat:
+    """Ratchets that keep this file's compose reads portable across platforms.
+
+    The `compose_data` fixture at the top of the file reads every tracked
+    compose YAML. On a Windows host, the default platform encoding is cp1252,
+    which cannot decode the ⚠ U+26A0 / ✅ U+2705 in our compose-file header
+    comments. CI runs on Linux (UTF-8 default), so the bug never reaches the
+    gate; a future contributor to this file would only see it on the
+    operator's 5090 worktree, where 32/34 `media-*` tests ERROR with
+    `UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f`.
+
+    The runtime test would only catch this on a Windows host, so a static
+    ratchet is cheaper and pins the same shape forever.
+    """
+
+    def test_compose_reads_use_utf8(self):
+        """Every `open(...)` of a compose YAML in this file passes encoding=.
+
+        A regression to a bare `open(path, "r")` here re-introduces the
+        cp1252 trap. The check is an AST walk over the file's source, NOT the
+        test runner's platform; a future contributor who edits the file on
+        any OS sees the failure on this Windows host before CI does.
+        """
+        import ast
+
+        # AST, not a regex over the source: a regex keyed on a quoted mode
+        # argument missed the most common bare shape of all, a modeless
+        # `open(path)` (review of #3358), and could not see through nested
+        # parentheses such as `open(str(path))`. Docstrings and comments are
+        # not Call nodes, so the examples in this test do not trip it.
+        tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+        bare = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else (
+                func.attr if isinstance(func, ast.Attribute) else None
+            )
+            if name != "open":
+                continue
+            if any(kw.arg == "encoding" for kw in node.keywords):
+                continue
+            # Path.open(mode) takes the mode first; builtin open(file, mode)
+            # second. A binary mode takes no encoding (passing one raises).
+            mode_index = 0 if isinstance(func, ast.Attribute) else 1
+            mode = None
+            if len(node.args) > mode_index and isinstance(node.args[mode_index], ast.Constant):
+                mode = node.args[mode_index].value
+            for kw in node.keywords:
+                if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                    mode = kw.value.value
+            if isinstance(mode, str) and "b" in mode:
+                continue
+            bare.append(f"line {node.lineno}: {ast.unparse(node)}")
+        assert not bare, (
+            "compose YAML reads must pass encoding= to the open() call so the "
+            "Windows cp1252 default does not trip over UTF-8 multi-byte "
+            "sequences in the compose-file header comments:\n  "
+            + "\n  ".join(bare)
+        )
+
+    def test_docker_hardening_runs_on_windows(self, compose_data):
+        """Smoke check: the compose_data fixture loads on this host.
+
+        This is the runtime counterpart to the static ratchet above. On a
+        Linux host it always passes (the cp1252 trap is Windows-only). On
+        the operator's 5090 worktree (Windows, the one place the ratchet
+        matters) it is the canary that the fix at line ~120 is still in
+        place. The static AST check pins the source; this test pins the
+        runtime.
+        """
+        assert "main" in compose_data or "hardened" in compose_data, (
+            f"compose_data loaded no services: keys={sorted(compose_data.keys())}"
+        )

@@ -226,7 +226,7 @@ All PMOVES services are organized as Git submodules in `.gitmodules` (repo root)
 |-----------|---------|--------|--------|--------------|
 | **Pmoves-Health-wger** | github.com/POWERFULMOVES/Pmoves-Health-wger | Hardened | Not initialized | `git submodule update --init Pmoves-Health-wger` |
 | **PMOVES-Wealth** | github.com/POWERFULMOVES/PMOVES-Wealth | Hardened | Not initialized | `git submodule update --init PMOVES-Wealth` |
-| **PMOVES-n8n** | github.com/POWERFULMOVES/PMOVES-n8n | Hardened | Not initialized | BPM workflow engine |
+| **PMOVES-n8n** | github.com/POWERFULMOVES/PMOVES-n8n-FlooS | Hardened | Not initialized | BPM workflow engine |
 | **PMOVES-MAI-UI** | github.com/POWERFULMOVES/PMOVES-MAI-UI | main | Not initialized | Practice web UI |
 | **Pmoves-Jellyfin-AI-Media-Stack** | github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack | Hardened | Not initialized | Patient education media |
 | **PMOVES-supabase** | github.com/POWERFULMOVES/PMOVES-supabase | Hardened | Not initialized | Patient data backend |
@@ -390,6 +390,28 @@ hermes profile use pmoves-hermes-kvm
 - **Toolsets**: `web`, `terminal`, `file`, `messaging`, `cronjob`
 - **No TTS/STT** (headless)
 - **NATS leaf node** to `pmoves-nats`
+
+#### Jetson Edge (JONS-1/2/3)
+```bash
+hermes profile create pmoves-hermes-jetson --clone-from pmoves-hermes
+hermes profile use pmoves-hermes-jetson
+```
+- **Hardware**: Jetson Orin Nano Super 8GB unified memory, SM_87, 67 TOPS, ARM64
+- **Role**: Edge inference combiner — STT, lightweight LLM, image preprocess, NATS relay
+- **Gateway port**: 7700
+- **Ollama**: localhost:11434 (phi3-mini only — 8GB unified memory limit)
+- **Local models**:
+  - `phi3:mini` (3.8B, ~3GB VRAM — primary edge LLM)
+  - `gemma3:2b` (via TensorRT, ~2GB VRAM)
+  - `whisper-small-int8` (via Faster-Whisper, not Ollama)
+- **Fallback**: `pmoves-gb10-spark:11434` for larger models (70B delegation via NATS)
+- **Toolsets**: `web`, `terminal`, `file`, `code_execution` (NO `image_gen`/`video`/`rl`/`moa` — SPARK handles those)
+- **TTS**: none on-device (SPARK handles via Flute-Gateway)
+- **STT**: faster-whisper (`small-int8`, on-device Orin GPU)
+- **NATS**: leaf node upstream to `ts:powerfulmoves:4222`; publishes `mesh.edge.heartbeat.v1`
+- **Combiner pairing**: SPARK (GB10 128GB) is the heavy layer — Jetsons do edge STT/LLM/detection, SPARK does 70B inference + ComfyUI + TTS
+- **Island mode**: when SPARK is offline, Jetsons fall back to phi3-mini round-robin via NATS
+- **IMPORTANT**: Keep total model + runtime VRAM under 6GB (8GB unified shared with CPU). TensorRT optimization critical for 2-5x speedup.
 
 ## NATS Subject Catalog (Hermes-specific)
 
@@ -568,7 +590,7 @@ All credentials are injected via CHIT secrets funnel (never committed).
 | Tier | Provider | Plan | Credential Env Var | Model | Use Case |
 |------|----------|------|-------------------|-------|----------|
 | 1 | Ollama (local) | Self-hosted | `OLLAMA_BASE_URL` | `hermes3:8b` | Always try first. Q4/CPU offload if GTX 1650 OOM |
-| 2 | Z.AI | Coding Plan | `ZAI_API_KEY` | `zai-coding` | Complex code gen, refactoring, agentic coding |
+| 2 | Z.AI | Coding Plan | `Z_AI_API_KEY` | `glm-5.2` | Complex code gen, refactoring, agentic coding |
 | 2 | Kimi | Allegro Coding Plan | `KIMI_API_KEY` | `kimi-k2.6` | Long-context reasoning, multi-file, Chinese |
 | 2 | MiniMax | Token Plan | `MINIMAX_API_KEY` | `minimax-text-01` | Creative writing, dialogue, multi-modal |
 | 2 | Alibaba | Coding Plan | `ALIBABA_API_KEY` | `qwen-coder` | Code completion, unit tests, Chinese coding |
@@ -585,14 +607,14 @@ Ollama local > Z.AI ≈ Kimi ≈ MiniMax ≈ Alibaba > OpenRouter > Codex/Claude
 ```
 
 ### Pool Rotation
-- `ZAI_API_KEYS` (comma-separated) -- round-robin for Z.AI Coding Plan
+- `Z_AI_API_KEYS` (comma-separated) -- round-robin for Z.AI Coding Plan
 - `OPENROUTER_API_KEYS` (comma-separated) -- round-robin for OpenRouter
 
 ### Docker MCP Toolkit
 This instance has Docker Desktop + WSL2 integration:
 - `DOCKER_HOST=tcp://localhost:2375`
 - Container image: `nikolaik/python-nodejs:python3.11-nodejs20`
-- Forwarded env vars: `ZAI_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`
+- Forwarded env vars: `Z_AI_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`
 - **Review after PRs**: Add custom MCP servers (n8n, ComfyUI, Hi-RAG gateway, etc.)
 
 ### HuggingFace / Unsloth Follow-Up (Post-PR)
@@ -711,10 +733,90 @@ glances --export json --time 60 --quiet
 - JSON/CSV export to `pmoves/telemetry/`
 - Alert thresholds tuned to actual hardware
 
+## v0.18.2 Config Alignment (2026-07-12)
+
+### Audit Summary
+
+Live audit of Hermes Agent v0.18.2 on Elder-Melchor found the `pmoves-hermes-elder`
+profile config used pre-v0.18 custom keys (`fallback_chain`, `provider_hierarchy`,
+`ollama.models`) that Hermes does not parse. The profile .env had placeholder
+values (`YOUR_ZAI_KEY_HERE`) instead of real API keys. Config version was v0
+(latest: v33). No fallback providers were configured on the default profile.
+
+### Changes Applied
+
+| Item | Before | After |
+|------|--------|-------|
+| Active profile | `default` (kimi-k2.7-code) | `pmoves-hermes-elder` (zai-coding) |
+| Config version | v0 | v33 (migrated via `hermes config migrate`) |
+| `fallback_providers` | `[]` (empty) | 4-tier cascade: kimi → minimax-oauth → openrouter → ollama-cloud |
+| `credential_pool_strategies` | `alibaba: fill_first` | zai, kimi-coding (fill_first), openrouter (round_robin), alibaba |
+| Profile .env keys | Placeholders | Real GLM_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_API_KEY |
+| `privacy.redact_pii` | false | true (HIPAA-aware — PII redaction for patient data) |
+| `hermes doctor` | 3 issues | All checks passed (reported status — see `hermes doctor` output) |
+
+### Default Profile Fallback Chain
+
+```text
+Primary:   glm-5.2 (via ollama-cloud)
+Fallbacks: zai-coding → kimi-k2.7-code → minimax-text-01 → nousresearch/hermes-3 → hermes3:8b
+```
+
+### pmoves-hermes-elder Profile Fallback Chain
+
+```text
+Primary:   zai-coding (via zai)
+Fallbacks: kimi-k2.7-code → minimax-text-01 → nousresearch/hermes-3 → hermes3:8b
+```
+
+### Key Env Var Mapping
+
+PMOVES .env uses `ZAI_API_KEY`; Hermes v0.18.2 expects `GLM_API_KEY` for the Z.AI
+provider. Both are now set in the profile .env with the same value.
+
+| PMOVES Name | Hermes v0.18.2 Name | Provider |
+|-------------|---------------------|----------|
+| `ZAI_API_KEY` | `GLM_API_KEY` | zai |
+| `KIMI_API_KEY` | `KIMI_API_KEY` | kimi-coding |
+| `MINIMAX_API_KEY` | `MINIMAX_API_KEY` | minimax (API key) |
+| — | `minimax-oauth` (browser OAuth) | minimax-oauth (separate provider) |
+| `OPENROUTER_API_KEY` | `OPENROUTER_API_KEY` | openrouter |
+| — | `OLLAMA_API_KEY` | ollama-cloud |
+
+### Upstream PRs Reviewed
+
+| PR | Title | PMOVES Relevance |
+|----|-------|-----------------|
+| #20893 | `refactor(gateway): run auth checks before processing hooks` | Security — prevents info leak to unauthorized gateway users. Important for patient-facing Discord/Telegram. |
+| #20920 | `fix(cross-platform): honor HERMES_HOME in file_safety and code_execution_tool` | Profile safety — fixes cross-profile data corruption when using non-default profiles. Directly relevant to `pmoves-hermes-elder`. |
+| #20876 | `feat(context-files): add @<path> include expansion` | Context includes — enables SSoT pattern (`@~/.agents/AGENTS.md`) in context files. Useful for PMOVES AGNOTE4482_SITREP reference pattern. |
+| #63168 | `fix(cron): handle repeat field as plain int (v0.18+ format)` | Cron fix — relevant for PMOVES appointment reminders, backup schedules. |
+| #62871 | `perf(memory): run post-turn memory retain off the reply path` | Memory perf — speeds up turns on practice workstation. |
+
+### Kilo Gateway / Kilocode Integration
+
+Kilo Gateway (`api.kilo.ai/api/gateway`) is now a **built-in Hermes provider** (`kilocode`
+with `KILOCODE_API_KEY`). Confirmed via [Kilo blog](https://blog.kilo.ai/p/how-to-use-kilo-gateway-with-hermes)
+and Hermes v0.18.2 fallback-providers docs.
+
+**PMOVES Impact:**
+- PMOVES-crush integration can use Kilo as a provider/fallback without custom code
+- `hermes model` → Kilo Code picker; or add as fallback: `{provider: kilocode, model: auto-balanced}`
+- Kilo recommends 64K+ context window for reliable agentic performance — PMOVES
+  uses each provider's native context window which can differ across the cascade
+- No `KILOCODE_API_KEY` configured yet on Elder-Melchor — add when Kilo subscription activated
+
+**Kilo vs Hermes Gateway Clarification:**
+- **Kilo Gateway**: unified API endpoint for model inference (the "brain")
+- **Hermes Messaging Gateway**: communication hub for Discord/Telegram/Slack (the "mouth")
+- PMOVES uses both: Kilo for compute, Hermes gateway for patient/staff comms
+
 ## Canonical References
 
 - Hermes Agent docs: https://hermes-agent.nousresearch.com/docs/
 - Hermes Agent repo: https://github.com/NousResearch/hermes-agent
+- Fallback Providers docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers
+- Kilo Gateway + Hermes: https://blog.kilo.ai/p/how-to-use-kilo-gateway-with-hermes
 - PMOVES AGNOTE4482: `pmoves/docs/AGENTS/AGNOTE4482.md`
 - PMOVES SITREP: `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md`
 - PMOVES Room Manifest Contract: `pmoves/docs/ROOM_MANIFEST_CONTRACT.md`

@@ -116,7 +116,7 @@ def _theory_to_cgp(theory: TheoryInfo, idx: int) -> Dict[str, Any]:
     # Create points from proponents
     points = []
     for pidx, proponent in enumerate(theory.proponents[:5]):
-        p_angle = angle + (pidx * 0.1)
+        angle + (pidx * 0.1)
         points.append({
             "id": f"pt:{theory.name.replace(' ', '_')}:{pidx}",
             "modality": "theory",

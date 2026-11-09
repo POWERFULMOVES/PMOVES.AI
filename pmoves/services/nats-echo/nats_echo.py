@@ -2,7 +2,6 @@
 import asyncio
 import os
 import signal
-import sys
 
 import nats
 
@@ -37,7 +36,7 @@ async def main(subject: str, url: str) -> None:
 
 if __name__ == "__main__":
     subject = os.environ.get("NATS_ECHO_SUBJECT", ">")
-    url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    url = os.environ.get("NATS_URL", "nats://nats:4222")
     try:
         asyncio.run(main(subject, url))
     except KeyboardInterrupt:

@@ -1,0 +1,10 @@
+Kind,Item,Value,Date,Notes
+ACTUAL,Vehicle purchased,2022 Hyundai Ioniq 5,2026-07,Dedicated pilot vehicle — jump-starts the Shuttle-Transport container
+ACTUAL,Purchase price USD,24440,2026-07,Replaces the 15000 Investment ASSUMPTION in docker_container_business_models.csv (actual is 63% higher)
+ACTUAL,Operating concept,Scheduled availability,2026-07,Vehicle available at set times for specific resident functions (Fordham Hill lane)
+ACTUAL,Payback goal,Vehicle payback then fund 2nd vehicle,2026-07,Fleet bootstraps itself — no outside raise assumed
+LANE,NY EV fleet repair + management contracts,Candidate B2B revenue,2026-07,Not counted in any payback tier below — upside only
+MODEL,Payback tier — Light use,net 800 USD/month => 30.6 months,2026-07,LABELED ASSUMPTION: net = after charging + insurance + maintenance
+MODEL,Payback tier — Moderate use,net 1500 USD/month => 16.3 months,2026-07,LABELED ASSUMPTION
+MODEL,Payback tier — Strong use,net 2500 USD/month => 9.8 months,2026-07,LABELED ASSUMPTION
+MODEL,Prior projection for contrast,15000 investment / 17800 net-month => 0.8 months,2025,Projection-era optimism — retained for honesty about the correction

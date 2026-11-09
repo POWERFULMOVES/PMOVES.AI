@@ -98,6 +98,20 @@ else
 fi
 run_sql "ALTER USER authenticator WITH PASSWORD '$SAFE_DB_PASS';" > /dev/null
 
+# App role: services (gotrue/postgrest/storage/realtime) connect as $DB_USER
+# presenting POSTGRES_PASSWORD (compose interpolates POSTGRES_PASSWORD before
+# SUPABASE_DB_PASSWORD in every service DSN). Align the app role to the SAME
+# precedence or a restored datadir / funnel rotation leaves it on an old
+# password and the whole stack crash-loops with 28P01 (bitten 2026-08-03, twice).
+APP_PASS="${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}"
+SAFE_APP_PASS="${APP_PASS//\'/\'\'}"
+APP_ALTER=$(docker exec "$DB_CONTAINER" psql -U supabase_admin -h 127.0.0.1 -d postgres -c "DO \$\$ BEGIN EXECUTE format('ALTER USER %I WITH PASSWORD %L', '$DB_USER', '$SAFE_APP_PASS'); EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'skipped $DB_USER ALTER (needs superuser)'; END \$\$;" 2>&1)
+if echo "$APP_ALTER" | grep -q "skipped"; then
+    log_warn "App role '$DB_USER' password NOT aligned (needs superuser)"
+else
+    log_info "App role '$DB_USER' password aligned with POSTGRES_PASSWORD"
+fi
+
 # Step 3: Ensure target database exists
 log_step "Step 3/7: Ensuring database '$DB_NAME' exists..."
 

@@ -1,0 +1,23 @@
+{
+  "name": "@chenglou/pretext",
+  "version": "0.0.8",
+  "description": "Vendored build of @chenglou/pretext. Do not edit — see README.md for the rebuild recipe.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/layout.js",
+  "types": "./dist/layout.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/layout.d.ts",
+      "import": "./dist/layout.js",
+      "default": "./dist/layout.js"
+    },
+    "./rich-inline": {
+      "types": "./dist/rich-inline.d.ts",
+      "import": "./dist/rich-inline.js",
+      "default": "./dist/rich-inline.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "LICENSE"]
+}

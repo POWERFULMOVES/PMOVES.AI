@@ -1,0 +1,79 @@
+{
+  "env": {
+    "MCP_TIMEOUT": "120000"
+  },
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "model": "fable[1m]",
+  "enabledPlugins": {
+    "glm-plan-usage@zai-coding-plugins": true,
+    "security-guidance@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "plugin-dev@claude-plugins-official": true,
+    "remember@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "huggingface-skills@claude-plugins-official": true,
+    "php-lsp@claude-plugins-official": true,
+    "coderabbit@claude-plugins-official": true,
+    "mcp-server-dev@claude-plugins-official": true,
+    "laravel-boost@claude-plugins-official": true,
+    "pydantic-ai@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "zai-coding-plugins": {
+      "source": {
+        "source": "directory",
+        "path": "C:\\Users\\russe\\AppData\\Local\\npm-cache\\_npx\\2f024689b4d0d3b0\\node_modules\\@z_ai\\coding-helper\\zai-coding-plugins"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "autoUpdatesChannel": "latest",
+  "tui": "fullscreen",
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(make -C pmoves up-obs:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)"
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Bash(docker compose down:*)",
+      "Bash(make -C pmoves volume-reset:*)",
+      "Bash(make -C pmoves mcp-toolkit-connect:*)"
+    ],
+    "environment": [
+      "### Org-wide",
+      "**Organization**: POWERFULMOVES (GitHub org - evidenced by origin remote github.com/POWERFULMOVES/PMOVES.AI and repeated POWERFULMOVES/* sibling repos)",
+      "**Cloud provider(s)**: None configured",
+      "**Repository visibility**: not queryable via gh in this recon; assume private per shipped default (no public-visibility evidence found)",
+      "**Internal sharing / snippet hosting**: None configured - treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: CHIT secrets funnel (CHIT_PASSPHRASE, CHIT_SIGNING_KEY referenced in CI secrets; `make secrets-funnel` / `secrets-funnel-from-prod` namespace seen in transcripts) - treat as this repo's secrets mechanism only",
+      "**Default / protected branches**: main (default); protected branches: `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `main`; rulesets active (`pmoves rules`, `tag-protection`, +1 redacted) - rulesets may extend protection beyond the classic branch-protection list",
+      "**CI/CD deploy targets**: DockerHub (CI_DOCKERHUB_*/DOCKERHUB_* secrets), GHCR (CI_GHCR_NAMESPACE, GHCR_TOKEN, GHCR_USERNAME) - scoped to this repo's CI workflows only",
+      "**Network posture**: None configured",
+      "**Source control**: This repo (POWERFULMOVES/PMOVES.AI) and its `origin` remote only. Note: an `upstream` remote to github.com/openclaw/openclaw.git is also configured - treat as an external upstream, not a trusted push target",
+      "**Trusted internal domains**: None configured",
+      "**Trusted cloud buckets**: tensorzero-* (config-derived - not a confirmed upload destination; uploads of local data still require confirmation) - includes tensorzero-helm-charts, tensorzero-batch-tests-input, tensorzero-batch-tests-output, tensorzero-fixtures (config-derived - not a confirmed upload destination; uploads of local data still require confirmation)",
+      "**Key internal services**: None configured",
+      "**Internal package registry**: npm.jsr.io (config-derived - not a confirmed upload destination; uploads of local data still require confirmation)",
+      "**Sensitive data locations & audiences**: secrets/ directory tree, *.key files, .env / .env.* files (excluding .env.example, .env.shared.example, .env.shared.sh, .env.template, .env.tier-*), CHIT secrets manifests (chit/secrets_manifest_v2.yaml across submodules), credentials-workflow.md, secrets-audit learnings doc - share only with audiences cleared at the [named+specifics] bar",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: any namespace/host/container carrying `prod`/`production` as a whole word or segment (e.g. `secrets-funnel-from-prod` k8s namespace seen in transcripts, `run_prod.sh` in PMOVES-AgentGym)",
+      "**Protected deployment namespaces / environments**: prod-tagged k8s namespaces (e.g. `secrets-funnel-from-prod`) and any namespace/env carrying `prod`/`production` as a whole word or segment - no separate org-wide list configured beyond this heuristic",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: software development (multi-agent orchestration platform work on PMOVES.AI)",
+      "**Trusted repo**: C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI (working directory) and its `origin` remote (github.com/POWERFULMOVES/PMOVES.AI); the `upstream` remote (github.com/openclaw/openclaw.git) is external, not part of the trusted repo",
+      "**Org-specific CLIs**: make (Known Roads targets), gh (with --repo POWERFULMOVES/PMOVES.AI convention seen in agent docs), claude, claude-pmoves, crush, crush-pmoves, codex, gemini, a0, kilo",
+      "routine under this repo's .claude/, pmoves/, and PMOVES-* submodule prefixes for Known-Roads make targets and docker compose bring-up"
+    ]
+  }
+}

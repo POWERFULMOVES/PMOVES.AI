@@ -220,7 +220,7 @@ ORCHESTRATION LAYER
   ▼
 VOICE LAYER
   │
-  ├── Flute Gateway (8055/8056)
+  ├── Flute Gateway (8055)
   ├── VibeVoice (realtime synthesis)
   ├── MiniMax (M2.7/M2.1, 7 NATS subjects)
   ├── FlOO$ Personas (Dr. Bean, Mr. Clean, PowerPuff)

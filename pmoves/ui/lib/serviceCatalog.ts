@@ -259,22 +259,11 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     endpoints: [
       { name: 'API', port: '8091', path: '/', type: 'api' },
       { name: 'Health', port: '8091', path: '/healthz', type: 'health' },
-    ],
-    healthCheck: 'http://localhost:8091/healthz',
-    capabilities: ['Prompt management', 'Persona studio', 'Form generation'],
-    dependencies: ['agent-zero', 'postgres'],
-  },
-  {
-    slug: 'archon-ui',
-    title: 'Archon UI',
-    summary: 'Web interface for Archon prompt studio',
-    category: 'agents',
-    color: 'violet',
-    endpoints: [
       { name: 'Web UI', port: '3737', path: '/', type: 'ui' },
     ],
-    external: true,
-    capabilities: ['Prompt editor', 'Persona management'],
+    healthCheck: 'http://localhost:8091/healthz',
+    capabilities: ['Prompt management', 'Persona studio', 'Form generation', 'Prompt editor', 'Persona management'],
+    dependencies: ['agent-zero', 'postgres'],
   },
   {
     slug: 'deepresearch',
@@ -592,7 +581,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     color: 'forest',
     endpoints: [
       { name: 'HTTP API', port: '8055', path: '/', type: 'api' },
-      { name: 'WebSocket', port: '8056', path: '/', type: 'ws' },
+      { name: 'WebSocket (TTS stream)', port: '8055', path: '/v1/voice/stream/tts', type: 'ws' },
       { name: 'Health', port: '8055', path: '/healthz', type: 'health' },
       { name: 'Metrics', port: '8055', path: '/metrics', type: 'metrics' },
     ],

@@ -245,7 +245,7 @@ class ModelLifecycleManager:
 
         if vram_needed > available:
             # Try to free up VRAM by unloading idle models
-            freed = await self._free_vram(vram_needed - available)
+            await self._free_vram(vram_needed - available)
             available = self.vram_tracker.get_available_vram(self.vram_reserve)
 
             if vram_needed > available:

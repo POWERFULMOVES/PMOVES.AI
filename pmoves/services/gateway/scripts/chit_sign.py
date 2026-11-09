@@ -22,7 +22,6 @@ if str(_PMOVES_ROOT) not in sys.path:
     sys.path.insert(0, str(_PMOVES_ROOT))
 
 from pmoves.tools.chit_security import sign_cgp, encrypt_anchors  # noqa: E402
-from pmoves.tools.chit_common import canon  # noqa: E402
 
 
 def sign_cgp_file(cgp: Dict[str, Any], passphrase: str) -> Dict[str, Any]:

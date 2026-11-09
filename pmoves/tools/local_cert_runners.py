@@ -12,9 +12,10 @@ import json
 import os
 import platform
 import shutil
+import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
@@ -461,13 +462,62 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         choices=tuple(lane.lane for lane in LANES),
         help="Runner lane to target. Repeat to target multiple lanes. Default: all lanes.",
     )
+    parser.add_argument(
+        "--node-label",
+        default=os.getenv("PMOVES_RUNNER_NODE_LABEL"),
+        help=(
+            "Node sub-label to append (e.g. 4090, b850). Workflows that address a "
+            "specific node use runs-on: [self-hosted, <lane>, <node>], so without "
+            "this the runner joins the lane but cannot be targeted individually. "
+            "Also suffixes the runner name, which GitHub requires to be unique per "
+            "runner -- two nodes registering the bare lane name collide. Pass the "
+            "SAME value to up/down/status: status looks the runner up by its "
+            "suffixed name. A PMOVES_RUNNER_NODE_LABEL default belongs in a "
+            "node-local env, NOT pmoves/env.shared -- env.shared is loaded "
+            "fleet-wide before parsing, so a value there would label every node "
+            "identically and defeat the point of a node label."
+        ),
+    )
     return parser.parse_args(argv)
+
+
+_NODE_LABEL_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def _apply_node_label(lanes: tuple[RunnerLane, ...], node_label: str) -> tuple[RunnerLane, ...]:
+    """Return `lanes` re-stamped for a specific node.
+
+    GitHub matches a job's `runs-on` list against a runner's labels as a SUBSET
+    test, so appending a node label keeps every existing lane match working --
+    `[self-hosted, ai-lab]` still selects this runner -- while additionally
+    allowing `[self-hosted, ai-lab, 4090]` to select it and only it.
+
+    The runner name is suffixed too. GitHub requires runner names to be unique
+    within a repository; two nodes both registering `pmoves-ai-lab-runner`
+    collide, and the second either fails to register or (with reuse enabled)
+    silently replaces the first.
+    """
+    if not _NODE_LABEL_RE.fullmatch(node_label):
+        raise ValueError(
+            f"invalid --node-label {node_label!r}: must match [a-z0-9][a-z0-9-]* "
+            "(the same shape workflow inputs validate, e.g. 4090, b850, kvm4-2)"
+        )
+    return tuple(
+        replace(
+            lane,
+            runner_name=f"{lane.runner_name}-{node_label}",
+            labels=f"{lane.labels},{node_label}",
+        )
+        for lane in lanes
+    )
 
 
 def main(argv: list[str]) -> int:
     _ensure_env_loaded()
     args = parse_args(argv)
     lanes = _selected_lanes(args.lane)
+    if args.node_label:
+        lanes = _apply_node_label(lanes, args.node_label)
     try:
         if args.action == "up":
             return cmd_up(args.repo, args.image, lanes)

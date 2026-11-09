@@ -49,7 +49,6 @@ from typing import Any, Optional
 
 import typer
 from rich.console import Console
-from rich.live import Live
 from rich.table import Table
 from rich.panel import Panel
 
@@ -61,7 +60,7 @@ app = typer.Typer(
 console = Console()
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-DEFAULT_NATS = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+DEFAULT_NATS = os.environ.get("NATS_URL", "nats://nats:4222")
 SUBJECT_CGP = "geometry.cgp.v1"
 SUBJECT_DECODED = "geometry.packet.decoded.v1"
 CGP_SPEC = "chit.cgp.v0.2"
@@ -119,7 +118,8 @@ def decode_state_vector(sv: dict[str, float]) -> dict[str, Any]:
         swarm_fitness    = F
     """
     # Clamp all inputs to [0.0, 1.0] per CGP v0.2 spec (defensive)
-    _clamp = lambda v: max(0.0, min(1.0, v))
+    def _clamp(v):
+        return max(0.0, min(1.0, v))
     delta = _clamp(sv.get("delta", 0.0))
     hz_norm = _clamp(sv.get("Hz", 0.0))
     kappa = _clamp(sv.get("kappa", 0.0))

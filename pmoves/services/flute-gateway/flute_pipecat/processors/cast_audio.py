@@ -6,14 +6,13 @@ Extends VibeVoice TTS with Google Cast device output for dual audio
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, AsyncGenerator, Optional
 
 import httpx
 
 if TYPE_CHECKING:
-    from providers.vibevoice import VibeVoiceProvider
+    pass
 
 logger = logging.getLogger(__name__)
 

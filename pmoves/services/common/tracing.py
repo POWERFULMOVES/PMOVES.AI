@@ -17,11 +17,10 @@ Usage::
 
 from __future__ import annotations
 
-import functools
 import logging
 import os
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Generator
 
 logger = logging.getLogger(__name__)
 

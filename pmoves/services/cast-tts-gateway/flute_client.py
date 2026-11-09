@@ -4,7 +4,6 @@ Flute-Gateway TTS Client
 Client for Flute-Gateway prosodic TTS synthesis API.
 """
 
-import asyncio
 from typing import Optional
 
 try:

@@ -1,0 +1,148 @@
+# TAC Tree: Pinokio 8 — L1 (venv) reachability
+# ==================================================
+# Audits the same-host, same-process-space reachability between Pinokio
+# apps and the venv graph they live in. Companion to:
+#   pmoves/configs/tac_trees/pinokio-p8.tac.yaml   (P8 surface + bridge health)
+#   pmoves/configs/tac_trees/pmoves-container.tac.yaml (L2, same-host Docker)
+#   pmoves/configs/tac_trees/tailnet-mesh.tac.yaml   (L3, headscale tailnet)
+#   pmoves/configs/tac_trees/public-tunnel.tac.yaml  (L4, kvm2 + Cloudflare/Hostinger)
+#
+# Per-layer audit pattern: each tree is owned by a different concern.
+# L1 (this file) is the host-local Pinokio venv graph. If a leaf check
+# fails, L2/L3/L4 will also fail for the same app — cascading gates
+# are a feature, not a bug.
+#
+# Pre-flight: Pinokio 8.x installed; pinokio_bridge reachable on :8130
+# with PMOVES_BRIDGE_TOKEN exported; pmoves/configs/pinokio-apps/curated/
+# has the curated entries for the apps you want to audit.
+#
+# The L1 tree asserts:
+#   - the app's slugs in the registry match the slugs Pinokio has on disk
+#   - each app's launcher script exists under the app's venv dir
+#   - the GPU/VRAM template vars ({{gpu}}, {{vram}}) are detectable on
+#     this host (the bridge exposes this via /v1/gpu/detect)
+#   - if the app requires_hf_login, Pinokio's hf.login is available
+#     (the bridge exposes hf.login as a structured shell.run call)
+
+name: "Pinokio 8 L1 venv reachability"
+version: "1.0.0"
+description: "Audit whether each curated Pinokio app is reachable from the same host via the venv graph (L1)."
+
+root:
+  id: pinokio-venv
+  task: "Pinokio 8 L1 venv reachability audit"
+  context: "D:\\pinokio\\api\\ + pmoves/configs/pinokio-apps/curated/ + pinokio_bridge :8130"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Registry <-> Pinokio on-disk agreement
+    # =========================================================================
+    - id: l1.registry_disk
+      task: "Each curated app has a matching on-disk install"
+      context: "Cross-reference pmoves/configs/pinokio-apps/curated/<slug>.yaml with D:\\pinokio\\api\\<slug>\\"
+      agent_hint: codex
+      children:
+        - id: l1.registry_disk.api_dir
+          task: "D:\\pinokio\\api\\<slug>\\ exists for every curated entry"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\api\\{{entry.slug}}"
+            expect: "Directory exists (12 of 12 curated entries)"
+          context: "Pinokio 8 stores each app under D:\\pinokio\\api\\<slug>\\. If a curated entry has no on-disk app, the bridge's /v1/apps/{slug}/status returns null and the launch is refused."
+          agent_hint: codex
+
+        - id: l1.registry_disk.launcher_script
+          task: "Each app's launcher script (start.js or pinokio.js) exists"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\api\\{{entry.slug}}\\{{entry.runtime.launcher_script}}"
+            expect: "File exists for all 12 curated entries (no missing launchers)"
+          context: "The bridge refuses to launch if the launcher script is missing"
+          agent_hint: codex
+
+        - id: l1.registry_disk.pinokio_manifest
+          task: "Each app has a pinokio.js or pinokio.json manifest"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\api\\{{entry.slug}}\\pinokio.js"
+            expect: "File exists OR the app has a custom manifest path declared in curated entry"
+          context: "Pinokio 8 requires pinokio.js (or pinokio.json) to know the app's scripts, dependencies, and metadata"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: GPU/VRAM template vars are detectable
+    # =========================================================================
+    - id: l1.gpu_detect
+      task: "P8 GPU/VRAM template vars are detectable on this host"
+      context: "pinokio_bridge /v1/gpu/detect returns {host, vram, gpus, gpu_model, gpu_target, gpu_driver}"
+      agent_hint: codex
+      children:
+        - id: l1.gpu_detect.gpu_target
+          task: "P8 reports the GPU's compute capability (sm_* or gfx*)"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/gpu/detect"
+            method: "GET"
+            expect: "JSON body has gpu_target set (e.g. sm_120 for 5090, gfx1201 for Knuckles)"
+          context: "P8 launchers use {{gpu_target}} for self-routing wheels/kernels; if not detectable, the launcher falls back to a non-GPU path"
+          agent_hint: codex
+
+        - id: l1.gpu_detect.vram
+          task: "P8 reports VRAM in GB for the primary GPU"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/gpu/detect"
+            method: "GET"
+            expect: "JSON body has vram set (e.g. 32 for 5090, 24 for z890 3090ti, 128 for Spark)"
+          context: "Vram is the integer GB the bridge uses for host_affinity routing on Pinokio 8 + PMOVES"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: requires_hf_login apps can call hf.login
+    # =========================================================================
+    - id: l1.hf_login
+      task: "Apps declaring requires_hf_login can use Pinokio 8's hf.login API"
+      context: "hf.login is a structured shell.run method on P8; the bridge forwards to it"
+      agent_hint: codex
+      children:
+        - id: l1.hf_login.api_available
+          task: "P8 exposes the hf.login method"
+          action:
+            type: manual
+            expect: "From a Pinokio app: invoke shell.run with method=hf.login and confirm the native login modal appears"
+          context: "8 of 12 curated entries (comfyui-desktop, ace-step, wan, lightonocr-2-1b, ultimate-tts-studio, qwen3-tts, vibevoice-realtime, voxforge-pro, unsloth) declare requires_hf_login=true"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: venv manager is correct (Miniforge per P8)
+    # =========================================================================
+    - id: l1.venv_manager
+      task: "P8 uses Miniforge (conda-forge-first) for its managed Conda"
+      context: "P8's managed Conda base moved from Miniconda to Miniforge. Apps that assume the old path will break on a fresh install."
+      agent_hint: codex
+      children:
+        - id: l1.venv_manager.miniforge_present
+          task: "P8's managed conda is Miniforge 26.3.2+ (not legacy Miniconda)"
+          action:
+            type: shell
+            command: "pterm --version"
+            expect: "Output contains '8.' and a separate conda --version reports conda-forge"
+          context: "P8 8.0.0 release notes: managed Conda base = Miniforge 26.3.2-3, conda-forge-first. Python 3.10.20, Node 24.18.0, pnpm 11.9.0"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: registry metadata is fresh (version_seen tracks on-disk)
+    # =========================================================================
+    - id: l1.registry_freshness
+      task: "Each curated entry's version_seen matches the on-disk app"
+      context: "Drift between registry and on-disk means P7 routes to the wrong launch"
+      agent_hint: codex
+      children:
+        - id: l1.registry_freshness.version_match
+          task: "version_seen in curated entry matches D:\\pinokio\\api\\<slug>\\version.json"
+          action:
+            type: manual
+            expect: "version_seen is a noop if the app has no version.json. For apps that ship one (comfyui-desktop, ace-step, wan, etc.), the registry should match within a minor version."
+          context: "Operator can pin strict matching with PMOVES_PINOKIO_REGISTRY_STRICT=true"
+          agent_hint: codex

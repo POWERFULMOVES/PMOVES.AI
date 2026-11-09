@@ -23,7 +23,6 @@ FLOW:
 Author: PMOVES.AI Automation
 Version: 1.2.0
 """
-import json
 import logging
 import os
 import shutil
@@ -155,7 +154,7 @@ def verify_gh_auth():
             print_error("GitHub CLI not authenticated")
             print("  Run: gh auth login")
             return False
-    except Exception as e:
+    except Exception:
         print_error("Failed to verify GitHub CLI — check logs for details")
         return False
 
@@ -202,7 +201,7 @@ def get_github_secrets():
     except PermissionError:
         print_error("Permission denied executing GitHub CLI")
         return None
-    except Exception as e:
+    except Exception:
         print_error("Failed to fetch GitHub Secrets — check logs for details")
         return None
 
@@ -302,7 +301,7 @@ def run_secrets_funnel():
                 logging.error(f"secrets-funnel stderr: {result.stderr}")
                 print("  Check logs for error details")
             return False
-    except Exception as e:
+    except Exception:
         print_error("Failed to run secrets-funnel — check logs for details")
         return False
 

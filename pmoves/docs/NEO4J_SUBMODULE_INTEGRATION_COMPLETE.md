@@ -1,5 +1,7 @@
 # Neo4j Submodule Integration Complete ✅
 
+> **SUPERSEDED (2026-10-01).** The submodule described here (its own Makefile, `docker/`, `db/migrations`, `db/seeds`) was never built: `PMOVES-Neo4j` is the upstream neo4j/neo4j source fork and has none of them on any branch. The make targets that called it were rewritten. Current state: [`docs/TAC/TAC_NEO4J.md`](TAC/TAC_NEO4J.md).
+
 **Date:** 2026-03-13 00:15 EST
 **Session:** Runtime Validation + CONCH Pipeline Execution
 **Status:** **Neo4j promoted to first-class submodule** 🎉
@@ -87,16 +89,22 @@ neo4j-seed:     → $(MAKE) -C pmoves/integrations/neo4j seed SEED=...
 
 #### Option 1: Reset Neo4j with Fresh Credentials (Recommended)
 ```bash
-# Stop existing Neo4j
-docker stop pmoves-neo4j-1
-
-# Remove data volume (WARNING: loses existing data)
-docker volume rm pmoves_neo4jdata
-
-# Generate fresh credentials
+# 1. Generate + apply fresh credentials FIRST.
+#    volume-reset RESTARTS the service as its last step (pmoves/mk/infra.mk:44),
+#    so the fresh volume initializes against whatever password is current at
+#    that moment. Generating credentials afterwards leaves the same auth
+#    mismatch this procedure exists to clear.
 make -C pmoves env-setup
+make -C pmoves secrets-funnel
 
-# Start Neo4j from submodule
+# 2. Reset the volume (WARNING: loses existing data).
+#    This stops, removes the container, drops the matching volumes, and brings
+#    the MAIN-COMPOSE `neo4j` service back up with the new credentials.
+make -C pmoves volume-reset SERVICE=neo4j
+
+# 3. The submodule stack and the main-compose service bind the same ports, so
+#    stop the one volume-reset just started before starting the other.
+make -C pmoves neo4j-local-down
 make -C pmoves neo4j-up
 
 # Run migrations (includes 003_consciousness_taxonomy)

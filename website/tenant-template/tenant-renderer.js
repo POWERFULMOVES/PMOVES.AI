@@ -1,0 +1,197 @@
+// PMOVES tenant page renderer
+// Per A2UI v0.1 + v0.2 spec: takes a composed A2UI message stream, creates
+// the corresponding web components, applies persona theming, wires
+// v0.2 `on-<event>` attributes between components.
+//
+// Usage:
+//   import { renderTenant } from './tenant-renderer.js';
+//   await renderTenant('fordham-hill');
+//
+// The message stream is the output of `pmoves.tools.compose.compose_tenant_page`.
+// Components come from the A2UI v0.1 + v0.2 registry at /pmoves/web-components/.
+
+const A2UI_VERSION = "0.2";  // must match pmoves/tools/compose/compose.py
+
+// v0.2 event wires may only invoke methods on this allowlist. Without it,
+// `target[method](arg)` would let tenant JSON invoke ANY function-valued
+// property on any element by id (e.g. remove, click, a DOM API). Today the
+// only legitimate wired methods are pm-toast.show and pm-haptic.pulse.
+const ALLOWED_METHODS = new Set(['show', 'pulse']);
+
+let _registered = false;
+let _eventWires = [];  // v0.2: list of {source, event, target, method}
+
+async function ensureRegistered() {
+  if (_registered) return;
+  // Two contexts:
+  //  - Deployed (CF Pages root = website/tenant-template/): the deploy step
+  //    stages a copy of the components at ./components/, so import that first.
+  //  - Dev (served from the repo root): ./components/ doesn't exist, so fall
+  //    back to the in-repo path ../../pmoves/web-components/register.js.
+  try {
+    await import('./components/register.js');
+  } catch (_) {
+    await import('../../pmoves/web-components/register.js');
+  }
+  _registered = true;
+}
+
+function applyProps(el, props) {
+  // Only props the component declares via observedAttributes may be applied.
+  // The compose tool validates upstream, but composed JSON reaches this
+  // renderer without it — so the component contract is the runtime boundary.
+  // Anything undeclared (innerHTML, onclick, src on a non-registry element…)
+  // is dropped, never written onto the live element.
+  const declared = new Set(el.constructor.observedAttributes || []);
+  for (const [key, value] of Object.entries(props || {})) {
+    if (key === 'id') continue; // applied at creation for v0.2 event-wire targeting
+    const attr = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+    if (!declared.has(attr)) {
+      console.warn(`[a2ui] dropping undeclared prop "${key}" on <${el.localName}>`);
+      continue;
+    }
+    try {
+      el[key] = value;
+    } catch (_) {
+      // Fall back to setAttribute (kebab-case) when the property isn't defined.
+      el.setAttribute(attr, String(value));
+    }
+  }
+}
+
+function applyTheme(theme) {
+  if (!theme || theme === 'custom') return;
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#050508');
+}
+
+function applyMeta(meta) {
+  if (!meta) return;
+  if (meta.title) {
+    document.title = `${meta.title} — PMOVES`;
+  }
+}
+
+function applyHeader(header) {
+  if (!header) return;
+  const titleEl = document.getElementById('tenant-title');
+  const taglineEl = document.getElementById('tenant-tagline');
+  if (header.title) titleEl.textContent = header.title;
+  if (header.tagline) taglineEl.textContent = header.tagline;
+}
+
+// v0.2 event wire (A2UI v0.2 §4.3):
+//   on-<event-name>="<component-id>:<method-name>"
+// Scans all elements for `on-*` attributes and wires them after all
+// components are mounted (so the target is guaranteed to exist).
+function wireEvents() {
+  _eventWires = [];
+  // Scan EVERY element in the surface (including those inside shadow roots
+  // we can't introspect — but `on-*` is an attribute we set, so it's on the
+  // host element).
+  const surface = document.getElementById('tenant-surface');
+  for (const el of surface.querySelectorAll('*')) {
+    for (const attr of el.getAttributeNames()) {
+      if (!attr.startsWith('on-')) continue;
+      if (attr === 'on-vote-cast' || attr === 'on-quorum-reached' || attr === 'on-ballot-closed') {
+        const event = attr.slice(3);  // 'vote-cast' etc.
+        const value = el.getAttribute(attr);
+        const [targetId, method] = value.split(':');
+        if (!targetId || !method) {
+          console.warn(`pm-renderer: malformed event wire "${attr}='${value}'" (want "id:method")`);
+          continue;
+        }
+        if (!ALLOWED_METHODS.has(method)) {
+          console.warn(`pm-renderer: method "${method}" is not allow-listed for event wiring; skipping "${attr}='${value}'"`);
+          continue;
+        }
+        el.addEventListener(event, (ev) => {
+          const target = document.getElementById(targetId);
+          if (!target) {
+            console.warn(`pm-renderer: event target #${targetId} not found`);
+            return;
+          }
+          if (typeof target[method] !== 'function') {
+            console.warn(`pm-renderer: event target #${targetId}.${method} is not a function`);
+            return;
+          }
+          // Pass the event detail (or the first arg as a string) to the method.
+          // Receipt-shaped payloads are summarised by hash only. Never render
+          // the choice: this is a page-level surface, so it is shoulder-surfable
+          // and screenshot-able, and naming the option re-links a voter to their
+          // vote for anyone watching. Never JSON.stringify(ev.detail) either —
+          // that dumps whatever a future payload happens to carry.
+          const arg = ev.detail?.receipt?.receiptHash
+            ? `Your vote was recorded — receipt ${ev.detail.receipt.receiptHash.slice(0, 10)}…`
+            : (typeof ev.detail === 'string' ? ev.detail : 'Done.');
+          target[method](arg);
+        });
+        _eventWires.push({ source: el, event, targetId, method });
+      }
+    }
+  }
+}
+
+export async function renderTenant(tenantId) {
+  // Tenant ids are slugs; anything else (../, absolute paths, %-escapes)
+  // would let ?tenant= fetch and render arbitrary same-origin JSON.
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(tenantId || '')) {
+    throw new Error(`invalid tenant id: ${tenantId}`);
+  }
+  await ensureRegistered();
+
+  const url = `./data/${tenantId}.json`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} fetching ${url}`);
+  }
+  const payload = await resp.json();
+
+  if (payload.a2uiVersion && payload.a2uiVersion !== A2UI_VERSION) {
+    console.warn(
+      `tenant ${tenantId} uses A2UI v${payload.a2uiVersion}; this renderer speaks v${A2UI_VERSION}`
+    );
+  }
+
+  applyMeta(payload.tenant);
+  applyTheme(payload.tenant?.theme);
+  applyHeader({ title: payload.tenant?.name, tagline: payload.tenant?.tagline });
+
+  const surface = document.getElementById('tenant-surface');
+  surface.innerHTML = '';
+
+  for (const msg of payload.messages || []) {
+    if (msg.type === 'pageMeta') {
+      applyTheme(msg.tenant?.theme);
+    } else if (msg.type === 'pageHeader') {
+      applyHeader(msg);
+    } else if (msg.type === 'createComponent' && msg.component) {
+      // Registry components only: a composed message must never be able to
+      // instantiate <script>, <iframe>, or any other non-A2UI element.
+      const tag = String(msg.component).toLowerCase();
+      if (!tag.startsWith('pm-') || !customElements.get(tag)) {
+        console.warn(`[a2ui] skipping non-registry component "${msg.component}"`);
+        continue;
+      }
+      const el = document.createElement(tag);
+      // Assign an id if the props include one (for v0.2 event-wire targeting)
+      if (msg.props && msg.props.id) el.id = msg.props.id;
+      applyProps(el, msg.props);
+      surface.appendChild(el);
+    } else {
+      // v0.2 messages: dataBinding, updateProps, removeComponent, etc.
+      // v0.1 silently ignores unknown message types.
+    }
+  }
+
+  // Wire v0.2 events AFTER all components are mounted.
+  wireEvents();
+}
+
+// Auto-run if loaded directly (no import) — the index.html uses import
+// but this lets a tenant page be a single self-contained file in the future.
+if (typeof window !== 'undefined' && window.location?.search?.includes('auto=1')) {
+  const params = new URLSearchParams(window.location.search);
+  const tenant = params.get('tenant') || 'fordham-hill';
+  renderTenant(tenant).catch(console.error);
+}

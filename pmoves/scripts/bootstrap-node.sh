@@ -231,6 +231,23 @@ else
   fi
 fi
 
+# ── Step 7 — MCP bootstrap ───────────────────────────────────────────────────
+
+echo ""
+echo "=== Step 7: MCP Bootstrap ==="
+
+if [[ "${PMOVES_BOOTSTRAP_MCPS:-1}" == "0" ]]; then
+  info "PMOVES_BOOTSTRAP_MCPS=0 — skipping MCP bootstrap"
+else
+  info "Running PMOVES MCP bootstrap (set PMOVES_BOOTSTRAP_MCPS=0 to skip)..."
+  if make -C "${REPO_ROOT}/pmoves" --no-print-directory mcp-bootstrap; then
+    ok "MCP bootstrap complete"
+  else
+    warn "MCP bootstrap reported errors — some clients may need manual configuration"
+    dim "Inspect with: make -C pmoves mcp-bootstrap-check"
+  fi
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""

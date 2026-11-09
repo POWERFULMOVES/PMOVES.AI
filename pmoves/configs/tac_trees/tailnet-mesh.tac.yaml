@@ -1,0 +1,154 @@
+# TAC Tree: Pinokio 8 — L3 (Tailscale mesh) reachability
+# =====================================================
+# Audits cross-host reachability: a PMOVES container on a DIFFERENT
+# host (not the Pinokio host) reaches the Pinokio app over the
+# headscale tailnet. The reachability path is:
+#   container on host A <-> headscale tailnet <-> <slug>.<tailscale_host>.ts.pmoves.net:<port> <-> Pinokio venv on host B
+# Per the slice-4 network_exposure.l3_mesh contract.
+#
+# Companion to:
+#   pinokio-venv.tac.yaml       (L1, same-process)
+#   pmoves-container.tac.yaml   (L2, same-host Docker)
+#   public-tunnel.tac.yaml      (L4, kvm2 + Cloudflare/Hostinger)
+#   pinokio-p8.tac.yaml         (P8 surface + bridge health, slice 2)
+#   networking-defense-in-depth.tac.yaml  (security posture)
+#
+# Pre-flight: headscale control plane at headscale.pmoves.local:8096
+# is up; the Tailscale agent is running on every host in the registry;
+# the pmoves/config/headscale/acl.yaml is the source of truth for ports
+# and groups; the mesh_exposure service (slice 4) is the writer.
+
+name: "Pinokio 8 L3 Tailscale-mesh reachability"
+version: "1.0.0"
+description: "Audit whether each curated Pinokio app is reachable from a PMOVES container on a different host via the headscale tailnet."
+
+root:
+  id: tailnet-mesh
+  task: "Pinokio 8 L3 Tailscale-mesh reachability audit"
+  context: "headscale.pmoves.local:8096 + every host's tailscale agent + pmoves/config/headscale/acl.yaml + the curated registry entries with network_exposure.l3_mesh.reachable=true"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: headscale control plane is up + base domain resolves
+    # =========================================================================
+    - id: l3.headscale_up
+      task: "headscale control plane is reachable on headscale.pmoves.local:8096"
+      context: "Self-hosted headscale at pmoves/config/headscale/config.yaml. server_url=https://headscale.pmoves.local"
+      agent_hint: codex
+      children:
+        - id: l3.headscale_up.control_plane
+          task: "headscale control plane is reachable"
+          action:
+            type: shell
+            command: "curl -sf https://headscale.pmoves.local:8090/health"
+            expect: "HTTP 200 with body OK (metrics_listen_addr is 0.0.0.0:9090; the control plane itself listens on 8096)"
+          context: "If headscale is down, no mesh — every cross-host Pinokio app is unreachable"
+          agent_hint: codex
+
+        - id: l3.headscale_up.dns
+          task: "Base domain ts.pmoves.net is reachable + tailscale DNS MagicDNS works"
+          action:
+            type: shell
+            command: "tailscale status --json | head -c 200"
+            expect: "JSON output shows current node + peers; MagicDNS resolves <node>.ts.pmoves.net for every tailnet member"
+          context: "MagicDNS is what makes <slug>.<tailscale_host>.ts.pmoves.net resolve from any tailnet member"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: every registry entry's headscale_acl_ports are in the ACL
+    # =========================================================================
+    - id: l3.acl_ports
+      task: "Each curated entry's l3_mesh.headscale_acl_ports are present in pmoves/config/headscale/acl.yaml"
+      context: "The mesh_exposure service (slice 4) is the writer; this phase is the reader. The ACL is deny-by-default + tag-scoped, so missing ports = silent no-route."
+      agent_hint: codex
+      children:
+        - id: l3.acl_ports.user_group_accept
+          task: "For each port in headscale_acl_ports: an ACL rule accepts (group:users or group:infrastructure) -> (the node's tailscale_host tag) on that port"
+          action:
+            type: grep
+            target: "pmoves/config/headscale/acl.yaml"
+            pattern: "ports: \\[.*\\b<port>\\b.*\\]"
+            expect: "At least one matching line for each port in each entry's l3_mesh.headscale_acl_ports"
+          context: "If a port is missing, the deny-by-default rule blocks traffic silently. mesh_exposure (slice 4) must have added the rule + the operator must have synced the headscale config to the running container."
+          agent_hint: codex
+
+        - id: l3.acl_ports.tag_scope
+          task: "Each app's tags_required is in the ACL's tagowners section"
+          action:
+            type: grep
+            target: "pmoves/config/headscale/acl.yaml"
+            pattern: "tag:(\\b<tag>\\b):"
+            expect: "All tags_required entries have a tagowners rule; otherwise the tag is unassignable and the consumer can't reach the app"
+          context: "Tagowners controls who can assign the tag; the consumer's tailnet node must already be tagged before the ACL evaluates the dst constraint"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: FQDN resolution from a remote host
+    # =========================================================================
+    - id: l3.fqdn_resolve
+      task: "<slug>.<tailscale_host>.ts.pmoves.net resolves from a remote tailnet member"
+      context: "MagicDNS auto-generates the FQDN for every tailnet member. The <slug> prefix is a convention the registry uses to disambiguate when one host runs many apps."
+      agent_hint: codex
+      children:
+        - id: l3.fqdn_resolve.dig
+          task: "dig +short <slug>.<tailscale_host>.ts.pmoves.net returns the tailscale IP"
+          action:
+            type: shell
+            command: "dig +short {{entry.slug}}.{{entry.tailscale_host}}.ts.pmoves.net @100.100.100.112"
+            expect: "Returns the 100.x.y.z tailscale IP of the host"
+          context: "MagicDNS uses 100.100.100.112 as the in-tailscale resolver. dig must be run from inside the tailnet."
+          agent_hint: codex
+
+        - id: l3.fqdn_resolve.curl
+          task: "curl on the FQDN reaches the app's health endpoint (when ACL allows)"
+          action:
+            type: shell
+            command: "curl -sf --max-time 5 http://{{entry.slug}}.{{entry.tailscale_host}}.ts.pmoves.net:{{entry.endpoints.primary.port or 8130}}{{entry.endpoints.primary.health or '/'}}"
+            expect: "HTTP 200 (or the app's expected health response) IF the port is non-zero + the ACL allows it"
+          context: "For static-port apps, this is a 1-curl check from any tailnet member. For dynamic-port apps (port=0), the test must first call the bridge at host.docker.internal:8130 from the Pinokio host to resolve the port, then dial the FQDN:port from the remote host."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: L3 bridge — pinokio_bridge on each Pinokio host reachable over mesh
+    # =========================================================================
+    - id: l3.bridge_on_pinokio_host
+      task: "pinokio_bridge is reachable on each Pinokio host's FQDN over the mesh"
+      context: "The bridge runs on every PMOVES GPU node. The L3 mesh consumer (e.g. P7 running on z890) needs to dial the 5090 bridge to launch apps."
+      agent_hint: codex
+      children:
+        - id: l3.bridge_on_pinokio_host.healthz
+          task: "pinokio_bridge /healthz on the 5090 host over the mesh"
+          action:
+            type: shell
+            command: "curl -sf --max-time 5 http://pinokio-bridge.powerfulmoves-1.ts.pmoves.net:8130/healthz"
+            expect: "HTTP 200 with body {status: ok, pinokio_version: 8.x.x, ...}"
+          context: "pinokio_bridge service on the 5090 host is the L3 entry point for cross-host launches"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: L3 mesh_exposure service is the writer (proves the loop is closed)
+    # =========================================================================
+    - id: l3.mesh_exposure_writer
+      task: "mesh_exposure service (slice 4) is the writer that keeps pmoves/config/headscale/acl.yaml in sync with the registry"
+      context: "If mesh_exposure isn't running, the ACL drifts from the registry and the audit silently fails. This is the loop-close check."
+      agent_hint: codex
+      children:
+        - id: l3.mesh_exposure_writer.service_reachable
+          task: "mesh_exposure service :8132 /healthz is reachable over the mesh"
+          action:
+            type: shell
+            command: "curl -sf http://mesh-exposure.infra-coordinator.ts.pmoves.net:8132/healthz"
+            expect: "HTTP 200 with body {status: ok, registry_entries: N, ...}"
+          context: "mesh_exposure is a Python FastAPI service. Same auth model as pinokio_bridge (X-PMOVES-Meshbus-Token). Runs on z890 (infra-coordinator) by default."
+          agent_hint: codex
+
+        - id: l3.mesh_exposure_writer.last_reconcile
+          task: "The last reconcile run completed within the last 24h (or the registry hasn't changed since)"
+          action:
+            type: http
+            target: "http://mesh-exposure.infra-coordinator.ts.pmoves.net:8132/v1/reconcile/status"
+            method: "GET"
+            expect: "JSON has last_run_at < 24h ago, or last_change_at == null (no changes)"
+          context: "A stale mesh_exposure means the ACL drifted from the registry. The audit is stale too."
+          agent_hint: codex

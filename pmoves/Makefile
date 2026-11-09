@@ -1,5 +1,27 @@
 # PMOVES top-level Makefile
 
+unexport KEY
+# ^ MUST STAY THE FIRST DIRECTIVE, above every include and every $(shell ...).
+# A command-line KEY (`make env-local-unset KEY=...`) is exported by default,
+# and GNU make EXPANDS an exported variable each time it builds a child
+# environment, so text like KEY='$(shell touch X)' executes:
+#   * make 4.3: children are recipes only. Measured 2026-09-23: with the
+#     unexport at the END of the file, recipe export expanded it and X was
+#     created; the directive closed it.
+#   * make >= 4.4: `$(shell ...)` ALSO receives exported variables. Two
+#     parse-time $(shell) calls (mk/a2ui-deploy.mk via the includes below, and
+#     one in this file) ran BEFORE an end-of-file unexport, so X was still
+#     created on 4.4.1 (independent review of #3164, container repro).
+# Make has no target-scoped unexport, and a directive only affects expansion
+# AFTER it is read -- so the only placement that holds on both versions is
+# here. tests/tools/test_env_local_key.py asserts the ordering structurally,
+# because CI runs 4.3 and cannot observe the 4.4 behaviour.
+# Other KEY users are unaffected: mk/codex.mk and mk/provider.mk interpolate
+# $(KEY) into recipe text, which does not depend on export. The one script with
+# an inherited-KEY shape, scripts/fleet/rustdesk-enroll.sh:65
+# (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
+# target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
+
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
@@ -26,7 +48,7 @@ endif
 # -------- External-mode → Compose profiles ----------
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
 # Profiles are defined on services in docker-compose.yml.
-compose_profiles = data,workers,gateway
+compose_profiles = data,workers,gateway,pinokio
 SUPABASE_RUNTIME ?= compose
 SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 ifeq ($(EXTERNAL_NEO4J),true)
@@ -57,6 +79,21 @@ export COMPOSE_PROFILES
 PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
 PYTHON := python
+endif
+
+# Prefer the canonical bringup venv when it exists, so targets that shell out to
+# tools/*.py (yt-cookies-*, etc.) pick up tool deps declared in tools/requirements.txt
+# instead of whatever bare `python3` resolves to on PATH. Without this, a system
+# python missing google-auth-oauthlib makes `yt-cookies-auth` fail with an install
+# hint even though `make venv-bringup` already installed it.
+# Only applies when PYTHON was not explicitly supplied: $(origin) is "default" or
+# "file" here, but "command line"/"environment" when the operator set it, so both
+# `make <target> PYTHON=/path` and `PYTHON=/path make <target>` still win.
+venv_python := $(CURDIR)/.venv-pmoves/bin/python
+ifneq ($(wildcard $(venv_python)),)
+ifeq ($(filter command\ line environment,$(origin PYTHON)),)
+PYTHON := $(venv_python)
+endif
 endif
 SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
@@ -135,12 +172,49 @@ ensure-env-shared:
 	python tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" || \
 	py -3 tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)"
 
+# -------- Launcher generator (registry-driven) -------------------------------
+# Source of truth: pmoves/configs/cli_tools.yaml :: pmoves_wrappers + 
+# pmoves/config/agent_registry.yaml (per-node identities).
+# Emit: deploy/provision/<tool>-pmoves.{sh,ps1,cmd} + install-* + per-node pins.
+# See: pmoves/tools/pmoves_launcher_generator.py and pmoves/docs/AGENTS/pmoves_launcher_generator_LEARNINGS.md
+LAUNCHER_GENERATOR := $(PYTHON) tools/pmoves_launcher_generator.py
+LAUNCHER_OUT := $(REPO_ROOT)/deploy/provision
+LAUNCHER_MANIFEST := $(LAUNCHER_OUT)/launchers.manifest.json
+
+.PHONY: launchers-regen
+launchers-regen: ## Regenerate registry-driven launchers + manifest into deploy/provision/
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --out "$(REPO_ROOT)" || \
+	$(LAUNCHER_GENERATOR)
+
+.PHONY: launchers-drift-check
+launchers-drift-check: ## Diff generator output against checked-in files; exit non-zero on drift
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --check || \
+	$(LAUNCHER_GENERATOR) --check
+
+.PHONY: launchers-manifest
+launchers-manifest: ## Print the launcher inventory (registry-driven)
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --dry-run --json || \
+	$(LAUNCHER_GENERATOR) --dry-run --json
+
+.PHONY: launchers-clean
+launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
+	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
+
+.PHONY: launcher-self-check
+launcher-self-check: ## Run the launcher auth-sanitize guard test (deploy/provision tests are not wired into CI)
+	@bash ../deploy/provision/tests/test-launcher-auth-sanitize.sh
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
 
 .PHONY: test
 test: test-smoke ## Run pytest smoke tests
+
+.PHONY: test-smoke
+test-smoke: ## Run pytest smoke tests for services (pre-refactor recipe restored)
+	@echo "Running pytest smoke tests..."
+	$(PYTHON) -m pytest tests/smoke/ -v -m smoke --tb=short
 
 .DEFAULT_GOAL := help
 
@@ -164,20 +238,29 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/worktree.mk
 include mk/build-gate.mk
+include mk/image-staleness.mk
+include mk/node-registry.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
 include mk/amd-rdna4.mk
 include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
+include mk/neo4j-tailnet.mk
+include mk/a2ui-deploy.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk
 include mk/mcp-toolkit-4090.mk
 include mk/mcp-toolkit-spark.mk
 include mk/unsloth.mk
 include mk/creator.mk
+include mk/kilo.mk
 include mk/voice.mk
+include mk/kong.mk
+include mk/review.mk
+include mk/mike.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -196,6 +279,22 @@ include mk/voice.mk
 check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, git, python3)
 	@bash scripts/check_prereqs.sh
 
+.PHONY: check-prereqs-agent
+check-prereqs-agent: ## Verify the agent CLI contract (Known Road tools + agent binaries); advisory, reports what each gap costs
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --agent
+
+.PHONY: check-prereqs-env
+check-prereqs-env: ## Verify the bringup interpreter resolves and the tool imports work; advisory
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --env
+
+.PHONY: check-prereqs-all
+check-prereqs-all: ## All tiers: bringup prereqs (fatal) + agent CLI contract + bringup interpreter (advisory)
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all
+
+.PHONY: check-prereqs-strict
+check-prereqs-strict: ## All tiers, non-zero exit on ANY gap (CI gate). --strict covers the env tier too.
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all --strict
+
 .PHONY: venv
 venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
 	@bash scripts/create_venv.sh
@@ -205,12 +304,39 @@ venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glance
 	@INCLUDE_BRINGUP=1 bash scripts/create_venv.sh
 	@echo
 	@echo "✅ Bringup venv ready at pmoves/.venv-pmoves/"
-	@echo "   Glances: $$(./.venv-pmoves/bin/glances --version 2>&1 | head -1 || echo 'NOT FOUND')"
-	@echo "   Activate: source pmoves/.venv-pmoves/bin/activate"
+	@# Both layouts: a venv is bin/ on POSIX and Scripts/ on Windows. Hardcoding
+	@# bin/ made this report "NOT FOUND" against a perfectly healthy Windows venv
+	@# and then print an activate path that does not exist there.
+	@glances=""; \
+	for g in ./.venv-pmoves/bin/glances ./.venv-pmoves/Scripts/glances.exe ./.venv-pmoves/Scripts/glances; do \
+	  [ -x "$$g" ] && { glances="$$g"; break; }; \
+	done; \
+	if [ -n "$$glances" ]; then \
+	  echo "   Glances: $$("$$glances" --version 2>&1 | head -1)"; \
+	else \
+	  echo "   Glances: NOT FOUND (re-run with INCLUDE_BRINGUP=1)"; \
+	fi
+	@act="pmoves/.venv-pmoves/bin/activate"; \
+	[ -f "./.venv-pmoves/bin/activate" ] || act="pmoves/.venv-pmoves/Scripts/activate"; \
+	echo "   Activate: source $$act"
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
+
+.PHONY: identity-verify
+identity-verify: ## Audit the claim register's identity vocabulary (0 clean / 1 findings / 3 could not measure)
+	@# KNOWN ROAD for pmoves/tools/identity_lineage.py --verify. Until this
+	@# existed the tool had NO caller: the co-owner feature's stated defense --
+	@# "an undeclared co-owner is a --verify finding by design" -- was a command
+	@# nobody ran, and the exit-3 doctrine implemented in main() had no consumer
+	@# that could act on it. Flagged as P3 in the PR #2858 review; the unrouted
+	@# half was the half that would have caught the two P1s.
+	@$(PYTHON) tools/identity_lineage.py --verify
+
+.PHONY: identity-co-owners
+identity-co-owners: ## List every register row that declares co-owners
+	@$(PYTHON) tools/identity_lineage.py --co-owners
 
 .PHONY: docs-runbook
 docs-runbook: ## Open the comprehensive bring-up runbook
@@ -233,6 +359,256 @@ docs-quickstart: ## Open the quick start guide
 		echo "Quickstart location: docs/operations/QUICKSTART.md"; \
 		echo "Full runbook: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
 	fi
+
+# -------- Claim register (AGNOTE4482) ----------
+# THE SANCTIONED WRITE PATH. `claim-collision-pre.py` refuses shell writes to
+# the register it cannot check, and a refusal with no alternative is a
+# deadlock: four delivery agents in one session had no Write/Edit tool, so a
+# shell append was the only way any of them could file a row. These targets are
+# that alternative -- they read the clock, run the collision gate's own check,
+# take an exclusive lock across the whole check-and-append, and append in
+# O_APPEND.
+#
+# NO REGISTER FIELD EVER BECOMES A SHELL WORD. Every one of them travels by
+# ENVIRONMENT, and the emptiness guards below test the EXPORTED variable
+# (`$$REGISTER_BRANCH`) rather than the make expansion (`$(BRANCH)`). Register
+# prose is full of backticks; expanded into a recipe they are command
+# substitutions that the shell runs before python is even started. Measured at
+# 776b429b9, when SCOPE already travelled by environment and only the guard
+# line still expanded it:
+#
+#     make register-claim ... SCOPE='document `touch /tmp/PROOF` behavior'
+#     -> the recorded row was correct, AND /tmp/PROOF was created
+#
+# A correct row is not the whole test. The command ran. OWNER, BRANCH, TTL,
+# ANCHOR and TEXT_FILE were interpolated outright, with no environment door at
+# all. ARGS is deliberately still expanded: it carries FLAGS (--dry-run), not
+# content, and it is the caller's own text.
+#
+# `:=` and a separate name for the owner, because `register-claim: export
+# REGISTER_OWNER = $(or $(OWNER),$(REGISTER_OWNER))` is a target-specific
+# variable defined in terms of itself, which make rejects as recursive.
+# THE INTERPRETER MUST HAVE THE GATE'S DEPENDENCIES, or the check silently
+# gets coarser. `register_append.py` imports `claim-collision-pre.py`, whose
+# `_load_lineage()` needs PyYAML to read `identity_vocabulary.yaml`. Without it
+# the gate falls back to comparing owner strings EXACTLY -- and one identity in
+# this register writes itself several ways (`(Knuckles)` x16, `(Knuckles, opus
+# 4.7 1M)` x7, `(Opus 5)` x2), so a RELEASE under one spelling stops closing a
+# CLAIM opened under another and the same node reads as a stranger to itself.
+# The hook declares the dependency in a PEP 723 block for `uv run`; a bare
+# `$(PYTHON)` honours no such declaration.
+#
+# Probed, not assumed, and RECURSIVE (`=`, not `:=`) so the probe runs only when
+# a register target actually expands it rather than on every make invocation.
+# `$(PYTHON)` is preferred when it already has the dependencies -- switching a
+# working interpreter for `uv run --script` would trade a silent degradation for
+# a first-run network fetch, which is a worse failure on an offline node.
+#
+# The offline tradeoff is unchanged in shape but now honest: the fallback
+# actually DELIVERS both dependencies, because the PEP 723 block in
+# register_append.py declares `pydantic>=2` alongside `pyyaml`. Before, an
+# offline node fell back to a `uv run --script` that still could not supply
+# pydantic, so the fetch bought nothing and the notice fired anyway.
+# PROBE EVERY DEPENDENCY THE GATE ACTUALLY USES, not just the first one that
+# ever mattered. This tested `import yaml` alone, so an interpreter with
+# PyYAML and no pydantic was chosen as GOOD and then printed a DEGRADED
+# notice on every write -- measured 2026-09-15 on two register-release runs.
+# `register_append.py` needs both: PyYAML for the identity vocabulary above,
+# pydantic for the RegisterProse model that is the DECLARED prose contract.
+# A probe that checks one of two dependencies reports on the half it looked at.
+REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml, pydantic' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
+# THE PATTERN, stated once so it can be reused instead of re-derived.
+#
+#   1. every tool declares its third-party deps in a PEP 723 block
+#   2. every target selects an interpreter that SATISFIES that declaration
+#   3. the fallback is `uv run --script`, which reads the block
+#
+# $(PYTHON) answers 'is there an interpreter', which is a different question
+# from 'can it import what this tool needs' -- and only the second one
+# decides whether the tool can do its job. A target that asks the first and
+# acts on the second degrades silently on whichever nodes happen to differ,
+# which is every fleet.
+#
+# PYTHON_YAML is REGISTER_PYTHON's shape for the (much larger) set of tools
+# needing PyYAML alone. Recursive `=` so the probe runs only when a target
+# expands it, not on every make invocation.
+PYTHON_YAML = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
+REGISTER_OWNER_VALUE := $(if $(OWNER),$(OWNER),$(REGISTER_OWNER))
+
+.PHONY: register-claim
+register-claim: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-claim: export REGISTER_BRANCH = $(BRANCH)
+register-claim: export REGISTER_TTL = $(if $(TTL),$(TTL),72h)
+register-claim: export REGISTER_SCOPE = $(SCOPE)
+register-claim: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
+register-claim: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL=72h] [CO_OWNER=])
+	@if [ -z "$$REGISTER_BRANCH" ] || { [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; }; then \
+		echo "usage: make register-claim OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'"; \
+		echo "  the single quotes are LOAD-BEARING: double quotes let the shell expand \$$VARS into the prose before"; \
+		echo "  make ever sees it, and the register is append-only so an absorbed expansion is uncorrectable."; \
+		echo "  long prose: write it to a file and pass ARGS='--scope-file=path' so it never joins a command string."; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py claim $(ARGS)
+
+.PHONY: register-release
+register-release: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-release: export REGISTER_BRANCH = $(BRANCH)
+register-release: export REGISTER_SCOPE = $(SCOPE)
+register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
+register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
+# THE BATON. Lanes are shared, not locked (AGNOTE4482.md:1709-1713): a RELEASE
+# closes the named lane for every PARTICIPANT -- the signer's own rows, rows
+# whose co-owners: declare the signer, and, with BATON_FROM=, the rows of the
+# peer who holds it when that peer is not running. The release row is the
+# REGISTER part of the recorded handoff (KRISS_KROSS_ACCORD.md:12-16 also asks
+# for a Graphiti trail entry and a PR comment), and the holder re-claiming
+# supersedes it. A malformed baton closes NOTHING -- never your own lanes.
+#   make -C pmoves register-release OWNER='<you>' BRANCH=fix/x \
+#        BATON_FROM='<holder>' SCOPE='what landed, and why you are carrying it'
+register-release: export REGISTER_BATON_FROM = $(BATON_FROM)
+# BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
+# this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
+# full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
+# tool refuses an untargeted release with a message naming both doors -- which
+# survives `make` collapsing every nonzero recipe exit to 2, because the message
+# is the structured part, not the code.
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM=<holder> to close a PEER's lane)
+	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
+		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
+		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \
+		echo "  a row cannot be corrected afterwards; ARGS='--scope-file=path' for long prose."; \
+		echo "       BRANCH= is required. To close EVERY lane you hold, say so: ARGS=--all-lanes"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py release $(ARGS)
+
+.PHONY: register-note
+# THE FACT ROAD. Without it the only non-CLAIM kind this tool accepted was
+# `release`, so recording a correction meant filing one -- and a RELEASE naming
+# no lane closes EVERY lane its owner holds. A footnote could therefore close a
+# node's whole workload silently. A NOTE transitions nothing, by construction
+# and by a before/after check on the open-lane map.
+register-note: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-note: export REGISTER_BRANCH = $(BRANCH)
+register-note: export REGISTER_SCOPE = $(SCOPE)
+register-note: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-note: ## Record a fact in the register WITHOUT opening or closing a lane (OWNER= SCOPE= [BRANCH=])
+	@if [ -z "$$REGISTER_SCOPE" ]; then \
+		echo "usage: make register-note OWNER='B850-CLAUDE (Knuckles)' SCOPE='the fact being recorded'"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py note $(ARGS)
+
+.PHONY: register-amend
+# THE AMEND ROAD. #2858's co-owner workflow needs the INCUMBENT to add
+# `co-owners:` to a row they already filed -- an in-place edit of one line. The
+# collision gate refuses in-place rewrites of the register (a PreToolUse hook
+# cannot see what a mid-file rewrite produces), register-claim only appends, and
+# register-docs refuses anything that changes a ledger row. Without this target
+# the field that SUPPRESSES a collision had no sanctioned way to be set from a
+# shell -- the same deadlock class as the missing append road.
+register-amend: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-amend: export REGISTER_BRANCH = $(BRANCH)
+register-amend: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-amend: ## Add co-owners to YOUR OWN open claim row (OWNER= BRANCH= CO_OWNER=)
+	@if [ -z "$$REGISTER_BRANCH" ] || [ -z "$$REGISTER_CO_OWNERS" ]; then \
+		echo "usage: make register-amend OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x CO_OWNER='4090-CLAUDE:filed the blocker'"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py amend $(ARGS)
+
+.PHONY: register-docs
+register-docs: export REGISTER_ANCHOR = $(ANCHOR)
+register-docs: export REGISTER_TEXT_FILE = $(TEXT_FILE)
+register-docs: ## Insert prose into the register without touching ledger rows (ANCHOR= TEXT_FILE=)
+	@if [ -z "$$REGISTER_ANCHOR" ] || [ -z "$$REGISTER_TEXT_FILE" ]; then \
+		echo "usage: make register-docs ANCHOR='## Some unique heading' TEXT_FILE=section.md"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py docs $(ARGS)
+
+.PHONY: register-sync
+# THE RECOVERY ROAD. A checkout whose register carries uncommitted appended rows
+# cannot fast-forward, and the collision gate (correctly) refuses every shell
+# route that could drop a row -- while every other register-* road only
+# appends. So a stuck checkout had no sanctioned way out (measured 2026-09-28:
+# the root checkout, 21 behind main, 8 uncommitted rows). This drops ONLY rows
+# the target ref already carries (byte-identical, or re-filed with a
+# `first filed at <ts>` marker by the same owner on the same lane) and keeps
+# every other line byte-exact. DRY RUN unless APPLY=1. Never fetches.
+#
+#   make -C pmoves register-sync                      # classify, write nothing
+#   make -C pmoves register-sync APPLY=1              # drop, re-append KEEP
+#   make -C pmoves register-sync HOLD=1 APPLY=1       # drop, HOLD KEEP in a sidecar
+#   git pull --ff-only --no-recurse-submodules
+#   make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1
+#
+# Every value travels by ENVIRONMENT, for the reason spelled out above
+# register-claim: nothing here ever becomes a shell word.
+# APPLY and HOLD are honoured ONLY from the command line: make imports the
+# ambient environment as variables, so an `APPLY=1` exported in some shell
+# would otherwise silently turn every dry run into a write. REPO is pinned
+# BLANK: the tool targets its own checkout, and an ambient REGISTER_SYNC_REPO
+# would redirect it to another checkout's register in a command that never
+# names that register (so no hook could see it). `ARGS=--repo=...` stays
+# possible and is visible in the command text.
+register-sync: export REGISTER_SYNC_APPLY = $(if $(filter command line,$(origin APPLY)),$(APPLY),)
+register-sync: export REGISTER_SYNC_HOLD = $(if $(filter command line,$(origin HOLD)),$(HOLD),)
+register-sync: export REGISTER_SYNC_REPO =
+register-sync: export REGISTER_SYNC_REAPPLY = $(REAPPLY)
+register-sync: export REGISTER_SYNC_REF = $(REF)
+register-sync: ## Drop uncommitted register rows main already has, keep the rest ([APPLY=1] [HOLD=1] [REAPPLY=sidecar] [REF=origin/main]) -- 0 done / 3 refused
+	@$(REGISTER_PYTHON) tools/register_append.py sync $(ARGS)
+
+.PHONY: register-status
+# THE SANCTIONED READ PATH. #2879 closed the shell write-hole correctly and left
+# the register with no way to ASK: every path its refusal named was a write, and
+# `open_claims_in()` -- the authority on what is open -- sits inside an
+# interpreter the gate refuses. An agent could file a claim and could not check
+# whether the lane was free.
+#
+# REGISTER_PYTHON, not $(PYTHON), and this is load-bearing for a READ in a way
+# it is not for a write. Without PyYAML the gate compares owner spellings
+# exactly; a write then over-blocks (fail closed) but a read under-reports --
+# it answers "free" for a lane held under a spelling it did not fold. The tool
+# refuses outright in that state rather than answer, so the interpreter choice
+# is the difference between an answer and a 3.
+register-status: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-status: export REGISTER_BRANCH = $(BRANCH)
+register-status: ## Read open lanes / whether a lane is free ([BRANCH=] [OWNER=]) -- 0 clean / 1 findings / 3 could not measure
+	@$(REGISTER_PYTHON) tools/register_status.py $(ARGS)
+
+.PHONY: register-postdate-check
+register-postdate-check: ## Assert rows added on this branch are not postdated (0 clean / 1 findings / 3 could not measure)
+	@$(PYTHON) tools/register_postdate_check.py --base "$(or $(BASE),origin/main)" $(ARGS)
+
+.PHONY: register-postdate-sweep
+register-postdate-sweep: ## Report every postdated row in the register's whole history
+	@$(PYTHON) tools/register_postdate_check.py --sweep $(ARGS)
+
+# -------- GitHub notification pool (3-surface review triage) ----------
+# The founding defect (PR #3025, 2026-09-12): fleet reviews post as bot
+# ISSUE COMMENTS, so review-endpoint scans return confident zeros while a
+# REQUEST_CHANGES sits in plain sight. The pool normalizes all three REST
+# surfaces per open PR and publishes to NATS github.pool.review.v1
+# (JetStream GITHUB_POOL, limits retention) -- one sweep, every agent reads.
+.PHONY: github-pool-sync
+github-pool-sync: ## Sweep PR review surfaces into the NATS pool (0 clean / 1 urgent / 3 could not measure)
+	@$(PYTHON) tools/github_pool_sync.py $(ARGS)
+
+.PHONY: github-pool-latest
+github-pool-latest: ## Print the last N pooled records (N=10)
+	@nats -s $(GITHUB_POOL_NATS_URL) stream view GITHUB_POOL --count $(or $(N),10) $(ARGS)
 
 # -------- Updates ----------
 .PHONY: update
@@ -259,6 +635,11 @@ up-bots: ## Start bot services (BotZ gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
 	@echo "✔ Bots up (botz-gateway)."
 
+.PHONY: rebuild-bots
+rebuild-bots: ## Rebuild + restart botz-gateway from current source (theme routes/CORS live here)
+	@$(DC) --profile data --profile workers --profile botz up -d --build botz-gateway
+	@echo "✔ botz-gateway rebuilt + restarted."
+
 # --- JuiceFS object-store PoC (replaces EOL MinIO; see docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md) ---
 # Scoped to base+juicefs overlays ONLY (not the monolith $(DC)): a full-monolith
 # `compose up` interpolates EVERY service's env, so unrelated ${VAR:?} guards
@@ -266,23 +647,30 @@ up-bots: ## Start bot services (BotZ gateway)
 # not PARSE — so isolation requires a separate file set, not just --profile.
 JUICEFS_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.base.yml -f docker-compose.juicefs.yml
 .PHONY: up-juicefs down-juicefs juicefs-status
-up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: redis metadata + one-time format + S3 gateway (base+juicefs overlays)
-	@$(JUICEFS_DC) --profile juicefs up -d juicefs-redis juicefs-format juicefs-gateway
-	@echo "✔ JuiceFS PoC started (base+juicefs overlays — no monolith secrets needed)."
+up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: Postgres metadata + one-time format + S3 gateway (requires supabase-db running)
+	@docker ps --filter name=supabase-db --format '{{.Names}}' | grep -q supabase-db \
+		|| (echo "❌ supabase-db must be running for JuiceFS Postgres metadata. Start it: make up-supabase" && exit 1)
+	@$(JUICEFS_DC) --profile juicefs up -d juicefs-format juicefs-gateway
+	@echo "✔ JuiceFS PoC started (Postgres metadata on supabase-db)."
 	@echo "  S3 endpoint: juicefs-gateway:9000 (drop-in for minio:9000)."
 	@echo "  Creds: JUICEFS_S3_USER/PASSWORD (fallback MINIO_USER/PASSWORD — run 'make brand-defaults' if unset)."
 	@echo "  Check:  make juicefs-status   |   Stop: make down-juicefs"
 
-down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-meta/juicefs-data volumes preserved)
-	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
-	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
-	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-meta $(PROJECT)_juicefs-data)."
+down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-data volume preserved)
+	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format 2>/dev/null || true
+	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format 2>/dev/null || true
+	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-data)."
+
+up-juicefs-recreate: ensure-env-shared bootstrap-tier-envs ## Force-recreate the JuiceFS gateway with current env (rotation-drift recovery)
+	@echo "Force-recreating juicefs-gateway with current env..."
+	@$(JUICEFS_DC) --profile juicefs up -d --force-recreate --no-deps juicefs-gateway
+	@echo "Done. Check: make juicefs-status"
 
 juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
 	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
 
 juicefs-status: ## Show JuiceFS PoC container state + gateway health
-	@$(JUICEFS_DC) --profile juicefs ps juicefs-redis juicefs-format juicefs-gateway
+	@$(JUICEFS_DC) --profile juicefs ps juicefs-format juicefs-gateway
 	@echo "--- gateway health probe ---"
 	@$(JUICEFS_DC) --profile juicefs exec -T juicefs-gateway sh -lc 'curl -fsS http://localhost:9000/minio/health/live && echo " GATEWAY S3 HEALTHY"' 2>/dev/null || echo "gateway not healthy yet (give it ~15s after up; check 'make juicefs-status')"
 
@@ -322,6 +710,7 @@ ensure-networks: ## Materialize the shared compose-owned networks (idempotent) s
 	@docker network inspect pmoves_bus >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.3.0/24 --gateway 172.30.3.1 --label com.docker.compose.network=pmoves_bus --label com.docker.compose.project=$(PROJECT) pmoves_bus >/dev/null 2>&1 || true
 	@docker network inspect pmoves_data >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.4.0/24 --gateway 172.30.4.1 --label com.docker.compose.network=pmoves_data --label com.docker.compose.project=$(PROJECT) pmoves_data >/dev/null 2>&1 || true
 	@docker network inspect pmoves_monitoring >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.5.0/24 --gateway 172.30.5.1 --label com.docker.compose.network=pmoves_monitoring --label com.docker.compose.project=$(PROJECT) pmoves_monitoring >/dev/null 2>&1 || true
+	@docker network inspect pmoves_db_egress >/dev/null 2>&1 || docker network create --driver bridge --subnet 172.30.8.0/24 --gateway 172.30.8.1 pmoves_db_egress >/dev/null 2>&1 || true
 	@docker network inspect pmoves-net >/dev/null 2>&1 || docker network create --driver bridge --label com.docker.compose.network=pmoves --label com.docker.compose.project=$(PROJECT) pmoves-net >/dev/null 2>&1 || true
 	@echo "✔ shared networks ensured"
 
@@ -386,6 +775,48 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
+.PHONY: kong-routes-check
+KONG_ADMIN_URL ?= http://localhost:8001
+KONG_CONTAINER ?= pmoves-supabase-kong-1
+kong-routes-check: ## Assert the Kong gateway is actually WIRED: routes loaded + every upstream resolvable
+	@echo "=== Kong: route table check ($(KONG_ADMIN_URL)) ==="
+	@n=$$(curl -sf $(KONG_ADMIN_URL)/routes 2>/dev/null \
+	  | $(PYTHON) -c 'import sys,json; print(len(json.load(sys.stdin).get("data",[])))' 2>/dev/null || echo ""); \
+	if [ -z "$$n" ]; then \
+	  echo "✗ Kong admin API unreachable at $(KONG_ADMIN_URL) — is supabase-kong up?" >&2; exit 1; \
+	fi; \
+	if [ "$$n" -eq 0 ]; then \
+	  echo "✗ Kong has 0 routes — the declarative config did not load." >&2; \
+	  echo "  Every /rest/v1, /auth/v1 and /storage/v1 request will 404 with" >&2; \
+	  echo "  'no Route matched with those values', while 'kong health' still" >&2; \
+	  echo "  reports healthy. Check KONG_DATABASE=off + KONG_DECLARATIVE_CONFIG" >&2; \
+	  echo "  and the kong.yml / kong-entrypoint.sh mounts in docker-compose.core.yml." >&2; \
+	  exit 1; \
+	fi; \
+	echo "✓ Kong has $$n routes loaded"
+	@echo "  --- route probes (404 = route missing; 401/200 = wired) ---"; \
+	rc=0; \
+	for p in /rest/v1/ /auth/v1/health /storage/v1/status /realtime/v1/ /pg/health; do \
+	  code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://localhost:8000$$p" 2>/dev/null); \
+	  if [ "$$code" = "404" ]; then printf '  ✗ %-22s %s (no route)\n' "$$p" "$$code"; rc=1; \
+	  else printf '  ✓ %-22s %s\n' "$$p" "$$code"; fi; \
+	done; exit $$rc
+	@echo "  --- upstream reachability FROM Kong ---"; \
+	echo "  (a route can match and still 503 'name resolution failed' if the"; \
+	echo "   upstream name in kong.yml does not resolve — routes alone prove nothing)"; \
+	rc=0; \
+	for hp in rest:3000 auth:9999 storage:5000 studio:3000 functions:9000 meta:8080 \
+	          analytics:4000 realtime-dev.supabase-realtime:4000; do \
+	  h=$${hp%:*}; p=$${hp##*:}; \
+	  if docker exec $(KONG_CONTAINER) bash -c "exec 3<>/dev/tcp/$$h/$$p" 2>/dev/null; then \
+	    printf '  ✓ %-34s reachable\n' "$$hp"; \
+	  else printf '  ✗ %-34s UNREACHABLE\n' "$$hp"; rc=1; fi; \
+	done; \
+	if [ $$rc -ne 0 ]; then \
+	  echo "  → add the upstream name as a pmoves_api network alias on that service" >&2; \
+	  echo "    (do NOT edit the vendored PMOVES-supabase kong.yml)" >&2; \
+	fi; exit $$rc
+
 .PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh supa-bootstrap-db
 supa-bootstrap-db: ensure-env-shared ## Bootstrap Supabase DB roles, schemas, and passwords from env
 	@bash scripts/supabase/bootstrap_db.sh
@@ -446,10 +877,10 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 			-e KONG_DATABASE=postgres \
 			-e KONG_PG_HOST=supabase-db \
-			-e KONG_PG_DATABASE=postgres \
-			-e KONG_PG_USER=$${SUPABASE_DB_USER:-postgres} \
-			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
-			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
+			-e KONG_PG_DATABASE=$${POSTGRES_DB:-$${SUPABASE_DB_NAME:-postgres}} \
+			-e KONG_PG_USER=$${POSTGRES_USER:-$${SUPABASE_DB_USER:-postgres}} \
+			-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD:-$${SUPABASE_DB_PASSWORD:-postgres}} \
+			kong/kong:3.9.1 sh -c "kong migrations bootstrap --yes 2>/dev/null || true; kong migrations up --yes 2>/dev/null || true" >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
 		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
@@ -471,6 +902,116 @@ supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-s
 	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true
 	@echo "✅ All Supabase runtimes stopped"
 
+build-svc: ## Build ONE service image from current source: make build-svc SVC=flute-gateway
+	@test -n "$(SVC)" || { echo "Usage: make build-svc SVC=<compose-service>"; exit 1; }
+	@echo "Building $(SVC) from current source..."
+	@$(DC) build $(SVC)
+	@echo "Built. Recreate to deploy: make recreate-svc SVC=$(SVC)"
+
+recreate-svc: ## Surgical recreate of ONE service with current env+image: make recreate-svc SVC=flute-gateway
+	@test -n "$(SVC)" || { echo "Usage: make recreate-svc SVC=<compose-service>"; exit 1; }
+	@# The --profile "*" below is for the LOOKUP on the next line only.
+	@#
+	@# CORRECTION (2026-09-03): an earlier revision of this comment claimed the
+	@# bare `up` could not recreate a profiled service such as flute-gateway.
+	@# That was wrong. Compose auto-enables a service's profile when the service
+	@# is named explicitly, so `up -d --no-deps flute-gateway` has always worked
+	@# -- verified by running exactly that, with no --profile, on the 4090.
+	@#
+	@# What IS true: `config --services` hides profiled services (18 of 107 on
+	@# this stack), so the existence check needs the wildcard or it would reject
+	@# every profiled service as "not in this stack". The check earns its keep
+	@# because compose's own error for an unresolvable service does not separate
+	@# "misspelled" from "hidden behind a profile".
+	@$(DC) --profile "*" config --services 2>/dev/null | grep -qx "$(SVC)" || { \
+	  echo "✖ no compose service named '$(SVC)' in this stack"; \
+	  echo "  list them: make recreate-svc-list"; \
+	  exit 1; }
+	@echo "Recreating $(SVC) with current env (no deps)..."
+	@$(DC) up -d --force-recreate --no-deps $(SVC)
+	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
+
+recreate-svc-list: ## List every compose service recreate-svc can target (all profiles)
+	@$(DC) --profile "*" config --services 2>/dev/null | sort
+
+.PHONY: disconnection-audit
+disconnection-audit: ## Detect services that are running, HEALTHY and disconnected. 0 clean / 1 findings / 3 could-not-measure
+	@# KNOWN ROAD for pmoves/tools/disconnection_audit.py. A verification
+	@# harness that lives only in an agent brief reaches exactly one agent;
+	@# a Known Road reaches the fleet.
+	@#
+	@# READ THE JSON, NOT make's EXIT CODE. make collapses every nonzero
+	@# recipe exit to 2, so `1 findings` and `3 could-not-measure` are
+	@# indistinguishable through this target -- which is why the tool also
+	@# writes a structured verdict carrying exit_code. Point --json at a file
+	@# and read .exit_code, or call the tool directly, when you need the
+	@# distinction. could-not-measure is NOT a pass.
+	@#
+	@# Read-only against the live runtime: it never starts, stops, recreates
+	@# or reconfigures a container, and never reads a secret file.
+	@#
+	@# Tunables: DETECTORS=D1,D3  WINDOW_MIN=15  REPEAT=5  LOG_TAIL=400
+	@#   FIELD=cpu_arch (repeatable via ARGS)  JSON=path/to/verdict.json
+	$(PYTHON) tools/disconnection_audit.py \
+	  --repo-root .. \
+	  --detectors $(or $(DETECTORS),D1,D2,D3,D4) \
+	  --log-window-min $(or $(WINDOW_MIN),15) \
+	  --repeat-threshold $(or $(REPEAT),5) \
+	  --log-tail $(or $(LOG_TAIL),400) \
+	  $(if $(JSON),--json $(JSON)) $(ARGS)
+
+.PHONY: disconnection-audit-test
+disconnection-audit-test: ## Validate the validator: prove each detector fires on its ground-truth fixture
+	$(PYTHON) -m pytest tools/tests/test_disconnection_audit.py -q
+
+.PHONY: net-reality
+net-reality: ## Cross-check every published port against a real host listener (catches silent binds). PORTS_ONLY=1 to skip subnet probes. 0 clean / 1 drift / 2 docker unavailable.
+	@# Propagate PROJECT: the script reads COMPOSE_PROJECT_NAME and otherwise
+	@# defaults to "pmoves", so `make PROJECT=other net-reality` would audit the
+	@# WRONG stack and return clean -- a green gate for containers nobody asked
+	@# about. (Raised in review on PR #2908.)
+	COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/audit_network_reality.sh $(if $(PORTS_ONLY),--ports-only)
+
+rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object killer)
+	@$(MAKE) --no-print-directory build-svc SVC=$(SVC)
+	@$(MAKE) --no-print-directory recreate-svc SVC=$(SVC)
+
+# Back-compat alias: the recreate primitive predates the generic name.
+# READ-ONLY SQL against the active Supabase DB, for schemas PostgREST cannot see.
+#
+# WHY THIS EXISTS. `/db:query` and the Supabase MCP both route through
+# PostgREST, which only serves PGRST_DB_SCHEMAS (public,pmoves_core,pmoves_kb).
+# Anything outside that -- `_supavisor`, `auth`, `storage`, `_realtime` -- was
+# unreadable by any sanctioned path, so the only way to answer a question about
+# those schemas was raw `psql`, which the damage-control guard correctly blocks.
+# That gap turned "is there encrypted tenant state in _supavisor?" into an
+# unanswerable question, and an unanswerable question becomes a guess.
+#
+# Exposing those schemas over REST would answer it by widening the attack
+# surface onto a credential vault. This answers it without doing that.
+#
+# READ-ONLY IS ENFORCED BY POSTGRES, NOT BY A REGEX. The statement runs inside
+# `BEGIN; SET TRANSACTION READ ONLY; ...; ROLLBACK;` so any write is rejected by
+# the server. A pattern-matching guard on the SQL string would be the same class
+# of defect this repo keeps producing: a check that looks like enforcement and
+# is really a hope.
+#
+# Usage: make supa-query SQL="select count(*) from _supavisor.tenants"
+supa-query: ## Read-only SQL against the active Supabase DB (server-enforced). Usage: SQL="select ..."
+	$(if $(strip $(SQL)),,$(error Usage: make -C pmoves supa-query SQL="select ..."))
+	@set -uo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "error: Supabase DB container not found"; exit 1; fi; \
+	PGDB=$${POSTGRES_DB:-pmoves}; \
+	printf 'BEGIN; SET TRANSACTION READ ONLY;\n%s;\nROLLBACK;\n' "$$SQL" | \
+	  docker exec -i "$$db" sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "'"$$PGDB"'" -v ON_ERROR_STOP=1 -A -F"|" -q'
+
+supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
+	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
+	@echo "Recreating $(SVC) with current env (no deps)..."
+	@$(DC) up -d --force-recreate --no-deps $(SVC)
+	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
+
 supa-restart: ## Restart Supabase stack for selected runtime
 	@echo "🔄 Restarting Supabase stack..."
 	@$(MAKE) --no-print-directory supa-stop
@@ -482,6 +1023,18 @@ pooler-recreate: ## Force-recreate supabase-pooler container to pick up env file
 	@echo "→ Force-recreating supabase-pooler with current env..."
 	@$(DC) --profile supabase-local up -d --force-recreate supabase-pooler
 	@echo "✓ pooler recreated — give it 30s for health check"
+
+.PHONY: supa-stack-default-up
+supa-stack-default-up: ## Lane 3 — bring supabase stack up cleanly (regen secrets, fix env files, run migrations, configure kong routes)
+	@$(PYTHON) tools/bootstrap-supabase-stack.py
+	@echo "✓ supabase stack default-up complete. Evidence: pmoves/tools/lane3-evidence/"
+
+supa-env-doctor-strict:
+.PHONY: supa-env-fix-shared supa-env-fix-tier-ui
+supa-env-fix-shared: ## One-shot: replace ${SERVICE_ROLE_KEY}/${ANON_KEY}/${JWT_SECRET} in env.shared with literals
+	@$(PYTHON) tools/fix-env-shared.py
+supa-env-fix-tier-ui: ## One-shot: populate empty SUPABASE_* in env.tier-ui from env.tier-supabase
+	@$(PYTHON) tools/fix-env-tier-ui.py
 
 supa-status: ## Show Supabase status for selected runtime and export env snapshot when available
 	@echo "🔍 Supabase status (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME)):"
@@ -530,7 +1083,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler 2>/dev/null || true; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
-		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
+		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
 		echo "  Kong:      http://localhost:$${SUPABASE_KONG_PROXY_PORT:-8000}"; \
 		echo "  Auth:      http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		echo "  Studio:    http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
@@ -586,8 +1139,13 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 			fi; \
 		fi; \
 	else \
-		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
-		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
+		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
+		: "gotrue and studio publish NO host port in the compose runtime — \
+		   `docker ps` shows bare '9999/tcp' and '3000/tcp' with no host mapping. \
+		   Probing localhost:9999 / localhost:54323 could therefore NEVER succeed, \
+		   and this target printed two permanent ❌ against a fully healthy stack. \
+		   Both are reachable through Kong, which is the supported path anyway."; \
+		auth_url="http://localhost:$${SUPABASE_KONG_PROXY_PORT:-8000}/auth/v1/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
 	rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest_url" || true); \
@@ -596,13 +1154,24 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 	fi; \
 	auth_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$auth_url" || true); \
 	studio_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$studio_url" || true); \
-	if [ "$$rest_code" = "200" ]; then echo "  ✅ REST ($$rest_url)"; else echo "  ❌ REST ($$rest_url) -> $$rest_code"; fi; \
-	if [ "$$auth_code" = "200" ]; then echo "  ✅ Auth ($$auth_url)"; else echo "  ❌ Auth ($$auth_url) -> $$auth_code"; fi; \
-	if [ "$$studio_code" = "200" ] || [ "$$studio_code" = "301" ] || [ "$$studio_code" = "302" ] || [ "$$studio_code" = "307" ] || [ "$$studio_code" = "308" ]; then \
-		echo "  ✅ Studio ($$studio_url)"; \
-	else \
-		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
-	fi
+	: "401 is PostgREST ANSWERING — it demands an apikey and says so. Requiring 200 \
+	   marked a live REST layer ❌. make kong-routes-check already documents the \
+	   correct rule on the very same service ('404 = route missing; 401/200 = wired'); \
+	   these two instruments disagreed about what alive means. 000 is the real \
+	   failure — nothing on the socket."; \
+	case "$$rest_code" in \
+		200|401) echo "  ✅ REST ($$rest_url) -> $$rest_code";; \
+		*) echo "  ❌ REST ($$rest_url) -> $$rest_code";; \
+	esac; \
+	case "$$auth_code" in \
+		200|401) echo "  ✅ Auth ($$auth_url) -> $$auth_code";; \
+		*) echo "  ❌ Auth ($$auth_url) -> $$auth_code";; \
+	esac; \
+	case "$$studio_code" in \
+		200|301|302|307|308) echo "  ✅ Studio ($$studio_url)";; \
+		000) echo "  ⚠️  Studio ($$studio_url) -> not published on the host (reach it via Kong)";; \
+		*) echo "  ❌ Studio ($$studio_url) -> $$studio_code";; \
+	esac
 
 supa-collation-refresh: ## Refresh collation version for all Supabase databases (RG-3)
 	@echo "Refreshing collation versions..."
@@ -672,41 +1241,57 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 .PHONY: supabase-bootstrap supabase-bootstrap-mark-applied
 supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
-	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@set -euo pipefail; \
+	@# BEST EFFORT, NOT A PRECONDITION. This used to be a hard dependency and
+	@# that created a bootstrap DEADLOCK: supa-start waits for supabase-postgrest
+	@# to report healthy, PostgREST cannot become healthy until its schema cache
+	@# builds, and the schema this bootstrap installs is what the cache needs.
+	@# So the repair required the thing it repairs. Measured 2026-09-01: the
+	@# stack had been in that state for 3 days --
+	@#   "dependency failed to start: container pmoves-supabase-postgrest-1 is unhealthy"
+	@# and every attempt to fix it through the documented path failed identically.
+	@#
+	@# Nothing below needs PostgREST. The DDL runs via `docker exec` into the DB
+	@# container, and the NEXT recipe line already fails loudly with
+	@# "Supabase DB container not found" if that container is absent -- which is
+	@# the real precondition, checked in the right place.
+	@# Tolerate ONLY the known deadlock, never a runtime-guard rejection.
+	@# A blanket `-` prefix would swallow a conflicting-runtime rejection too,
+	@# after which find_db_container.sh falls back to ANY running
+	@# supabase_db_* container -- so a sibling or stale CLI database could
+	@# receive this repo's DDL. Match the specific failure instead.
+	@log=$$(mktemp); \
+	if $(MAKE) --no-print-directory supa-start >"$$log" 2>&1; then \
+	  rm -f "$$log"; \
+	elif grep -q 'supabase-postgrest' "$$log" && grep -qi 'unhealthy\|failed to start' "$$log"; then \
+	  echo "warn: supa-start failed only on PostgREST health -- continuing; that is precisely what this bootstrap repairs"; \
+	  rm -f "$$log"; \
+	else \
+	  echo "error: supa-start failed for a reason OTHER than PostgREST health -- refusing to apply DDL:"; \
+	  cat "$$log"; rm -f "$$log"; exit 1; \
+	fi
+	@set -uo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
-	if [ -d "supabase/migrations" ]; then \
-		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
-			[ -f "$$migration" ] || continue; \
-			name=$$(basename "$$migration"); \
-			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
-			if [ "$$applied" = "1" ]; then \
-				echo "   Skipping migration (already applied): $$name"; \
-				continue; \
-			fi; \; echo "   Applying migration: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$migration"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+	PGDB=$${POSTGRES_DB:-pmoves}; \
+	: "Run psql as the privileged supabase_admin role over TCP, sourcing the DB"; \
+	: "password from the container env. supabase_admin is the self-hosted superuser;"; \
+	: "the plain 'postgres' role is NOT superuser and lacks CREATE on public."; \
+	admin_psql() { docker exec -i "$$db" sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "'"$$PGDB"'" -v ON_ERROR_STOP=1 "$$@"' _ "$$@"; }; \
+	admin_psql -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));" >/dev/null; \
+	apply_dir() { akind="$$1"; adir="$$2"; \
+		if [ ! -d "$$adir" ]; then echo "   ⚠️  No $$adir directory found"; return 0; fi; \
+		ok=0; skip=0; fail=0; \
+		for f in $$(find "$$adir" -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$f" ] || continue; \
+			name=$$(basename "$$f"); \
+			if [ "$$(admin_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='$$akind' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]')" = "1" ]; then skip=$$((skip+1)); continue; fi; \
+			if admin_psql < "$$f" >/tmp/sb_apply.log 2>&1; then \
+				admin_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('$$akind', '$$name') ON CONFLICT DO NOTHING;" >/dev/null; ok=$$((ok+1)); \
+			else fail=$$((fail+1)); echo "   ⚠️  $$akind FAILED (skipped): $$name :: $$(grep -iE 'ERROR' /tmp/sb_apply.log | head -1 | cut -c1-100)"; fi; \
 		done; \
-	else \
-		echo "   ⚠️  No migrations directory found"; \
-	fi; \
-	if [ -d "supabase/initdb" ]; then \
-		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
-			[ -f "$$seed" ] || continue; \
-			name=$$(basename "$$seed"); \
-			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
-			if [ "$$applied" = "1" ]; then \
-				echo "   Skipping seed (already applied): $$name"; \
-				continue; \
-			fi; \; echo "   Applying seed: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$seed"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
-		done; \
-	else \
-		echo "   ⚠️  No initdb directory found"; \
-	fi
+		echo "   $$akind: applied=$$ok skipped=$$skip failed=$$fail"; }; \
+	apply_dir migration supabase/migrations; \
+	apply_dir seed supabase/initdb
 	@echo "✅ Supabase bootstrap complete"
 
 .PHONY: supabase-bootstrap-no-start
@@ -841,7 +1426,7 @@ seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
-	@$(DC) up -d --no-deps --build --recreate hi-rag-gateway-v2
+	@$(DC) up -d --no-deps --build --force-recreate hi-rag-gateway-v2
 	@sleep 5
 	@$(DC) exec -T hi-rag-gateway-v2 python /app/scripts/seed_local.py 2>/dev/null || \
 		$(DC) exec -T hi-rag-gateway-v2 python3 /app/scripts/seed_local.py 2>/dev/null || \
@@ -864,7 +1449,7 @@ bootstrap-data: ## Umbrella: Supabase SQL + Neo4j seeds + Qdrant/Meili demo data
 	@echo "   💡 Run 'make smoke' to verify installation"
 
 .PHONY: first-run
-first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo data
+first-run: ## Guided first-run: env setup, Supabase, core services, agents, MCPs, demo data
 	@echo "🚀 PMOVES First-Run Bootstrap"
 	@echo "================================"
 	@echo ""
@@ -876,6 +1461,8 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@echo "  ✓ Start core services (data tier, workers)"
 	@echo "  ✓ Start agents (Agent Zero, Archon)"
 	@echo "  ✓ Run auth bootstrap (mode=$(AUTH_BOOTSTRAP_MODE), email=$(SUPABASE_BOOT_USER_EMAIL))"
+	@echo "  ✓ Bootstrap Docker MCP Toolkit profile"
+	@echo "  ✓ Register native PMOVES MCP servers (Claude/Kimi/KiloCode configs)"
 	@echo "  ✓ Seed Agent Zero MCP servers"
 	@echo ""
 	@$(MAKE) --no-print-directory check-tools
@@ -885,6 +1472,9 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory up-agents-ui
 	@$(MAKE) --no-print-directory auth-bootstrap
+	@$(MAKE) --no-print-directory mcp-toolkit-bootstrap || true
+	@$(MAKE) --no-print-directory mcp-config-bootstrap
+	@$(MAKE) --no-print-directory a0-model-sync
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@echo ""
 	@echo "✅ First-run complete!"
@@ -1005,6 +1595,7 @@ first-run-multi-host: ## Guided first-run with multi-host mesh setup
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory up-agents-ui
 	@$(MAKE) --no-print-directory auth-bootstrap
+	@$(MAKE) --no-print-directory a0-model-sync
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@$(MAKE) --no-print-directory registry-sync
 	@echo ""
@@ -1019,12 +1610,84 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
+.PHONY: reset-data-tier
+reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreate with current credentials
+	@echo "⚠️  This will DELETE all data-tier volumes (Neo4j, Qdrant, Meilisearch, MinIO)."
+	@echo "⚠️  Press Ctrl+C to abort. Continuing in 3 seconds..."
+	@sleep 3
+	@$(DC) stop $(DATA_SERVICES) 2>/dev/null || true
+	@$(DC) rm -f $(DATA_SERVICES) 2>/dev/null || true
+	@docker volume rm $(PROJECT)_neo4j-data $(PROJECT)_qdrant-data $(PROJECT)_meilisearch-data $(PROJECT)_minio-data 2>/dev/null || true
+	@$(MAKE) --no-print-directory up-data-tier
+	@echo "✅ Data tier reset with current env.tier-data credentials"
+
 .PHONY: up-minio
+# Pre-check (read-only): the minio image is a LOCAL source build that no registry
+# serves (see minio-build-src below). Resolve the image the way compose will, via
+# `config --images` (shell MINIO_IMAGE > --env-file > compose default), and if it is
+# the local -src build but not present, stop with the fix instead of letting compose
+# attempt a pull that can only fail. A registry MINIO_IMAGE override is never blocked.
+# COUPLING: the check compares against MINIO_SRC_TAG, which must equal the compose
+# MINIO_IMAGE default. If they drift, the check WARNs and skips instead of guarding.
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
+	@img=$$($(DC) config --images minio 2>/dev/null | head -n1); \
+	 if [ -z "$$img" ]; then \
+	   echo "WARN: could not resolve the minio image via 'docker compose config'; image pre-check SKIPPED" >&2; \
+	 elif [ "$$img" = "$(MINIO_SRC_TAG)" ]; then \
+	   if ! docker image inspect "$$img" >/dev/null 2>&1; then \
+	     echo "ERROR: minio image $$img is not present on this node. It is built locally, not pulled:" >&2; \
+	     echo "         make -C pmoves minio-build-src" >&2; \
+	     echo "       or, if upstream is still cached here (docker image inspect minio/minio:$(MINIO_SRC_RELEASE)):" >&2; \
+	     echo "         MINIO_IMAGE=minio/minio:$(MINIO_SRC_RELEASE) make -C pmoves up-minio" >&2; \
+	     exit 1; \
+	   fi; \
+	 else \
+	   case "$$img" in *-src) echo "WARN: minio resolves to $$img but MINIO_SRC_TAG=$(MINIO_SRC_TAG); the two have drifted, image pre-check SKIPPED" >&2;; esac; \
+	 fi
 	@$(DC) up -d --force-recreate minio presign
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
 	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
+
+# MinIO RELEASE.2025-09-07T16-13-09Z built from source. Every published copy of
+# this release is gone (docker.io 401 / quay.io 401 / ghcr.io 403 / dl.min.io 410),
+# so the image is rebuilt from the archived GitHub tag — the EXACT release the
+# data in pmoves_minio-data was written by. See docker/minio-src/README.md.
+# Interim only: Garage is the planned substrate (JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+#
+# The tag lives in OUR registry namespace (ghcr.io/powerfulmoves) even though it is
+# built locally: an unbuilt node that falls through to a pull then fails closed
+# against our own org, instead of pulling whatever a third party publishes under
+# an unowned docker.io namespace.
+#
+# COUPLING: this value MUST equal the MINIO_IMAGE default of the `minio` service in
+# docker-compose.yml (and the generated docker-compose.core.yml). Change them together.
+MINIO_SRC_TAG ?= ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src
+MINIO_SRC_RELEASE := RELEASE.2025-09-07T16-13-09Z
+# The Go build of minio peaks at several GB; refuse to start below this much
+# MemAvailable rather than push a node into OOM mid-build.
+# LIMITS: the gate reads /proc/meminfo, so it only works on a Linux host
+# (macOS/Windows get a WARN and no gate). It measures the HOST, not the builder VM,
+# and BuildKit runs the minio and mc stages IN PARALLEL, so peak use is
+# roughly both Go builds at once.
+MINIO_BUILD_MIN_MEM_MB ?= 6144
+
+.PHONY: minio-build-src
+minio-build-src: ## Build MinIO RELEASE.2025-09-07T16-13-09Z (+ mc) from source -> $(MINIO_SRC_TAG)
+	@min="$(MINIO_BUILD_MIN_MEM_MB)"; \
+	 avail=$$(awk '/^MemAvailable:/{print int($$2/1024)}' /proc/meminfo 2>/dev/null); \
+	 case "$$min" in ''|*[!0-9]*) echo "WARN: MINIO_BUILD_MIN_MEM_MB='$$min' is not a number; memory gate SKIPPED" >&2; min="";; esac; \
+	 case "$$avail" in ''|*[!0-9]*) echo "WARN: MemAvailable not measurable (no Linux /proc/meminfo); memory gate SKIPPED" >&2; avail="";; esac; \
+	 if [ -n "$$min" ] && [ -n "$$avail" ] && [ "$$avail" -lt "$$min" ]; then \
+	   echo "ERROR: MemAvailable $${avail}MB < MINIO_BUILD_MIN_MEM_MB=$${min}MB; free memory or override" >&2; exit 1; \
+	 fi
+	docker build -t "$(MINIO_SRC_TAG)" -f docker/minio-src/Dockerfile docker/minio-src
+	@echo "→ smoke: minio --version reports $(MINIO_SRC_RELEASE)"
+	@docker run --rm "$(MINIO_SRC_TAG)" --version | tee /dev/stderr | grep -qF "minio version $(MINIO_SRC_RELEASE)" \
+	  || { echo "ERROR: $(MINIO_SRC_TAG) does not report $(MINIO_SRC_RELEASE)" >&2; exit 1; }
+	@echo "→ smoke: mc and curl present (brand-defaults/backup use mc; the healthcheck uses curl)"
+	@docker run --rm --entrypoint mc "$(MINIO_SRC_TAG)" --version | head -1
+	@docker run --rm --entrypoint curl "$(MINIO_SRC_TAG)" --version | head -1
 
 .PHONY: up-bus
 up-bus: ## Start message bus (NATS)
@@ -1050,7 +1713,170 @@ nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Ro
 nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
 	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
 
+# ----------------------------------------------------------------------------
+# Lane 5 (2026-08-01): JetStream stream management
+#   nats-streams-init    - re-run init_streams.sh (idempotent; safe to re-run)
+#   nats-streams-validate - assert the 8 expected streams exist post-init
+# ----------------------------------------------------------------------------
+.PHONY: nats-streams-init nats-streams-validate nats-streams-list
+nats-streams-init: ## Idempotently create JetStream streams via the nats-init sidecar script (Known Road)
+	@echo "🔧 Initializing NATS JetStream streams (idempotent)..."
+	@bash scripts/nats/init_streams.sh
+	@echo "✅ NATS stream init complete"
+
+nats-streams-validate: ## Assert the expected streams exist with the expected subjects + retention (CI-runnable)
+	@echo "🔍 Validating NATS JetStream streams..."
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" -e NATS_URL="$$NATS_URL" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c 'for name in $$(nats -s "$$NATS_URL" stream ls -n); do nats -s "$$NATS_URL" stream info "$$name" -j; done' \
+	    > /tmp/nats_streams_actual.json
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.json
+	@rm -f /tmp/nats_streams_actual.json
+
+nats-streams-list: ## List current JetStream streams (ad-hoc)
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" \
+	    nats -s "$$NATS_URL" stream ls -n
+
+# ----------------------------------------------------------------------------
+# Fork registry ratchet (2026-08-03)
+#   fork-registry-ratchet       - assert every fork has sync+reason
+#   fork-registry-ratchet-json  - same, machine-readable
+# ----------------------------------------------------------------------------
+.PHONY: fork-registry-ratchet fork-registry-ratchet-json
+fork-registry-ratchet: ## Assert every fork in pmoves/config/fork_registry.json has a sync+reason decision (no network, <100ms)
+	@echo "🔒 Fork-registry ratchet..."
+	@$(PYTHON) tools/fork_registry_ratchet.py
+
+fork-registry-ratchet-json: ## Same as fork-registry-ratchet, but JSON output (for CI annotation)
+	@$(PYTHON) tools/fork_registry_ratchet.py --json
+
+# ----------------------------------------------------------------------------
+# Compose build-provenance ratchet (2026-09-12)
+#   compose-provenance-audit    - every build: is SUBMODULE or baselined shim
+#   compose-provenance-baseline - rewrite the shim baseline (deliberate; say why)
+# ----------------------------------------------------------------------------
+.PHONY: compose-provenance-audit compose-provenance-baseline
+compose-provenance-audit: ## Assert every compose build is a submodule build or a baselined shim (no network, ~200ms)
+	@echo "🔒 Compose build-provenance ratchet..."
+	@$(PYTHON) tools/compose_provenance_audit.py
+
+compose-provenance-baseline: ## Re-baseline the superproject-shim exceptions (deliberate; state why in the PR)
+	@$(PYTHON) tools/compose_provenance_audit.py --baseline
+
+# ----------------------------------------------------------------------------
+# Validate-composes ratchet (2026-08-05)
+#   validate-composes        - assert no short-form .env.local in any overlay
+#   validate-composes-json   - same, JSON output
+#   validate-composes-images - same, with --check-images (digest pinning)
+# ----------------------------------------------------------------------------
+.PHONY: validate-composes validate-composes-json validate-composes-images
+validate-composes: ## Assert no docker-compose overlay has short-form .env.local (no network, ~100ms)
+	@echo "🔒 Validate-composes ratchet..."
+	@$(PYTHON) tools/validate_composes.py
+
+validate-composes-json: ## Same as validate-composes, but JSON output (for CI annotation)
+	@$(PYTHON) tools/validate_composes.py --json
+
+validate-composes-images: ## validate-composes with --check-images (off by default; flag moving tags / no-digest refs)
+	@$(PYTHON) tools/validate_composes.py --check-images
+
+# ----------------------------------------------------------------------------
+# Validate-tac ratchet (2026-08-05)
+#   validate-tac        - assert every TAC node's action.type is implemented
+#                        (file_exists, grep, command, http, manual) or in
+#                        the operator-acknowledged baseline
+#   validate-tac-json   - same, JSON output
+# ----------------------------------------------------------------------------
+.PHONY: validate-tac validate-tac-json
+validate-tac: ## Assert no TAC tree has unknown action.type outside the operator baseline (no network, ~100ms)
+	@echo "🔒 Validate-tac ratchet..."
+	@$(PYTHON) tools/validate_tac.py
+
+validate-tac-json: ## Same as validate-tac, but JSON output (for CI annotation)
+	@$(PYTHON) tools/validate_tac.py --json
+
+# ----------------------------------------------------------------------------
+# Validate-dockerfile-paths ratchet (2026-08-05)
+#   validate-dockerfile-paths        - assert every compose `build:` points at
+#                                      a real Dockerfile, and every Dockerfile
+#                                      is either referenced or in the baseline
+#   validate-dockerfile-paths-json   - same, JSON output
+#   validate-dockerfile-paths-list-orphans - diagnostic: print orphan list
+#                                           without failing
+#   validate-dockerfile-paths-copy-skips  - diagnostic: print the COPY/ADD
+#                                           sources the scan deliberately
+#                                           does not check, with reasons
+#   validate-dockerfile-paths-copy-baseline - re-baseline COPY_UNRESOLVED
+#                                           (deliberate; every entry is a
+#                                            real build break)
+# ----------------------------------------------------------------------------
+.PHONY: validate-dockerfile-paths validate-dockerfile-paths-json validate-dockerfile-paths-list-orphans validate-dockerfile-paths-copy-baseline validate-dockerfile-paths-copy-skips
+validate-dockerfile-paths: ## Assert every compose `build:` points at a real Dockerfile; orphans must be in baseline (no network, ~100ms)
+	@echo "?? Validate-dockerfile-paths ratchet..."
+	@$(PYTHON) tools/validate_dockerfile_paths.py
+
+validate-dockerfile-paths-json: ## Same as validate-dockerfile-paths, but JSON output (for CI annotation)
+	@$(PYTHON) tools/validate_dockerfile_paths.py --json
+
+# ----------------------------------------------------------------------------
+# validate-command-anchors — a doc that says `make foo` is a promise; check it
+#   GHOST_TARGET   documented `make <t>` with no such target
+#   GHOST_PATH     documented `file:NNN` where the file does not exist
+#   UNRUNNABLE_DOC documented command matching a damage-control BLOCKED_PATTERN
+#   UNKNOWN_HOST   documented ssh host absent from the fleet topology
+# ----------------------------------------------------------------------------
+# Bind-source preflight -- the runtime half of the submodule build & mount gap.
+# Docker CREATES a missing bind source as a directory instead of erroring, so an
+# unpopulated submodule turns a file mount into a directory mount and the container
+# fails on its own config. Neither compose ratchet can see it (both check out
+# without submodules). See docs/operations/SUBMODULE_BUILD_AND_MOUNT_GAP.md.
+# ----------------------------------------------------------------------------
+.PHONY: bind-sources-check bind-sources-check-json
+bind-sources-check: ## Assert every submodule-backed compose bind source exists and is the right kind
+	@$(PYTHON) tools/check_bind_sources.py
+
+bind-sources-check-json: ## Same as bind-sources-check, but JSON output
+	@$(PYTHON) tools/check_bind_sources.py --json
+
+# Scope-aware: make reaches docker/ssh/python/git/systemd/nats, not just docker.
+# Ratchet — baseline in configs/command_anchors/_known_gaps.yaml, count goes down.
+# ----------------------------------------------------------------------------
+.PHONY: validate-command-anchors validate-command-anchors-json validate-command-anchors-baseline
+validate-command-anchors: ## Assert every documented `make <t>` / `file:NNN` / ssh host resolves (no network)
+	@echo "?? Validate-command-anchors ratchet..."
+	@$(PYTHON) tools/validate_command_anchors.py
+
+validate-command-anchors-json: ## Same as validate-command-anchors, but JSON output
+	@$(PYTHON) tools/validate_command_anchors.py --json
+
+validate-command-anchors-baseline: ## Re-baseline the anchor gate (deliberate: say why in the PR)
+	@$(PYTHON) tools/validate_command_anchors.py --write-baseline
+
+.PHONY: python-tests-ratchet python-tests-json python-tests-baseline
+python-tests-ratchet: ## Run every test_*.py and fail only on NEW failures (the merge-gate check)
+	@echo "?? Python-tests ratchet..."
+	@$(PYTHON) tools/pytest_ratchet.py
+
+python-tests-json: ## Same as python-tests-ratchet, but JSON output
+	@$(PYTHON) tools/pytest_ratchet.py --json
+
+python-tests-baseline: ## Re-baseline the python-tests gate (deliberate: say why in the PR)
+	@$(PYTHON) tools/pytest_ratchet.py --write-baseline
+
+validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
+	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
+
+validate-dockerfile-paths-copy-skips: ## Diagnostic: list COPY/ADD sources the scan cannot check statically, with reasons; never fails
+	@$(PYTHON) tools/validate_dockerfile_paths.py --list-copy-skips
+
+validate-dockerfile-paths-copy-baseline: ## Re-baseline the COPY-source gate (deliberate: every entry is a real build break — say why in the PR)
+	@$(PYTHON) tools/validate_dockerfile_paths.py --write-copy-baseline
+
 .PHONY: up-workers up-workers-core
+
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
 	@$(DC) up -d $(WORKER_SERVICES)
@@ -1064,6 +1890,12 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
 
+.PHONY: up-evo
+up-evo: ## Start the EVO SWARM controller (evolutionary optimizer :8113) — builds locally (no ghcr image published). Loads env.shared for CHIT prod signing.
+	@echo "🧬 Starting EVO SWARM controller (:8113)..."
+	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d --build evo-controller
+	@echo "✅ EVO SWARM controller starting on :8113 (publishes evoswarm.training.genome.v1 / .fitness.v1)"
+
 .PHONY: archon-db-setup
 archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZero LLM config)
 	@bash scripts/archon_db_setup.sh
@@ -1071,7 +1903,14 @@ archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZ
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@# The gateway goes up on its own first. pmoves-ollama reserves an NVIDIA
+	@# device, so on an AMD node (Knuckles/B850: runc only) it fails with
+	@# 'could not select device driver "nvidia"' -- and bundled into one `up`
+	@# that error aborted the gateway too, leaving it Created but never started
+	@# (measured 2026-10-01). The gateway's host.docker.internal routes,
+	@# including the embedding model, do not need the container.
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	@$(DC) --profile tensorzero up -d pmoves-ollama || echo "⚠️ pmoves-ollama did not start (no NVIDIA runtime on this node?). Routes to http://pmoves-ollama:11434 will fail; host.docker.internal routes are unaffected (see deploy/provision/ollama-docker-bridge.sh)." >&2
 	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
@@ -1091,6 +1930,37 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 	@echo "✅ PMOVES UI ready"
 	@echo "   Dashboard:    http://localhost:4482"
 	@echo "   Services:     http://localhost:4482/dashboard/services"
+
+.PHONY: up-openroom
+up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
+	@echo "🚪 Starting OpenRoom desktop..."
+	@$(DC) --profile ui up -d openroom p7
+	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
+	@echo "✅ OpenRoom ready"
+	@echo "   Desktop:      http://localhost:5173/webuiapps/"
+	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
+
+.PHONY: up-tokenism down-tokenism
+up-tokenism: ## Start the Tokenism simulator + Next.js UI (reports the ports it MEASURES, not the ones it asked for)
+	@echo "🪙 Starting Tokenism simulator + Next.js UI..."
+	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d tokenism-simulator tokenism-ui
+	@# Ask Docker what it actually published before waiting on, or advertising,
+	@# any URL. A container on an internal network stores its port binding and
+	@# never activates it -- so polling a declared port burned the full 120s
+	@# timeout on every run and then printed two addresses that refuse
+	@# connections (measured on the 4090, 2026-09-03).
+	@#
+	@# report_endpoint.sh branches on the helper's STATUS, so "running but
+	@# internal-only" (exit 1) and "never came up" (exit 2) stay distinct. An
+	@# earlier revision captured stdout and dropped the status, which made a
+	@# crashed container look like a healthy internal one -- the very defect this
+	@# target is being fixed for. COMPOSE_PROJECT_NAME scopes the service lookup
+	@# to this stack so a second worktree's container can never be measured here.
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-ui 8504 "Tokenism UI (Next.js)" /
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-simulator 8100 "Tokenism simulator API"
+
+down-tokenism: ## Stop the Tokenism simulator + UI
+	@$(LOAD_ENV_SHARED); $(DC) --profile agents stop tokenism-simulator tokenism-ui
 
 # =============================================================================
 # HIGH-LEVEL STARTUP TARGETS (Observability-First Order)
@@ -1173,18 +2043,60 @@ health-dormant: ## Health-check dormant/newly-activated services
 # =============================================================================
 
 .PHONY: down-all
-down-all: ## Stop ALL services in graceful reverse order
+down-all: ## Stop ALL services in graceful reverse order (voice, search, inference, agents, data)
 	@echo "🛑 Graceful shutdown starting..."
-	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
-	@-$(MAKE) --no-print-directory down-tensorzero
-	@-$(MAKE) --no-print-directory down-agents
-	@-$(MAKE) --no-print-directory down-model-management
-	@-$(MAKE) --no-print-directory down-workers
-	@-$(MAKE) --no-print-directory down-bus
-	@-$(MAKE) --no-print-directory down-data
-	@-$(MAKE) --no-print-directory down-obs
-	@-$(MAKE) --no-print-directory down-supabase
+	$(MAKE) --no-print-directory down-integrations 2>/dev/null || true
+	$(MAKE) --no-print-directory down-tensorzero || true
+	$(MAKE) --no-print-directory down-agents || true
+	$(MAKE) --no-print-directory down-voice || true
+	$(MAKE) --no-print-directory down-search || true
+	$(MAKE) --no-print-directory down-model-management || true
+	$(MAKE) --no-print-directory down-workers || true
+	$(MAKE) --no-print-directory down-inference || true
+	$(MAKE) --no-print-directory down-bus || true
+	$(MAKE) --no-print-directory down-data || true
+	$(MAKE) --no-print-directory down-obs || true
+	$(MAKE) --no-print-directory down-supabase || true
 	@echo "✅ All services stopped gracefully"
+
+# Shutdown order is the reverse of startup, and the ordering is load-bearing:
+# TensorZero is a GATEWAY in front of the inference backends, and Ollama comes
+# up BEFORE TensorZero. So TZ must go down EARLY (position 2) and the backends
+# LATE (down-inference) — otherwise the gateway is briefly live with its
+# backend already gone, and in-flight requests fail instead of draining.
+# Likewise down-voice/down-search run before down-inference: they are callers.
+
+# vibevoice lives in docker-compose.voice.yml, which is NOT in STACK_FILES, so a
+# bare `$(DC) stop vibevoice` cannot resolve it — docker compose errors, `|| true`
+# swallows it, and the container keeps running while the target reports success.
+# It therefore needs the voice overlay appended explicitly. (The pre-existing
+# `stop-vibevoice` target has this same latent bug; see VOICE_OVERLAY use below.)
+VOICE_SERVICES := flute-gateway voice-relay cast-tts-gateway ultimate-tts-studio
+VOICE_OVERLAY := -f docker-compose.voice.yml
+VOICE_OVERLAY_SERVICES := vibevoice
+SEARCH_SERVICES := hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu
+INFERENCE_SERVICES := pmoves-ollama comfyui
+
+.PHONY: down-voice
+down-voice: ## Stop voice fabric (Flute-Gateway, Voice-Relay, VibeVoice, TTS studio, OmniVoice)
+	@echo "🔇 Stopping voice fabric..."
+	@$(DC) stop $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) rm -f $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@-docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice down 2>/dev/null || true
+
+.PHONY: down-search
+down-search: ## Stop Hi-RAG gateways (all CPU/GPU/v2 variants). Used by down-all.
+	@echo "🔎 Stopping Hi-RAG gateways..."
+	@$(DC) stop $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-inference
+down-inference: ## Stop local inference backends (Ollama, ComfyUI) — frees VRAM. Used by down-all.
+	@echo "🧊 Stopping inference backends (frees VRAM)..."
+	@$(DC) stop $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-integrations
 down-integrations: ## Stop external integrations
@@ -1206,8 +2118,8 @@ restart-tensorzero: ## Restart TensorZero LLM gateway
 .PHONY: down-agents
 down-agents: ## Stop agent services
 	@echo "🤖 Stopping agents..."
-	@$(DC) stop $(AGENT_SERVICES) archon-ui >/dev/null 2>&1 || true
-	@$(DC) rm -f $(AGENT_SERVICES) archon-ui >/dev/null 2>&1 || true
+	@$(DC) stop $(AGENT_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(AGENT_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-workers
 down-workers: ## Stop worker services
@@ -1306,7 +2218,9 @@ wait-obs: ## Wait for observability to be ready
 wait-data: ## Wait for data tier to be ready
 	@echo "⏳ Waiting for data tier..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || true
+	@# Neo4j publishes no host port (internal-only behind the neo4j-tailnet forwarder), so
+	@# localhost:7474 never answers: wait on the container's own healthcheck instead.
+	@n=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) && timeout 60 bash -c "until [ \"\$$(docker inspect -f '{{.State.Health.Status}}' $$n 2>/dev/null)\" = healthy ]; do sleep 2; done" || true
 	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || true
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || true
 	@echo "✅ Data tier ready"
@@ -1345,13 +2259,25 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
 .PHONY: validate-agents
-validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check
+validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check + node-vocabulary default_identity wiring
 	@echo "🔍 Validating agent registry ↔ teams coupling (pydantic gate)..."
 	@# Workflow-only deps — the script imports pyyaml + pydantic, which aren't in the
-	@# base env. Mirror the CI gate (validate-agents-config.yml) so a fresh local
-	@# checkout can run this target without a ModuleNotFoundError (Codex #1993 P2).
-	@python -m pip install --quiet "pydantic>=2" pyyaml
-	@python $(CURDIR)/scripts/validate_agent_registry.py
+	@# base env. The point (Codex #1993 P2) is that a fresh local checkout can run
+	@# this without a ModuleNotFoundError.
+	@#
+	@# `uv run --with`, NOT `python -m pip install`. The pip form mirrored CI's
+	@# MECHANISM rather than its RESULT, and the mechanism does not transfer: a CI
+	@# runner has pip, a project .venv often does not. On B850 this target failed
+	@# with `No module named pip` while the validator itself was fine -- the gate
+	@# was unrunnable locally for the exact "fresh checkout" case it was added to
+	@# serve. CI keeps pip because a disposable runner is the one place mutating
+	@# the interpreter is free.
+	@#
+	@# It also stops installing into the developer's environment as a side effect
+	@# of running a read-only check. --no-project for the same reason as
+	@# COMPOSE_SPLIT_RUN: project discovery syncs the whole workspace first.
+	@uv run --quiet --no-project --with "pydantic>=2" --with pyyaml \
+		python $(CURDIR)/scripts/validate_agent_registry.py
 
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
@@ -1380,10 +2306,10 @@ yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 
 .PHONY: gpu-rerank-evidence
 gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmoves/docs/logs/
-	@mkdir -p pmoves/docs/logs
+	@mkdir -p docs/logs
 	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
 	  echo "→ Strict GPU rerank smoke (this will fail if rerank not enabled/model missing)"; \
-	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
+	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
 	  echo "Wrote pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt"
 
 .PHONY: evidence-auto
@@ -1408,8 +2334,8 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory monitoring-report
 	@echo "-> yt-dlp catalog smoke"
 	-@$(MAKE) --no-print-directory yt-docs-catalog-smoke
-	@echo "-> Archon smoke"
-	-@$(MAKE) --no-print-directory archon-smoke
+	@echo "-> Archon native health"
+	-@$(MAKE) --no-print-directory archon-native-health
 	@echo "-> Archon REST policy probe"
 	-@$(MAKE) --no-print-directory archon-rest-policy-smoke
 	@echo "-> Core smoke"
@@ -1420,68 +2346,163 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory channel-monitor-smoke
 	@echo "-> Agents headless smoke"
 	-@$(MAKE) --no-print-directory agents-headless-smoke
-	@echo "-> Archon MCP evidence"
-	-@$(MAKE) --no-print-directory archon-mcp-evidence
 	@echo "-> Model & persona readiness"
 	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
-.PHONY: archon-mcp-evidence
-archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence under pmoves/docs/logs/
-	@mkdir -p pmoves/docs/logs
-	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
-	  ARCHON_URL=$${SERVICE_ARCHON_URL:-$${ARCHON_BASE_URL:-http://localhost:8091}}; \
-	  echo "→ Archon MCP describe ($$ARCHON_URL)"; \
-	  curl -sf "$$ARCHON_URL/mcp/describe" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_describe.json; \
-	  echo "→ Archon MCP commands"; \
-	  curl -sf "$$ARCHON_URL/mcp/commands" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json; \
-	  tool=$$(jq -r 'first(.commands[] | select(.name=="form.get").name) // .commands[0].name' pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json); \
-	  echo "→ Archon MCP execute $$tool"; \
-	  curl -sS -X POST "$$ARCHON_URL/mcp/execute" -H 'content-type: application/json' -d "{\"tool\":\"$$tool\",\"arguments\":{}}" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_execute.json; \
-	  echo "✔ Evidence saved under pmoves/docs/logs/ with stamp $$STAMP"
-
-.PHONY: archon-submodule-extract
-archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARCHON_SUBMODULE_REPO=Org/Repo)
-	@if [ -z "$$ARCHON_SUBMODULE_REPO" ]; then echo "Usage: make archon-submodule-extract ARCHON_SUBMODULE_REPO=Org/Repo" && exit 2; fi; \
-	bash tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" integrations/archon
-
-.PHONY: up-archon-submodule
-up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
-	@$(DC) up -d archon
-
-# Native Archon: run Archon's OWN compose (server + mcp + frontend) against local
-# Supabase, fed by pipeline-emitted env.shared. Replaces the broken hand-rolled
-# archon*.submodule.yml wrapper. Frontend :3737, MCP :8051, server :8181.
+# Native Archon (TypeScript since upstream 0.6.0; release-tracked below): TS/SQLite-native, runs from its OWN compose + own env file.
+# 0.6.0 upstream rewrote Python -> TypeScript and does NOT use Supabase — it uses
+# SQLite by default (~/.archon), or its own Postgres via Archon's `--profile
+# with-db`. The server self-allocates port 3090 and IGNORES the compose PORT (PORT
+# is not injected into the container), so the published mapping must target 3090.
+# Requires the operator to seed Archon's own env file from its example first (that
+# file is secrets-domain and not machine-emitted by the PMOVES pipeline).
+# See memory project_archon_060_native. Standalone for now; deeper main-compose
+# integration is tracked as the "#5 Archon integration" follow-up.
 ARCHON_NATIVE_DIR := $(CURDIR)/../PMOVES-Archon
-# SUPABASE_URL is injected as a shell-env override scoped to THIS compose only
-# (compose precedence: shell env > --env-file). It is deliberately absent from the
-# global env.shared so it never clobbers the in-compose ${SUPABASE_URL:-http://supabase-kong:8000}
-# default other services use (Codex #1984 P1). host.docker.internal reaches the
-# host-published Kong gateway from Archon's standalone compose network.
-ARCHON_NATIVE_SUPABASE_URL ?= http://host.docker.internal:8000
-ARCHON_NATIVE_DC := SUPABASE_URL=$(ARCHON_NATIVE_SUPABASE_URL) docker compose --env-file $(CURDIR)/env.shared \
+ARCHON_NATIVE_PORT ?= 3090
+ARCHON_NATIVE_DC := PORT=$(ARCHON_NATIVE_PORT) docker compose \
 	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
 
-.PHONY: archon-native-config up-archon-native down-archon-native
-# secrets-runtime-hydrate fills SUPABASE_SERVICE_KEY from the freshest canonical
-# source (live Supabase container's SERVICE_ROLE_KEY) before Archon reads it.
-archon-native-config: secrets-runtime-hydrate ## Render native Archon config + confirm Supabase env is populated
-	@$(ARCHON_NATIVE_DC) config 2>/dev/null | grep -E "SUPABASE_URL|SUPABASE_SERVICE_KEY" | sed -E 's/(KEY: ).{12}.*/\1<set>/' | sort -u
-
-up-archon-native: secrets-runtime-hydrate ## Build+start native Archon (server+mcp+frontend) on local Supabase
-	@$(ARCHON_NATIVE_DC) up --build -d
+.PHONY: up-archon-native down-archon-native archon-native-health
+up-archon-native: ## Build+start standalone native Archon (TS/SQLite, its own compose) on :3090
+	@test -f "$(ARCHON_NATIVE_DIR)/.env" || { echo "ERROR: Archon env file missing. Seed it first: cp $(ARCHON_NATIVE_DIR)/.env.example $(ARCHON_NATIVE_DIR)/.env"; exit 1; }
+	@$(ARCHON_NATIVE_DC) up --build -d app
+	@echo "✔ Archon native (standalone) starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
 
 down-archon-native: ## Stop native Archon stack
 	@$(ARCHON_NATIVE_DC) down
+
+archon-native-health: ## Check native (TS) Archon health on :3090 — asserts the JSON status, not just HTTP 200
+	@# The SPA catch-all answers 200 for unknown paths, so a status-only probe is
+	@# a check that cannot fail. Assert the JSON status word, same as compose.
+	@curl -fsS http://localhost:$(ARCHON_NATIVE_PORT)/api/health | grep -qE '"status"[[:space:]]*:[[:space:]]*"(healthy|ok|ready|up)"' \
+		&& echo " ✔ archon healthy" || (echo "✗ archon unhealthy" && exit 1)
+
+# -------- Release tracking: Archon + Agent Zero follow UPSTREAM RELEASES --------
+# No hand-bumped pins. tools/upstream_release_track.py resolves the newest
+# upstream release (gh api .../releases/latest) and refuses (exit 1) unless the
+# fork's PMOVES.AI-Edition-Hardened branch already CONTAINS it -- a missing sync
+# is a finding, not something to paper over by building a stale tree.
+#
+# Channel: a node runs `<image>:current`. A freshly built release only becomes
+# :current after it boots and answers its health smoke in a throwaway container
+# (no network, no ports, no volumes). On failure :current stays on the previous
+# release and the target exits non-zero loudly. Currency without silent breakage.
+UPSTREAM_TRACK := $(PYTHON) $(CURDIR)/tools/upstream_release_track.py
+ARCHON_CHANNEL_TOOL := $(CURDIR)/tools/archon_release_channel.sh
+ARCHON_CHANNEL_REPO ?= ghcr.io/powerfulmoves/pmoves-archon
+ARCHON_CHANNEL ?= current
+ARCHON_SMOKE_TIMEOUT ?= 180
+export ARCHON_CHANNEL_REPO ARCHON_CHANNEL ARCHON_SMOKE_TIMEOUT
+# UNGATED builds never wear the channel tag. Compose's archon service carries
+# both `build:` and `image: ${ARCHON_IMAGE:-...:current}`, so any `--build` (or
+# `build`) of archon would otherwise tag the raw submodule tree as :current on
+# this node. Every target that BUILDS archon gets a target-specific EXPORT of
+# ARCHON_IMAGE (below); the recipe lines themselves stay byte-identical, so the
+# $(DC) shape (and the CIPHER_TOKEN_SHADOW_GUARD it starts with) is untouched.
+# The exported shell value outranks the --env-file value (compose precedence);
+# `override` also beats an ARCHON_IMAGE given on the make command line.
+ARCHON_LOCAL_BUILD_IMAGE ?= pmoves-archon:local-build
+ARCHON_BUILD_TARGETS := up-agents-stack archon-rebuild build-agents-integrations
+$(ARCHON_BUILD_TARGETS): export override ARCHON_IMAGE = $(ARCHON_LOCAL_BUILD_IMAGE)
+# Resolver exit codes: 1 = hardened fork lacks the release (sync it), 3 = could not measure.
+ARCHON_RESOLVE_OR_EXPLAIN = out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; printf '%s\n' "$$out"; \
+	if [ $$rc -eq 1 ]; then echo "✖ refusing: the hardened fork does not contain the latest upstream release (sync it first)"; \
+	else echo "✖ COULD-NOT-MEASURE: release resolution failed (rc=$$rc)"; fi; exit $$rc; }; eval "$$out"
+
+.PHONY: archon-release-resolve archon-build-latest archon-promote-current archon-release-latest
+archon-release-resolve: ## Print the newest upstream Archon release and whether the hardened fork contains it (exit 1 = sync needed, 3 = could not measure)
+	@$(UPSTREAM_TRACK) archon
+
+archon-build-latest: ## Resolve once, then build Archon from the exact hardened fork sha that contains the release; tags <version>-pmoves.<sha8>
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	FORK="$$FORK" FORK_SHA="$$FORK_SHA" RELEASE_TAG="$$RELEASE_TAG" RELEASE_SHA="$$RELEASE_SHA" RELEASE_VERSION="$$RELEASE_VERSION" \
+		$(ARCHON_CHANNEL_TOOL) build
+
+# Values (IMAGE, FORK_SHA, RELEASE_TAG, RELEASE_VERSION) are read from the
+# environment by the tool -- command-line make variables are exported -- and
+# never spliced into recipe text.
+archon-promote-current: ## Gate IMAGE into :current (needs IMAGE FORK_SHA RELEASE_TAG RELEASE_VERSION; refuses mismatched labels; SQLite smoke only -- Postgres migrations NOT covered)
+	@$(ARCHON_CHANNEL_TOOL) promote
+
+archon-release-latest: ## Resolve ONCE → build that sha → gate → promote :current (SQLite smoke only; Postgres migrations NOT covered)
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	export FORK FORK_SHA RELEASE_TAG RELEASE_SHA RELEASE_VERSION; \
+	$(ARCHON_CHANNEL_TOOL) build; \
+	IMAGE="$(ARCHON_CHANNEL_REPO):$$RELEASE_VERSION-pmoves.$$FORK_SHA8" $(ARCHON_CHANNEL_TOOL) promote
+
+# Agent Zero: the resolver side is here. The build side cannot be made
+# release-exact from the Makefile: services/agent-zero/Dockerfile clones a NAMED
+# BRANCH (AGENT_ZERO_REF) and nothing asserts the clone's commit. Closing that
+# needs AGENT_ZERO_SHA as a build arg plus a `git rev-parse HEAD` assertion after
+# the clone -- a Dockerfile edit, road KNOWN_ROAD=dockerfile:<reason>. Until
+# then a0-release-resolve reports what a build WOULD get; it cannot prove it.
+.PHONY: a0-release-resolve
+a0-release-resolve: ## Print the newest upstream Agent Zero release and whether the hardened fork contains it (exit 1 = sync needed)
+	@$(UPSTREAM_TRACK) agent-zero
+
+# Scoped bring-up of the in-compose Archon (TS) + Agent Zero from PREBUILT local
+# images. --no-deps: the depends_on closure otherwise recreates archon-postgres
+# and creates nats-init, tensorzero-gateway and tensorzero-clickhouse (measured
+# on B850 2026-09-28). --no-build/--pull never: use exactly the image already on
+# the node (ARCHON_IMAGE, e.g. the gated :current; agent-zero has no image key,
+# so it is the compose default pmoves-agent-zero:latest).
+# SERVICES narrows it (e.g. SERVICES=archon). DRY_RUN=1 prints the plan.
+A0_ARCHON_SERVICES ?= archon agent-zero
+A0_ARCHON_ALLOWED := archon agent-zero
+# Raw text via $(value): a command-line SERVICES='$(shell ...)' must not expand.
+A0_ARCHON_PICK := $(strip $(or $(value SERVICES),$(A0_ARCHON_SERVICES)))
+A0_ARCHON_BAD := $(filter-out $(A0_ARCHON_ALLOWED),$(A0_ARCHON_PICK))
+A0_ARCHON_DRY := $(filter-out 0 false no off,$(strip $(value DRY_RUN)))
+# Recursive (=), not :=, because DC is (re)defined further down this file.
+A0_ARCHON_UP = $(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never
+# archon ALWAYS gets --force-recreate --renew-anon-volumes. Measured on B850
+# 2026-09-28: recreating the retired Python archon container as the native TS
+# image crash-looped, because compose carried the old container's NAMED volume
+# (pmoves_archon-user-home) over the tmpfs docker-compose.yml now declares at
+# /home/appuser (archon service, `- type: tmpfs` / `target: /home/appuser`,
+# ~line 3911). -V + --force-recreate made HostConfig.Mounts show the tmpfs again
+# and the service came up healthy. agent-zero is recreated separately WITHOUT
+# -V: its state lives in bind mounts and nothing measured calls for renewal.
+# Consequence (open, not solved here): /home/appuser is an EMPTY tmpfs on every
+# start, so gh and any Claude/gh credentials the old volume carried are absent.
+#
+# Preflight (gated vs ungated): before recreating archon, the image compose
+# resolves is checked by `archon_release_channel.sh verify-current`. A :current
+# tag WITHOUT the pmoves.upstream.release label is an ungated build wearing the
+# channel name -> refused (tool exit 3; make reports 2).
+#
+# WHICH ROAD:
+#   make archon-follow          ONLINE: pull the gated GHCR :current, verify, recreate.
+#                               This is how a node follows new releases.
+#   make up-a0-archon-scoped    OFFLINE: --pull never; recreate from whatever is
+#                               already local (still label-verified). Also the
+#                               road for a pinned rollback: ARCHON_IMAGE=<repo>:<ver>-pmoves.<sha8>
+.PHONY: up-a0-archon-scoped
+up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan; archon gets --force-recreate -V)
+	$(if $(A0_ARCHON_BAD),$(error up-a0-archon-scoped: SERVICES may only name: $(A0_ARCHON_ALLOWED) (refused: $(A0_ARCHON_BAD))))
+	@set -e; case " $(A0_ARCHON_PICK) " in *" archon "*) \
+		img=$$($(DC) --profile agents config --images archon 2>/dev/null | head -n 1); \
+		if [ -z "$$img" ]; then echo "✖ COULD-NOT-MEASURE: compose did not resolve the archon image"; exit 3; fi; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"; \
+		$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon;; \
+	esac
+	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
+
+.PHONY: archon-follow
+archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, then recreate archon (use this to follow releases)
+	@set -e; img="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"; \
+		docker pull "$$img"; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"
+	@$(MAKE) --no-print-directory up-a0-archon-scoped SERVICES=archon ARCHON_IMAGE="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
 load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
-	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
-	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
-	@echo ""
-	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b): data/consciousness/neo4j-consciousness-schema.cypher"
+	$(call neo4j_apply_cypher,$(CURDIR)/data/consciousness/neo4j-consciousness-schema.cypher)
 	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
@@ -1542,18 +2563,73 @@ loki-ready: ## Check Loki readiness endpoint (/ready)
 
 # -------- Backups / Restore helpers ----------
 .PHONY: backup restore
-BACKUP_DIR ?= backups/$$(date +%Y%m%d_%H%M%S)
-backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO bucket, Meili dump (best-effort)
+# Deferred `=` would re-run date on EVERY expansion, so `mkdir -p $(BACKUP_DIR)`
+# created one timestamped directory and the writes targeted a later second --
+# "backups/20260903_162919/postgres.sql.partial: No such file or directory",
+# measured on the 4090 2026-09-03. `:=` snapshots it once per make invocation.
+BACKUP_TS := $(shell date +%Y%m%d_%H%M%S)
+BACKUP_DIR ?= backups/$(BACKUP_TS)
+backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO, dump Meili. Reports PER COMPONENT; non-zero if any fail (BACKUP_BEST_EFFORT=1 to accept partial).
 	@mkdir -p "$(BACKUP_DIR)"
-	@echo "→ Backing up Postgres…"
-	-@$(DC) exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
-	@echo "→ Snapshotting Qdrant…"
-	-@curl -fsS "http://localhost:6333/collections/$$QDRANT_COLLECTION/snapshots" -X POST -H 'content-type: application/json' -d '{}' > "$(BACKUP_DIR)/qdrant_snapshot.json"
-	@echo "→ Mirroring MinIO bucket '$(MINIO_BUCKET)' (requires mc alias 'local')…"
-	-@$(DC) exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
-	@echo "→ Dumping Meilisearch…"
-	-@curl -fsS "http://localhost:7700/dumps" -X POST -H "X-Meili-API-Key: $$MEILI_MASTER_KEY" -d '{}' > "$(BACKUP_DIR)/meili_dump.json"
-	@echo "✔ Backup written to: $(BACKUP_DIR)"
+	@# Every component here carried make's `-` prefix, which DISCARDS the exit
+	@# status, while the `>` redirect still created a file. So any failure left a
+	@# plausible-looking artifact and the target printed "Backup written to:".
+	@#
+	@# Measured on the 4090 2026-09-03: qdrant and meilisearch sit on
+	@# internal-only networks, so their host ports are never activated and both
+	@# curls fail with "Failed to connect" (`make net-reality` reports this).
+	@# The URLs below are still the RIGHT target -- routing around it with a
+	@# sidecar container would hide the topology defect instead of surfacing it,
+	@# so these keep pointing at localhost and now FAIL LOUDLY until the network
+	@# tier is fixed (DOCKER_NETWORK_HARDENING.md x-network-tailnet-published).
+	@#
+	@# Each component writes <file>.partial and is promoted only on success, so a
+	@# failed component leaves evidence and never a plausible-looking artifact.
+	@# This recipe reads POSTGRES_USER / QDRANT_COLLECTION / MEILI_MASTER_KEY /
+	@# MINIO_BUCKET from the shell, but never loaded env.shared -- unlike the 39
+	@# other targets that use LOAD_ENV_SHARED. So every one of those expanded
+	@# EMPTY: pg_dump ran as `-U  -d `, the Meili key was blank, the Qdrant URL
+	@# pointed at no collection. Combined with the discarded exit codes above,
+	@# `make backup` produced an EMPTY directory and reported success.
+	@$(LOAD_ENV_SHARED); rc=0; \
+	 echo "→ Backing up Postgres…"; \
+	 if $(DC) exec -T postgres pg_dump -U $${POSTGRES_USER:-} -d $${POSTGRES_DB:-} > "$(BACKUP_DIR)/postgres.sql.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/postgres.sql.partial" "$(BACKUP_DIR)/postgres.sql"; \
+	   echo "  ✔ postgres.sql ($$(wc -c < "$(BACKUP_DIR)/postgres.sql") bytes)"; \
+	 else echo "  ✖ postgres FAILED (left postgres.sql.partial)"; rc=1; fi; \
+	 echo "→ Snapshotting Qdrant…"; \
+	 if curl -fsS "http://localhost:6333/collections/$${QDRANT_COLLECTION:-}/snapshots" \
+	      -X POST -H 'content-type: application/json' -d '{}' \
+	      > "$(BACKUP_DIR)/qdrant_snapshot.json.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/qdrant_snapshot.json.partial" "$(BACKUP_DIR)/qdrant_snapshot.json"; \
+	   echo "  ✔ qdrant_snapshot.json ($$(wc -c < "$(BACKUP_DIR)/qdrant_snapshot.json") bytes)"; \
+	 else echo "  ✖ qdrant FAILED (collection '$${QDRANT_COLLECTION:-}' missing, or service down)"; rc=1; fi; \
+	 bucket="$${MINIO_BUCKET:-}"; \
+	 echo "→ Mirroring MinIO bucket '$${bucket:-<unset>}'…"; \
+	 if [ -z "$$bucket" ]; then \
+	   echo "  ✖ minio SKIPPED — MINIO_BUCKET unset (absent from env.shared)"; rc=1; \
+	 elif $(DC) exec -T minio mc mirror --overwrite "local/$$bucket" "$(BACKUP_DIR)/minio_$$bucket" >/dev/null 2>&1; then \
+	   echo "  ✔ minio_$$bucket"; \
+	 else echo "  ✖ minio FAILED (needs mc alias 'local')"; rc=1; fi; \
+	 echo "→ Dumping Meilisearch…"; \
+	 if curl -fsS "http://localhost:7700/dumps" -X POST \
+	      -H "X-Meili-API-Key: $${MEILI_MASTER_KEY:-}" -d '{}' \
+	      > "$(BACKUP_DIR)/meili_dump.json.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/meili_dump.json.partial" "$(BACKUP_DIR)/meili_dump.json"; \
+	   echo "  ✔ meili_dump.json ($$(wc -c < "$(BACKUP_DIR)/meili_dump.json") bytes)"; \
+	 else echo "  ✖ meilisearch FAILED"; rc=1; fi; \
+	 echo ""; \
+	 if [ "$$rc" = "0" ]; then \
+	   echo "✔ Backup complete — every component succeeded: $(BACKUP_DIR)"; \
+	 elif [ "$${BACKUP_BEST_EFFORT:-0}" = "1" ]; then \
+	   echo "⚠ PARTIAL backup at $(BACKUP_DIR) — see ✖ above. Exit forced to 0 by BACKUP_BEST_EFFORT=1."; \
+	   rc=0; \
+	 else \
+	   echo "✖ PARTIAL backup at $(BACKUP_DIR) — see ✖ above. NOT a restore point."; \
+	   echo "  A silently-partial backup is worse than none: it looks like a restore point and is not."; \
+	   echo "  Accept partial deliberately: BACKUP_BEST_EFFORT=1 make -C pmoves backup"; \
+	 fi; \
+	 exit $$rc
 
 restore: ## See docs/LOCAL_DEV.md for restore steps
 	@echo "See docs/LOCAL_DEV.md (Restore) for step-by-step instructions."
@@ -1564,7 +2640,24 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 
 .PHONY: check-tier-envs
 check-tier-envs: ## Validate all tier environment files exist
-	@$(PYTHON) tools/check_tier_envs.py
+	@# --drift is now the default, but pass it explicitly: this target existed for
+	@# a year invoking the checker with no flags, which silently disabled the half
+	@# that catches a key declared in .example and absent from the runtime tier.
+	@# Add --strict here once the current backlog is cleared, to ratchet it shut.
+	@#
+	@# --shadow is named for the same reason as --drift, and catches the opposite
+	@# half of the same failure: drift is the funnelled value never ARRIVING in a
+	@# tier file; shadow is it arriving and being OVERRULED, because Compose reads
+	@# the process environment ahead of every --env-file. Measured 2026-09-02: 43
+	@# pipeline-owned keys on the 4090 resolve from a shell export rather than
+	@# from the pipeline, SECRET_KEY_BASE among them -- two rotations wrote the
+	@# correct value to all eight tier files and the container kept the stale one.
+	@#
+	@# It reports and does not strip. Two of those 43 (SUPABASE_ANON_KEY,
+	@# SUPABASE_SERVICE_ROLE_KEY) are EMPTY in the tier file and real only in the
+	@# shell, so unsetting pipeline-owned exports wholesale would hand Supabase
+	@# empty credentials. The operator decides; the check only refuses to be silent.
+	@$(PYTHON) tools/check_tier_envs.py --drift --shadow
 
 .PHONY: bootstrap-tier-envs
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
@@ -1659,6 +2752,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		grep -q "^MEILI_API_KEY=" env.tier-data 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-data; \
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
 	fi; \
@@ -1695,6 +2790,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
 		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		grep -q "^MEILI_API_KEY=" env.tier-api 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-api; \
 		echo "✓ Populated env.tier-api"; \
 	fi; \
 	if [ -f "env.tier-llm" ]; then \
@@ -1712,7 +2809,7 @@ clean-networks: ## Remove stale Docker Compose networks (fixes WSL2 "incorrect l
 .PHONY: up up-gpu up-both-gateways
 up: check-tier-envs ensure-env-shared clean-networks ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
-	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@$(DC) --profile data --profile workers --profile pinokio up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval nats_event_bus pinokio_bridge
 	@echo "Starting GPU gateway variant (if GPU available)..."
 	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
@@ -1813,13 +2910,48 @@ STACK_FILES ?= \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
 	-f docker-compose.archon.submodule.yml \
-	-f docker-compose.archon-ui.submodule.yml
+	-f docker-compose.apps.yml \
+	-f docker-compose.activepieces.yml
+
+# AMD/ROCm nodes (Knuckles/B850 class) have no NVIDIA container runtime, so the
+# deploy.resources.reservations.devices block ffmpeg-whisper declares in
+# docker-compose.yml makes it fail to schedule outright ("could not select device
+# driver nvidia"). docker-compose.amd.yml resets that reservation so the image
+# runs its CPU path instead. Injected through WHISPER_NODE_OVERLAY rather than
+# added to STACK_FILES, so NVIDIA nodes are untouched by default; the `-amd`
+# sibling of each ffmpeg-whisper bring-up target sets it. Same shape as
+# up-voice-amd / docker-compose.amd-voice.yml.
+AMD_OVERLAY := -f docker-compose.amd.yml
+WHISPER_NODE_OVERLAY ?=
+
+# Agent sessions export CIPHER_API_TOKEN as their OWN per-agent bearer
+# (cipher_<uuid>, bound by the launcher). Compose interpolation takes the shell
+# over --env-file, so any `up` from such a session baked that bearer into
+# cipher-api as the deployment-wide bootstrap token (every env-file bootstrap
+# caller then got 401; auth.ts never treats a cipher_ value as bootstrap, so
+# the bootstrap path is simply dead) and into Agent Zero's cipher MCP header
+# (A0 then acts as that agent). Measured on Knuckles 2026-09-26. A cipher_
+# value is never a valid bootstrap token, so drop it for compose only and let
+# the env files answer; any other exported value is an operator override and
+# is left alone. Only emitted when that shape is exported, so DC stays
+# shell-agnostic everywhere else.
+CIPHER_TOKEN_SHADOW_GUARD := $(if $(filter cipher_%,$(CIPHER_API_TOKEN)),env -u CIPHER_API_TOKEN)
 
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
-DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
+DC := $(CIPHER_TOKEN_SHADOW_GUARD) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
+MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
+# The BoTZ stack is a separate compose PROJECT (its own network,
+# pmoves_pmoves_app). Given its own -p so it keeps that identity, but routed
+# through COMPOSE_ENV_FILES like every other stack rather than raw compose.
+# Project name and working dir MUST match what created the containers, or
+# compose treats them as foreign and `up` dies on a name conflict. Read off
+# the running container's labels: com.docker.compose.project=pmoves-botz,
+# working_dir=<repo>/PMOVES-BoTZ. Guessing `-p pmoves` produced exactly that
+# conflict during verification.
+BOTZ_STACK_DC := docker compose -p pmoves-botz --project-directory $(CURDIR)/../PMOVES-BoTZ $(COMPOSE_ENV_FILES) -f ../PMOVES-BoTZ/docker-compose.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
@@ -1863,7 +2995,7 @@ endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
 WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator notebook-mcp wealth-mcp
 
 down:
 	@$(DC) down
@@ -1898,7 +3030,7 @@ smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict 
 smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemma 3n)
 	@echo "=== New Model Providers Smoke Test ==="
 	@echo "1) NVIDIA NIM health:"
-	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null 2>&1 \
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8206}/v1/health/ready >/dev/null 2>&1 \
 	  && echo "   NIM: ready" \
 	  || echo "   NIM: not available (skipped)"
 	@echo "2) TensorZero model catalog:"
@@ -1937,6 +3069,7 @@ submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
 submodule-integrity: ## Non-recursive submodule integrity gate (all declared submodules required)
+	@$(PYTHON) tools/check_vendored_pretext.py
 	@$(PYTHON) tools/submodule_integrity.py \
 		--required-initialized PMOVES-Agent-Zero \
 		--required-initialized PMOVES-Archon \
@@ -1947,6 +3080,7 @@ submodule-integrity: ## Non-recursive submodule integrity gate (all declared sub
 		--required-initialized Pmoves-cipher
 
 submodule-integrity-strict: ## Strict submodule integrity gate (includes recursive validation)
+	@$(PYTHON) tools/check_vendored_pretext.py
 	@$(PYTHON) tools/submodule_integrity.py --check-recursive \
 		--required-initialized PMOVES-Agent-Zero \
 		--required-initialized PMOVES-Archon \
@@ -2044,8 +3178,29 @@ pmoves-ai-sync-hyperdim: ## Sync Pmoves-hyperdimensions submodule → website/hy
 	  || python tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
 	  || py -3 tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)"
 
-.PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
-pmoves-ai-dev: pmoves-ai-sync-hyperdim ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+chit-tour-data: ## Regenerate the CHIT tour's LIVE tables (roster + subjects) from the agent registry (generated; run before deploy)
+	@$(PYTHON) scripts/gen_chit_tour_data.py \
+	  || python scripts/gen_chit_tour_data.py \
+	  || py -3 scripts/gen_chit_tour_data.py
+
+# --- CHIT Visual Tour public edge (chit.pmoves.ai, behind the Traefik edge).
+# See docs/handoffs/chit-tour-public-edge.md. Serves the static tour with live
+# data; PUBLIC route (no forward-auth). Prereq: Traefik edge up + DNS record.
+CHIT_TOUR_DC := docker compose -p $(PROJECT)-chit-tour --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.chit-tour.yml
+
+.PHONY: up-chit-tour down-chit-tour chit-tour-health
+up-chit-tour: chit-tour-data ## Serve the CHIT tour at chit.pmoves.ai (Traefik edge must be up)
+	@$(CHIT_TOUR_DC) up -d
+	@echo "✔ chit-tour up — Traefik serves https://chit.pmoves.ai (ensure the DNS record + edge are live)"
+
+down-chit-tour: ## Stop the CHIT tour service
+	@$(CHIT_TOUR_DC) down
+
+chit-tour-health: ## Check the chit-tour container status
+	@$(CHIT_TOUR_DC) ps chit-tour
+
+.PHONY: chit-tour-data pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
+pmoves-ai-dev: pmoves-ai-sync-hyperdim chit-tour-data ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
 	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
 	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
 
@@ -2067,7 +3222,7 @@ pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project
 	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
 
-pmoves-ai-deploy: pmoves-ai-sync-hyperdim ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+pmoves-ai-deploy: pmoves-ai-sync-hyperdim chit-tour-data ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
 	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
@@ -2130,7 +3285,7 @@ notebook-logs: ## Follow logs for the Open Notebook service
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
-	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; exec $(PYTHON) scripts/open_notebook_seed.py'
+	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; . scripts/pm-ca-bundle.sh && pm_ca_bundle_normalize; exec $(PYTHON) scripts/open_notebook_seed.py'
 
 .PHONY: notebook-workbench-smoke
 notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
@@ -2150,11 +3305,28 @@ up-workers-core:
 
 # YouTube ingest + whisper stack
 up-yt:
-	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	# COOKIES_DC (base + yt-cookies overlay), NOT $(DC): STACK_FILES omits the
+	# overlay, so plain DC starts pmoves-yt WITHOUT the harvested-cookie volume
+	# (/app/config/cookies) - downloads then run cookie-less and bot-gate.
+	# JuiceFS media overlay is opt-in: only nodes with a host-side FUSE mount
+	# (JUICEFS_HOST_MOUNT set) can satisfy its rshared bind.
+	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: up-yt-amd
+up-yt-amd: ## Start YouTube ingest stack on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
 	@bash ./scripts/channel_monitor_up.sh
+
+.PHONY: activepieces-up
+activepieces-up: ensure-env-shared ## Start ActivePieces (profile automation): app + worker + own postgres/redis
+	@$(DC) --profile automation up -d activepieces-app activepieces-worker
+
+.PHONY: activepieces-down
+activepieces-down: ## Stop ActivePieces stack
+	@$(DC) --profile automation stop activepieces-app activepieces-worker
 
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
@@ -2170,10 +3342,13 @@ channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
 	  done; \
 	'
 
-.PHONY: up-yt-published
+.PHONY: up-yt-published up-yt-published-amd
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
-	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
+
+up-yt-published-amd: ## up-yt-published on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt-published WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 .PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto up-core-capable up-core-gpu
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
@@ -2226,10 +3401,16 @@ up-agents-auto: ## Capability-aware bring-up: tier (lean|capable|gpu) picks the 
 		fi ;; \
 	esac
 
-up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+up-core-capable: cipher-build-pin-check ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+	@# Gated even though this recipe has no --build: cipher-api declares build:
+	@# with no image: (docker-compose.yml), and neither overlay stacked here
+	@# defines cipher-api at all — so on a node with no pmoves-cipher-api image,
+	@# `up -d cipher-api` builds it from the worktree. A conditional build road,
+	@# silent on exactly the fresh node where it fires (review F2, 2026-09-02).
 	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
 	@$(MAKE) --no-print-directory up-core-hardened
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✅ Capable tier up (data tier + agents + Consciousness/CHIT)."
 
 up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVIDIA container runtime)
@@ -2240,8 +3421,12 @@ up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVI
 	@echo "✅ GPU tier bring-up attempted (capable + GPU services)."
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
-	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started (hardened overrides applied)."
+
+.PHONY: up-yt-hardened-amd
+up-yt-hardened-amd: ## up-yt-hardened on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt-hardened WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 # Optional media analyzers (video+audio)
 up-media:
@@ -2301,12 +3486,18 @@ down-tensorzero-full:
 # -------- Monitoring stack (Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor) --------
 .PHONY: up-monitoring down-monitoring monitoring-open monitoring-status monitoring-smoke monitoring-smoke-prod observability-audit
 
+# --project-directory is REQUIRED on every invocation of the monitoring compose.
+# Relative bind paths inside it resolve against the PROJECT DIRECTORY, and Docker
+# defaults that to the first compose file's own directory -- so omitting it here
+# while up-obs (line ~363) passes it meant the same file resolved its binds two
+# different ways. One of the two was always broken; which one depended only on
+# which target the operator happened to run.
 MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
 up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor)
 	@echo "⛳ Starting monitoring stack..."
 	@bash -lc '. ./scripts/with-env.sh; \
-		docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml up -d; \
+		docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml --project-directory "$(CURDIR)" up -d; \
 		echo "✔ Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"; \
 		echo "✔ Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"; \
 		echo "✔ Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"; \
@@ -2314,7 +3505,7 @@ up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Lok
 		echo "✔ cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"'
 
 down-monitoring: ## Stop monitoring stack and remove volumes
-	@bash -lc 'docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml down -v'
+	@bash -lc 'docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml --project-directory "$(CURDIR)" down -v'
 
 GRAFANA_HOST_PORT ?= 3002
 PROMETHEUS_HOST_PORT ?= 9090
@@ -2669,13 +3860,31 @@ voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
 
 # -------- Voice stack health + unified launch --------
-.PHONY: voice-health up-voice
+.PHONY: voice-health up-voice up-voice-amd
 
 voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
 	@echo "=== Voice Stack Health ==="
-	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
-	  && echo "  NATS       (:4222) ✔" \
-	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@# 4222 is the NATS CLIENT PROTOCOL port, not HTTP -- it answers a raw INFO
+	@# line, never `/healthz`. `curl http://localhost:4222/healthz` therefore fails
+	@# on every node, always, so this row reported NATS down even with the broker
+	@# healthy and told the operator to run `up-bus` on a running service.
+	@# Measured 2026-09-02 on the 4090: container Up 11 hours (healthy),
+	@# 4222/tcp -> 0.0.0.0:4222, a raw TCP connect returns INFO {"server_id":...},
+	@# and this check still printed the failure branch.
+	@#
+	@# A check that can only ever say NO is worse than none: the four rows below it
+	@# are real, and a permanently-red first line trains you to skip the block.
+	@#
+	@# HTTP monitoring lives on 8222, published here at 127.0.0.1:9223 -- which is
+	@# exactly what .claude/scripts/nats-endpoint.sh derives (PR #2861). Reuse it
+	@# rather than hardcoding a port that varies per node; it exits non-zero when it
+	@# had to assume rather than measure, so an unresolved endpoint reads as down.
+	@ep=$$(bash "$(CURDIR)/../.claude/scripts/nats-endpoint.sh" 2>/dev/null); \
+	if [ -n "$$ep" ] && curl -sf "$$ep/healthz" > /dev/null 2>&1; then \
+	  echo "  NATS       (monitor) ✔"; \
+	else \
+	  echo "  NATS       (monitor) ✗  — run: make up-bus"; \
+	fi
 	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
 	  && echo "  Flute      (:8055) ✔" \
 	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
@@ -2704,6 +3913,23 @@ up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-R
 		-f docker-compose.voice.yml \
 		--profile supabase-local --profile media --profile voice \
 		up -d flute-gateway vibevoice voice-relay
+	@echo ""
+	@$(MAKE) --no-print-directory voice-health
+
+up-voice-amd: ## Start voice stack for AMD ROCm nodes (RDNA3/4): Flute + Ultimate-TTS + Voice-Relay
+	@echo "Starting AMD ROCm voice stack (Flute + Ultimate-TTS [chatterbox] + Voice-Relay)..."
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
+		-f docker-compose.base.yml \
+		-f docker-compose.core.yml \
+		-f docker-compose.media.yml \
+		-f docker-compose.voice.yml \
+		-f docker-compose.amd-voice.yml \
+		--profile supabase-local --profile media --profile voice --profile tts \
+		up -d flute-gateway ultimate-tts-studio voice-relay
+	@echo ""
+	@echo "  AMD ROCm voice stack started."
+	@echo "  Ultimate TTS engine: $${ULTIMATE_TTS_DEFAULT_ENGINE:-chatterbox} (override with ULTIMATE_TTS_DEFAULT_ENGINE)"
+	@echo "  GFX version: $${HSA_OVERRIDE_GFX_VERSION:-12.0.1} (RDNA4 default; RDNA3: 11.0.0)"
 	@echo ""
 	@$(MAKE) --no-print-directory voice-health
 
@@ -2838,20 +4064,225 @@ ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
-# Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
+# Bring up the agents stack: NATS, Agent Zero, Archon (TS, upstream 0.x) + its
+# dedicated archon-postgres, mesh-agent, deepresearch, publisher-discord, cipher-api.
+# The in-compose `archon` service has been the first-class TS Archon since #2259
+# (the Python wrapper is retired, #2943); `up-archon-native` is the separate
+# standalone (SQLite, own compose) path. `--build` here rebuilds archon from
+# whatever is on disk in ../PMOVES-Archon; to run the gated upstream release
+# instead, use archon-release-latest + up-a0-archon-scoped.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
-	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
+up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon (TS) + its Postgres, Cipher Memory, etc.)
+	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
 	@$(DC) --profile agents up -d --build notebooklm-agent
 	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
 
+.PHONY: cipher-build-pin-check
+cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that drifted off the recorded gitlink
+	@# docker compose's build.context for cipher-api is ../Pmoves-cipher — the
+	@# WORKTREE. Docker reads files on disk and knows nothing about gitlinks, so a
+	@# drifted checkout is faithfully compiled and the road still prints "ready".
+	@# That is how B850 served `initialize -> 400 stream is not readable` for two
+	@# weeks while main carried the fix (c69adb43, pinned 2026-07-30 by 96cfa3311;
+	@# PR #2366 later moved the pin to d5c4045e on 2026-08-03).
+	@# It also refuses when the worktree sits exactly ON the pin but the files the
+	@# Dockerfile COPYs are modified — `git submodule status` shows no `+` for that,
+	@# and Pmoves-cipher has no .dockerignore, so an uncommitted edit under src/ is
+	@# compiled straight into the image. Naming Dockerfile.pmoves narrows that check
+	@# to what it actually copies from the context, so the untracked runtime data/
+	@# this node carries does not produce a false block (review F1, 2026-09-02).
+	@# Set CIPHER_BUILD_PIN=warn to build anyway — e.g. deliberately testing an
+	@# unpushed submodule change. It must be typed, and it says so in the output.
+	@# The override is echoed as a whole pasteable command, built from $(CURDIR)
+	@# and $(MAKECMDGOALS) so it is correct from any directory — the operator
+	@# reading this is NOT standing in pmoves/, make is. Same reason the check
+	@# itself prints absolute git -C paths (review comment 3910500690). GOALS is
+	@# never empty here: .DEFAULT_GOAL is help, which does not depend on this gate.
+	@rc=0; $(PYTHON) tools/submodule_build_pin_check.py Pmoves-cipher:Dockerfile.pmoves || rc=$$?; \
+	if [ $$rc -ne 0 ]; then \
+		if [ "$${CIPHER_BUILD_PIN}" = "warn" ]; then \
+			if [ $$rc -eq 3 ]; then \
+				echo "CIPHER_BUILD_PIN=warn — building WITHOUT KNOWING what commit this compiles (exit 3, could not measure, suppressed)"; \
+			else \
+				echo "CIPHER_BUILD_PIN=warn — building from the drifted/dirty worktree anyway (exit $$rc suppressed)"; \
+			fi; \
+		else \
+			echo "Refusing to build. Run the command the check printed above, or override with:"; \
+			echo "    CIPHER_BUILD_PIN=warn $(MAKE) -C $(CURDIR) $(MAKECMDGOALS)"; \
+			exit $$rc; \
+		fi; \
+	fi
+
 .PHONY: up-cipher
-up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
+	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
+	@# gate fails loudly on it); every other failure — bad Qdrant creds,
+	@# network timeout, missing python image — must abort the road instead
+	@# of printing "ready" over a dead collection (review P2).
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
+
+.PHONY: up-cipher-nobuild
+up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
+	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
+	@# recreated here is exactly as empty as a fresh build's.
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
+	@echo "✔ Cipher Memory recreated (no rebuild) at http://localhost:$${CIPHER_PORT:-8105}"
+
+.PHONY: up-p7
+up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
+	@# --profile p7 ONLY: adding --profile agents activates the legacy
+	@# p7-room-orchestrator whose supabase-kong dependency is profile-gated
+	@# (supabase-local) — compose then fails the whole project as "depends on
+	@# undefined service". The new p7 service needs no agents-profile peer.
+	@$(DC) --profile p7 up -d --build p7
+	@$(MAKE) p7-health
+
+.PHONY: p7-health
+p7-health: ## Check P7 service health
+	@# Retry loop: up-p7 chains straight into this and the container needs a
+	@# few seconds to boot — a single immediate probe false-fails the target.
+	@ok=0; for i in 1 2 3 4 5 6 7 8 9 10; do \
+	  if curl -sf http://localhost:$${P7_PORT:-8120}/healthz >/dev/null 2>&1; then ok=1; break; fi; \
+	  sleep 3; \
+	done; \
+	if [ "$$ok" = "1" ]; then echo " ✔ p7 healthy at http://localhost:$${P7_PORT:-8120}"; else echo "✗ p7 unhealthy" && exit 1; fi
+
+.PHONY: smoke-p7
+smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempotency)
+	@# Tests import the service's flat modules (main/catalog/config) — pytest
+	@# must run from the service dir or those imports shadow/miss.
+	@cd services/p7-room-orchestrator && $(PYTHON) -m pytest -q tests/ -x
+
+.PHONY: qdrant-provision-cipher
+qdrant-provision-cipher: ## Provision the Qdrant collection Cipher Memory writes into (idempotent; safe to re-run)
+	@# Cipher's embedding sidecar auto-creates pmoves_cipher_memory, but ONLY
+	@# from storeVector/search/deleteVector, which are all gated behind a
+	@# successful sidecar.embed(). Where the embedding backend is unreachable,
+	@# embed() returns null, the create never fires, and every vector write is
+	@# silently dropped while POST /api/memory still answers 201 off the
+	@# lexical fallback. This target creates the collection eagerly so the
+	@# schema does not depend on a lucky first write.
+	@#
+	@# Runs in a one-shot container on pmoves_data because Qdrant is not
+	@# guaranteed to publish a host port (it does not on B850) — a host-side
+	@# curl/python cannot reach it. Same shape as the kong-migrations one-shot
+	@# in supa-start. Image is the repo's standard pinned python base, so this
+	@# pulls nothing new on a node that has built any Python service.
+	@echo "🧠 Provisioning Qdrant collection for Cipher Memory..."
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+		-v "$(CURDIR)/scripts:/scripts:ro" \
+		-e PYTHONDONTWRITEBYTECODE=1 \
+		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
+		-e QDRANT_API_KEY=$${QDRANT__API_KEY:-$${QDRANT_API_KEY:-}} \
+		-e QDRANT_CIPHER_COLLECTION=$${QDRANT_CIPHER_COLLECTION:-pmoves_cipher_memory} \
+		-e EMBEDDING_DIM=$${EMBEDDING_DIM:-2560} \
+		-e QDRANT_WAIT_SECONDS=$${QDRANT_WAIT_SECONDS:-60} \
+		-e QDRANT_RECREATE_ON_MISMATCH=$${QDRANT_RECREATE_ON_MISMATCH:-false} \
+		python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 \
+		python3 -u /scripts/provision_qdrant_cipher_memory.py
+
+.PHONY: qdrant-verify-cipher
+qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher collection (dense + BM25 + RRF)
+	@# Answers "can this collection serve what embedding.ts asks of it?" without
+	@# needing a reachable embedding backend — the dense half uses a synthetic
+	@# vector. Use cipher-memory-smoke for the end-to-end check through Cipher's
+	@# own HTTP surface.
+	@#
+	@# MSYS_NO_PATHCONV: on Git Bash this recipe FAILED before the probe ever ran.
+	@# The container-side `/scripts/provision_qdrant_cipher_memory.py` was rewritten
+	@# to `//C:/Program Files/Git/scripts/...` and python3 exited 2 with
+	@# "No such file or directory" -- a host path substituted into a container
+	@# argument. Same conversion recorded in three handoffs on this node, and the
+	@# same two exports scripts/channel_monitor_up.sh:16-17 already carries.
+	@# Harmless on Linux/macOS, where both variables are simply unused.
+	@#
+	@# This mattered more than a broken target: qdrant-verify-cipher PROVISIONS the
+	@# collection and needs no reachable embedder to do it. While it failed here,
+	@# `pmoves_cipher_memory` did not exist on the 4090, so every Cipher store
+	@# returned embedded:false and every search silently fell through to
+	@# lexicalFallback() -- which ignores the query text entirely.
+	@echo "🧠 Verifying Qdrant collection round trip for Cipher Memory..."
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+		-v "$(CURDIR)/scripts:/scripts:ro" \
+		-e PYTHONDONTWRITEBYTECODE=1 \
+		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
+		-e QDRANT_API_KEY=$${QDRANT__API_KEY:-$${QDRANT_API_KEY:-}} \
+		-e QDRANT_CIPHER_COLLECTION=$${QDRANT_CIPHER_COLLECTION:-pmoves_cipher_memory} \
+		-e EMBEDDING_DIM=$${EMBEDDING_DIM:-2560} \
+		-e QDRANT_WAIT_SECONDS=$${QDRANT_WAIT_SECONDS:-60} \
+		python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 \
+		python3 -u /scripts/provision_qdrant_cipher_memory.py --self-test
+
+.PHONY: up-cipher-full
+up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
+	@echo "Starting full Cipher embedding stack..."
+	@$(DC) up -d nats qdrant
+	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@$(DC) --profile agents up -d --build cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher
+	@echo "✔ Cipher Memory + embedding pipeline ready"
+	@echo "  Cipher:    http://localhost:$${CIPHER_PORT:-8105}"
+	@echo "  Qdrant:    http://localhost:6333"
+	@echo "  Ollama:    http://localhost:11434"
+
+.PHONY: cipher-memory-smoke
+cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if the vector path is dead (requires up-cipher-full)
+	@# This target previously had two defects, both fixed here.
+	@#
+	@# 1. Its POST body omitted agentId, which memory-routes.ts requires
+	@#    ("agentId is required for per-agent scope" -> 400). Under `curl -sf`
+	@#    that surfaced as `POST FAILED:` with an empty message, because -f
+	@#    discards the response body. The target has been failing on every node
+	@#    without ever printing why.
+	@#
+	@# 2. It asserted only curl's exit status. Both endpoints answer 2xx with
+	@#    the entire vector pipeline down: POST falls back to ByteRover's
+	@#    lexical store and returns 201, and search falls back to
+	@#    lexicalFallback() and returns 200 with results. So once defect 1 was
+	@#    fixed it would have reported "✔ passed" on a node where no embedding
+	@#    backend is reachable and pmoves_cipher_memory does not exist.
+	@#
+	@# Two fields distinguish the real path from the fallback:
+	@#   POST   -> embedding_id is non-null only when sidecar.embed() succeeded
+	@#   SEARCH -> results carry `score` only when they came from Qdrant
+	@#             (memory-routes.ts sets score from the vector hit; the lexical
+	@#             fallback has no score field at all)
+	@# A missing agentId is a 400, so the payload must carry one.
+	@echo "Testing cipher /api/memory POST..."
+	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
+		-H 'Content-Type: application/json' \
+		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"],"agentId":"cipher-memory-smoke"}' 2>&1) \
+		&& echo "  POST OK: $$resp" \
+		|| (echo "  POST FAILED: $$resp" && exit 1); \
+	case "$$resp" in \
+		*'"embedding_id":null'*) \
+			echo "  ✗ POST stored NOTHING in Qdrant — embedding_id is null."; \
+			echo "    sidecar.embed() returned null, so storeVector() never ran and"; \
+			echo "    ensureCollection() never fired. Check that TENSORZERO_URL or"; \
+			echo "    OLLAMA_URL is reachable FROM the cipher container:"; \
+			echo "      docker exec pmoves-cipher-api-1 node -e 'fetch(process.env.TENSORZERO_URL+\"/health\").then(r=>console.log(r.status))'"; \
+			exit 1;; \
+	esac
+	@echo "Testing cipher /api/memory/search..."
+	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
+		&& echo "  SEARCH OK: $$resp" \
+		|| (echo "  SEARCH FAILED: $$resp" && exit 1); \
+	case "$$resp" in \
+		*'"score"'*) ;; \
+		*) \
+			echo "  ✗ SEARCH returned lexical-fallback results, not vector hits (no score field)."; \
+			echo "    Either the query embedding failed or Qdrant returned no points."; \
+			echo "    Provision the collection with: make -C pmoves qdrant-provision-cipher"; \
+			exit 1;; \
+	esac
+	@echo "✔ Cipher memory pipeline smoke passed (vector path live)"
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
@@ -2861,19 +4292,36 @@ cipher-health: ## Check Cipher Memory health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
 	@$(PYTHON) scripts/spark_health.py
 
-.PHONY: agents-headless-smoke
+.PHONY: agents-headless-smoke health-agent-zero a0-mcp-smoke a0-mcp-exec-smoke a0-smoke-selftest
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
+# Prove the instrument before trusting its reading: a0-smoke-selftest runs the
+# probes against in-process stubs, so a green below cannot mean "measured nothing".
+	@$(MAKE) --no-print-directory a0-smoke-selftest
 	@$(MAKE) health-agent-zero
-	@$(MAKE) archon-headless-smoke
+	@$(MAKE) archon-ui-smoke
+
+a0-smoke-selftest: ## Positive control: prove the Agent Zero probes go green on contract and red on each known defect (no service needed)
+	@$(PYTHON) tools/agent_zero_smoke.py selftest
+
+# NOTE: /healthz returns {status, command, pid, last_returncode, nats[, runtime]}
+# and has never carried a form. The CHIT persona form lives on /mcp/commands.
+health-agent-zero: ## Verify Agent Zero supervisor (port 8080): /healthz status=ok + non-empty /config/environment
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py health
+
+a0-mcp-smoke: ## List Agent Zero MCP commands via /mcp/commands and assert default_form is configured
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-list
+
+a0-mcp-exec-smoke: ## Execute form.get via POST /mcp/execute {cmd,arguments} and assert result.form
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-exec
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
-	@$(DC) -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
+	@$(DC) -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon deepresearch supaserch mesh-agent publisher-discord
 	@echo "✔ Agents started (published images where available). For production, use PULL=always and pin *_IMAGE tags."
 
 .PHONY: up-agents-ui
 up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
-	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
+	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed a0-mcp-show
@@ -2886,25 +4334,34 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	echo "→ $$file"; \
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
-.PHONY: archon-mcp-smoke
-archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
-	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8051/ || true); \
-	if [ "$$code" = "000" ]; then echo "✖ archon-mcp not reachable on :8051" && exit 1; else echo "✔ archon-mcp HTTP $$code"; fi
+# Registry (not compose env) owns the Agent Zero model-config surface.
+# Per-node deployment pass-through: INSTANCE stamps header/manifest and picks
+# the instance's usr-dir var; OUT relocates output (default follows that var
+# like compose does). INSTANCE/OUT are generic names, so they are honoured ONLY
+# from the make command line: a stray exported OUT/INSTANCE in the invoking
+# shell must not relocate presets. The namespaced A0_MODEL_SYNC_INSTANCE /
+# A0_MODEL_SYNC_OUT may come from the environment. Empty INSTANCE= -> docked.
+A0_MODEL_SYNC_INSTANCE ?=
+A0_MODEL_SYNC_OUT ?=
+A0_SYNC_INSTANCE = $(or $(if $(filter command line,$(origin INSTANCE)),$(INSTANCE)),$(A0_MODEL_SYNC_INSTANCE),docked)
+A0_SYNC_OUT = $(or $(if $(filter command line,$(origin OUT)),$(OUT)),$(A0_MODEL_SYNC_OUT))
+
+.PHONY: a0-model-sync
+a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
+
+# Variant 3 of the ownership plan: drift control. Clean rooms stay quiet;
+# drifted rooms exit 1 so fleet sweepers can score them.
+.PHONY: a0-model-sync-check
+a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (writes nothing; exit 0 clean, 1 drift, 2 undecided)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 .PHONY: archon-ui-smoke
-archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
-	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
-	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
+archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
+	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/api/health || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
+	if [ "$$api" != "200" ]; then echo "✖ archon API /api/health => $$api" && exit 1; fi; \
 	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
 	echo "✔ archon API/ UI healthy (API $$api, UI $$ui)"
-
-.PHONY: archon-smoke
-archon-smoke: ## Combined Archon smoke: /healthz 200 and Supabase CLI REST reachable
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py full
-
-.PHONY: archon-upload-smoke
-archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload) to validate embedding wiring
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py upload
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
@@ -2937,7 +4394,12 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 	  if echo "$$c" | grep -Eq "^0+$$"; then url=""; fi; \
 	fi; \
 	if [ -z "$$url" ]; then \
-	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3000"; do \
+	  # Last candidate is postgrest's HOST port. It was 3000; Invidious defaults to
+	  # the same host port (docker-compose.yml `${INVIDIOUS_PORT:-3000}:3000`), so with
+	  # Invidious up this probe selected Invidious, got 2xx on "/", then 404 on
+	  # "$$url/$$table" and printed "not accessible (policy/missing) — OK" with exit 0.
+	  # An RLS probe passing against a video frontend. 3010 is postgrest's actual host port.
+	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3010"; do \
 	    c=$$(curl -s -o /dev/null -w "%{http_code}" "$$cand/" || true); \
 	    case "$$c" in 2*|3*|4*) url="$$cand"; break;; esac; \
 	  done; \
@@ -2954,10 +4416,6 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 	elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; \
 	elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
 	else echo "↷ REST probe HTTP $$code"; fi'
-
-.PHONY: archon-headless-smoke
-archon-headless-smoke: ## Verify Archon headless services: /ready 200 and MCP bridge responds
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py headless
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)
@@ -3009,7 +4467,7 @@ GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
 GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
 GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
 GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
-GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge session-context-worker tokenism-ui
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge a2ui-renderer session-context-worker tokenism-ui
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -3018,16 +4476,9 @@ buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
 	@docker buildx inspect --bootstrap >/dev/null
 	@echo "✔ buildx builder ready: $(BUILDX_BUILDER)"
 
-docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env credentials
-	@$(LOAD_ENV_SHARED); \
-	user="$${GHCR_USERNAME:-$${GITHUB_ACTOR:-$$(gh api user -q .login 2>/dev/null || true)}}"; \
-	token="$${GHCR_TOKEN:-$${GH_PAT_PUBLISH:-$${GITHUB_TOKEN:-$$(gh auth token 2>/dev/null || true)}}}"; \
-	if [ -z "$$token" ] && [ -n "$${GHCR_TOKEN_FILE:-}" ] && [ -f "$${GHCR_TOKEN_FILE}" ]; then token="$$(cat "$${GHCR_TOKEN_FILE}")"; fi; \
-	if [ -z "$$user" ] || [ -z "$$token" ]; then \
-	  echo "✖ Missing GHCR credentials. Set GHCR_USERNAME and GHCR_TOKEN (or GH_PAT_PUBLISH)."; \
-	  exit 1; \
-	fi; \
-	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
+docker-login: ensure-env-shared ## Login to GHCR (read-only pulls: GHCR_READ_TOKEN_FILE=<0600 classic PAT> GHCR_USERNAME=<owner>; DRY_RUN=1 to validate)
+	@GHCR_READ_TOKEN_FILE="$(GHCR_READ_TOKEN_FILE)" GHCR_READ_USERNAME="$(GHCR_USERNAME)" DRY_RUN="$(DRY_RUN)" \
+	  bash scripts/ghcr_login.sh
 
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
 	@ctx=$$(pwd)/services; \
@@ -3171,11 +4622,11 @@ agents-integrations-pull: ## Pull latest from your forks
 	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
 
 build-agents-integrations: ## Build agent images from your forks
-	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon archon-ui
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
 
 
 up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))
-	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
 	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
 .PHONY: up-n8n n8n-sync-submodule-flows n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry n8n-bootstrap n8n-export-repo-flows
@@ -3197,6 +4648,57 @@ up-n8n: ensure-env-shared n8n-sync-submodule-flows
 down-n8n: ## Stop n8n workflow services
 	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
+
+# ---- ActivePieces (standalone self-host — low-code automation companion to n8n) ----
+# Known Road wrappers so the standalone stack is never brought up via raw
+# `docker compose up` (which would bypass the env-injection convention). Its
+# secrets live in its own gitignored env.activepieces (self-managed instance keys,
+# seeded from env.activepieces.example + hydrated via the secrets pipeline).
+AP_DIR := $(CURDIR)/activepieces
+AP_DC := docker compose --project-directory $(AP_DIR) -f $(AP_DIR)/docker-compose.yml --env-file $(AP_DIR)/env.activepieces -p pmoves-activepieces
+
+.PHONY: up-activepieces down-activepieces activepieces-health
+up-activepieces: ## Start the standalone ActivePieces self-host (:8087)
+	@test -f "$(AP_DIR)/env.activepieces" || { echo "ERROR: activepieces/env.activepieces missing — seed it: 'cp activepieces/env.activepieces.example activepieces/env.activepieces' then hydrate the SECRET values (see activepieces/README.md). Never hand-commit secrets."; exit 1; }
+	@$(AP_DC) up -d
+	@echo "✔ ActivePieces starting → http://localhost:$${AP_APP_PORT:-8087}/  (check: make -C pmoves activepieces-health)"
+
+down-activepieces: ## Stop the ActivePieces self-host
+	@$(AP_DC) down
+
+activepieces-health: ## Check ActivePieces app health
+	@curl -sf "http://localhost:$${AP_APP_PORT:-8087}/api/v1/flags" >/dev/null && echo "✔ activepieces healthy" || (echo "✗ activepieces unhealthy" && exit 1)
+
+# --- Persona living-doc room (Phase 5 host cutover) — PUBLIC static site at
+# persona.pmoves.ai behind the Traefik edge (docker-compose.traefik.yml, #2221).
+# Serves the RENDERED living-doc, NOT the OpenRoom operator desktop (private).
+# See docs/handoffs/persona-room-public-edge.md.
+PERSONA_DIST := $(CURDIR)/rooms/persona/dist
+PERSONA_DC := docker compose -p $(PROJECT)-persona --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.persona.yml
+
+.PHONY: persona-render up-persona down-persona persona-health
+persona-render: ## Render the persona living-doc (PreTeXt + Remotion) into rooms/persona/dist
+	@echo "→ PreTeXt case study …"
+	@cd rooms/persona/pretext && uv run --no-project --with pretext pretext build web
+	@echo "→ Remotion walkthrough (pulls deps + headless chromium) …"
+	@cd services/a2ui-renderer && (npm ci >/dev/null 2>&1 || npm install) && npm run render:provenance:file -- --default-input demos/persona_walkthrough.request.json --default-output demos/persona_walkthrough.preview.mp4
+	@echo "→ assembling static bundle → rooms/persona/dist"
+	@rm -rf "$(PERSONA_DIST)" && mkdir -p "$(PERSONA_DIST)/pretext"
+	@cp rooms/persona/index.html "$(PERSONA_DIST)/index.html"
+	@cp -r rooms/persona/pretext/output/web/. "$(PERSONA_DIST)/pretext/" 2>/dev/null || echo "  (pretext output missing — check the build above)"
+	@cp services/a2ui-renderer/demos/persona_walkthrough.preview.mp4 "$(PERSONA_DIST)/walkthrough.mp4" 2>/dev/null || echo "  (walkthrough render missing — slot degrades to 'authored' link)"
+	@echo "✔ persona bundle staged at rooms/persona/dist"
+
+up-persona: ## Serve the persona living-doc at persona.pmoves.ai (Traefik edge must be up)
+	@test -f "$(PERSONA_DIST)/index.html" || { echo "ERROR: no rendered bundle — run 'make persona-render' first"; exit 1; }
+	@$(PERSONA_DC) up -d
+	@echo "✔ persona-room up — Traefik serves https://persona.pmoves.ai (ensure the DNS record + edge are live)"
+
+down-persona: ## Stop the persona living-doc service
+	@$(PERSONA_DC) down
+
+persona-health: ## Check the persona-room container status
+	@$(PERSONA_DC) ps persona-room
 
 n8n-api-bootstrap: ## Create/login the n8n owner and mint a fresh Public API key into the local env file
 	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/bootstrap_n8n_api.py" \
@@ -3328,7 +4830,7 @@ up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights
 
 .PHONY: stop-vibevoice
 stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
-	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
 	@echo "✔ VibeVoice stopped"
 
 .PHONY: vibevoice-smoke
@@ -3387,6 +4889,69 @@ up-voicebox: ## Start Voicebox via Pinokio (host-side, NOT docker-compose)
 	@echo "  start: pterm run voicebox.pinokio.git"
 	@echo "  expected URL: http://localhost:$${VOICEBOX_HOST_PORT:-17493}"
 	@echo "  flute-gateway uses: VOICEBOX_URL=$${VOICEBOX_URL:-http://host.docker.internal:$${VOICEBOX_HOST_PORT:-17493}}"
+
+# ────────────────────────────────────────────────────────────────────────────
+# PINOKIO BRIDGE + nats_event_bus (Creator-Collab lane slices 2 + 3)
+# ────────────────────────────────────────────────────────────────────────────
+# pinokio_bridge is the HTTP-fronted bridge from PMOVES to the host's
+# Pinokio 8 install (or any ComfyUI launcher). It reads on-host
+# $PINOKIO_HOME and (via pterm) drives app launches. Without a live
+# pterm the bridge returns 503 with a clear error; it does NOT install
+# Pinokio itself.
+#
+# nats_event_bus is the slice-3 HTTP-fronted event bus for the
+# creator-collab subjects (comfy.collab.*, room.presence.v1,
+# room.directory.v1, helpdesk.*). pinokio_bridge publishes a
+# room.presence.v1 on every successful app launch.
+#
+# Both services profile: [apps, pinokio] so they are skipped by
+# default `make up` (too Pinokio-specific) but included by
+# `make up-pinokio` and `make up-creator-collab`.
+
+.PHONY: up-pinokio up-creator-collab pinokio-bridge-smoke nats-event-bus-smoke
+up-pinokio: ## Start nats_event_bus + pinokio_bridge (creator-collab slices 2 + 3)
+	@echo "?? Starting creator-collab event bus + pinokio bridge..."
+	@$(DC) --profile apps --profile pinokio up -d nats_event_bus pinokio_bridge
+	@$(MAKE) --no-print-directory nats-event-bus-smoke
+	@$(MAKE) --no-print-directory pinokio-bridge-smoke
+	@echo "? Pinokio stack ready (nats_event_bus :8131, pinokio_bridge :8130)"
+
+up-creator-collab: up-pinokio ## Alias for up-pinokio (the creator-collab runtime deps)
+	@echo "  creator-collab slices 2 + 3 are up; pmoves-helpdesk-skill + room-suggest-skill can now be exercised via slice 7's E2E script"
+
+nats-event-bus-smoke: ## Smoke check nats_event_bus /healthz
+	@port=$${NATS_EVENT_BUS_PORT:-8131}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$$port/healthz 2>/dev/null || echo "000"); \
+	if [ "$$code" != "200" ]; then \
+	  echo "? nats_event_bus /healthz => $$code (check: docker logs pmoves-nats-event-bus)"; \
+	  exit 1; \
+	fi; \
+	echo "? nats_event_bus /healthz 200"; \
+	curl -sS http://127.0.0.1:$$port/healthz | python -c "import sys,json; d=json.load(sys.stdin); print(f'  status={d.get(\"status\")} topics={len(d.get(\"topics\",[]))} nats_connected={d.get(\"nats_connected\")} writes_enabled={d.get(\"writes_enabled\")}')"
+
+pinokio-bridge-smoke: ## Smoke check pinokio_bridge /healthz
+	@port=$${PINOKIO_BRIDGE_PORT:-8130}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$$port/healthz 2>/dev/null || echo "000"); \
+	if [ "$$code" != "200" ]; then \
+	  body=$$(curl -sS http://127.0.0.1:$$port/healthz 2>/dev/null); \
+	  if echo "$$body" | grep -qi "pterm"; then \
+	    echo "? pinokio_bridge /healthz returned non-200 but the body mentions pterm - this is the expected 'pterm not available on host' 503."; \
+	    echo "  body: $$body"; \
+	    echo "  to fix: install pterm on the host (Pinokio 8 ships it) or set PINOKIO_HOME to a valid Pinokio install"; \
+	  else \
+	    echo "? pinokio_bridge /healthz => $$code (check: docker logs pmoves-pinokio-bridge)"; \
+	    exit 1; \
+	  fi; \
+	else \
+	  echo "? pinokio_bridge /healthz 200"; \
+	  curl -sS http://127.0.0.1:$$port/healthz; \
+	fi
+
+# alias: make bringup-creator-collab for the full creator-collab runtime
+.PHONY: bringup-creator-collab
+bringup-creator-collab: up-pinokio ## Full creator-collab runtime (nats_event_bus + pinokio_bridge)
+	@echo "? Creator-collab runtime ready. To run slice 7's E2E:"
+	@echo "    python pmoves/tools/creator-collab-evidence/slice7_fordham_e2e.py"
 
 .PHONY: voicebox-smoke
 voicebox-smoke: ## Smoke check Voicebox /health (expects 200, reports profile count)
@@ -3466,7 +5031,7 @@ voicebox-profile-create: ## Create a default Voicebox preset profile (Kokoro, no
 # ────────────────────────────────────────────────────────────────────────────
 
 .PHONY: up-flute-gateway flute-gateway-rebuild flute-gateway-smoke
-up-flute-gateway: ## Start Flute-Gateway voice communication service
+up-flute-gateway: up-bus ## Start Flute-Gateway voice communication service (NATS first — lifespan blocks on bus connect)
 	@echo "Starting Flute-Gateway..."
 	@$(DC) --profile orchestration up -d --build flute-gateway
 	@sleep 5
@@ -3491,14 +5056,18 @@ flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
 # FFMPEG-WHISPER STT SERVICE (mic chain — STT only, narrower than up-yt)
 # ────────────────────────────────────────────────────────────────────────────
 
-.PHONY: up-ffmpeg-whisper ffmpeg-whisper-smoke
+.PHONY: up-ffmpeg-whisper up-ffmpeg-whisper-amd ffmpeg-whisper-smoke
 up-ffmpeg-whisper: ## Start ffmpeg-whisper STT service (port 8078, requires GPU)
 	@echo "Starting ffmpeg-whisper..."
-	@$(DC) --profile workers up -d --build ffmpeg-whisper
+	@$(DC) $(WHISPER_NODE_OVERLAY) --profile workers up -d --build ffmpeg-whisper
 	@sleep 5
 	@curl -sf http://localhost:8078/healthz > /dev/null 2>&1 \
 	  && echo "ffmpeg-whisper ready at http://localhost:8078" \
 	  || echo "ffmpeg-whisper may still be starting (check: curl http://localhost:8078/healthz)"
+
+up-ffmpeg-whisper-amd: ## Start ffmpeg-whisper on AMD/ROCm nodes (CPU transcription, no NVIDIA runtime)
+	@echo "AMD/ROCm node: stripping the NVIDIA device reservation, ffmpeg-whisper runs its CPU path."
+	@$(MAKE) --no-print-directory up-ffmpeg-whisper WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 ffmpeg-whisper-smoke: ## Smoke test ffmpeg-whisper health
 	@echo "ffmpeg-whisper smoke test..."
@@ -3520,6 +5089,62 @@ up-voice-relay: ## Start voice-relay NATS bridge (port 8121, CPU only)
 voice-relay-smoke: ## Smoke test voice-relay health
 	@echo "voice-relay smoke test..."
 	@curl -sf http://localhost:8121/healthz || { echo "voice-relay not responding at http://localhost:8121/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
+# A2UI RENDERER (Remotion living-doc renderer, creator profile, port 8107)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-a2ui-renderer down-a2ui-renderer a2ui-renderer-smoke a2ui-renderer-render docs-render-living
+A2UI_RENDERER_PORT ?= 8107
+A2UI_RENDERER_TOKEN ?= ${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+A2UI_RENDERER_RENDER_DIR ?= pmoves/docs/living-docs/rendered
+up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), agents+media+docs profiles)
+	@echo "Starting a2ui-renderer (heavy Chromium image - first build is slow)..."
+	@$(DC) --profile agents --profile media --profile docs up -d --build a2ui-renderer
+	@sleep 5
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz > /dev/null 2>&1 \
+	  && echo "a2ui-renderer ready at http://localhost:$(A2UI_RENDERER_PORT)" \
+	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:$(A2UI_RENDERER_PORT)/healthz)"
+
+down-a2ui-renderer: ## Stop a2ui-renderer (and remove the container)
+	@echo "Stopping a2ui-renderer..."
+	@$(DC) --profile agents --profile media --profile docs stop a2ui-renderer || true
+	@$(DC) --profile agents --profile media --profile docs rm -f a2ui-renderer || true
+
+a2ui-renderer-smoke: ## Smoke test a2ui-renderer health + sample render
+	@echo "a2ui-renderer smoke test..."
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz || { echo "a2ui-renderer not responding at http://localhost:$(A2UI_RENDERER_PORT)/healthz"; exit 1; }
+	@echo "✅ healthz OK; metrics:"
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/metrics | grep -E '^a2ui_' | head -5
+
+# Helper: render a single living-doc entry through the a2ui-renderer.
+# Used by docs-render-living (the registry iterator) and for ad-hoc renders.
+# Usage: make a2ui-renderer-render DOC=pmoves/docs/handoffs/X.md
+A2UI_RENDERER_RENDER_INPUT  ?= $(DOC)
+A2UI_RENDERER_RENDER_OUTPUT ?= $(A2UI_RENDERER_RENDER_DIR)/$(notdir $(basename $(DOC))).mp4
+a2ui-renderer-render: ## Render a single markdown doc as a living-doc MP4 via a2ui-renderer
+	@echo "Rendering $(A2UI_RENDERER_RENDER_INPUT) -> $(A2UI_RENDERER_RENDER_OUTPUT)..."
+	@cd $(CURDIR)/.. && mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
+	@cd $(CURDIR)/.. && uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --doc $(A2UI_RENDERER_RENDER_INPUT) \
+	    --output $(A2UI_RENDERER_RENDER_OUTPUT) \
+	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
+	    --token "$${A2UI_RENDERER_TOKEN}" \
+	    --format mp4
+
+# Render every entry in pmoves/configs/living_docs_registry.yaml.
+# Each entry: { id, source_doc, output_key, format, ttl_days }.
+# Outputs go to $${A2UI_RENDERER_RENDER_DIR}/<id>.<format> and are uploaded
+# to MinIO bucket $${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>.
+docs-render-living: ## Render all LIVING_DOCS_INDEX-registered docs through a2ui-renderer
+	@echo "Rendering living docs from pmoves/configs/living_docs_registry.yaml..."
+	@cd $(CURDIR)/.. && mkdir -p $(A2UI_RENDERER_RENDER_DIR)
+	@cd $(CURDIR)/.. && uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --registry pmoves/configs/living_docs_registry.yaml \
+	    --output-dir $(A2UI_RENDERER_RENDER_DIR) \
+	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
+	    --token "$${A2UI_RENDERER_TOKEN}" \
+	    --minio-bucket "$${MINIO_BUCKET:-outputs}"
 
 # ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)
@@ -3716,13 +5341,198 @@ up-external: ensure-env-shared ## Start external integration services (Wger, Fir
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 
+.PHONY: rebuild-external-svc
+rebuild-external-svc: ensure-env-shared ## Recreate ONE external-overlay service from current compose/image WITHOUT touching the others — critically avoids up-external's dual-writer open-notebook/surreal hazard (both -ext surreal shares surreal_data with the running standalone). Usage: make rebuild-external-svc SVC=jellyfin-ext
+	@# up-external does `up -d` on EVERY external service, which starts
+	@# open-notebook-surrealdb-ext (same container_name + surreal_data volume as the
+	@# running standalone) = dual-writer corruption. This recreates just SVC with
+	@# --no-deps so a config change (e.g. a jellyfin --webdir fix) deploys without
+	@# collateral. Goes through the pipeline's EXTERNAL_DC (COMPOSE_ENV_FILES honored).
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-external-svc SVC=<external service, e.g. jellyfin-ext>"; exit 1; }
+	@echo "→ Recreating external service $(SVC) (no deps; other external services untouched)..."
+	@$(EXTERNAL_DC) up -d --no-deps --force-recreate $(SVC)
+	@# Service-aware verify: compose maps SVC to its real container regardless of
+	@# container_name (jellyfin-ext's is pmoves-jellyfin, not pmoves-jellyfin-ext), and
+	@# stays on the pipeline's DC instead of emitting a raw `docker logs` the guard blocks.
+	@echo "✔ $(SVC) recreated. Verify: $(EXTERNAL_DC) logs --since 30s $(SVC)"
+
 .PHONY: down-external
 down-external: ## Stop external integration services
 	@$(EXTERNAL_DC) down
 	@echo "✔ External stacks down"
 
+# ---------------------------------------------------------------------------
+# Edge: Traefik + sso-auth.
+#
+# docker-compose.traefik.yml and docker-compose.sso.yml have existed since #2221
+# with NO make target to start them, so the edge was never brought up through the
+# pipeline. Consequences observed 2026-08-05: no Traefik container on z890 at all,
+# so media.pmoves.ai / auth.pmoves.ai resolve to nothing, every traefik.* label in
+# the fleet is inert, and pmoves-sso-auth sits healthy while protecting nothing.
+# Services fall back to their own password prompts (Open Notebook's
+# RemoteUserAuthMiddleware is fail-closed and needs the Traefik-injected
+# X-Forward-Auth-Secret header, so a direct hit gets the password check by design).
+#
+# Both overlays go up together on purpose: the auth.pmoves.ai router is declared on
+# the traefik container but points at `sso-auth@docker`, so Traefik without sso-auth
+# is an edge whose own login route 404s.
+# ---------------------------------------------------------------------------
+EDGE_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
+
+.PHONY: edge-preflight
+edge-preflight: ## Check edge prerequisites (networks, 80/443, dynamic.yml) without starting anything
+	@# The SSO overlay declares three external networks. Compose fails with
+	@# network-not-found before starting anything if any is missing.
+	@# pmoves_external is ours to create — same as up-external does.
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
+	@# pmoves_app / pmoves_api are NOT auto-created here on purpose. Both are
+	@# `internal: true` in the core stack (docker-compose.yml:5364,5373). Creating
+	@# them here with a plain `docker network create --driver bridge` would make them
+	@# NON-internal, and the core stack would then silently attach to a network that
+	@# no longer blocks egress — turning a missing-network error into a quiet
+	@# security regression. Require the core stack instead.
+	@for n in pmoves_app pmoves_api; do \
+	  docker network inspect $$n >/dev/null 2>&1 || { \
+	    echo "ERROR: network $$n missing — sso-auth needs it to reach GoTrue."; \
+	    echo "  It is internal:true in the core stack; bring that up first (make up) rather"; \
+	    echo "  than creating it here, which would create it non-internal."; exit 1; }; \
+	done
+	@# Traefik publishes 80/443 directly. Fail loudly here rather than let compose emit
+	@# a bind error that scrolls past. Two traps this avoids:
+	@#  1. Check the OUTPUT, not the exit code — a pipeline ending in `head` exits 0 on
+	@#     no matches and would report every port as occupied.
+	@#  2. Be OS-aware. Windows netstat prints LISTENING, Linux/BSD print LISTEN. The
+	@#     first version of this matched only LISTENING, so on the Linux hosts where the
+	@#     edge actually runs it silently passed and protected nothing.
+	@# Skipped entirely when OUR traefik already holds the ports, so up-edge stays
+	@# idempotent — a rerun to pick up config changes must not be blocked by its own
+	@# listener. Compose handles the recreate/handoff.
+	@if [ -n "$$(docker ps --filter name=pmoves-traefik --format '{{.Names}}' 2>/dev/null)" ]; then \
+	  echo "  (pmoves-traefik already running — skipping port preflight, compose will recreate)"; \
+	elif command -v ss >/dev/null 2>&1; then \
+	  for p in 80 443; do \
+	    busy="$$(ss -ltn 2>/dev/null | awk -v p=":$$p" 'NR>1 && $$4 ~ p"$$"' | head -2)"; \
+	    if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
+	  done; \
+	elif command -v netstat >/dev/null 2>&1; then \
+	  for p in 80 443; do \
+	    busy="$$(netstat -an 2>/dev/null | grep -E "[.:]$$p[[:space:]]+.*(LISTENING|LISTEN)[[:space:]]*$$" | head -2)"; \
+	    if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
+	  done; \
+	else \
+	  echo "  WARNING: neither ss nor netstat found — cannot preflight 80/443."; \
+	  echo "  Continuing; compose will surface a bind error if they are taken."; \
+	fi
+	@test -f config/traefik/dynamic.yml || { echo "ERROR: config/traefik/dynamic.yml missing — forward-auth middleware would not load"; exit 1; }
+	@echo "✔ Edge preflight passed"
+
+.PHONY: up-edge
+up-edge: ensure-env-shared edge-preflight ## Start the Traefik edge + sso-auth (media./auth.pmoves.ai, forward-auth)
+	@echo "→ Starting edge (Traefik + sso-auth)..."
+	@$(EDGE_DC) up -d
+	@echo "✔ Edge up — verify with 'make edge-health'"
+
+.PHONY: rebuild-edge-svc
+rebuild-edge-svc: ensure-env-shared ## Funnel secrets, then rebuild+recreate ONE edge-overlay service from current source (the edge stale-container killer): make rebuild-edge-svc SVC=sso-auth
+	@# up-edge does `up -d` (no build) and rebuild-svc uses the DEFAULT $(DC), which
+	@# does not know sso-auth (it lives in docker-compose.sso.yml). So a merged sso-auth
+	@# code change (e.g. a forward-auth behavior fix) is NOT picked up by up-edge — the
+	@# container keeps running the stale image. This rebuilds just SVC from the edge
+	@# overlay and recreates it with --no-deps, leaving Traefik (and its live ACME
+	@# state) untouched.
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-edge-svc SVC=sso-auth"; exit 1; }
+	@# AGENTS.md's Known Road for recreating a single service is
+	@# `secrets-funnel && up-<svc>`, and this is a recreate. Compose interpolates
+	@# SUPABASE_JWT_SECRET / JELLYFIN_OIDC_CLIENT_SECRET / SSO_FORWARD_AUTH_SECRET
+	@# from the env files at recreate time, so --force-recreate bakes in whatever is
+	@# on disk. Two of the three have silent defaults in docker-compose.sso.yml
+	@# (`:-$${JWT_SECRET}` and a bare `:-`), so a stale or unhydrated value does not
+	@# fail the recreate -- it yields a RUNNING container with broken auth, which is
+	@# the worst shape of failure to debug from the edge.
+	@# `secrets-rotate` already funnels on its own, so the window is narrow: a bare
+	@# `secrets-local-hydrate` or a CHIT bundle import leaves the env files stale.
+	@# Deliberately run AFTER the SVC guard rather than as a prerequisite, so a
+	@# mistyped invocation fails in a second instead of after the whole funnel.
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "→ Rebuilding + recreating edge service $(SVC) from current source (no deps; Traefik untouched)..."
+	@$(EDGE_DC) up -d --build --no-deps --force-recreate $(SVC)
+	@echo "✔ $(SVC) rebuilt + recreated. Verify: make edge-health"
+
+.PHONY: sso-create-user
+sso-create-user: ## Create a CONFIRMED email/password SSO user via the GoTrue admin API (interactive; no SMTP needed). Sign in after at auth.pmoves.ai/login. GitHub OAuth is intentionally not wired (see project_sso_auth_architecture_decision).
+	@# Runs through with-env.sh so SUPABASE_SERVICE_ROLE_KEY loads from the env tier
+	@# (source-only). The password is read interactively and never touches argv / ps /
+	@# env files / chat. email_confirm:true creates an already-confirmed user without
+	@# sending mail (GoTrue here has no SMTP + MAILER_AUTOCONFIRM=false, so a self-serve
+	@# signup would strand the user unconfirmed). Validated against Supabase docs:
+	@# supabase.auth.admin.createUser({email,password,email_confirm:true}) == this REST call.
+	@bash scripts/with-env.sh bash scripts/sso-create-user.sh
+
+.PHONY: down-edge
+down-edge: ## Stop the Traefik edge + sso-auth
+	@$(EDGE_DC) down
+	@echo "✔ Edge down"
+
+.PHONY: edge-health
+edge-health: ## Show edge status: containers, published ports, and which routers use forward-auth
+	@# Check each component separately. A combined filter passes when only ONE of
+	@# the two is up, which is the exact state that looks fine and is not: sso-auth
+	@# healthy behind a Traefik that does not exist.
+	@echo "=== Edge containers ==="
+	@for svc in pmoves-traefik pmoves-sso-auth; do \
+	  st="$$(docker ps --filter name=$$svc --format '{{.Status}}' 2>/dev/null | head -1)"; \
+	  if [ -n "$$st" ]; then printf '  %-18s %s\n' "$$svc" "$$st"; \
+	  else printf '  %-18s NOT RUNNING\n' "$$svc"; fi; \
+	done
+	@echo ""
+	@echo "=== Traefik published ports ==="
+	@p="$$(docker inspect pmoves-traefik --format '{{json .NetworkSettings.Ports}}' 2>/dev/null)"; \
+	  if [ -n "$$p" ]; then echo "  $$p"; else echo "  (no traefik container)"; fi
+	@echo "  NOTE: an EMPTY [] binding list means the publish silently no-oped."
+	@echo "  On Windows that is the same-subnet ghost-adapter pattern -"
+	@echo "  see docs/operations/SAME_SUBNET_GHOST_PATTERN.md"
+	@echo ""
+	@# Read the actual router middleware LABELS rather than grepping the whole inspect
+	@# blob for the string — the old version matched anywhere (an env var or a comment
+	@# would count) and printed only the container, so you could not tell WHICH router
+	@# was protected on a container serving several.
+	@echo "=== Routers attached to pmoves-forward-auth ==="
+	@found=0; for c in $$(docker ps --format '{{.Names}}' 2>/dev/null); do \
+	  hits="$$(docker inspect $$c --format '{{range $$k,$$v := .Config.Labels}}{{$$k}}={{$$v}}{{println}}{{end}}' 2>/dev/null \
+	          | grep -E '^traefik\.http\.routers\.[^.]+\.middlewares=' \
+	          | grep -F 'pmoves-forward-auth' \
+	          | sed -E 's/^traefik\.http\.routers\.([^.]+)\.middlewares=(.*)$$/\1 [\2]/')"; \
+	  if [ -n "$$hits" ]; then \
+	    echo "$$hits" | while IFS= read -r h; do [ -n "$$h" ] && printf '  %-22s router %s\n' "$$c" "$$h"; done; \
+	    found=1; \
+	  fi; \
+	done; \
+	  if [ "$$found" != 1 ]; then \
+	    echo "  NONE - the middleware is defined in config/traefik/dynamic.yml but"; \
+	    echo "  no RUNNING container's router references it, so sso-auth protects nothing."; \
+	    echo "  NOTE: docker-compose.external.yml DOES set it on health/wealth/notebook."; \
+	    echo "  If those are running, they predate the labels and need recreating."; \
+	  fi
+
+.PHONY: jellyfin-ai-submodule-check
+jellyfin-ai-submodule-check: ## Fail early if the jellyfin-ai build contexts are not populated
+	@ctx="$${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}"; \
+	if [ ! -d "$$ctx/audio-processor" ]; then \
+	  echo "ERROR: jellyfin-ai build contexts not found under $$ctx" >&2; \
+	  echo "" >&2; \
+	  echo "The three images build FROM the submodule, so it must be populated." >&2; \
+	  echo "A fresh clone or a git worktree does not get it, and Compose reports" >&2; \
+	  echo "this as 'context not found' rather than 'submodule missing' -- which" >&2; \
+	  echo "is why this check exists instead of letting the build fail obscurely." >&2; \
+	  echo "" >&2; \
+	  echo "  git submodule update --init Pmoves-Jellyfin-AI-Media-Stack" >&2; \
+	  echo "" >&2; \
+	  echo "(or set PMOVES_JELLYFIN_AI_ROOT to an existing checkout)" >&2; \
+	  exit 1; \
+	fi
+
 .PHONY: up-jellyfin-ai
-up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
+up-jellyfin-ai: ensure-env-shared jellyfin-ai-submodule-check ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
 	@echo "→ Starting Jellyfin AI overlay..."
 	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker network create pmoves_api >/dev/null 2>&1 || true
@@ -3740,8 +5550,13 @@ down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
 
+.PHONY: jellyfin-ai-compose
+jellyfin-ai-compose: ensure-env-shared jellyfin-ai-submodule-check ## Run docker compose against the Jellyfin AI overlay. Usage: make jellyfin-ai-compose ARGS="up -d --build jellyfin-audio-processor"
+	@if [ -z "$(strip $(ARGS))" ]; then 		echo "Usage: make jellyfin-ai-compose ARGS=\"<docker compose args>\""; 		exit 1; 	fi
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai $(ARGS)
+
 .PHONY: up-jellyfin-ai-nvenc
-up-jellyfin-ai-nvenc: ensure-env-shared ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
+up-jellyfin-ai-nvenc: ensure-env-shared jellyfin-ai-submodule-check ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
 	@echo "→ Starting Jellyfin AI overlay with NVENC..."
 	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker network create pmoves_api >/dev/null 2>&1 || true
@@ -3823,6 +5638,14 @@ geometry-bus-status: ## Check GEOMETRY BUS NATS subject health
 geometry-bus-status-json: ## Check GEOMETRY BUS health (JSON output)
 	@$(PYTHON) tools/geometry_bus_health.py --json
 
+.PHONY: silent-handler-sweep
+silent-handler-sweep: ## Sweep for silent except-around-import handlers (instrument-trust audit)
+	@$(PYTHON) tools/silent_handler_sweep.py
+
+.PHONY: silent-handler-sweep-json
+silent-handler-sweep-json: ## Silent-handler sweep (JSON output)
+	@$(PYTHON) tools/silent_handler_sweep.py --json
+
 .PHONY: chit-encode
 chit-encode: ## CHIT-encode content from stdin
 	@$(PYTHON) tools/chit_encode_hook.py --pretty
@@ -3834,7 +5657,7 @@ chit-terminal-viz: ## Render CHIT visualization in terminal
 .PHONY: chit-mindmap-seed
 chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
 	@echo "→ Seeding Neo4j with CHIT mindmap..."
-	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	$(call neo4j_apply_cypher,$(CURDIR)/tools/chit_mindmap_seed.cypher)
 	@echo "✔ CHIT mindmap seeded"
 
 # =============================================================================
@@ -3878,6 +5701,24 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
 
+.PHONY: skills-parity
+skills-parity: ## Which harnesses see which skills (report; ARGS=--strict to gate, --json for machine output)
+	@$(PYTHON) tools/skills_parity.py $(ARGS)
+
+# Renamed from docs-render-living: it silently shadowed the Lane 2228
+# registry iterator (make keeps the LAST single-colon recipe) — same
+# duplicate-target class as the #2339 fix for juicefs-status et al.
+.PHONY: docs-render-living-dashboard
+docs-render-living-dashboard: ## Render living docs DASHBOARD via a2ui-renderer (legacy renderer)
+	@echo "🎨 Rendering living docs dashboard via a2ui-renderer..."
+	@if ! docker ps --format '{{.Names}}' | grep -q a2ui-renderer; then \
+		echo "⚠️  a2ui-renderer not running. Start with: make -C pmoves up-a2ui-renderer"; exit 1; \
+	fi
+	@$(PYTHON) tools/render_living_docs.py $(ARGS)
+.PHONY: sync-hyperdim
+sync-hyperdim: ## Sync website/hyperdim/ from Pmoves-hyperdimensions fork (run before CF Pages deploy)
+	@bash scripts/sync_hyperdim_from_fork.sh
+
 # =============================================================================
 # GitHub App Credential Management
 # =============================================================================
@@ -3897,53 +5738,64 @@ github-app-test: ## Test GitHub App token minting (requires services running)
 	@echo "→ Testing GitHub App token minting..."
 	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
 
-# Neo4j Integration (PMOVES-Neo4j Submodule at root level)
+# Neo4j roads
 # =============================================================================
-.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+# These used to delegate to a Makefile inside the PMOVES-Neo4j submodule and read
+# its db/{migrations,seeds}. That submodule is the upstream neo4j/neo4j
+# source fork: it has no Makefile and no db/ on any branch, so every one of them
+# failed. They now drive the `neo4j` compose service and the Cypher files this
+# repo actually carries (pmoves/neo4j/cypher/). See docs/TAC/TAC_NEO4J.md.
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-bootstrap neo4j-status
 
-neo4j-up: ## Start Neo4j submodule stack
-	@echo "→ Starting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j up
+# Apply one Cypher file to the running Neo4j. The password reaches cypher-shell
+# through its NEO4J_PASSWORD env var (`docker exec -e NAME` copies it from this
+# shell), never argv. An unset password fails closed: there is no fallback to the
+# vendor default, which would either fail auth or, on a fresh store, succeed.
+define neo4j_apply_cypher
+	@$(LOAD_ENV_SHARED); set +e; \
+	f="$(1)"; \
+	[ -f "$$f" ] || { echo "ERROR: $$f not found" >&2; exit 1; }; \
+	[ -n "$${NEO4J_PASSWORD:-}" ] || { echo "ERROR: NEO4J_PASSWORD is unset or empty (env.shared via with-env.sh); refusing to fall back to a default password" >&2; exit 1; }; \
+	c=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	echo "→ Applying $$f to $$c"; \
+	NEO4J_USERNAME="$${NEO4J_USER:-neo4j}" docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$$c" cypher-shell < "$$f"
+endef
 
-neo4j-down: ## Stop Neo4j submodule stack
-	@echo "→ Stopping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j down
+# --no-recreate guarded neo4j-up until the compose reconciliation (#3251) landed.
+# Now a plain `up -d` is right: it recreates Neo4j only when its compose config
+# changed. On a node whose container predates #3251, the first run is that one
+# planned recreate (docs/TAC/TAC_NEO4J.md section 7: dump first). --wait returns
+# once the healthcheck passes.
+neo4j-up: ## Start Neo4j (recreates it once if its compose config changed; see TAC_NEO4J section 7)
+	@$(DC) up -d --wait neo4j
 
-neo4j-restart: ## Restart Neo4j submodule stack
-	@echo "→ Restarting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j restart
+neo4j-down: ## Stop Neo4j (container kept; data volume untouched)
+	@$(DC) stop neo4j
 
-neo4j-logs: ## View Neo4j logs
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j logs
+neo4j-restart: ## Restart Neo4j (60s graceful stop for the checkpoint)
+	@$(DC) restart neo4j
 
-neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+neo4j-logs: ## Follow Neo4j logs
+	@$(DC) logs -f --tail=200 neo4j
+
+neo4j-migrate: ## Apply one Cypher file from neo4j/cypher (usage: make neo4j-migrate VERSION=001)
 	@if [ -z "$(VERSION)" ]; then \
-		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo "Usage: make neo4j-migrate VERSION=001"; \
 		echo ""; \
-		echo "Available migrations:"; \
-		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
+		echo "Available migrations (neo4j/cypher):"; \
+		ls -1 $(CURDIR)/neo4j/cypher/*.cypher | while read -r f; do echo "  • $$(basename "$$f")"; done; \
 		exit 1; \
 	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j migrate VERSION=$(VERSION)
+	@n=$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher 2>/dev/null | wc -l); \
+	if [ "$$n" != 1 ]; then echo "ERROR: VERSION=$(VERSION) matches $$n files in neo4j/cypher (need exactly 1)" >&2; exit 1; fi
+	$(call neo4j_apply_cypher,$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher))
 
-neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
-	@if [ -z "$(SEED)" ]; then \
-		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
-		echo ""; \
-		echo "Available seeds:"; \
-		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
+neo4j-bootstrap: ## Initialize Neo4j (constraints, alias seed CSV, CHIT geometry fixture + smoke)
+	@echo "→ Bootstrapping Neo4j..."
+	@$(LOAD_ENV_SHARED); set +e; bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
-neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
-	@echo "→ Bootstrapping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
-
-neo4j-status: ## Check Neo4j status from submodule
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
+neo4j-status: ## Show the Neo4j container state and health
+	@$(DC) ps neo4j
 
 # Legacy compatibility
 .PHONY: neo4j-bootstrap-legacy
@@ -3977,12 +5829,13 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	backup_dir="backups"; \
 	mkdir -p "$$backup_dir"; \
-	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -z "$$container_name" ]; then \
-		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
-		$(MAKE) --no-print-directory neo4j-local-up; \
-		sleep 10; \
-		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if ! docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
+		echo "❌ Neo4j container '$$container_name' is not running; a backup does not start one."; \
+		echo "   (It used to: '$(DC) ps -q neo4j' cannot see an out-of-compose container, so the"; \
+		echo "   fallback started a SECOND Neo4j on the volume the running one held.)"; \
+		echo "   Start it deliberately: make -C pmoves up-data-tier DATA_SERVICES=neo4j"; \
+		exit 1; \
 	fi; \
 	if [ -n "$$container_name" ]; then \
 		if docker exec $$container_name neo4j-admin database dump \
@@ -3998,7 +5851,8 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \
@@ -4020,17 +5874,55 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 		echo "❌ Error: Backup file not found: $(BACKUP)"; \
 		exit 1; \
 	fi
+	@# Refuse while the container of that name is NOT compose-managed. The steps
+	@# below stop and remove only the COMPOSE service; an out-of-compose container
+	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
+	@# compose Neo4j is started beside it. Migrate it under compose first (the
+	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@# The label is read from STDOUT only: a CLI warning on stderr must never make
+	@# an unlabelled (stray) container look compose-managed.
+	@# Only an explicit "No such container" means absent. Any other inspect
+	@# failure (daemon down, permission, wrong context) is could-not-measure (3),
+	@# never "absent": treating an error as absent is how a guard waves through
+	@# exactly the case it exists to stop.
+	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	errf=$$(mktemp); \
+	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>"$$errf"); rc=$$?; \
+	err=$$(cat "$$errf"); unlink "$$errf"; \
+	if [ $$rc -ne 0 ]; then \
+		if printf '%s' "$$err" | grep -qi 'no such container'; then :; else \
+			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$err"; \
+			exit 3; \
+		fi; \
+	elif [ -z "$$label" ]; then \
+		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
+		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
+		exit 1; \
+	fi
 	@echo "→ Restoring Neo4j from $(BACKUP)..."
 	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
 	@$(MAKE) --no-print-directory neo4j-local-down
-	@docker volume rm pmoves_neo4j-data 2>/dev/null || true
+	@# Absent (an explicit "no such volume") is fine: nothing to clear. Present
+	@# but not removable fails CLOSED (1): this used to swallow the failure
+	@# (2>/dev/null || true) and go on to start and load over a volume another
+	@# Neo4j still held. Any OTHER inspect failure is could-not-measure (3), so an
+	@# error is never read as "absent" and the removal still refuses on every error.
+	@err=$$(docker volume inspect pmoves_neo4j-data 2>&1 >/dev/null); rc=$$?; \
+	if [ $$rc -eq 0 ]; then \
+		docker volume rm pmoves_neo4j-data || { echo "❌ could not remove pmoves_neo4j-data (still in use?): refusing to start and load over a volume another Neo4j may hold."; exit 1; }; \
+	elif printf '%s' "$$err" | grep -qi 'no such volume'; then \
+		echo "→ pmoves_neo4j-data absent; nothing to remove."; \
+	else \
+		echo "❌ could not determine whether pmoves_neo4j-data exists: $$err"; \
+		exit 3; \
+	fi
 	@echo "→ Starting fresh Neo4j..."
 	@$(MAKE) --no-print-directory neo4j-local-up
 	@sleep 15
-	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -n "$$container_name" ]; then \
+	@container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
 		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
 		docker exec $$container_name neo4j-admin database load \
 			--from=/backups/neo4j.dump \
@@ -4073,6 +5965,20 @@ compose-split-check: ## Drift gate: fail if committed overlays differ from regen
 	    exit 1; \
 	  fi
 
+# PMOVES_NETWORKS wiring: mirror each service's networks: into PMOVES_NETWORKS= in
+# its own environment: so topology.TopologyContext.from_env() sees a non-empty
+# docker_networks (backs on_network()/has_external_egress()). Source-mutating, so
+# run BEFORE compose-split. See scripts/inject_pmoves_networks.py.
+COMPOSE_NETWORKS_RUN := uv run --no-project --with ruamel.yaml==0.19.1 python scripts/inject_pmoves_networks.py
+
+.PHONY: compose-networks compose-networks-check
+compose-networks: ## Wire PMOVES_NETWORKS into docker-compose.yml, then regenerate overlays
+	@cd $(CURDIR) && $(COMPOSE_NETWORKS_RUN)
+	@$(MAKE) --no-print-directory compose-split
+
+compose-networks-check: ## Drift gate: fail if PMOVES_NETWORKS is out of sync with services' networks:
+	@cd $(CURDIR) && $(COMPOSE_NETWORKS_RUN) --check
+
 .PHONY: validate-service-tools-packaging
 validate-service-tools-packaging: ## Audit that services importing pmoves.tools copy them into Docker images
 	@$(PYTHON) $(CURDIR)/scripts/validate_service_tools_packaging.py
@@ -4084,6 +5990,7 @@ OVERLAY_MEDIA   := -f docker-compose.media.yml
 OVERLAY_UI      := -f docker-compose.ui.yml
 OVERLAY_WORKERS := -f docker-compose.workers.yml
 OVERLAY_APPS    := -f docker-compose.apps.yml
+OVERLAY_ROCM    := -f docker-compose.rocm.override.yml
 
 # Use the raw docker compose binary (NOT $(DC), which includes STACK_FILES and would
 # pull the monolithic docker-compose.yml into overlay targets, defeating isolation).
@@ -4110,12 +6017,14 @@ overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
 # files declare networks `external: true` (so each overlay parses standalone), so they
 # must EXIST at runtime; docker-compose.base.yml owns them but only materializes them
 # in a full `up`. Subnets here MUST match docker-compose.base.yml.
-ensure-overlay-networks: ## Create the bus overlay networks (pmoves_bus, pmoves_external) if missing
+ensure-overlay-networks: ## Create the bus overlay networks (pmoves_bus, pmoves_external, pmoves_db_egress) if missing
 	@docker network inspect pmoves_bus >/dev/null 2>&1 || \
 		docker network create --internal --driver bridge --subnet 172.30.3.0/24 --gateway 172.30.3.1 pmoves_bus >/dev/null
 	@docker network inspect pmoves_external >/dev/null 2>&1 || \
 		docker network create --driver bridge --subnet 172.30.6.0/24 --gateway 172.30.6.1 pmoves_external >/dev/null
-	@echo "✅ overlay bus networks present (pmoves_bus, pmoves_external)"
+	@docker network inspect pmoves_db_egress >/dev/null 2>&1 || \
+		docker network create --driver bridge --subnet 172.30.8.0/24 --gateway 172.30.8.1 pmoves_db_egress >/dev/null
+	@echo "✅ overlay bus networks present (pmoves_bus, pmoves_external, pmoves_db_egress)"
 
 # overlay-up-bus brings up ONLY the NATS event bus via the split overlays
 # (OVERLAY_DC = base+core), NOT the monolith via DC/STACK_FILES. The monolith's
@@ -4157,6 +6066,44 @@ overlay-up-apps: ## Start application services via overlay
 overlay-down: ## Stop all overlay services
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
 	@echo "✅ All overlay services stopped"
+
+# --- AMD RDNA4 / ROCm node overlay -----------------------------------------
+# Node-specific: only nodes with an AMD GPU can run this. Guarded on /dev/kfd so a
+# non-AMD node gets a clear skip instead of a container that fails to start.
+# Brief: docs/handoffs/rocm-device-metrics-exporter-2026-08-15.md
+.PHONY: overlay-up-rocm overlay-down-rocm rocm-exporter-status
+
+overlay-up-rocm: ## Start AMD GPU metrics exporter (rdna4 nodes only)
+	@if [ ! -e /dev/kfd ]; then \
+	  echo "⏭  skipping: /dev/kfd absent — not an AMD GPU node"; exit 0; \
+	fi
+	@$(OVERLAY_DC) $(OVERLAY_ROCM) up -d device-metrics-exporter
+	@echo "✅ AMD device-metrics-exporter started"
+	@echo "   Prometheus scrapes it by service name on pmoves_monitoring (job: amd-gpu)."
+	@echo "   Verify: make -C pmoves rocm-exporter-status"
+
+overlay-down-rocm: ## Stop the AMD GPU metrics exporter
+	@$(OVERLAY_DC) $(OVERLAY_ROCM) down
+	@echo "✅ AMD device-metrics-exporter stopped"
+
+rocm-exporter-status: ## Verify the AMD GPU exporter serves SAMPLES and Prometheus scrapes it
+	@echo "── exporter endpoint ──"
+	@# Probed via docker exec, NOT a host curl: pmoves_monitoring is an internal
+	@# network, so there is no host port to hit. A host curl here returns 000 on a
+	@# perfectly healthy exporter — which is a misleading diagnostic, the thing this
+	@# whole change exists to stop.
+	@samples=$$(docker exec pmoves-device-metrics-exporter \
+	     wget -qO- http://localhost:5000/metrics 2>/dev/null | grep -c '^gpu_' || echo 0); \
+	 echo "   gpu_ samples: $$samples"; \
+	 if [ "$$samples" -eq 0 ]; then \
+	   echo "   ⚠ answering but empty is the exact failure this replaced — check: docker logs pmoves-device-metrics-exporter"; \
+	 fi
+	@echo "── prometheus target ──"
+	@curl -s --max-time 6 'http://localhost:9090/api/v1/targets?state=any' 2>/dev/null \
+	  | $(PYTHON) -c "import json,sys; d=json.load(sys.stdin); \
+	    ts=[t for t in d.get('data',{}).get('activeTargets',[]) if t['labels'].get('job')=='amd-gpu']; \
+	    print('   ' + (('health=' + ts[0]['health'] + (' lastError=' + ts[0]['lastError'] if ts[0].get('lastError') else '')) if ts else 'job amd-gpu NOT configured in prometheus.yml'))" \
+	  2>/dev/null || echo "   (prometheus unreachable on :9090)"
 
 .PHONY: design-tokens design-tokens-check design-test-js
 
@@ -4222,3 +6169,297 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
+
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token cipher-identity
+claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
+	@bash $(CURDIR)/scripts/claude-pmoves.sh
+
+kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
+
+kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+
+codex-pmoves: ## Launch Codex CLI with PMOVES context
+	@bash $(CURDIR)/scripts/codex-pmoves.sh
+
+cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
+	@$(PYTHON_YAML) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+
+# Held in a variable, NOT inline in the $(or ...) below. Make splits function
+# arguments on commas, so an inline comma-separated default is not one string —
+# it is six arguments, and $(or) returns the first non-empty one. Every agent
+# minted without an explicit SCOPES= therefore got ["memory:read"] alone: no
+# write, no reasoning, no session. Measured 2026-09-16 minting claude-4090.
+# A variable reference is a single argument; commas inside its VALUE do not
+# split, because splitting happens on the call text before expansion.
+CIPHER_MINT_DEFAULT_SCOPES := memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write
+
+cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
+
+cipher-revoke-token: ## Retire an agent's cipher tokens (sets revoked_at; auth.ts already rejects them): AGENT=z890-claude [TOKEN_UUID=... DRY_RUN=1]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-revoke-token AGENT=z890-claude [TOKEN_UUID=<one> DRY_RUN=1]"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/revoke_cipher_token.py --agent "$(AGENT)" $(if $(TOKEN_UUID),--token-uuid "$(TOKEN_UUID)",) $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: beats-analyze beats-hyperdim beats-pipeline
+beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
+	@echo "[beats] Running sonic fingerprint analysis (glaze mode)..."
+	@rm -f $(CURDIR)/data/beats/soundcloud/darkxside/.fingerprints.json
+	@cd $(CURDIR)/.. && uv run pmoves/tools/analyze_beats.py analyze --sense-mode glaze
+
+beats-hyperdim: ## Export analysis to Hyperdimensions saves + constellation embed
+	@echo "[beats] Exporting to Hyperdimensions..."
+	@cd $(CURDIR)/.. && uv run pmoves/tools/beats_to_cgp.py export-hyperdim
+
+beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimensions
+	@echo "[beats] Full DARKXSIDE beats -> Hyperdimensions pipeline..."
+	@$(MAKE) -C $(CURDIR) beats-analyze
+	@$(MAKE) -C $(CURDIR) beats-hyperdim
+	@echo "[beats] Done. Open website/hyperdim/ or website/embeds/beats-constellation/"
+
+# ---------------------------------------------------------------------------
+# Agent sandboxes (E2B) — the sanctioned substitute for proving a fix that
+# would otherwise need a live mutation against production.
+#
+# Entrypoint doc: .claude/skills/agent-sandbox/SKILL.md
+# CLI source:     skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli/
+#
+# Credentials are loaded through scripts/with-env.sh (LOAD_ENV_SHARED), never
+# hardcoded and never echoed. A Makefile $(VAR) cannot see funnel-delivered
+# values, so every recipe sources the loader inside the shell.
+#
+# DEPLOYMENT MODE is explicit and selectable. Self-host is the default target;
+# e2b.dev cloud remains reachable as a fallback:
+#   make -C pmoves sandbox-preflight                    # selfhost-local
+#   make -C pmoves sandbox-preflight E2B_MODE=cloud
+#   make -C pmoves sandbox-preflight E2B_MODE=selfhost-gcp
+#   make -C pmoves sandbox-preflight E2B_MODE=auto      # infer from env
+# The three modes take three DIFFERENT credential sets; scripts/e2b_mode.sh is
+# the single place that knows them, and it validates prefix + length + charset
+# rather than mere presence (a `[ -n ]` test passes a truncated secret).
+# Runbook: pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md
+#
+# ── EXIT CODES: `make` CANNOT CARRY THEM ────────────────────────────────────
+# These scripts speak the fleet doctrine 0 clean / 1 findings / 3
+# could-not-measure. GNU make DOES NOT propagate a recipe's status: it exits 2
+# for any recipe failure. Measured here — a recipe exiting 1 and a recipe
+# exiting 3 both make `make` exit 2, while running the script directly returns
+# 3. So the distinction between "this failed" and "this could not be measured"
+# is DESTROYED by the make wrapper, and could-not-measure is precisely the
+# outcome that must never be mistaken for either a pass or a failure.
+# Therefore: every target below PRINTS its real exit code, and anything that
+# needs to branch on it (CI, a gate, another script) must call the script
+# directly, not through make:
+#   bash pmoves/scripts/probe_danger_room_host.sh ; echo $?
+#   bash pmoves/scripts/sandbox_smoke.sh          ; echo $?
+# ---------------------------------------------------------------------------
+SANDBOX_CLI_DIR := $(CURDIR)/../skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli
+SANDBOX_TIMEOUT ?= 600
+# SECURITY (review finding F3, PR #2982): a caller-supplied value is NEVER
+# interpolated into a recipe's shell text. It used to be:
+#     uv run sbx exec "$(SBX)" "$(CMD)" $(ARGS)
+# inside bash -lc '...'. make pastes CMD in literally, so an apostrophe closed
+# the quoting and the remainder ran ON THE HOST:
+#     make sandbox-exec SBX=x CMD="x'; touch /tmp/pwned; echo '"
+# created /tmp/pwned on the host — the exact isolation failure this sandbox
+# exists to prevent. Same shape applied to NAME, TEMPLATE, SBX, ARGS, E2B_MODE.
+#
+# Every caller value now reaches the shell through a target-specific `export`,
+# i.e. through execve's environment, never through shell text, and is read back
+# as "$$VAR_ARG". Regression test: pmoves/tests/test_sandbox_make_quoting.sh
+# (asserts the payload does NOT execute, with a positive control proving the
+# harness can still observe an execution when one happens).
+#
+# Passed into every recipe's shell so the resolver sees an operator override.
+# E2B_MODE is forwarded ONLY when non-empty: an empty exported var shadows a
+# value the env files would otherwise supply (the classic tier-env shadow bug).
+# That non-empty check now happens in the shell, on the exported E2B_MODE_ARG.
+export SANDBOX_CLI_DIR
+# Fail-closed (fleet review 2982). Provenance: E2B SDK env contract per upstream docs
+# (docs.e2b.dev - the SDK reads E2B_API_KEY / E2B_ACCESS_TOKEN / E2B_DOMAIN; see the
+# docs-provenance note in the e2b lane before changing which vars are loaded here).
+SANDBOX_ENV = if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+	if [ ! -f ./scripts/with-env.sh ]; then echo "SANDBOX_ENV: scripts/with-env.sh missing - cannot load sandbox credentials" >&2; exit 3; fi; \
+	. ./scripts/with-env.sh; set +e; \
+	. ./scripts/e2b_mode.sh; \
+	{ e2b_resolve_mode >/dev/null && e2b_apply_mode_env >/dev/null; } || { echo "SANDBOX_ENV: e2b mode resolution failed - refusing to continue misconfigured" >&2; exit 3; }; \
+	e2b_validate_shapes || exit 3
+
+.PHONY: sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
+        sandbox-info sandbox-exec sandbox-kill sandbox-smoke sandbox-host-probe \
+        sandbox-runbook sandbox-selftest
+
+# --- Caller values in, via the environment only (see SECURITY note above) ---
+sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
+sandbox-info sandbox-exec sandbox-kill sandbox-smoke: export E2B_MODE_ARG = $(E2B_MODE)
+sandbox-info sandbox-exec sandbox-kill: export SBX_ARG = $(SBX)
+sandbox-exec: export CMD_ARG = $(CMD)
+sandbox-create sandbox-exec: export ARGS_ARG = $(ARGS)
+sandbox-create: export NAME_ARG = $(NAME)
+sandbox-create: export TEMPLATE_ARG = $(TEMPLATE)
+sandbox-create: export SANDBOX_TIMEOUT_ARG = $(SANDBOX_TIMEOUT)
+sandbox-list: export LIMIT_ARG = $(LIMIT)
+sandbox-help: export GROUP_ARG = $(GROUP)
+
+sandbox-preflight: ## Check the CLI is runnable and the SELECTED mode's credentials are well-shaped (make masks the code as 2 — see header) [E2B_MODE=selfhost-local|cloud|selfhost-gcp|auto]
+	@bash -lc 'set +x; if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		. ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
+		rc=0; \
+		if [ -d "$$SANDBOX_CLI_DIR" ]; then echo "[sandbox] CLI dir: present"; \
+		else echo "[sandbox] CLI dir: MISSING — run: git submodule update --init --recursive skills/"; rc=3; fi; \
+		if command -v uv >/dev/null 2>&1; then echo "[sandbox] uv: $$(uv --version 2>/dev/null)"; \
+		else echo "[sandbox] uv: MISSING — required (CLI is a uv package, python >=3.12)"; rc=3; fi; \
+		. ./scripts/e2b_mode.sh; \
+		e2b_resolve_mode || rc=3; \
+		e2b_apply_mode_env || rc=3; \
+		if [ $$rc -eq 0 ] || [ -n "$$E2B_MODE_RESOLVED" ]; then e2b_validate_shapes || rc=3; fi; \
+		[ $$rc -eq 0 ] && echo "[sandbox] preflight OK (mode $$E2B_MODE_RESOLVED)" || echo "[sandbox] preflight COULD-NOT-MEASURE (exit 3)"; \
+		exit $$rc'
+
+sandbox-mode: ## Print the resolved E2B deployment mode and its variable set (no values)
+	@bash -lc 'set +x; if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		. ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
+		. ./scripts/e2b_mode.sh; e2b_resolve_mode && e2b_apply_mode_env && e2b_validate_shapes'
+
+sandbox-help: ## Show the real agent-sandbox CLI command surface
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		if [ -n "$${GROUP_ARG:-}" ]; then uv run sbx "$$GROUP_ARG" --help; else uv run sbx --help; fi'
+
+sandbox-create: ## Provision a sandbox and print its ID [SANDBOX_TIMEOUT=600] [NAME=..] [TEMPLATE=..] [ARGS=..]
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		set -- init --timeout "$${SANDBOX_TIMEOUT_ARG:-600}"; \
+		if [ -n "$${NAME_ARG:-}" ]; then set -- "$$@" --name "$$NAME_ARG"; fi; \
+		if [ -n "$${TEMPLATE_ARG:-}" ]; then set -- "$$@" --template "$$TEMPLATE_ARG"; fi; \
+		uv run sbx "$$@" $$ARGS_ARG'
+
+sandbox-list: ## List running sandboxes [LIMIT=20]
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox list --limit "$${LIMIT_ARG:-20}"'
+
+sandbox-info: ## Show sandbox details: SBX=<sandbox_id>
+	@if [ -z "$$SBX_ARG" ]; then echo "Usage: make -C pmoves sandbox-info SBX=<sandbox_id>"; exit 1; fi
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox info "$$SBX_ARG"'
+
+sandbox-exec: ## Run a command inside a sandbox: SBX=<id> CMD='echo hi' [ARGS=--shell]
+	@if [ -z "$$SBX_ARG" ] || [ -z "$$CMD_ARG" ]; then echo "Usage: make -C pmoves sandbox-exec SBX=<sandbox_id> CMD='echo hi' [ARGS=--shell]"; exit 1; fi
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx exec "$$SBX_ARG" "$$CMD_ARG" $$ARGS_ARG'
+
+sandbox-kill: ## Tear down a sandbox: SBX=<sandbox_id>
+	@if [ -z "$$SBX_ARG" ]; then echo "Usage: make -C pmoves sandbox-kill SBX=<sandbox_id>"; exit 1; fi
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox kill "$$SBX_ARG"'
+
+sandbox-smoke: ## End-to-end proof: provision -> exec echo -> tear down. Prints the real 0/1/3 code; make itself reports 2 for both 1 and 3 [E2B_MODE=..]
+	@set +e; if [ -n "$$E2B_MODE_ARG" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		bash $(CURDIR)/scripts/sandbox_smoke.sh; rc=$$?; \
+		echo "[sandbox] sandbox_smoke.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure). make will report 2 for any non-zero — branch on the script directly, not on make."; \
+		exit $$rc
+
+# --- Self-host capability probe --------------------------------------------
+# Answers "can THIS node host the Danger Room?" against the real requirements
+# in PMOVES-Danger-infra/DEV-LOCAL.md. Read-only: it loads no module, writes no
+# sysctl, brings nothing up and touches no credential.
+#
+# It must run ON the candidate node. The owning node for the Danger Room is
+# pmoves-5090 (operator decision 2026-09-06); running the probe on any other
+# node measures that other node and answers nothing about the 5090.
+#
+# Verdicts are PASS / FAIL / COULD-NOT-MEASURE per item, and could-not-measure
+# is NOT a pass — it outranks FAIL in the overall exit code so an incomplete
+# reading can never be reported as a clean one.
+#   exit 0 = clean, 1 = findings, 3 = could-not-measure
+sandbox-host-probe: ## Probe THIS node's fitness to host the E2B self-host stack (read-only; 0 clean / 1 findings / 3 could-not-measure)
+	@echo "[sandbox] Danger Room capability probe — read-only, provisions nothing."
+	@echo "[sandbox] Owning node for the Danger Room is pmoves-5090. Run this ON the node you are judging."
+	@echo "[sandbox] On a Windows host, run scripts/probe_danger_room_host.ps1 FIRST, then this inside WSL2."
+	@set +e; bash $(CURDIR)/scripts/probe_danger_room_host.sh; rc=$$?; \
+		echo "[sandbox] probe_danger_room_host.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure)."; \
+		[ $$rc -eq 3 ] && echo "[sandbox] COULD-NOT-MEASURE is NOT a pass. Resolve the unread items and re-run before placing any workload here." || true; \
+		echo "[sandbox] make collapses this to 2 for any non-zero — a gate must call the script directly."; \
+		exit $$rc
+
+sandbox-selftest: ## Run the sandbox regression tests (no credentials, no provisioning, no network)
+	@# These two tests guard defects that a green smoke run could not have caught:
+	@#   test_sandbox_make_quoting.sh   - F3, host escape through the sandbox-* targets
+	@#   test_sandbox_smoke_teardown.sh - F4, a teardown check that could not fail
+	@# Both stub the CLI, so they need no E2B credentials and provision nothing.
+	@# make collapses any nonzero recipe exit to 2; the per-test codes are printed
+	@# below. Doctrine: 0 clean / 1 findings / 3 could-not-measure.
+	@set +x; rc=0; \
+	for t in tests/test_sandbox_make_quoting.sh tests/test_sandbox_smoke_teardown.sh tests/test_e2b_mode_configures.sh; do \
+		if [ ! -f "$$t" ]; then echo "[sandbox-selftest] $$t MISSING - could-not-measure"; [ $$rc -eq 0 ] && rc=3; continue; fi; \
+		echo "[sandbox-selftest] === $$t ==="; \
+		bash "$$t"; tc=$$?; \
+		echo "[sandbox-selftest] $$t exit=$$tc"; \
+		if [ $$tc -eq 1 ]; then rc=1; elif [ $$tc -ne 0 ] && [ $$rc -eq 0 ]; then rc=3; fi; \
+	done; \
+	echo "[sandbox-selftest] overall exit=$$rc"; \
+	exit $$rc
+
+sandbox-runbook: ## Print the self-host runbook path + the owning node
+	@echo "owning node: pmoves-5090  (Ryzen 9 9950XD / RTX 5090 / 192 GB, deployment_class private-mesh)"
+	@echo "runbook:     pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md"
+	@echo "probe:       pmoves/scripts/probe_danger_room_host.ps1  (Windows host half)"
+	@echo "             pmoves/scripts/probe_danger_room_host.sh   (Linux/WSL2 half)"
+	@echo "vendor docs: PMOVES-Danger-infra/DEV-LOCAL.md  (local bare metal)"
+	@echo "             PMOVES-Danger-infra/self-host.md  (GCP)"
+
+# -------- Node-local env overlay: ONE key at a time (Known Road) ----------
+# THE SANCTIONED EDIT PATH for pmoves/.env.local, the node-local overlay that
+# scripts/with-env.sh loads after the generated tier files. Nothing generates
+# it, so before these targets every change was a hand edit with no record --
+# which is how CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY} reached a fleet node
+# (copied from the df0218537 commit message) with no record of when or by whom.
+#
+# OPERATOR-RUN. Agents keep ZERO access to the file; the damage-control
+# zero-access rule is unchanged. The tool never prints or audits a value: it
+# reports key, action, whether a line existed and old/new value LENGTH, backs
+# the file up to <file>.bak-<UTC ts> (0600) before any change, writes
+# atomically preserving the mode and every other line, refuses a duplicated or
+# malformed key, and appends a row to data/audit/env_local_edits.jsonl
+# (git-ignored, node-local).
+#
+# KEY TRAVELS BY ENVIRONMENT, never as a shell word, and `$(value KEY)` stops
+# make from expanding anything inside it -- the register targets above learned
+# both lessons the hard way. The case-guard below is a courtesy; the tool
+# re-validates ^[A-Z][A-Z0-9_]*$ itself.
+#
+# `$(value KEY)` ALONE IS NOT ENOUGH: a command-line KEY is exported, and an
+# exported variable is expanded whenever a child environment is built. The
+# `unexport KEY` that closes this is at the TOP of this file -- see the
+# comment there for the make-version semantics and why position matters.
+#
+# env-local-set takes the value from a NO-ECHO prompt (the tool's getpass on
+# the controlling terminal) or from piped stdin -- never argv, so it is not in
+# shell history or `ps`. make's recipe shell is /bin/sh, which has no
+# `read -s`; getpass does the same without the value becoming a shell variable.
+#
+# make collapses every nonzero exit to 2 -- read the printed `result=` line
+# (done / noop / present / absent / refused / could-not-measure).
+.PHONY: env-local-has env-local-set env-local-unset
+env-local-has env-local-set env-local-unset: export ENV_LOCAL_KEY_NAME = $(value KEY)
+ENV_LOCAL_KEY_GUARD = case "$$ENV_LOCAL_KEY_NAME" in ""|[!A-Z]*|*[!A-Z0-9_]*) \
+	echo "usage: make $@ KEY=NAME   (NAME must match ^[A-Z][A-Z0-9_]*$$; the value is never an argument)" >&2; \
+	exit 2;; esac
+
+env-local-has: ## Operator: is KEY present in pmoves/.env.local? Prints no value (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py has "$$ENV_LOCAL_KEY_NAME"
+
+env-local-set: ## Operator: set KEY in pmoves/.env.local; value from a no-echo prompt or stdin, never argv (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py set "$$ENV_LOCAL_KEY_NAME"
+
+env-local-unset: ## Operator: remove the single KEY line from pmoves/.env.local, with backup + audit row (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py unset "$$ENV_LOCAL_KEY_NAME"

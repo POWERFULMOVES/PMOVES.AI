@@ -16,7 +16,7 @@ import json
 import subprocess
 import sys
 import time
-from datetime import date, timezone
+from datetime import date
 from typing import Any
 
 
@@ -129,7 +129,7 @@ def _gh_api_get(endpoint: str, **jq: str) -> Any:
     args = ["api", endpoint]
     if jq:
         for flag, expr in jq.items():
-            args.extend([f"--jq", expr])
+            args.extend(["--jq", expr])
     return _gh_json(*args)
 
 
@@ -676,7 +676,7 @@ def main() -> None:
     p_sync.add_argument("--json", action="store_true", help="Output JSON")
 
     # status
-    p_status = sub.add_parser("status", help="Check sync PR status")
+    sub.add_parser("status", help="Check sync PR status")
 
     args = parser.parse_args()
 

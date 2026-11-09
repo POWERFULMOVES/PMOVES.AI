@@ -76,6 +76,12 @@ COPY services/common/ services/common/
 # Copy source
 COPY services/flute-gateway/ .
 
+# MCP bridge engine registry - mcp_bridge.py resolves these under
+# /app/pmoves/configs/ inside the container (TTS_CAPABILITIES_YAML /
+# TTS_EXPRESSIONS_YAML env vars override)
+COPY configs/tts-engine-capabilities.yaml pmoves/configs/tts-engine-capabilities.yaml
+COPY configs/tts-engine-expressions.yaml pmoves/configs/tts-engine-expressions.yaml
+
 # Change ownership to non-root user
 RUN chown -R pmoves:pmoves /app
 

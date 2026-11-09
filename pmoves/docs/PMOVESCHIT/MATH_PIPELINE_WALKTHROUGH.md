@@ -28,7 +28,7 @@
 
 ## Pipeline Overview
 
-The CHIT (Cymatic-Holographic Information Transfer) pipeline transforms arbitrary content into **boundary representations** — geometric packets called CGPs (CHIT Geometry Packets) — that encode meaning as constellations of anchors, spectra, and attribution proofs rather than raw token streams.
+The CHIT (Cymatic Holographic Information Theory) pipeline transforms arbitrary content into **boundary representations** — geometric packets called CGPs (CHIT Geometry Packets) — that encode meaning as constellations of anchors, spectra, and attribution proofs rather than raw token streams.
 
 ### Why Geometry Instead of Tokens?
 

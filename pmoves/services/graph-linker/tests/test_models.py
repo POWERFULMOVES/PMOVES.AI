@@ -3,7 +3,6 @@
 import json
 import sys
 import os
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -12,8 +11,6 @@ from models import (
     GenImageResultMessage,
     AnalysisTopicsMessage,
     KBUpsertMessage,
-    KBItem,
-    TopicItem,
     HealthResponse,
     ReadyResponse,
     parse_s3,

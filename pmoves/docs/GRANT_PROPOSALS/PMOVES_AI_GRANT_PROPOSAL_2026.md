@@ -37,7 +37,7 @@ PMOVES.AI is a **Metal-Organic Framework (MOF) for distributed machine intellige
 | Layer | Name | What it is in code |
 |---|---|---|
 | L1 | **MOF Lattice** | Agent Zero hierarchy + Archon coordination define pore geometry across the fleet |
-| L2 | **CHIT** | Cymatic-Holographic Information Theory — geometry-encoded packets (CGPs) replace token streams between agents |
+| L2 | **CHIT** | Cymatic Holographic Information Theory — geometry-encoded packets (CGPs) replace token streams between agents |
 | L3 | **GEOMETRY BUS** | NATS JetStream transport for CGPs across nodes; subjects catalogued in [`.claude/context/geometry-nats-subjects.md`](https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/.claude/context/geometry-nats-subjects.md) |
 | L4 | **EVO SWARM** | Evolutionary policy optimization across the agent population ([`EVOSWARM_OPERATIONS_GUIDE.md`](https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/EVOSWARM_OPERATIONS_GUIDE.md)) |
 | L5 | **ToKenism** | Economic and attribution layer (compute credits, contributor weights, community currency) |
@@ -102,7 +102,7 @@ The `pmoves-nats-fleet` MCP server exposes NATS publish/subscribe directly to op
 ### 2.6 Voice, multimodal, and media pipeline
 
 The platform ingests, transcribes, and analyses long-form media end-to-end. Component services:
-- **Flute-Gateway** (`:8055` HTTP / `:8056` WS) — multimodal voice via Pipecat, prosodic TTS API (`/v1/voice/synthesize/prosodic`).
+- **Flute-Gateway** (`:8055` HTTP + WS) — multimodal voice via Pipecat, prosodic TTS API (`/v1/voice/synthesize/prosodic`).
 - **Ultimate-TTS-Studio** (`:7860` native) — 14-engine GPU-accelerated TTS, runs natively via Pinokio.
 - **PMOVES.YT** (`:8077`) — YouTube ingestion with MinIO persistence.
 - **FFmpeg-Whisper** (`:8078`) — Faster-Whisper transcription with Jetson/GPU auto-detect.

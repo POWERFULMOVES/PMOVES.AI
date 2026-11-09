@@ -29,11 +29,15 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Mesh Agent** (no HTTP) — Distributed node announcer; publishes host presence/capabilities on NATS every 15s.
 
-**Archon** `:8091` API, `:3737` UI — Supabase-driven agent service, prompt/form management. Connects to Agent Zero MCP. Health: `GET http://localhost:8091/healthz`.
+**Archon** `:3090` API/UI/MCP (unified), `:3737` host alias → 3090 — Archon 0.6.0 (TypeScript/Bun) remote-coding-agent, Postgres-backed (pg_notify), prompt/form management. Connects to Agent Zero MCP. Health: `GET http://localhost:3090/api/health`. _(0.6.0 rewrote the old Python `:8091`/`:8051` service — #2217.)_
+
+**DeepSeek Harness (dsh)** `:3080` web UI — Cordis-based harness where everything is a plugin (profile/bundle/patch composition). Hosts OTHER harnesses via `packages/hooks/hook-protocol` plus per-harness dialects (`hooks-claude-code`, `hooks-codex`); capability seams keyed `ctx.*` with swappable LLM impls (`llm-deepseek`, `llm-pi-ai`, `llm-retry`). The reference the PMOVES harness registry is measured against — see `pmoves/configs/tac_trees/deepseek-harness.tac.yaml`. Port is the boot default (`packages/boot/cmdline`, `ctx.webStartup.port ?? 3080`); verified unclaimed in this catalog and in every compose file. Submodule is **not populated by default** — `git submodule update --init PMOVES-deepseek-harness` before use.
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
-**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). Live surface: MCP over SSE at `/sse` (Express route `src/app/mcp/mcp_sse_server.ts`; matches `.claude/mcp.json`) + streamable-http at `/http`; health `GET /health` / `/healthz`. **Auth (submodule ed701ca):** all routes require `Authorization: Bearer <token>` EXCEPT the public paths `/health`, `/healthz`, `/.well-known/` — so `/sse` is not anonymously reachable. NOTE: the `/api/memory` + `/api/memory/search` REST paths previously documented do **not exist** (no such route in Cipher submodule source) — use the MCP tools over `/sse`, not a REST API. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
+**HF MCP Server** `:8203` (host) / `:8096` (container) — HuggingFace Hub MCP server. Tools: `hf.model.search/info/download/list/convert_gguf`. SSE MCP at `/mcp/sse` (real JSON-RPC over SSE via `mcp.server.MCPServer`; POST messages to `/mcp/messages/`), REST API at `/api/*`, publishes `hf.model.downloaded.v1`. Downloads to `${HF_HOME:-./data/models}`:/models; inference services can mount the same path or import converted GGUF artifacts. Health: `GET /healthz`. Profile: `agents`/`research`.
+
+**Cipher Memory** `:8105` (host) / `:3000` (container) — Agent memory service. Submodule `Pmoves-cipher` forked from `campfirein/byterover-cli` v3.16.1 (formerly Cipher) with PMOVES additive shim (`src/pmoves/`). REST: `/api/memory` CRUD (POST/GET/search/DELETE — PMOVES PR #5 + A1-Shim), `GET /health` (NOT `/healthz`). MCP: SSE at `/mcp/sse` (4 tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`), POST `/mcp/messages`. **Auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` on all routes except `/health` (dev-skip if unset). NATS: emits `cipher.memory.stored.v1`, `.searched.v1`, `cipher.reasoning.stored.v1` + `services.announce.v1` (discovery mesh). Python bridge (`pmoves-cipher-mcp/`) DISABLED since 2026-05-15 — agents connect direct SSE. See `pmoves/docs/TAC/TAC_CIPHER.md` for architecture decision + A1-Shim workorder. BoTZ variant: separate instance at `:8081`, own `botz.cipher.*` NATS namespace. DoX variant: native Python CipherService at `:8096`.
 
 ## Retrieval & Knowledge Services
 
@@ -49,11 +53,13 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
 
-**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.**
+**clip-embed** `:8109` — Deterministic CLIP image/text embedder (`openai/clip-vit-large-patch14`, MIT). `POST /embed/image` (multipart), `POST /embed/text`, `GET /healthz`, `GET /metrics`. 768-d, L2-normalised. Used for keyframe embeddings in media pipeline.
+
+**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** Wired into `docker-compose.yml` under the **`creator`** profile (opt-in — heavy Remotion/Chromium image): `make -C pmoves up-a2ui-renderer` (#2228).
 
 ## Voice & Speech
 
-**Flute-Gateway** `:8055` HTTP, `:8056` WebSocket — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic`. Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.
+**Flute-Gateway** `:8055` (HTTP + WebSocket) — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic` (returns `audio/wav`), `GET /v1/voice/config`, `GET /v1/voice/binding`. WS: `/v1/voice/stream/tts`, `/v1/voice/agent`. Auth: `X-API-Key` header (no Bearer/JWT). Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.
 
 **Ultimate-TTS-Studio** `:7860` native, `:7861` Docker — 14-engine TTS (KittenTTS, Kokoro, F5, IndexTTS/2, Fish Speech S1/S2 Pro, VoxCPM, Higgs Audio, Chatterbox variants, Qwen Voice Design, VibeVoice). Gradio UI. **GPU-accelerated, runs natively via Pinokio (NOT Docker).** Health: `GET /gradio_api/info`.
 
@@ -63,9 +69,9 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **FFmpeg-Whisper** `:8078` — Media transcription with Faster-Whisper (small model). GPU. Reads/writes MinIO.
 
-**Media-Video Analyzer** `:8079` — YOLOv8 frame analysis. Every 5th frame, conf 0.25. Outputs to Supabase.
+**Media-Video Analyzer** `:8079` — object detection over sampled video frames. On `main` this is a FastAPI **stub** (`server.py` with `/healthz`, `/metrics`, GPU detection; analysis pipeline was `TODO`) — it starts and serves health, it does not crash-loop. Full pipeline implemented in PR #2182 (OpenCV frame sampling → **DETR** default, YOLO selectable via `DETECTION_ENGINE`). Wired into `docker-compose.media.yml`. Health: `GET /healthz`.
 
-**Media-Audio Analyzer** `:8082` — Emotion/speaker detection. Model: `superb/hubert-large-superb-er`.
+**Media-Audio Analyzer** `:8082` — audio analysis (STT + diarization + emotion). On `main` this is a FastAPI **stub** (`server.py` with `/healthz`, `/metrics`, GPU detection; analysis pipeline was `TODO`) — it starts and serves health, it does not crash-loop. Full pipeline implemented in PR #2181 (whisper-large-v3-turbo + pyannote-3.1 + `superb/hubert-large-superb-er`). Wired into `docker-compose.media.yml`. Health: `GET /healthz`.
 
 **Extract Worker** `:8083` — Text embedding + indexing. Qdrant (vectors) + Meilisearch (FTS). Model: `all-MiniLM-L6-v2`. API: `POST /ingest`.
 
@@ -84,6 +90,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 **Publisher-Discord** `:8094` — Discord notification bot. Listens on `ingest.file.added.v1`, `ingest.transcript.ready.v1`, summary/chapter events.
 
 **Jellyfin Bridge** `:8093` — Jellyfin metadata webhook + helper. Syncs Jellyfin events to Supabase.
+
+**PMOVES-Mike** (SPARK, compose project `pmoves-mike`, loopback block `18300-18391`) — MikeOSS legal-AI platform with its OWN Supabase/Mailpit/RustFS/Redis. Frontend `:18300`, backend `:18301` (`GET /health`), Supabase gateway `:18321`, Postgres `:18322`, Mailpit UI+API `:18325` (`GET /readyz`), Mailpit SMTP `:18326`, Redis `:18379`, RustFS S3 `:18390` / console `:18391`. Road: `make -C pmoves up-mike | down-mike | mike-status`. Doc: `pmoves/docs/integrations/MIKE_INTEGRATION.md`.
 
 ## Monitoring Stack
 
@@ -112,7 +120,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Host | Tailscale name | Role | Key services | Hub flag |
 |------|---------------|------|--------------|----------|
-| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
+| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:3090`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
 | `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
 | `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
 
@@ -124,10 +132,10 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Server | Transport | Required env | Source path | Notes |
 |--------|-----------|--------------|-------------|-------|
-| `pmoves-cipher` | SSE `localhost:8105/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
+| `pmoves-cipher` | SSE `localhost:8105/mcp/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
 | `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
 | `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
-| `hostinger-mcp` | stdio (npm pkg `hostinger-api-mcp@0.2.1`) | `HOSTINGER_API_KEY` | npm package | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
+| `hostinger-mcp` | stdio (GitHub fork `POWERFULMOVES/pmoves-hostinger-api-mcp-server#094e38c`, v1.35.7, 320 tools) | `HOSTINGER_API_KEY` | git fork, commit-pinned | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
 | `tailscale` | stdio (npm pkg `tailscale-mcp@2026.4.10-1`) | `TAILSCALE_API_KEY`, `TAILSCALE_TAILNET` | npm package | No-op until env populated. Tailnet inventory, ACL audit, stale-node sweep |
 
 **Secrets pipeline (canonical)** — never paste API keys in chat. Set in `pmoves/env.tier-api` (or per-tier file), run `make -C pmoves secrets-funnel`, restart the consuming container or Claude Code session. The env.shared multi-line value rule applies: keep secrets single-line escaped or behind `_PATH` references; multi-line bodies break dotenv parsing.

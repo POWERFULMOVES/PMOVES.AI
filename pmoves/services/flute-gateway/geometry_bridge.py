@@ -46,7 +46,9 @@ class GeometryBridge:
         """
         self._passphrase = passphrase
 
-    def encode_packet(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    def encode_packet(
+        self, event: Dict[str, Any], meta: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         """Wrap a flat voice-synthesis event into a signed CGP v0.2 packet.
 
         Input shape (matches the existing `_publish_chit_voice_event` payload):
@@ -69,21 +71,29 @@ class GeometryBridge:
         returned **unsigned** (no `sig` block) and a warning is logged. This
         matches the dev-mode pattern used by `sign_trail` in the rest of
         PMOVES.
+
+        Args:
+            event: The flat voice-synthesis event payload.
+            meta: Optional provenance metadata (from provenance_gate.build_cgp_meta)
+                merged into the point's `meta` block for attribution (§8).
         """
         ts = event.get("ts") or datetime.now(timezone.utc).isoformat()
 
         # Deep copy meta — strip the keys we promote to point fields
-        meta = {
+        point_meta = {
             k: v
             for k, v in event.items()
             if k not in {"ts", "modality", "text_length"}
         }
 
+        if meta:
+            point_meta.update(meta)
+
         point: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "modality": event.get("modality", "voice_synthesis"),
             "ts": ts,
-            "meta": meta,
+            "meta": point_meta,
         }
         text_length = event.get("text_length")
         if isinstance(text_length, int) and text_length >= 0:

@@ -1,4 +1,7 @@
-import json, os, subprocess, sys
+import json
+import os
+import subprocess
+import sys
 
 def test_mini_calibration():
     root = os.path.dirname(os.path.dirname(__file__))

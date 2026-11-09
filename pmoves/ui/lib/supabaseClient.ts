@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient, type Session } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 import { logError } from './errorUtils';
 import { ErrorIds } from './constants/errorIds';
@@ -7,9 +7,18 @@ type SupabaseClientOptions = {
   serviceRole?: boolean;
 };
 
+// During `next build` (e.g. inside `docker build`) no live env exists, and
+// several client pages construct a Supabase client at module scope or during
+// the prerender pass. Throwing there kills the image build. In the build
+// phase only, hand back inert placeholders; at runtime the strict throws
+// below still fire on real misconfiguration.
+const isBuildPhase = (): boolean =>
+  process.env.NEXT_PHASE === 'phase-production-build';
+
 const ensureUrl = (): string => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   if (!url) {
+    if (isBuildPhase()) return 'http://supabase-placeholder.invalid';
     throw new Error(
       'SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) is not configured. Run `make supa-start` + `make supa-status` and sync the values into pmoves/.env.local.'
     );
@@ -20,6 +29,7 @@ const ensureUrl = (): string => {
 const ensureAnonKey = (): string => {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   if (!key) {
+    if (isBuildPhase()) return 'build-phase-placeholder';
     throw new Error(
       'SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) is missing. Export the publishable key from `make supa-status` and add it to pmoves/.env.local.'
     );
@@ -45,6 +55,25 @@ let cachedRestUrl: string | null = null;
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
+export function syncSessionToCookie(session: Session | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const cookieName = `sb-${new URL(ensureUrl()).hostname}-auth-token`;
+    if (session) {
+      const val = JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        token_type: session.token_type,
+        user: session.user,
+      });
+      document.cookie = `${cookieName}=${encodeURIComponent(val)}; path=/; max-age=${session.expires_in ?? 3600}; SameSite=Lax`;
+    } else {
+      document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    }
+  } catch { /* SSR guard */ }
+}
+
 export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
   const bootJwt = resolveBootJwt();
   const validBoot = bootJwt && !isBootJwtExpired(5);
@@ -52,6 +81,7 @@ export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
     auth: {
       autoRefreshToken: !validBoot,
       persistSession: !validBoot,
+      detectSessionInUrl: !validBoot,
     },
     global: validBoot
       ? {
@@ -61,11 +91,10 @@ export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
         }
       : undefined,
   });
-  if (typeof window !== 'undefined') {
-    (window as any).__PMOVES_SUPABASE_BOOT = {
-      hasBootJwt: Boolean(bootJwt),
-      // Security: never expose the JWT token on the window object
-    };
+  if (typeof window !== 'undefined' && !validBoot) {
+    client.auth.onAuthStateChange((_event, session) => {
+      syncSessionToCookie(session);
+    });
   }
   return client;
 };

@@ -22,9 +22,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-from jsonschema import Draft202012Validator, validate as jsonschema_validate
-from sentence_transformers import SentenceTransformer
-from sklearn.cluster import KMeans
+from jsonschema import Draft202012Validator
+
+# Heavy tier — optional by design (see requirements-lite-embeddings.txt).
+# The core lite venv is CUDA-free; these import lazily-fatal so importing
+# this module without the embeddings tier fails only at actual use,
+# matching chit_decoder.py's defensive pattern.
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except Exception:  # pragma: no cover - heavy tier absent
+    SentenceTransformer = None
+try:
+    from sklearn.cluster import KMeans  # type: ignore
+except Exception:  # pragma: no cover - heavy tier absent
+    KMeans = None
 
 
 def eprint(*args, **kwargs):

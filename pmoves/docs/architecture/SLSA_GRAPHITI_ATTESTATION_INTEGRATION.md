@@ -66,7 +66,7 @@ Future: this contract can be verified at admission time against actual usage.
 
 **Status:** 75% implemented (per CHIT_IMPLEMENTATION_AUDIT_2026-02-08)
 
-CHIT (Context-Hybrid Information Token) provides:
+CHIT (Compressed Hierarchical Information Transfer) provides:
 - **Geometry Packets (CGP):** Structured messages encoding content as geometric shapes
 - **Shape Attribution:** Merkle-proof-based attribution tracking via `shape-attribution.ts`
 - **Five Mathematical Pillars:** Dirichlet distributions, hyperbolic geometry, Merkle proofs,

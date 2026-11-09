@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/room/p7.command.failed.v1.schema.json",
+  "title": "P7 Command Failed v1",
+  "type": "object",
+  "required": ["command", "payload", "detail", "ts"],
+  "properties": {
+    "command": {"type": "string", "minLength": 1},
+    "payload": {},
+    "detail": {},
+    "ts": {"type": "number"}
+  },
+  "additionalProperties": false
+}

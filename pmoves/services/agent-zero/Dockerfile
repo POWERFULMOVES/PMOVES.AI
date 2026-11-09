@@ -9,7 +9,13 @@ ARG A0_BASE_TAG=latest
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
-ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
+ARG AGENT_ZERO_REF=PMOVES.AI-Edition-v2.13
+
+# Cache-bust the clone when the branch tip moves: ADD of this ref URL
+# re-fetches whenever the branch head changes, invalidating the clone layer
+# below. Without it a rebuild cache-hits the old clone and silently ships a
+# stale tree (issue #2202: post-v2.5 rebuild ran the June 5f38d70 tree).
+ADD https://api.github.com/repos/POWERFULMOVES/PMOVES-Agent-Zero/git/ref/heads/${AGENT_ZERO_REF} /tmp/agent-zero-ref.json
 
 # Clone PMOVES fork of Agent Zero (matches submodule branch)
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
@@ -38,7 +44,7 @@ COPY services/agent-zero/upstream-constraints.txt /tmp/upstream-constraints.txt
 # If re-enabling, also add huggingface.co:443 to integrations-ghcr.yml egress.
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements.txt \
-    && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt
+    && if [ -f /git/agent-zero/requirements2.txt ]; then uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt; fi
 
 # ── Stage 2: PMOVES overlay ────────────────────────────────────
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS app
@@ -78,7 +84,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #    a read-only rootfs; avoiding network/cache writes at startup is intentional).
 ARG DOCKER_CLI_VERSION=27.5.1
 ARG SUPABASE_POSTGREST_MCP_VERSION=0.1.1
-RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
+RUN ARCH=$(dpkg --print-architecture) \
+    && case "$ARCH" in \
+         amd64) DOCKER_ARCH=x86_64 ;; \
+         arm64) DOCKER_ARCH=aarch64 ;; \
+         *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+       esac \
+    && curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_CLI_VERSION}.tgz" \
       | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
     && docker --version \
     && npm install -g "@supabase/mcp-server-postgrest@${SUPABASE_POSTGREST_MCP_VERSION}" \
@@ -90,7 +102,9 @@ RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir \
        --constraint requirements.lock -r requirements.txt
 
-# Init script (replaces upstream /ins/copy_A0.sh)
+# Init script (replaces upstream /ins/copy_A0.sh).
+# /a0 is owned by the non-root runtime user (65532) so the container can keep
+# the hardened tier's cap_drop=ALL and run without DAC_OVERRIDE.
 RUN install -d -o 65532 -g 65532 /a0 \
     && printf '#!/bin/bash\nset -e\nif [ ! -f "/a0/run_ui.py" ]; then\n  cp -rn --no-preserve=ownership,mode "/git/agent-zero/." "/a0"\nfi\n' \
        > /usr/local/bin/init-a0.sh \
@@ -121,7 +135,12 @@ COPY --chown=65532:65532 tools/chit_security.py /app/pmoves/tools/chit_security.
 
 # Compatibility overlay: recent flaredantic builds may omit Microsoft/notifier symbols.
 # Keep Agent Zero startup resilient by overlaying a tunnel manager that degrades gracefully.
-COPY --chown=65532:65532 services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/python/helpers/tunnel_manager.py
+# Destination is helpers/, NOT python/helpers/. Upstream moved these modules up a level, so
+# `helpers.tunnel_manager` resolves to /a0/helpers/tunnel_manager.py. COPY into a
+# non-existent path always succeeds (Docker creates it), so the old destination left a
+# correct overlay on a path nothing imports while the unguarded upstream file kept loading
+# and /api/tunnel_proxy raised ImportError on flaredantic's missing NotifyData.
+COPY --chown=65532:65532 services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/helpers/tunnel_manager.py
 
 USER pmoves:pmoves
 

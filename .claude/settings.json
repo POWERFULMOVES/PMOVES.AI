@@ -82,6 +82,7 @@
       "Bash(rm -rf /:*)"
     ],
     "additionalDirectories": [
+      "C:/pinokio",
       "D:/pinokio"
     ]
   },
@@ -103,7 +104,12 @@
           {
             "type": "command",
             "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/bash-tool-damage-control.py\"",
-            "timeout": 5
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"",
+            "timeout": 15
           }
         ]
       },
@@ -113,7 +119,12 @@
           {
             "type": "command",
             "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/edit-tool-damage-control.py\"",
-            "timeout": 5
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"",
+            "timeout": 15
           }
         ]
       },
@@ -123,12 +134,27 @@
           {
             "type": "command",
             "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/write-tool-damage-control.py\"",
-            "timeout": 5
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"",
+            "timeout": 15
           }
         ]
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/effect_check.py\"",
+            "timeout": 15
+          }
+        ]
+      },
       {
         "matcher": "Edit|Write",
         "hooks": [
@@ -177,7 +203,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-skill-reminder.sh\"",
-            "timeout": 3
+            "timeout": 8
           }
         ]
       },
@@ -187,7 +213,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/env-known-roads-reminder.sh\"",
-            "timeout": 3
+            "timeout": 8
           }
         ]
       },
@@ -197,7 +223,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-keyword-surfacer.sh\"",
-            "timeout": 3
+            "timeout": 8
           }
         ]
       }
@@ -209,7 +235,12 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-env-check.sh\"",
-            "timeout": 5
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "PMOVES_PERSONA_HOOK_EVENT=start bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/persona-session-hook.sh\"",
+            "timeout": 15
           }
         ]
       }
@@ -221,6 +252,17 @@
             "type": "command",
             "command": "echo \"[pmoves-agent] Sub-agent completed: $(cat | jq -r '.agent_type // \"unknown\"')\" >&2",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PMOVES_PERSONA_HOOK_EVENT=stop bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/persona-session-hook.sh\"",
+            "timeout": 15
           }
         ]
       }

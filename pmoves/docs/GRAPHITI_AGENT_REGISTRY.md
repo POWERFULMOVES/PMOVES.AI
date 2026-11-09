@@ -50,7 +50,7 @@
 - **Color:** #F59E0B (gold) | **Accent:** #FCD34D
 - **Voice:** Directive — decision statements, priority calls, scope definitions
 - **Domains:** vision, doctrine, final-authority, integration-decisions
-- **Co-Author:** `Russell Olivier <russell@powerfulmoves.ai>`
+- **Co-Author:** `Russell Richardson <powerfulmoves@pmoves.ai>`
 
 ### ◇ Crush
 - **ID:** `crush`

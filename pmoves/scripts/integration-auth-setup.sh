@@ -35,6 +35,13 @@ if [[ -f "$ENV_SHARED" ]]; then
     source "$ENV_SHARED"
     set +a
 fi
+# env.shared exports SSL_CERT_FILE= etc. EMPTY (container leak guard), which
+# breaks host python TLS; see pm-ca-bundle.sh.
+if [[ -f "${SCRIPT_DIR}/pm-ca-bundle.sh" ]]; then
+    # shellcheck source=./pm-ca-bundle.sh
+    source "${SCRIPT_DIR}/pm-ca-bundle.sh"
+    pm_ca_bundle_normalize || true
+fi
 
 # Default URLs
 FIREFLY_URL="${FIREFLY_URL:-http://localhost:8082}"

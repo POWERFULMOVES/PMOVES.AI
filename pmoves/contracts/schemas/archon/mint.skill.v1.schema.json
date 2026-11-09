@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archon Mint Skill",
+  "description": "Skill mint submission from /archon:mint-skill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["skill_name", "path", "owning_persona", "ts"],
+  "properties": {
+    "skill_id": { "type": ["string", "null"] },
+    "skill_name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "path": { "type": "string" },
+    "user_invocable": { "type": "boolean" },
+    "owning_persona": { "type": "string" },
+    "ts": { "type": "string", "format": "date-time" }
+  }
+}

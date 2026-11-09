@@ -34,11 +34,11 @@ Flute-Gateway: OK
 
 CONTAINER              STATUS         PORTS
 ultimate-tts-studio    Up 5 mins      0.0.0.0:7861->7861/tcp
-flute-gateway          Up 10 mins     0.0.0.0:8055-8056->8055-8056/tcp
+flute-gateway          Up 10 mins     0.0.0.0:8055-8056->8055-8056/tcp   # 8056 is published but unbound
 ```
 
 ## Notes
 
 - Ultimate-TTS-Studio runs on port 7861
-- Flute-gateway runs on ports 8055 (HTTP) and 8056 (WebSocket)
+- Flute-gateway serves HTTP **and** WebSocket on port 8055 (single uvicorn bind). Compose also publishes 8056, but no process listens there.
 - GPU is optional but recommended for fast synthesis

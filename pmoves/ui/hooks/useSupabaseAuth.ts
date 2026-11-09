@@ -7,7 +7,7 @@ import type {
   SignInWithOAuthCredentials,
   SignInWithPasswordCredentials
 } from '@supabase/supabase-js';
-import { createSupabaseBrowserClient, getBootJwt } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient, getBootJwt, syncSessionToCookie } from '@/lib/supabaseClient';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 type OAuthSignInResponse = Awaited<ReturnType<SupabaseBrowserClient['auth']['signInWithOAuth']>>;
@@ -102,6 +102,8 @@ export const useSupabaseAuth = (): UseSupabaseAuthReturn => {
       const response = await supabase.auth.signInWithPassword(credentials);
       if (response.error) {
         setError(response.error.message);
+      } else if (response.data.session) {
+        syncSessionToCookie(response.data.session);
       }
       setLoading(false);
       return response;
@@ -125,6 +127,7 @@ export const useSupabaseAuth = (): UseSupabaseAuthReturn => {
     setLoading(true);
     setError(null);
     const { error: signOutError } = await supabase.auth.signOut();
+    syncSessionToCookie(null);
     if (signOutError) {
       setError(signOutError.message);
     }

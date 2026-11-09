@@ -12,7 +12,7 @@ provider_display: "Ollama (Local)"
 distillation_stage: model_fine_tune
 
 model_config:
-  model_name: qwen3.6:q4_k_m
+  model_name: qwen3.6:27b-q4_K_M  # "q4_k_m" alone was never a tag; 27b is the Q4_K_M size nearest the 16GB note
   endpoint: http://localhost:11434/v1
   api_key_env: null
   context_window: 32768
@@ -78,6 +78,18 @@ cross_agent:
   clawz: limited
   typer: untested
   pinokio: full
+
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher.
+fit:
+  clawz:
+    "*":
+      - verdict: limited
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+        note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"
 
 huggingface:
   model_id: Qwen/Qwen3.6-35B-A3B

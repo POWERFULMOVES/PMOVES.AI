@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import pathlib
-import shutil
 import time
 
 from minio import Minio
@@ -45,7 +44,7 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://minio:9000")
 PRESIGN_HOURS = _parse_int_env("PRESIGN_EXPIRES_HOURS", 24)
 OUTPUT_DIR = os.environ.get("COMFY_OUTPUT_DIR", "/data/output")
 STATE_PATH = os.environ.get("COMFY_WATCHER_STATE_PATH", "/state/state.json")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 POLL_SECONDS = _parse_int_env("COMFY_WATCHER_POLL_SECONDS", 5)
 
 
@@ -194,7 +193,7 @@ async def run() -> None:
                         # Continue without presigned URL - not critical for all workflows
 
                     env = envelope("gen.image.result.v1", payload, source="comfy-watcher")
-                    env["payload"]["meta"] = meta
+                    env["payload"]["meta"] = payload["meta"]
                     await nc.publish("gen.image.result.v1".encode(), json.dumps(env).encode())
                     print("Uploaded and announced:", key)
                 except Exception as e:
@@ -205,10 +204,7 @@ if __name__ == "__main__":
     import asyncio
     asyncio.run(run())
 
-import os, time, json, hashlib, pathlib, datetime
-from minio import Minio
-from nats.aio.client import Client as NATS
-from services.common.events import envelope
+import os
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT","minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL","false").lower() == "true"
@@ -219,7 +215,7 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL","http://localhost:9000")
 PRESIGN_HOURS = int(os.environ.get("PRESIGN_EXPIRES_HOURS","24"))
 OUTPUT_DIR = "/data/output"
 STATE_PATH = "/state/state.json"
-NATS_URL = os.environ.get("NATS_URL","nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL","nats://nats:4222")
 
 def load_state():
     try:
@@ -273,7 +269,7 @@ async def run():
                     try:
                         from datetime import timedelta
                         presigned = client.presigned_get_object(BUCKET, key, expires=timedelta(hours=PRESIGN_HOURS))
-                    except Exception as e:
+                    except Exception:
                         presigned = None
                     public_url = f"{PUBLIC_BASE_URL}/{BUCKET}/{key}".replace('//','/').replace('http:/','http://').replace('https:/','https://')
                     payload = {"artifact_uri": f"s3://{BUCKET}/{key}"}

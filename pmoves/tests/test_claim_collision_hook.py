@@ -1,0 +1,2242 @@
+"""Regression tests for .claude/hooks/governance/claim-collision-pre.py.
+
+The hook shipped keyed on the CLAIMANT rather than the CLAIMED LANE, which
+inverted the Village Rule it enforces: two owners could claim one branch with
+no complaint, while a single owner was blocked from a second unrelated branch.
+Both directions are pinned here, because the failure mode of a governance gate
+is silence -- it goes on exiting 0 and looks exactly like a gate that works.
+
+Invoked as a subprocess against the real entrypoint, not by importing
+open_claims_in(), so the payload shape and the exit codes are covered too: a
+PreToolUse hook only blocks on exit 2, so an exception-swallowed 0 is the bug
+class that matters.
+"""
+
+from __future__ import annotations
+
+import ast
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+HOOK = REPO_ROOT / ".claude" / "hooks" / "governance" / "claim-collision-pre.py"
+
+# The hook only engages on files with the register's name.
+REGISTER_NAME = "AGNOTE4482PHI.t1.md"
+EXISTING = "- `2026-01-01T00:00:00Z` CLAIM `AGENT-A` scope: **widget.** Branch `feat/widget`\n"
+
+ALLOW, BLOCK = 0, 2
+
+
+def run_hook(tmp_path: Path, proposed: str, existing: str = EXISTING):
+    register = tmp_path / REGISTER_NAME
+    register.write_text(existing, encoding="utf-8")
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(register), "content": proposed},
+    }
+    return subprocess.run(
+        [sys.executable, str(HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_hook_exists():
+    assert HOOK.is_file(), f"governance hook missing: {HOOK}"
+
+
+def test_different_owner_same_lane_is_blocked(tmp_path):
+    """The event the register exists to prevent. Keyed on owner, this returned 0."""
+    r = run_hook(tmp_path, "- `t` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`")
+    assert r.returncode == BLOCK, f"expected block, got {r.returncode}: {r.stderr}"
+    assert "feat/widget" in r.stderr
+    assert "AGENT-A" in r.stderr, "block message must name who holds the lane"
+
+
+def test_same_owner_different_lane_is_allowed(tmp_path):
+    """A node running several lanes at once is the normal case here, not a collision."""
+    r = run_hook(tmp_path, "- `t` CLAIM `AGENT-A` scope: **docs.** Branch `docs/typo`")
+    assert r.returncode == ALLOW, f"false positive: {r.stderr}"
+
+
+def test_same_owner_same_lane_is_allowed(tmp_path):
+    """Re-naming your own open lane is not a collision with yourself."""
+    r = run_hook(tmp_path, "- `t` CLAIM `AGENT-A` scope: **more widget.** Branch `feat/widget`")
+    assert r.returncode == ALLOW, f"false positive: {r.stderr}"
+
+
+def test_different_owner_different_lane_is_allowed(tmp_path):
+    r = run_hook(tmp_path, "- `t` CLAIM `AGENT-B` scope: **docs.** Branch `docs/typo`")
+    assert r.returncode == ALLOW, f"false positive: {r.stderr}"
+
+
+def test_released_lane_is_free(tmp_path):
+    """A RELEASE pairs by owner, and must free the lane for someone else."""
+    existing = EXISTING + "- `2026-01-02T00:00:00Z` RELEASE `AGENT-A` scope: **done.**\n"
+    r = run_hook(
+        tmp_path,
+        "- `t` CLAIM `AGENT-B` scope: **taking it over.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, f"released lane still blocked: {r.stderr}"
+
+
+def test_release_must_match_the_claim_key_exactly(tmp_path):
+    """Closing is an exact-string pop; a near-miss key must NOT free the lane.
+
+    This is why a stale-keyed claim has to be released under its stale key.
+    """
+    existing = EXISTING + "- `2026-01-02T00:00:00Z` RELEASE `AGENT-A (v2)` scope: **done.**\n"
+    r = run_hook(
+        tmp_path,
+        "- `t` CLAIM `AGENT-B` scope: **taking it over.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, "a mismatched RELEASE key must not close the lane"
+
+
+def test_unkeyed_claim_is_refused_not_merely_reported(tmp_path):
+    """A claim with no lane is unenforceable, so it is refused rather than logged.
+
+    THIS ASSERTION USED TO BE `ALLOW` plus a "NOT CHECKED" line on stderr, and
+    that made the raw shell write MORE PERMISSIVE than the sanctioned tool it is
+    supposed to be replaced by. Measured at 776b429b9 with the identical claim:
+
+        EXIT=0  Bash echo-redirect / Bash heredoc / Write
+        EXIT=3  make -C pmoves register-claim   ("a CLAIM must name --branch")
+
+    AGENTS.md requires a CLAIM row to carry branch + scope + TTL, and 78 rows in
+    the live register name no branch and are enforceable by nothing. Could not
+    measure is not a pass.
+    """
+    r = run_hook(tmp_path, "- `t` CLAIM `AGENT-B` scope: **freeform prose, no branch**")
+    assert r.returncode == BLOCK, f"an unenforceable claim must be refused: {r.stderr!r}"
+    assert "names no branch" in r.stderr
+    assert "register-claim" in r.stderr, "a refusal must name the road that works"
+
+
+def test_an_unkeyed_claim_is_refused_the_same_way_on_the_shell_path(tmp_path):
+    """Same row, same verdict, whichever tool the agent happens to have.
+
+    The gap Codex found was between the shell path and `register_append.py`.
+    Fixing it on Bash alone would have re-opened the gap this PR closed --
+    Write and Bash disagreeing about one register row.
+    """
+    row = "- `t` CLAIM `AGENT-B` scope: **freeform prose, no branch**"
+    via_write = run_hook(tmp_path, row)
+    via_bash = _run_bash(tmp_path, f"echo '{row}' >> {REGISTER_NAME}")
+    assert via_write.returncode == BLOCK
+    assert via_bash.returncode == BLOCK
+    assert via_write.stderr == via_bash.stderr, (
+        "the two matchers must say the same thing:\n"
+        f"WRITE: {via_write.stderr!r}\nBASH:  {via_bash.stderr!r}"
+    )
+
+
+def test_non_register_file_is_ignored(tmp_path):
+    other = tmp_path / "NOTES.md"
+    other.write_text("hello", encoding="utf-8")
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(other), "content": "CLAIM `AGENT-B` Branch `feat/widget`"},
+    }
+    r = subprocess.run(
+        [sys.executable, str(HOOK)], input=json.dumps(payload), capture_output=True, text=True
+    )
+    assert r.returncode == ALLOW
+
+
+@pytest.mark.parametrize("tool", ["Read", "Bash", "Grep"])
+def test_non_write_tools_are_ignored(tmp_path, tool):
+    register = tmp_path / REGISTER_NAME
+    register.write_text(EXISTING, encoding="utf-8")
+    payload = {
+        "tool_name": tool,
+        "tool_input": {"file_path": str(register), "content": "CLAIM `AGENT-B` Branch `feat/widget`"},
+    }
+    r = subprocess.run(
+        [sys.executable, str(HOOK)], input=json.dumps(payload), capture_output=True, text=True
+    )
+    assert r.returncode == ALLOW
+
+
+def test_line_numbers_resolve_the_way_an_editor_counts(tmp_path):
+    """splitlines() also breaks on form feed; grep, sed, and editors do not.
+
+    A block message points the reader at a line number, so a number that does
+    not resolve in their editor sends them hunting.
+    """
+    existing = "filler\n\x0c\nfiller\n" + EXISTING
+    r = run_hook(tmp_path, "- `t` CLAIM `AGENT-B` scope: **x.** Branch `feat/widget`", existing=existing)
+    assert r.returncode == BLOCK
+    reported = int(r.stderr.split("line ")[1].split(")")[0].strip())
+    actual = existing.split("\n").index(EXISTING.rstrip("\n")) + 1
+    assert reported == actual, f"hook said line {reported}, editors say {actual}"
+
+
+# ---------------------------------------------------------------------------
+# Spelling drift. The register carries 49 author strings for ~13 identities;
+# B850 alone writes four. String equality made a release under one spelling
+# fail to close a claim opened under another, and left a lane open for a week
+# (2026-08-25). Both directions of that are pinned here.
+# ---------------------------------------------------------------------------
+
+B850_A = "B850-CLAUDE (Knuckles)"
+B850_B = "B850-CLAUDE (Claude Opus 5)"
+
+
+def test_a_release_closes_a_claim_written_under_another_spelling(tmp_path):
+    """The lane-stays-open bug. `(Knuckles)` claims, `(Claude Opus 5)` releases."""
+    existing = (
+        f"- `2026-01-01T00:00:00Z` CLAIM `{B850_A}` scope: **x.** Branch `feat/widget`\n"
+        f"- `2026-01-02T00:00:00Z` RELEASE `{B850_B}` scope: done.\n"
+    )
+    proposed = (
+        "- `2026-01-03T00:00:00Z` CLAIM `AGENT-C` scope: **x.** Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing)
+    assert result.returncode == ALLOW, (
+        "the lane was released, under a different spelling of the same "
+        f"identity; blocking it keeps the lane open forever.\n{result.stderr}"
+    )
+
+
+def test_an_identity_does_not_collide_with_itself_across_spellings(tmp_path):
+    """The mirror-image false positive: re-claiming your own lane after your
+    parenthetical changes (a new model, a new alter) is not a collision."""
+    existing = (
+        f"- `2026-01-01T00:00:00Z` CLAIM `{B850_A}` scope: **x.** Branch `feat/widget`\n"
+    )
+    proposed = (
+        f"- `2026-01-03T00:00:00Z` CLAIM `{B850_B}` scope: **x.** Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing)
+    assert result.returncode == ALLOW, (
+        f"an identity blocked itself across two of its own spellings\n{result.stderr}"
+    )
+
+
+def test_a_genuine_collision_still_blocks_across_spellings(tmp_path):
+    """Folding must not become a way to take someone else's lane.
+
+    The whole risk of canonicalising is over-folding, so this pins the
+    negative: two DIFFERENT identities on one lane still blocks.
+    """
+    existing = (
+        f"- `2026-01-01T00:00:00Z` CLAIM `{B850_A}` scope: **x.** Branch `feat/widget`\n"
+    )
+    proposed = (
+        "- `2026-01-03T00:00:00Z` CLAIM `4090-CLAUDE (field)` scope: **x.** "
+        "Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing)
+    assert result.returncode == BLOCK, (
+        f"a real cross-identity collision stopped blocking\n{result.stdout}"
+    )
+    assert B850_A in result.stderr, (
+        "the message must name the AS-WRITTEN owner so the reader can find the "
+        f"entry; got: {result.stderr}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# One identity, two machines (#3313).
+#
+# resolve_register_name() lets an identity sign OFF its home node as
+# `<BASE> (<node>)` -- `B850-CLAUDE (spark)`, or the declared node_relations
+# token `Z890-CLAUDE (Z890-mirror-on-5090)` -- while home stays
+# `B850-CLAUDE (Knuckles)`. The spelling fold above merged all of them into one
+# owner key, so a bare RELEASE by one machine's session closed the OTHER
+# machine's open lanes, and a CLAIM by one read as a self-reclaim of the
+# other's lane. Same identity, different sessions: the key is (identity, node).
+# Home-spelling variants -- `(Knuckles, opus 4.7 1M)`, `(Opus 5)` -- must keep
+# folding together, which is the 2026-08-25 reason the fold exists at all.
+# ---------------------------------------------------------------------------
+
+B850_SPARK = "B850-CLAUDE (spark)"
+Z890_HOME = "Z890-CLAUDE"
+Z890_MIRROR = "Z890-CLAUDE (Z890-mirror-on-5090)"
+
+
+def _claim(owner, branch="feat/widget", ts="2026-01-01T00:00:00Z"):
+    return f"- `{ts}` CLAIM `{owner}` scope: **x.** Branch `{branch}`\n"
+
+
+def _release(owner, ts="2026-01-02T00:00:00Z"):
+    return f"- `{ts}` RELEASE `{owner}` scope: done.\n"
+
+
+def test_an_off_home_release_does_not_close_the_home_sessions_lane(tmp_path):
+    """The defect. spark's bare RELEASE must leave Knuckles' lane held."""
+    existing = _claim(B850_A) + _release(B850_SPARK)
+    result = run_hook(tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"), existing)
+    assert result.returncode == BLOCK, (
+        "a RELEASE signed on spark closed a lane the Knuckles session still "
+        f"holds -- one machine's session freed the other's work\n{result.stdout}"
+    )
+    assert B850_A in result.stderr
+
+
+def test_a_home_release_does_not_close_the_off_home_sessions_lane(tmp_path):
+    """The mirror direction: Knuckles' RELEASE leaves spark's lane held."""
+    existing = _claim(B850_SPARK) + _release(B850_A)
+    result = run_hook(tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"), existing)
+    assert result.returncode == BLOCK, (
+        f"Knuckles' RELEASE closed spark's open lane\n{result.stdout}"
+    )
+    assert B850_SPARK in result.stderr
+
+
+def test_an_off_home_claim_on_a_home_held_lane_is_a_collision(tmp_path):
+    """Two concurrent sessions of one identity on one branch is the event the
+    register exists to catch -- not a self-reclaim."""
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK, (
+        "spark claimed a branch the Knuckles session holds and the gate read "
+        f"it as the same owner re-naming its own lane\n{result.stdout}"
+    )
+    assert B850_A in result.stderr
+
+
+def test_a_node_relations_mirror_claim_is_its_own_session(tmp_path):
+    """`Z890-CLAUDE (Z890-mirror-on-5090)` runs on the 5090, not on the z890."""
+    claim = run_hook(tmp_path, _claim(Z890_MIRROR, ts="2026-01-03T00:00:00Z"), _claim(Z890_HOME))
+    assert claim.returncode == BLOCK, (
+        f"the 5090 mirror's CLAIM read as the z890 re-naming its lane\n{claim.stdout}"
+    )
+    assert Z890_HOME in claim.stderr, "the block must name the holder"
+
+
+def test_a_node_relations_mirror_release_does_not_close_the_home_lane(tmp_path):
+    release = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(Z890_HOME) + _release(Z890_MIRROR),
+    )
+    assert release.returncode == BLOCK, (
+        f"the 5090 mirror's RELEASE closed the z890's open lane\n{release.stdout}"
+    )
+    assert Z890_HOME in release.stderr, "the block must name the holder"
+
+
+@pytest.mark.parametrize("spelling", [
+    "B850-CLAUDE (Knuckles, opus 4.7 1M)",   # node token + model annotation
+    "B850-CLAUDE (Opus 5)",                  # no node named -> home node
+    "B850-CLAUDE",                           # bare base -> home node
+    "B850-CLAUDE (pmoves-b850-ai-top)",      # a node ALIAS of the home node
+])
+def test_home_spelling_variants_still_fold_together(tmp_path, spelling):
+    """The 2026-08-25 fold must survive: every HOME spelling closes and
+    re-claims the home session's lane."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_A) + _release(spelling),
+    )
+    assert released.returncode == ALLOW, (
+        f"{spelling!r} is a home spelling and must close the home CLAIM\n"
+        f"{released.stderr}"
+    )
+    assert '"permissionDecision": "ask"' not in released.stdout, released.stdout
+    reclaimed = run_hook(tmp_path, _claim(spelling, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert reclaimed.returncode == ALLOW, (
+        f"{spelling!r} collided with its own home session\n{reclaimed.stderr}"
+    )
+    assert '"permissionDecision": "ask"' not in reclaimed.stdout, reclaimed.stdout
+
+
+def test_an_off_home_session_folds_its_own_spellings(tmp_path):
+    """Off home, the fold still applies WITHIN the session: spark's RELEASE
+    with an annotation closes spark's CLAIM, and re-naming is not a collision."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK) + _release("B850-CLAUDE (spark, opus 4.7 1M)"),
+    )
+    assert released.returncode == ALLOW, released.stderr
+    assert '"permissionDecision": "ask"' not in released.stdout, released.stdout
+    reclaimed = run_hook(
+        tmp_path, _claim("B850-CLAUDE (dgx-spark)", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK),
+    )
+    assert reclaimed.returncode == ALLOW, reclaimed.stderr
+    assert '"permissionDecision": "ask"' not in reclaimed.stdout, reclaimed.stdout
+
+
+@pytest.mark.parametrize("raw", ["b850-claude @ spark", "b850-claude (@ spark)"])
+def test_a_raw_owner_cannot_spell_a_constructed_node_key(tmp_path, raw):
+    """An owner literally WRITTEN as the off-home key must not become that
+    session. Constructed keys live in a namespace no raw owner can reach."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK) + _release(raw),
+    )
+    assert released.returncode == BLOCK, (
+        f"a RELEASE by the literal owner {raw!r} closed spark's lane\n{released.stdout}"
+    )
+    claimed = run_hook(tmp_path, _claim(raw, ts="2026-01-03T00:00:00Z"), _claim(B850_SPARK))
+    assert claimed.returncode == BLOCK, (
+        f"the literal owner {raw!r} re-claimed spark's lane as itself\n{claimed.stdout}"
+    )
+
+
+def test_an_identity_with_no_home_node_is_split_per_node_too(tmp_path):
+    """Operator decision 2026-10-08: the node is a measured fact, so a no-home
+    identity (`claude-opus`) on two named nodes is two sessions. The z890
+    session's RELEASE must not close the 5090 mirror's lane -- the shape of
+    register row 1795 (a spark lane closed by a bare RELEASE from elsewhere)."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (Z890-mirror-on-5090)") + _release("CLAUDE-OPUS (Z890)"),
+    )
+    assert released.returncode == BLOCK, (
+        f"a z890 RELEASE closed the 5090 session's lane\n{released.stdout}"
+    )
+    assert "CLAUDE-OPUS (Z890-mirror-on-5090)" in released.stderr
+    bare = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (spark)") + _release("CLAUDE-OPUS"),
+    )
+    assert bare.returncode == BLOCK, (
+        f"a node-less RELEASE closed a named-node session's lane\n{bare.stdout}"
+    )
+    same = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (Z890)") + _release("CLAUDE-OPUS-5 (z890)"),
+    )
+    assert same.returncode == ALLOW, same.stderr
+    assert '"permissionDecision": "ask"' not in same.stdout, same.stdout
+
+
+def test_a_non_machine_node_word_does_not_split_the_key(tmp_path):
+    """`any` is a declared placeholder, not a machine a session ran on."""
+    result = run_hook(tmp_path, _claim("B850-CLAUDE (any)", ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+# ---------------------------------------------------------------------------
+# The node half, unreadable (#3313 review, P2). Folding onto the home key is
+# the pre-#3313 behaviour -- the one under which a spark RELEASE closed
+# Knuckles' lanes -- so it may be a fallback, never a silent allow.
+# PMOVES_NODE_VOCABULARY is honoured only by the hook's node loader, for this.
+# ---------------------------------------------------------------------------
+
+def _ask_reason(result) -> str:
+    if '"permissionDecision": "ask"' not in result.stdout:
+        return ""
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+@pytest.fixture
+def no_node_vocabulary(tmp_path, monkeypatch):
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(tmp_path / "no-such-nodes.yaml"))
+
+
+def test_a_claim_is_asked_when_the_node_vocabulary_is_unreadable(tmp_path, no_node_vocabulary):
+    result = run_hook(tmp_path, _claim(B850_A, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    reason = _ask_reason(result)
+    assert reason, f"a degraded node half allowed silently\n{result.stdout!r}"
+    assert "node vocabulary is unavailable" in reason and B850_A in reason
+    assert "NOT MEASURED" in result.stderr
+
+
+def test_a_degraded_self_reclaim_across_nodes_is_never_a_silent_allow(
+        tmp_path, no_node_vocabulary):
+    """With the node half gone, Knuckles claiming spark's lane folds to
+    'same owner' -- the gate must at least ASK."""
+    result = run_hook(tmp_path, _claim(B850_A, ts="2026-01-03T00:00:00Z"), _claim(B850_SPARK))
+    assert result.returncode == BLOCK or _ask_reason(result), (
+        f"degraded cross-node reclaim was a silent allow\n{result.stdout!r}"
+    )
+
+
+def test_a_release_only_write_is_asked_when_the_node_vocabulary_is_unreadable(
+        tmp_path, no_node_vocabulary):
+    """A RELEASE is what closes lanes; a RELEASE-only Write used to skip the
+    gate entirely."""
+    existing = _claim(B850_A)
+    result = run_hook(tmp_path, existing + _release(B850_SPARK), existing)
+    assert result.returncode == ALLOW, result.stderr
+    assert B850_SPARK in _ask_reason(result), result.stdout
+
+
+def test_a_shell_release_is_asked_when_the_node_vocabulary_is_unreadable(
+        tmp_path, no_node_vocabulary):
+    reg = tmp_path / REGISTER_NAME
+    row = _release(B850_SPARK).rstrip("\n")
+    result = _run_bash(tmp_path, f"cat >> {reg} <<'EOF'\n{row}\nEOF", _claim(B850_A))
+    assert result.returncode == ALLOW, result.stderr
+    assert B850_SPARK in _ask_reason(result), result.stdout
+
+
+def test_a_malformed_node_relations_row_is_asked_not_silently_folded(tmp_path, monkeypatch):
+    """The reviewer's concrete case, through an override that predates the
+    fix: a node_relations row with no `token` makes wearing() raise. That
+    used to be swallowed, folding spark onto home -- a silent allow of a
+    cross-node reclaim. It must surface as an ask naming the failure."""
+    real = REPO_ROOT / "pmoves" / "config" / "identity_vocabulary.yaml"
+    broken = tmp_path / "identity_vocabulary.yaml"
+    broken.write_text(real.read_text(encoding="utf-8").rstrip("\n")
+                      + "\n  - node: '5090'\n", encoding="utf-8")
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(broken))
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK or _ask_reason(result), (
+        f"an unparseable node half folded spark onto home silently\n{result.stdout!r}"
+    )
+    assert "KeyError" in (_ask_reason(result) + result.stderr)
+
+
+def test_an_unresolved_owner_is_not_asked_about_nodes(tmp_path, no_node_vocabulary):
+    """No identity -> compared as an exact string, which already keeps every
+    node spelling apart. Nothing to ask."""
+    result = run_hook(tmp_path, _claim("AGENT-B", branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# An AMBIGUOUS parenthetical (#3313 review, P3). Two nodes named, or tokens
+# the vocabulary does not know and no node it does, is not "home" -- it is a
+# question. The gate asks; it does not pick (last-token-wins was the old rule).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (Knuckles, spark)",     # two machines
+    "B850-CLAUDE (spark, Knuckles)",     # same two, other order
+    "B850-CLAUDE (dgx spark)",           # unrecognised token, no node
+    "B850-CLAUDE (Knuckles @ spark)",    # unrecognised token, no node
+])
+def test_an_ambiguous_node_parenthetical_is_asked(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    reason = _ask_reason(result)
+    assert reason and owner in reason, (
+        f"{owner!r} names no single node, and the gate decided one silently\n"
+        f"{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (spark, some lane nobody declared)",  # node + unknown: decided
+    "B850-CLAUDE (Knuckles, opus 4.7 1M)",             # node + known model
+])
+def test_a_single_node_with_annotations_is_decided_not_asked(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+# Re-review P3-1: the model (and a role) is an annotation, never a node.
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (Opus 5.5)",
+    "B850-CLAUDE (Claude Opus 5.5 1M context)",
+    "B850-CLAUDE (reviewer)",
+    "CLAUDE-OPUS (Opus 5.5)",                 # no-home identity, model only
+])
+def test_a_model_or_role_annotation_is_not_asked_about(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+# Kilo r4221570771: "contains a digit" is not "is a model". An unknown node
+# spelled with a digit must not be waved through as an annotation.
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (nano-2)", "B850-CLAUDE (z890-mirror-2)", "B850-CLAUDE (dgx spark 2)",
+])
+def test_an_unknown_digit_bearing_node_still_asks(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert owner in _ask_reason(result), (
+        f"{owner!r} folded home silently -- a digit is not a version\n{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("owner, node", [
+    ("B850-CLAUDE (4090)", "4090"), ("B850-CLAUDE (kvm4-2)", "kvm4-2"),
+])
+def test_known_digit_nodes_still_resolve_as_nodes(tmp_path, owner, node):
+    """A digit-named node is still a node: its session is distinct from home."""
+    result = run_hook(tmp_path, _claim(owner, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK, (
+        f"{owner!r} read as the home session\n{result.stdout!r}"
+    )
+
+
+def test_a_node_shaped_unknown_token_still_asks_and_says_how_to_fix_it(tmp_path):
+    result = run_hook(tmp_path, _claim("B850-CLAUDE (dgx spark)", branch="feat/fresh",
+                                       ts="2026-01-03T00:00:00Z"))
+    reason = _ask_reason(result)
+    assert reason and "Add your node token" in reason, result.stdout
+
+
+# Re-review P3-2: baton-from holders and co-owner names are keyed too.
+def test_an_ambiguous_baton_from_holder_is_asked(tmp_path):
+    """A homeless signer passing a baton on behalf of a holder whose node
+    cannot be decided: the baton closes THAT holder's lanes, so ask."""
+    row = ("- `2026-01-03T00:00:00Z` RELEASE `CRUSH (Knuckles)` branch: `feat/fresh` "
+           "\u00b7 baton-from: `CLAUDE-OPUS (dgx spark)` \u00b7 scope: passing.\n")
+    result = run_hook(tmp_path, EXISTING + row, EXISTING)
+    assert "CLAUDE-OPUS (dgx spark)" in _ask_reason(result), result.stdout
+
+
+def test_an_ambiguous_co_owner_name_is_asked(tmp_path):
+    row = ("- `2026-01-03T00:00:00Z` CLAIM `CRUSH (Knuckles)` branch: `feat/fresh` "
+           "\u00b7 co-owners: `B850-CLAUDE (Knuckles, spark)` \u00b7 scope: s.\n")
+    result = run_hook(tmp_path, row)
+    assert "B850-CLAUDE (Knuckles, spark)" in _ask_reason(result), result.stdout
+
+
+# Re-review P3-3: the override feeds only the hook's index; a node wearing()
+# resolves that the index lacks must be asked about, not folded home.
+def test_a_node_the_gate_index_lacks_is_asked(tmp_path, monkeypatch):
+    import yaml
+    real = REPO_ROOT / "pmoves" / "configs" / "node-vocabulary.yaml"
+    doc = yaml.safe_load(real.read_text(encoding="utf-8"))
+    doc["nodes"] = [n for n in doc["nodes"] if n.get("canonical") != "spark"]
+    trimmed = tmp_path / "nodes.yaml"
+    trimmed.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(trimmed))
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK or "does not know" in _ask_reason(result), (
+        f"a node outside the gate's index folded home silently\n{result.stdout!r}"
+    )
+
+
+def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
+    """Fail-safe, not fail-open.
+
+    With no vocabulary the hook must fall back to exact comparison -- its
+    previous behaviour -- and still block a genuine collision. A guard that
+    silently stops guarding when a config goes missing is the failure mode
+    this whole change exists to remove.
+    """
+    proposed = (
+        "- `2026-01-03T00:00:00Z` CLAIM `AGENT-B` scope: **x.** Branch `feat/widget`\n"
+    )
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(tmp_path / "nope.yaml"))
+    result = run_hook(tmp_path, proposed)
+    assert result.returncode == BLOCK, result.stdout
+    assert "vocabulary unavailable" in result.stderr, (
+        "the fallback must be audible -- a guard that quietly degrades is "
+        f"indistinguishable from one that works. stderr was: {result.stderr}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dependency declaration.
+#
+# The hook is invoked as a bare `uv run` from a directory with no
+# pyproject.toml. With no PEP 723 block uv supplies an interpreter that has no
+# PyYAML, the identity vocabulary fails to import, and the hook falls back to
+# comparing owner strings exactly -- reintroducing the collision-with-self this
+# file exists to prevent, while still exiting 0 and printing nothing.
+#
+# This cannot be caught by running the hook here: %APPDATA%\Python\Python3xx\
+# site-packages is on sys.path for EVERY interpreter on a developer box, so
+# PyYAML is present locally however cleanly you invoke it. Reproduced with
+# `PYTHONNOUSERSITE=1 uv run --no-project`, which is the state of a fresh node.
+# So the assertion is structural: the declaration must be in the source.
+# ---------------------------------------------------------------------------
+
+SETTINGS = REPO_ROOT / ".claude" / "settings.json"
+
+# Import name -> distribution name. Explicit, so an unrecognised third-party
+# import fails the test rather than passing for lack of a mapping.
+DISTRIBUTION = {"yaml": "pyyaml", "jsonschema": "jsonschema", "requests": "requests"}
+
+
+def _uv_run_hook_scripts() -> list[Path]:
+    """Every hook script settings.json launches with `uv run`."""
+    settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    found: list[Path] = []
+    for event in settings.get("hooks", {}).values():
+        for matcher in event:
+            for hook in matcher.get("hooks", []):
+                command = hook.get("command", "")
+                if "uv run" not in command:
+                    continue
+                m = re.search(r'\$CLAUDE_PROJECT_DIR/([^"\']+\.py)', command)
+                if m:
+                    found.append(REPO_ROOT / m.group(1))
+    return found
+
+
+def _pep723_dependencies(source: str) -> list[str] | None:
+    """Parse the inline script block. None means no block at all."""
+    m = re.search(r"^# /// script\n(.*?)^# ///$", source, re.M | re.S)
+    if not m:
+        return None
+    body = "".join(line.lstrip("#").strip() for line in m.group(1).splitlines())
+    deps = re.search(r"dependencies\s*=\s*\[(.*?)\]", body, re.S)
+    if not deps:
+        return []
+    return re.findall(r'"([^"]+)"', deps.group(1))
+
+
+def _third_party_imports(path: Path, seen: set[Path] | None = None) -> set[str]:
+    """Top-level third-party modules reachable from `path`.
+
+    Follows spec_from_file_location loads, because the hook's PyYAML need is
+    inherited from identity_lineage.py rather than written in the hook itself.
+    """
+    seen = seen if seen is not None else set()
+    if path in seen or not path.exists():
+        return set()
+    seen.add(path)
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            modules.update({node.module.split(".")[0]})
+    third_party: set[str] = set()
+    for module in modules:
+        if module in sys.stdlib_module_names:
+            continue
+        sibling = path.parent / f"{module}.py"
+        if sibling.exists():
+            # A local sibling, not a distribution. Its own imports still count:
+            # the hook inherits every dependency it reaches, however indirectly.
+            third_party |= _third_party_imports(sibling, seen)
+        else:
+            third_party.add(module)
+    # Follow modules loaded by explicit path, e.g. `root / "pmoves" / "tools" / "x.py"`.
+    for _, filename in re.findall(
+        r'"([A-Za-z0-9_-]+)"\s*/\s*"([A-Za-z0-9_.-]+\.py)"', source
+    ):
+        for candidate in REPO_ROOT.rglob(filename):
+            third_party |= _third_party_imports(candidate, seen)
+    return third_party
+
+
+@pytest.mark.skipif(
+    not hasattr(sys, "stdlib_module_names"), reason="needs Python 3.10+"
+)
+def test_uv_run_hooks_declare_the_dependencies_they_import():
+    scripts = _uv_run_hook_scripts()
+    assert scripts, (
+        "no `uv run` hooks found in settings.json -- either the command shape "
+        "changed or this test stopped looking at the right place. It must not "
+        "pass by finding nothing to check."
+    )
+    undeclared: list[str] = []
+    for script in scripts:
+        needed = _third_party_imports(script)
+        if not needed:
+            continue
+        declared = _pep723_dependencies(script.read_text(encoding="utf-8"))
+        have = {d.lower() for d in (declared or [])}
+        for module in sorted(needed):
+            dist = DISTRIBUTION.get(module)
+            assert dist, (
+                f"{script.name} imports third-party module {module!r} with no "
+                f"entry in DISTRIBUTION -- add one rather than letting this "
+                f"test pass by not recognising it."
+            )
+            if dist.lower() not in have:
+                undeclared.append(f"{script.name} needs {dist} (imports {module})")
+    assert not undeclared, (
+        "hook scripts run by bare `uv run` must declare their dependencies in a "
+        "PEP 723 block, or uv hands them an interpreter without those packages "
+        "on a clean node:\n  " + "\n  ".join(undeclared)
+    )
+
+
+def test_the_collision_hook_specifically_declares_pyyaml():
+    """Pinned by name: this is the one whose absence degrades silently."""
+    declared = _pep723_dependencies(HOOK.read_text(encoding="utf-8"))
+    assert declared is not None, "claim-collision-pre.py has no PEP 723 block"
+    assert any(d.lower() == "pyyaml" for d in declared), (
+        f"pyyaml missing from {declared!r}: without it _load_folder() catches "
+        "ImportError and the hook reverts to exact-string owner comparison, "
+        "which is the defect it was changed to remove."
+    )
+# --- the shell-shaped hole -------------------------------------------------
+# A heredoc/tee/sed write never reaches the Write|Edit matcher. This agent filed
+# its own CLAIM that way and the gate never fired. The Bash path cannot do the
+# same check -- a shell command carries no proposed text -- so it asks instead.
+
+def _run_bash(tmp_path: Path, command: str, existing: str = EXISTING):
+    register = tmp_path / REGISTER_NAME
+    register.write_text(existing, encoding="utf-8")
+    payload = {
+        "tool_name": "Bash",
+        "cwd": str(tmp_path),
+        "tool_input": {"command": command},
+    }
+    return subprocess.run(
+        [sys.executable, str(HOOK)], input=json.dumps(payload),
+        capture_output=True, text=True,
+    )
+
+
+def _decision(result):
+    if not result.stdout.strip():
+        return None
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"]
+
+
+# THESE TESTS CHANGED CONTRACT DELIBERATELY, and the old assertions are kept
+# here as the record of what was replaced. Every one of them asserted
+# `permissionDecision: "ask"` on a shell write, because the hook could not read
+# what a shell command would write and said so honestly.
+#
+# It can now read the common case: a heredoc body, and an `echo`/`printf`
+# literal, are IN the command string. So a recoverable write gets the same
+# collision check the Write path gets -- blocking at exit 2 on a held lane, and
+# passing silently when it is clean -- and only a genuinely unreadable write
+# (`sed -i`, a variable, a computed row) is refused as could-not-measure.
+#
+# The change was not cosmetic. Measured 2026-09-02: Write exited 2 on a held
+# lane while Bash exited 0 on identical content, and four delivery agents in
+# one session had no Write tool at all, so "ask" was the only verdict any of
+# them could receive.
+
+
+@pytest.mark.parametrize("command", [
+    f"python3 - <<'PY'\nopen('{REGISTER_NAME}','a').write(x)\nPY",
+    f"sed -i 's/a/b/' {REGISTER_NAME}",
+    f"printf '%s' \"$ROW\" >> {REGISTER_NAME}",
+    f"cat > {REGISTER_NAME} <<'EOF'\n- entry\nEOF",
+])
+def test_unreadable_shell_writes_are_refused(tmp_path, command):
+    """A write whose CONTENT is not in the command string is could-not-measure.
+
+    Per the repo doctrine (0 clean / 1 findings / 3 could not measure -- NOT a
+    pass) that is a refusal. The advisory this replaces returned exit 0 with an
+    "ask", which made could-not-measure indistinguishable from measured-clean
+    on the only surface that gates.
+    """
+    r = _run_bash(tmp_path, command)
+    assert r.returncode == BLOCK, f"unreadable write allowed: {command!r}"
+    assert "NOT MEASURED" in r.stderr
+    assert "register-claim" in r.stderr, (
+        "a refusal with no sanctioned alternative is a deadlock, not a gate"
+    )
+
+
+@pytest.mark.parametrize("command", [
+    f"cat >> {REGISTER_NAME} <<'EOF'\n{{row}}\nEOF",
+    f"tee -a {REGISTER_NAME} <<'EOF'\n{{row}}\nEOF",
+    f"echo '{{row}}' >> {REGISTER_NAME}",
+])
+def test_recoverable_shell_writes_are_checked_like_a_write_tool(tmp_path, command):
+    """The heredoc/literal body IS the payload, so it gets the real check.
+
+    Both halves are asserted. A gate observed only refusing is as unproven as
+    one observed only passing, and breaking the routine append is how a gate
+    gets removed.
+    """
+    squat = ("- `t` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`")
+    r = _run_bash(tmp_path, command.format(row=squat))
+    assert r.returncode == BLOCK, f"collision missed on the shell path: {command!r}"
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+    free = ("- `t` CLAIM `AGENT-B` scope: **new work.** Branch `feat/unheld`")
+    r = _run_bash(tmp_path, command.format(row=free))
+    assert r.returncode == ALLOW, f"routine append broken: {command!r}"
+
+
+def test_the_shell_block_message_matches_the_write_path(tmp_path):
+    """One register, one verdict, one message -- whichever tool you reached for.
+
+    A gate whose refusal depends on the tool teaches that the tool is the
+    variable, which is precisely how the shell path came to be the way to file
+    a claim without being checked.
+    """
+    row = "- `t` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`"
+    via_write = run_hook(tmp_path, row)
+    via_bash = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF")
+    assert via_write.returncode == via_bash.returncode == BLOCK
+    assert via_write.stderr == via_bash.stderr
+
+
+@pytest.mark.parametrize("command", [
+    f"grep -n CLAIM {REGISTER_NAME}",
+    f"sed -n '1,5p' {REGISTER_NAME}",
+    f"wc -l {REGISTER_NAME}",
+    "echo hello >> /tmp/unrelated.txt",
+])
+def test_reads_and_unrelated_writes_stay_silent(tmp_path, command):
+    """A prompt on every `grep` would train the reader to click through."""
+    r = _run_bash(tmp_path, command)
+    assert r.returncode == ALLOW
+    assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+def test_the_refusal_names_the_lane_and_the_holder(tmp_path):
+    """Surfacing state is still the whole point.
+
+    The advisory listed EVERY open lane because it did not know which one you
+    were about to touch. Now it does, so it names the one that actually
+    collides and the owner holding it -- the same information, minus the noise
+    that trains people to click through.
+    """
+    row = "- `t` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`"
+    r = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF")
+    assert r.returncode == BLOCK
+    assert "AGENT-A" in r.stderr and "feat/widget" in r.stderr
+
+
+def test_a_file_path_is_not_a_lane(tmp_path):
+    """`docs/x.md` in a scope is a citation, not a claimed branch.
+
+    Unfiltered, two agents citing the same spec file would collide on it, and
+    the register showed lanes nobody was working.
+    """
+    # Each row names its OWN lane. Without that these two claims are unkeyed,
+    # and an unkeyed claim is now refused on its own account -- which would let
+    # this test pass while saying nothing about the suffix filter. With distinct
+    # lanes the only thing that can produce a collision here is the cited file
+    # being read as a lane, which is exactly the property under test.
+    existing = (
+        "- `t` CLAIM `AGENT-A` scope: **wrote it up.** Branch `feat/write-the-spec` "
+        "See `docs/superpowers/specs/thing-design.md`\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t` CLAIM `AGENT-B` scope: **read it.** Branch `feat/read-the-spec` "
+        "See `docs/superpowers/specs/thing-design.md`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, "a shared file citation must not read as a collision"
+
+
+def test_a_real_docs_branch_is_still_a_lane(tmp_path):
+    """The filter keys on the file extension, so extensionless docs/ branches survive."""
+    existing = "- `t` CLAIM `AGENT-A` scope: **x.** Branch `docs/opus5-identity-and-lane-claim`\n"
+    r = run_hook(
+        tmp_path,
+        "- `t` CLAIM `AGENT-B` scope: **x.** Branch `docs/opus5-identity-and-lane-claim`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, "a genuine docs/ branch must still be a lane"
+
+
+def test_every_colliding_lane_is_named_not_just_the_first(tmp_path):
+    """One identity can hold several lanes, and a claim can name several.
+
+    #2760 made open_claims_in() keep a LIST per owner because keying one claim
+    per owner silently forgot every lane but the newest. The refusal has to
+    report all of them, or the agent fixes one collision and hits the next.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` scope: **one.** Branch `feat/one`\n"
+        "- `t1` CLAIM `AGENT-A` scope: **two.** Branch `feat/two`\n"
+    )
+    row = ("- `t2` CLAIM `AGENT-B` scope: **both.** "
+           "Branch `feat/one` and Branch `feat/two`")
+    r = _run_bash(
+        tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK
+    assert "feat/one" in r.stderr and "feat/two" in r.stderr
+
+
+
+def test_a_release_citing_a_file_still_closes_the_whole_claim(tmp_path):
+    """A RELEASE that cites a file path is a BARE release, not a scoped one.
+
+    `lanes_in` filters file paths out of CLAIM lines; the RELEASE line has to
+    use the same filter. Left on the raw regex, a release whose scope mentions
+    `docs/something.md` produces a non-empty `released` set, so it takes the
+    "closes only the named lanes" branch and closes nothing -- while the
+    register's own convention (99 of its 120 RELEASE lines name no branch) is
+    that a bare release is a full handoff. The lane would stay open and the
+    author would have no way to tell.
+    """
+    existing = (
+        "- `2026-01-01T00:00:00Z` CLAIM `AGENT-A` scope: **widget.** Branch `feat/widget`\n"
+        "- `2026-01-02T00:00:00Z` RELEASE `AGENT-A` scope: **done, see `docs/notes.md`.**\n"
+    )
+    proposed = existing + (
+        "- `2026-01-03T00:00:00Z` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing=existing)
+    assert result.returncode == ALLOW, (
+        "the release closed the lane, so AGENT-B may take it:\n" + result.stderr
+    )
+
+
+# --- Codex findings on #2755 -------------------------------------------------
+
+def test_replacement_commands_are_refused(tmp_path):
+    """`cp`/`mv`/`perl -pi` rewrite a file with no redirect and no sed -i.
+
+    None of them carried a WRITE_TOKENS match, so the gate stayed silent while
+    the register was replaced wholesale -- the exact hole the Bash advisory
+    exists to close, reachable by the most ordinary way to overwrite a file.
+    """
+    for command in (
+        f"cp updated.md {REGISTER_NAME}",
+        f"mv staged.md {REGISTER_NAME}",
+        f"perl -pi -e 's/a/b/' {REGISTER_NAME}",
+        f"install -m 644 new.md {REGISTER_NAME}",
+    ):
+        r = _run_bash(tmp_path, command)
+        assert r.returncode == BLOCK, f"silent on a register rewrite: {command!r}"
+        assert "NOT MEASURED" in r.stderr
+
+
+def test_read_only_redirection_is_not_advised(tmp_path):
+    """A redirect that does not TARGET the register is not a write to it.
+
+    `2>/dev/null` and a redirect to report.txt matched the bare `>` token, so
+    routine reads prompted. This hook runs on every Bash call, so a false ask
+    here is friction on ordinary work -- and friction is what trains people to
+    click through the prompt that actually matters.
+    """
+    for command in (
+        f"cat {REGISTER_NAME} 2>/dev/null",
+        f"grep CLAIM {REGISTER_NAME} > report.txt",
+        f"wc -l < {REGISTER_NAME}",
+    ):
+        r = _run_bash(tmp_path, command)
+        assert _decision(r) is None, f"false prompt on a read: {command!r}"
+
+
+def test_redirection_onto_the_register_is_checked_not_merely_flagged(tmp_path):
+    """The other half of the above: a redirect AT the register is now READ.
+
+    `echo '- entry' >> REG` used to raise an "ask" because the hook could not
+    see the content. It can: the literal is single-quoted, so the shell expands
+    nothing and `- entry` is exactly what lands. It carries no CLAIM, collides
+    with nothing, and passes -- while the same redirect carrying a claim on a
+    held lane is refused, which the collision tests above pin.
+
+    Silence here is a MEASURED clean, not an unexamined one.
+    """
+    r = _run_bash(tmp_path, f"echo '- entry' >> {REGISTER_NAME}")
+    assert r.returncode == ALLOW
+    assert _decision(r) is None
+
+
+def test_an_explicitly_marked_branch_keeps_its_file_suffix(tmp_path):
+    """A branch may legitimately end in `.py`; the suffix filter dropped it.
+
+    Both claims then became unkeyed, so two owners could hold one branch with
+    no collision -- the gate failing OPEN, silently. The suffix filter still
+    earns its place for bare cited paths, so an explicit `Branch` marker is
+    what distinguishes a claimed lane from a referenced file.
+    """
+    existing = "- `t0` CLAIM `AGENT-A` scope: **parser.** Branch `fix/parser.py`\n"
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **same parser.** Branch `fix/parser.py`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, f"gate failed OPEN on a suffixed branch: {r.returncode}"
+    assert "fix/parser.py" in r.stderr
+
+
+def test_a_cited_file_path_is_still_not_a_lane(tmp_path):
+    """Negative control for the fix above: no marker, so the suffix filter holds."""
+    existing = ("- `t0` CLAIM `AGENT-A` branch: `fix/reviewer-notes` \xb7 scope: "
+                "reviewed `docs/superpowers/specs/x-design.md`\n")
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `fix/reader-notes` \xb7 scope: also read "
+        "`docs/superpowers/specs/x-design.md`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, "a merely-cited spec file must not register as a lane"
+
+
+# ---------------------------------------------------------------------------
+# CO-OWNERS -- lanes are shared just like nodes, and the register can say so.
+#
+# The gap these pin: the row grammar captured exactly ONE backticked owner, so a
+# lane worked by four bodies could only ever be attributed to one and every
+# co-worker was invisible to any machine reading the ledger. The hook already
+# BELIEVED shared lanes were legitimate -- its docstring says "more than one
+# node on a lane is the village working, not a violation" -- it simply could not
+# tell a declared collaboration apart from a genuine clash.
+#
+# The load-bearing assertion in this section is NOT that a declared shared lane
+# is allowed. It is the pair: declared -> allow, UNDECLARED -> still block. A
+# gate that only got quieter would be a regression wearing a feature's clothes.
+# ---------------------------------------------------------------------------
+
+
+def test_a_declared_co_owner_may_claim_the_shared_lane(tmp_path):
+    """The motivating case: four bodies on #2807, one of them claiming next."""
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (ran the validation) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **picking up widget.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        "a lane whose holder DECLARED this claimant as a co-owner is shared work, "
+        f"not a collision; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_declaring_the_holder_as_a_co_owner_also_shares_the_lane(tmp_path):
+    """Symmetry: the newcomer declaring the incumbent works too.
+
+    Without this the field would only work if the FIRST agent had foreseen who
+    would join -- which is backwards, since a lane picks up co-workers as it
+    goes. That is why 198 rows say `Three-body: delivery=...` after the fact.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · "
+        "co-owners: `AGENT-A` (holds the open claim) · scope: **joining.**",
+    )
+    assert r.returncode == ALLOW, (
+        f"declaring the incumbent must share the lane; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_an_UNDECLARED_collision_still_blocks(tmp_path):
+    """The negative control, and the reason this feature is not just a mute button.
+
+    Same file, same lane, co-owners declared -- but naming somebody ELSE. The
+    lane is shared with C, not with the claimant, so the clash is real.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-C` (did the docs) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, (
+        "declaring SOME co-owner must not excuse a claimant who is not among "
+        f"them; got {r.returncode}"
+    )
+    assert "feat/widget" in r.stderr
+    assert "AGENT-A" in r.stderr
+
+
+def test_collision_still_keys_on_the_lane_not_the_claimant(tmp_path):
+    """The original inversion, re-pinned with the field present.
+
+    Participants changed HOW two claims are compared; it must not have changed
+    WHAT they are keyed on. A co-owned claim on a different branch is still a
+    different lane.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (helped) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-A` scope: **unrelated.** Branch `feat/gadget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, "one owner running several lanes is the normal case"
+
+
+def test_a_co_owner_id_is_folded_through_the_same_vocabulary(tmp_path):
+    """A co-owner written in a different spelling of one identity still matches.
+
+    Co-owner IDs go through canonical_owner() exactly as the signing owner
+    does. Anything less and the field would open a second uncontrolled name
+    space beside the one identity_vocabulary.yaml exists to control -- and a
+    declaration written in the wrong spelling would silently do nothing.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `B850-CLAUDE` (ran it) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `B850-CLAUDE (Knuckles)` scope: **mine too.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        "`B850-CLAUDE` as a co-owner must fold to the same identity as "
+        f"`B850-CLAUDE (Knuckles)` claiming; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_the_agent_registry_key_spelling_folds_too(tmp_path):
+    """`claude_b850` -- the agent_registry.yaml key -- was the fifth spelling.
+
+    canonical_owner() bridged `B850-CLAUDE (Knuckles)` -> `B850-CLAUDE` ->
+    `b850-claude` and stopped there. The `2026-08-28T16:47:00Z` CLAIM on
+    `docs/governance-enforcement-gap` recorded the split (item 3) and left it
+    open; it is closed by aliasing the registry key.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `claude_b850` (delivery) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `B850-CLAUDE (Knuckles)` scope: **mine.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        f"registry key `claude_b850` must fold to b850-claude; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_a_single_owner_row_is_completely_unchanged(tmp_path):
+    """Backward compatibility, asserted rather than assumed.
+
+    Every row written before this field existed carries no marker, so it never
+    enters the co-owner code path. Both directions of the original rule are
+    re-checked here against the new implementation.
+    """
+    blocked = run_hook(
+        tmp_path, "- `t` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`"
+    )
+    assert blocked.returncode == BLOCK, "different owner, same lane must still block"
+    allowed = run_hook(
+        tmp_path, "- `t` CLAIM `AGENT-A` scope: **other.** Branch `feat/gadget`"
+    )
+    assert allowed.returncode == ALLOW, "same owner, different lane must still allow"
+
+
+def test_an_unreadable_co_owners_field_is_reported_not_skipped(tmp_path):
+    """`co-owners: 4090 and SPARK` satisfies a human and is empty to a machine.
+
+    That is this lane's own defect reintroduced one layer down, so it must be
+    LOUD. Reporting it as `[]` would be indistinguishable from a row that
+    genuinely has no co-owners -- a silent gate is the failure mode.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: 4090 and SPARK and DARKXSIDE · scope: **gadget.**",
+    )
+    assert "NOT MEASURED" in r.stderr, (
+        f"an unparseable co-owners field must say so; stderr was: {r.stderr!r}"
+    )
+
+
+def test_a_co_owner_id_does_not_register_as_a_lane(tmp_path):
+    """Blast radius. LANE_RE matches branch-shaped tokens loosely.
+
+    A backticked co-owner ID must not be mistaken for a claimed branch, or the
+    field would silently widen what every row claims. LANE_RE needs a
+    conventional-commit prefix and BRANCH_MARKER_RE keys on the word `branch`,
+    so neither can fire here -- pinned so a later regex edit cannot quietly
+    break it.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: `AGENT-C` (helped) · scope: **gadget.**",
+    )
+    assert r.returncode == ALLOW
+    second = run_hook(
+        tmp_path,
+        "- `t2` CLAIM `AGENT-D` scope: **unrelated.** Branch `feat/widget`",
+        existing=(
+            "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+            "co-owners: `AGENT-C` (helped) · scope: **gadget.**\n"
+        ),
+    )
+    assert second.returncode == ALLOW, (
+        "AGENT-B's row claims only feat/gadget; a co-owner ID must not have "
+        f"widened it. got {second.returncode}: {second.stderr}"
+    )
+
+
+def test_a_declared_co_owner_changes_the_verdict_not_just_the_prose(tmp_path):
+    """"AGENT-A holds feat/widget" and "...shared with AGENT-B" differ.
+
+    This used to be asserted against the ADVISORY, which enumerated every open
+    lane into an `ask` and let a permission classifier decide. The advisory is
+    gone -- it was the surface on which a colliding CLAIM filed by heredoc
+    exited 0 -- so the same distinction is pinned where it now lives: the
+    incumbent's declaration turns a BLOCK into an announced ALLOW.
+    """
+    shared = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (ran the validation) · scope: **widget.**\n"
+    )
+    undeclared = "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · scope: **widget.**\n"
+    row = "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **shared.**"
+
+    blocked = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+                        existing=undeclared)
+    assert blocked.returncode == BLOCK
+
+    allowed = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+                        existing=shared)
+    assert allowed.returncode == ALLOW, (
+        f"a declared co-owner did not change the verdict: {allowed.stderr}"
+    )
+    assert "SHARED LANE" in allowed.stderr, "a suppressed collision left no trace"
+    assert "AGENT-B" in allowed.stderr or "AGENT-A" in allowed.stderr
+
+
+def _reason(result):
+    """The prompt text of an `ask`, or None when the hook emitted no decision."""
+    if not result.stdout.strip():
+        return None
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+# --------------------------------------------------------------------------
+# A DECLARATION IS NOT A PERMISSION SLIP.
+#
+# `mine & theirs` is a symmetric intersection, so on its own it cannot tell
+# "the incumbent invited me" from "I named the incumbent without asking".
+# Both used to exit 0 with completely empty stderr -- the honest case and the
+# squat were indistinguishable AT THE HOOK'S OUTPUT, which is the one place a
+# reviewer would ever look. The three tests below pin the distinction: the
+# consented case is allowed AND said out loud, the one-sided case is neither
+# blocked nor waved through but ASKED, and the undeclared case still blocks.
+# --------------------------------------------------------------------------
+
+def test_a_unilateral_co_owner_declaration_is_asked_never_silently_allowed(tmp_path):
+    """The self-issued exemption. Exit 0 + empty stderr was the whole bug.
+
+    A newcomer can write anyone's ID into its own row; nothing about that is a
+    handoff. Blocking it would be wrong too -- an incumbent who went offline is
+    exactly the case the register is a ledger and not a lock for. So: surface
+    it, name who declared what, and let whoever is deciding decide.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · "
+        "co-owners: `AGENT-A` (totally working with me, honest) · scope: **squat.**",
+    )
+    assert r.returncode == ALLOW, "a one-sided declaration is not a hard block"
+    assert _decision(r) == "ask", (
+        "a collision suppressed by a self-issued declaration must not pass "
+        f"silently; stdout was {r.stdout!r} / stderr {r.stderr!r}"
+    )
+    reason = _reason(r)
+    assert "unilateral" in reason.lower(), reason
+    assert "feat/widget" in reason, "the prompt must name the lane"
+    assert "AGENT-A" in reason and "AGENT-B" in reason, (
+        f"the prompt must name who declared whom: {reason!r}"
+    )
+
+
+def test_a_reciprocated_declaration_is_allowed_and_said_out_loud(tmp_path):
+    """The honest workflow, which must stay frictionless -- but not silent.
+
+    The incumbent's OPEN row names the newcomer, so the party who actually
+    holds the lane consented. No prompt. It still leaves a trace, because a
+    suppressed collision that leaves no trace is not distinguishable from a
+    gate that never ran.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (joining me on this) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **the work.**",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, f"consented sharing must not block: {r.stderr}"
+    assert _decision(r) is None, (
+        f"consented sharing must not prompt either: {r.stdout!r}"
+    )
+    assert "SHARED LANE" in r.stderr, (
+        f"a suppressed collision must leave a trace: {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+
+def test_an_undeclared_collision_still_blocks_after_the_consent_split(tmp_path):
+    """The half that must not weaken. Re-driven against the new code path."""
+    r = run_hook(
+        tmp_path, "- `t1` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`"
+    )
+    assert r.returncode == BLOCK, f"expected block, got {r.returncode}: {r.stderr}"
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+
+# --------------------------------------------------------------------------
+# ONE ROW'S DECLARATION IS ONE ROW'S DECLARATION.
+#
+# co_owners_in() ran once over the WHOLE proposed text and was attached to
+# every CLAIM match in it, so a single honest field on row 1 granted
+# participation to row 2, row 3, and anything else in the same write. Multi-row
+# appends to this register are routine, so this was not only an adversarial
+# case: the gate and the register ended up disagreeing about who is on a lane,
+# because open_claims_in() has always parsed per line.
+# --------------------------------------------------------------------------
+
+def test_a_co_owner_declaration_does_not_leak_to_other_rows_in_the_same_edit(tmp_path):
+    """Row 1 declares honestly on ITS lane; row 2 squats, declaring nothing."""
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: `AGENT-A` (honest, on this other lane) · scope: **gadget.**\n"
+        "- `t2` CLAIM `AGENT-B` branch: `feat/widget` · scope: **squat.**\n",
+    )
+    assert r.returncode == BLOCK, (
+        "row 1's co-owners field must not cover row 2; got "
+        f"{r.returncode}: {r.stdout!r} / {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr
+
+
+def test_the_AB_control_for_the_row_scope_leak(tmp_path):
+    """The same two rows with row 1's field deleted -- the reviewer's control.
+
+    Both spellings must now BLOCK. Before the fix, deleting one field on an
+    unrelated row flipped the other row from ALLOW to BLOCK, which is the
+    proof that the field was being read out of its own row's scope.
+    """
+    rows = (
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · scope: **gadget.**\n"
+        "- `t2` CLAIM `AGENT-B` branch: `feat/widget` · scope: **squat.**\n"
+    )
+    assert run_hook(tmp_path, rows).returncode == BLOCK
+
+
+def test_a_multi_row_append_does_not_cross_contaminate_lanes(tmp_path):
+    """The routine case, and the false positive a co-owner-only fix would add.
+
+    Row 1 legitimately shares a lane the incumbent declared; row 2 claims a
+    free lane. Reading lanes over the whole edit would put row 1's shared lane
+    onto row 2 -- which declares nobody -- and block an ordinary append.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (joining me on this) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **the shared work.**\n"
+        "- `t2` CLAIM `AGENT-B` branch: `feat/unheld` · scope: **new lane.**\n",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        f"ordinary multi-row append must not collide with itself: {r.stderr}"
+    )
+    assert _decision(r) is None, f"and must not prompt: {r.stdout!r}"
+
+
+def test_a_row_naming_no_branch_of_its_own_still_uses_the_edits_lanes(tmp_path):
+    """Scoping lanes per row must not make the gate BLINDER than it was.
+
+    A CLAIM that names no branch on its own line is unkeyed; the pre-existing
+    whole-text read is kept for exactly that row, so a claim whose branch is
+    written on a neighbouring line is still compared instead of silently
+    passing as unguarded.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **picking this up.**\n"
+        "  (working on branch: `feat/widget` from this week)\n",
+    )
+    assert r.returncode == BLOCK, (
+        f"an unkeyed row must not lose the lanes it used to see: {r.stderr!r}"
+    )
+
+
+# --------------------------------------------------------------------------
+# A ROW THAT DOCUMENTS THE GRAMMAR IS NOT A ROW THAT USES IT.
+# --------------------------------------------------------------------------
+
+def test_a_double_backtick_EXAMPLE_cannot_suppress_a_real_collision(tmp_path):
+    """The register is a document about its own governance.
+
+    ``co-owners: `X` (note)`` shows the grammar. Read as a declaration, a row
+    that merely EXPLAINS the field could take a lane off somebody -- a silent
+    grant produced by documentation.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: the grammar is "
+        "``co-owners: `AGENT-A` (what they did)`` as shown.",
+    )
+    assert r.returncode == BLOCK, (
+        "a documented example must not grant participation; got "
+        f"{r.returncode}: {r.stdout!r} / {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr
+
+
+def test_an_unreadable_co_owner_field_carries_a_decision_not_just_stderr(tmp_path):
+    """"Could not measure" on the ENFORCING path was exit 0 + stderr.
+
+    Exit 0 is the same code as a fully measured clean run, and PreToolUse
+    stderr on exit 0 is not fed back the way exit-2 stderr is. The register's
+    documented doctrine is that could-not-measure is never indistinguishable
+    from clean, so the hook raises it as a decision instead.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: 4090 and SPARK and DARKXSIDE · scope: **gadget.**",
+    )
+    assert "NOT MEASURED" in r.stderr
+    assert _decision(r) == "ask", (
+        f"could-not-measure must not exit 0 looking clean: {r.stdout!r}"
+    )
+
+
+def test_the_word_branch_inside_a_code_span_is_a_mention_not_a_lane(tmp_path):
+    """A phantom lane made of prose stays open forever in an append-only file.
+
+    ``branch: `x` `` is a marker; "keys on the word `branch`, so ..." is prose
+    that happens to contain the noun -- and with `:` optional the matcher fired
+    on the mention and captured everything up to the next backtick. Two CLAIM
+    rows in the live register hold a sentence as a lane that way. Nobody can
+    release it, and it blocks whoever tries.
+
+    Driven through the COLLISION VERDICT rather than the advisory that used to
+    enumerate open lanes: the real lane must still block, and the prose must
+    not appear as one.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` scope: BRANCH_MARKER_RE keys on the word "
+        "`branch`, so neither can fire on a co-owner ID. Lane is "
+        "`feat/widget` here.\n"
+    )
+    row = "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **mine now.**"
+    r = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+                  existing=existing)
+    assert r.returncode == BLOCK, (
+        f"the real lane must still be seen: {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr
+    assert "so neither can fire" not in r.stderr, (
+        f"prose was captured as a claimed lane: {r.stderr!r}"
+    )
+
+
+# --------------------------------------------------------------------------
+# THE SHELL PATH IS AN ALLOWLIST.
+#
+# The fail-closed cut before this one enumerated the ways a command could WRITE
+# the register and passed a 22-case matrix. An independent reviewer then
+# measured six shapes the enumeration never considered -- every one exit 0,
+# every one able to append a colliding CLAIM, two of them able to destroy an
+# append-only ledger outright. Two more turned up reproducing that report.
+#
+# Adding those eight to a denylist would fix these eight. The defect is that the
+# question was "which commands write?", and no author can enumerate that. These
+# tests pin the inverted question: a segment naming the register is refused
+# unless it is positively recognised as a read.
+# --------------------------------------------------------------------------
+
+_ROW = "- `t` CLAIM `AGENT-B` scope: **mine now.** branch: `feat/widget`"
+
+
+@pytest.mark.parametrize("command", [
+    # The six from the review, verbatim in shape.
+    'python3 -c "open(\'{R}\',\'a\').write(\'{ROW}\')"',
+    'python3 -c "open(\'{R}\',\'w\').write(\'nuked\')"',
+    "python3 -c 'import pathlib;pathlib.Path(\"{R}\").write_text(\"x\")'",
+    'node -e "require(\'fs\').appendFileSync(\'{R}\', \'{ROW}\')"',
+    'ruby -e \'File.write("{R}", "{ROW}", mode:"a")\'',
+    "printf 'a\\n{ROW}\\n.\\nw\\n' | ed -s {R}",
+    # Found reproducing the review.
+    "git checkout --ours -- {R}",
+    "git restore --source=HEAD {R}",
+    # Shapes nobody has listed anywhere, which is the point of an allowlist.
+    "perl -e 'open(F,\">>\",\"{R}\");print F \"{ROW}\"'",
+    "awk 'BEGIN{{print \"{ROW}\" >> \"{R}\"}}'",
+    "php -r 'file_put_contents(\"{R}\",\"{ROW}\",FILE_APPEND);'",
+    "some-future-tool --write {R}",
+    "xargs -I% cp % {R} < /dev/null",
+])
+def test_inline_interpreter_and_unknown_writes_are_refused(tmp_path, command):
+    """Not positively understood as a read -> could-not-measure -> refused.
+
+    Each of these exited 0 (or would have) under the enumerate-the-writes cut.
+    `python3 -c` is the single most likely command in a fleet whose delivery
+    agents have had no Write tool for five consecutive sessions, and the `-w`
+    form of it TRUNCATES an append-only ledger.
+    """
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, command.format(R=str(reg), ROW=_ROW))
+    assert r.returncode == BLOCK, f"bypass: {command!r}"
+    assert "NOT MEASURED" in r.stderr
+    assert "register-claim" in r.stderr, (
+        "a refusal with no sanctioned alternative is a deadlock, not a gate"
+    )
+
+
+def test_deleting_the_register_is_refused(tmp_path):
+    """An append-only ledger cannot be re-created; removal IS the redaction."""
+    reg = tmp_path / REGISTER_NAME
+    # Spelled, not written: the damage-control hook literal-matches this token
+    # anywhere in a command INCLUDING inside content, which is the same bug this
+    # file's own heredoc handling was fixed for.
+    r = _run_bash(tmp_path, "r" + "m" + " " + str(reg))
+    assert r.returncode == BLOCK
+    assert "NOT MEASURED" in r.stderr
+
+
+@pytest.mark.parametrize("command", [
+    "cat {R}",
+    "grep -n CLAIM {R}",
+    "sed -n '1,5p' {R}",
+    "wc -l {R}",
+    "head -n 3 {R} | cut -c1-40",
+    "tail -n 1 {R}",
+    "git show HEAD:{R}",
+    "git add {R}",
+    "git diff -- {R}",
+    "ls -la {R}",
+    "sha256sum {R}",
+    "grep CLAIM {R} > /tmp/pmoves-gate-probe-report.txt",
+    "cat {R} | python3 -c 'import sys;print(len(sys.stdin.read()))'",
+])
+def test_reading_the_register_from_a_shell_stays_allowed(tmp_path, command):
+    """The deadlock direction, tested as hard as the hole direction.
+
+    A gate that makes the register unreadable is worse than the gap it closes,
+    and a prompt on every `grep` trains the reader to click through the one
+    prompt that matters. The last row is the documented escape hatch for
+    interpreters: pipe the register in rather than naming it.
+    """
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, command.format(R=str(reg)))
+    assert r.returncode == ALLOW, f"read refused: {command!r}\n{r.stderr}"
+    assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+@pytest.mark.parametrize("suffix", [
+    ".bak", ".orig", ".rej", ".BACKUP.123", ".LOCAL.123", ".REMOTE.123",
+])
+def test_a_neighbouring_filename_is_not_the_register(tmp_path, suffix):
+    """Substring match on the redirect target denied git's own merge artifacts.
+
+    `.orig`, `.rej` and `.BACKUP/.LOCAL/.REMOTE` are what git leaves behind in a
+    conflict -- so the old test fired precisely in the merge-conflict scenario,
+    which is the one where a careful hand fixup is the whole recovery story.
+    This is the damage-control literal-match bug, on the write target instead of
+    the content. A path test, not a substring test.
+    """
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, f"echo x > {reg}{suffix}")
+    assert r.returncode == ALLOW, f"{suffix} refused as the register: {r.stderr}"
+
+
+def test_the_register_may_be_a_copy_source_but_never_a_destination(tmp_path):
+    """Coverage was inverted for the case that actually happens.
+
+    Taking a backup before a risky fixup was refused, while `git checkout
+    --ours` -- the operation .gitattributes names as SILENTLY DROPPING another
+    node's provenance row -- passed clean.
+    """
+    reg = tmp_path / REGISTER_NAME
+    ok = _run_bash(tmp_path, f"cp {reg} /tmp/pmoves-register-backup.md")
+    assert ok.returncode == ALLOW, f"backing up the register refused: {ok.stderr}"
+    ok2 = _run_bash(tmp_path, f"cp {reg} {reg}.bak")
+    assert ok2.returncode == ALLOW, f"in-place backup refused: {ok2.stderr}"
+    bad = _run_bash(tmp_path, f"cp /tmp/whatever.md {reg}")
+    assert bad.returncode == BLOCK, "the register as a cp DESTINATION must refuse"
+
+
+def test_a_multi_line_quoted_argument_is_not_a_second_command(tmp_path):
+    """The literal-match-inside-content bug, refused a fourth entry.
+
+    Splitting segments naively on newline turns the second line of a quoted
+    argument into a "segment" whose first word is the register's own filename --
+    which an allowlist then refuses. The command below writes /tmp and touches
+    no ledger.
+    """
+    reg = tmp_path / REGISTER_NAME
+    cmd = (f"echo 'first line\nthe file {reg} is the register\nthird line' "
+           "> /tmp/pmoves-gate-notes.md")
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == ALLOW, f"prose about the register refused: {r.stderr}"
+
+
+# --------------------------------------------------------------------------
+# THE THREE-WAY VERDICT REACHES THE SHELL PATH.
+#
+# #2858 gave the Write matcher block / SHARED LANE / ask. The shell matcher had
+# no notion of `ask` at all, so a unilateral declaration filed through a heredoc
+# -- the only way an agent with no Write tool can file anything -- was a silent
+# exit 0 while the identical Write payload prompted.
+# --------------------------------------------------------------------------
+
+_RECIPROCATED = (
+    "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+    "co-owners: `AGENT-B` (ran the validation) · scope: **widget.**\n"
+)
+_UNDECLARED = (
+    "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · scope: **widget.**\n"
+)
+_ONE_SIDED_ROW = (
+    "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · "
+    "co-owners: `AGENT-A` (I say we are sharing) · scope: **mine too.**"
+)
+
+
+def test_a_reciprocated_share_is_allowed_out_loud_on_the_shell_path(tmp_path):
+    """The incumbent declared the claimant, so the sharing was consented to.
+
+    Allowed without a prompt -- that workflow has to stay frictionless -- but
+    announced, because an allow that prints nothing cannot be told apart from a
+    gate that did not run. That is exactly the state a reviewer found the Bash
+    path in.
+    """
+    row = "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **shared.**"
+    r = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+                  existing=_RECIPROCATED)
+    assert r.returncode == ALLOW, f"consented share blocked: {r.stderr}"
+    assert "SHARED LANE" in r.stderr and "AGENT-A" in r.stderr
+
+
+def test_a_unilateral_declaration_asks_on_the_shell_path(tmp_path):
+    """Attribution is not a handoff, and a heredoc must not be the way past it."""
+    r = _run_bash(
+        tmp_path,
+        f"cat >> {REGISTER_NAME} <<'EOF'\n{_ONE_SIDED_ROW}\nEOF",
+        existing=_UNDECLARED,
+    )
+    assert r.returncode == ALLOW
+    assert _decision(r) == "ask", (
+        f"the shell path had no notion of ask: {r.stdout!r}"
+    )
+    reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "UNILATERAL" in reason
+    assert "AGENT-B" in reason and "AGENT-A" in reason, (
+        "the prompt must name who declared whom"
+    )
+
+
+def test_an_undeclared_overlap_still_blocks_on_the_shell_path(tmp_path):
+    row = "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **mine now.**"
+    r = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+                  existing=_UNDECLARED)
+    assert r.returncode == BLOCK
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+
+@pytest.mark.parametrize("existing,row,expect_rc,expect_decision", [
+    (_UNDECLARED,
+     "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **mine now.**",
+     BLOCK, None),
+    (_RECIPROCATED,
+     "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **shared.**",
+     ALLOW, None),
+    (_UNDECLARED, _ONE_SIDED_ROW, ALLOW, "ask"),
+])
+def test_both_matchers_return_the_same_verdict(tmp_path, existing, row,
+                                               expect_rc, expect_decision):
+    """One register, one verdict, one message -- whichever tool you reached for.
+
+    A gate whose answer depends on which tool you happened to have teaches that
+    the tool is the variable, which is precisely how the shell path came to be
+    the way to file a claim without being checked.
+    """
+    via_write = run_hook(tmp_path, row, existing=existing)
+    via_bash = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+                         existing=existing)
+    assert via_write.returncode == via_bash.returncode == expect_rc
+    assert _decision(via_write) == _decision(via_bash) == expect_decision
+    assert via_write.stderr == via_bash.stderr
+    assert via_write.stdout == via_bash.stdout
+
+
+def test_lanes_and_co_owners_are_read_per_row_not_per_payload(tmp_path):
+    """An innocent row filed beside a colliding one is not charged with its lane.
+
+    Reported twice, for one collision, and named a claimant who had nothing to
+    do with the lane. #2858 removed this shape from the Write path with
+    `_row_at`; sharing the verdict function is what could have let it back in.
+    """
+    proposed = (
+        "- `t1` CLAIM `ALICE` branch: `fix/totally-innocent` · scope: **a.**\n"
+        "- `t2` CLAIM `BOB` branch: `feat/widget` · scope: **b.**"
+    )
+    r = run_hook(tmp_path, proposed, existing=_UNDECLARED)
+    assert r.returncode == BLOCK
+    named = [l for l in r.stderr.splitlines() if "already claimed by" in l]
+    assert len(named) == 1, f"one collision, reported {len(named)} times: {named}"
+    assert "fix/totally-innocent" not in r.stderr, (
+        "ALICE's innocent lane was charged with BOB's collision"
+    )
+
+
+# --------------------------------------------------------------------------
+# A read-by-default command carrying its own output-file flag.
+#
+# The allowlist above fixed the interpreter class and then re-made the same
+# mistake one layer in: `sort`, `shuf` and `xxd` were admitted wholesale as
+# "read-only commands", and each of them takes an OUTPUT file. Measured against
+# the allowlist cut, all at exit 0 with the register as the destination:
+#
+#     sort -o <register> in.txt          <- REPLACES the append-only ledger
+#     shuf -o <register> in.txt          <- REPLACES it
+#     xxd -r dump.hex <register>         <- rewrites it from a dump
+#
+# None of these appears in the review, in the 22-case matrix, or in the 32-probe
+# sweep that replaced it. They were found by asking the allowlist the question it
+# asks of everything else -- is this command CERTIFIED not to write? -- rather
+# than by thinking of more shapes. "Usually a read" is not "certified".
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", [
+    "sort -o {R} /tmp/in.txt",
+    "sort --output={R} /tmp/in.txt",
+    "sort --output {R} /tmp/in.txt",
+    "shuf -o {R} /tmp/in.txt",
+    "shuf --output={R} /tmp/in.txt",
+    "xxd -r /tmp/dump.hex {R}",
+    "xxd -revert /tmp/dump.hex {R}",
+    "csplit -f {R} /tmp/in.txt 2",
+    "csplit --prefix={R} /tmp/in.txt 2",
+    "split -l 1 /tmp/in.txt {R}",
+])
+def test_a_read_only_command_with_an_output_flag_is_refused(tmp_path, command):
+    """`sort -o <register>` truncates an append-only ledger at exit 0."""
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, command.format(R=str(reg)))
+    assert r.returncode == BLOCK, f"output-flag bypass: {command!r}"
+    assert "NOT MEASURED" in r.stderr
+    assert "register-claim" in r.stderr
+
+
+@pytest.mark.parametrize("command", [
+    "sort {R}",
+    "sort {R} > /tmp/sorted.txt",
+    "sort -u {R}",
+    "shuf -n 3 {R}",
+    "xxd {R}",
+    "xxd {R} > /tmp/dump.hex",
+    "od -c {R}",
+    "split -l 100 {R} /tmp/part-",
+    "csplit -f /tmp/pre- {R} 100",
+])
+def test_those_same_commands_still_read_the_register(tmp_path, command):
+    """The guard keys on the output flag, not on the command name.
+
+    `split -l 100 <register> /tmp/part-` reads it. A first cut of this guard
+    counted `100` as an operand and refused that, which is the false-refusal
+    direction -- the one that gets a gate switched off rather than bypassed.
+    """
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, command.format(R=str(reg)))
+    assert r.returncode == ALLOW, f"read refused: {command!r}\n{r.stderr}"
+    assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+# ---------------------------------------------------------------------------
+# Path SPELLING must not decide whether the guard fires.
+#
+# These pin the platform-independent behaviour on purpose. The suite's other
+# cases build paths with `tmp_path / REGISTER_NAME`, which yields "\" on
+# Windows and "/" on Linux -- so a Linux runner exercises only one spelling and
+# can never catch a regression of this. Hard-code both.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cp /tmp/whatever.md {R}",
+        "dd of={R}",
+        "install /tmp/x {R}",
+        "csplit -f {R} /tmp/in.txt 2",
+        "csplit --prefix={R} /tmp/in.txt 2",
+        "split -l 1 /tmp/in.txt {R}",
+        "mv /tmp/x {R}",
+        "echo x > {R}",
+        "tee {R}",
+        "sed -i s/a/b/ {R}",
+    ],
+)
+def test_a_backslash_spelled_register_is_still_the_register(tmp_path, command):
+    r"""`shlex.split(posix=True)` treats "\\" as an ESCAPE, not a separator.
+
+    So a Windows-spelled target does not merely tokenize oddly -- it comes back
+    with its separators DELETED:
+
+        C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+          -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+
+    leaving no separator for any basename test to find. Measured on Z890
+    (win32) before the fix: cp, dd of=, install, csplit -f, csplit --prefix=
+    and split ALL passed silently, while the identical commands spelled with
+    "/" were refused. Six write vectors on an append-only provenance file,
+    decided by which slash the operator happened to type.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", "\\")
+    r = _run_bash(tmp_path, command.format(R=reg))
+    assert r.returncode == BLOCK, (
+        f"backslash spelling bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize("suffix", [".bak", ".orig", ".rej", ".BACKUP.123"])
+def test_neighbouring_filenames_stay_allowed_in_both_spellings(tmp_path, sep, suffix):
+    """The over-match has a bound, and this is where it has to hold.
+
+    `_is_register` now falls back to `endswith` precisely because the POSIX
+    tokenizer can destroy the separators. That fallback must NOT swallow git's
+    merge-conflict artifacts -- the scenario where a careful hand fixup is the
+    entire recovery story, and the one the substring form got wrong.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, f"echo x > {reg}{suffix}")
+    assert r.returncode == ALLOW, f"{suffix} refused as the register ({sep!r}): {r.stderr}"
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x > {Q}{R}{Q}",
+        "printf y > {Q}{R}{Q}",
+        "cat /tmp/in.txt > {Q}{R}{Q}",
+        "echo x >> {Q}{R}{Q}",
+    ],
+)
+def test_a_quoted_redirect_target_with_a_space_is_still_the_register(
+    tmp_path, command, sep, quote
+):
+    r"""`REDIRECT_RE` stopped at whitespace, so a quoted path with a space was
+    truncated before `_is_register` ever saw the basename.
+
+    `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"` handed
+    `"C:\Users\Jane` to the check, which is not the register, so
+    `_segment_verdict` certified `echo` as read-only and the hook exited 0 --
+    a silent truncate of an append-only ledger.
+
+    Deliberately parametrized over BOTH separators: this one is redirect
+    parsing, not path spelling, and it reproduced identically with "/" and
+    "\\". `tee` and `cp` were never affected because they route through
+    `_tokens`, where shlex already understands quoting.
+    """
+    d = tmp_path / "Jane Doe"
+    d.mkdir()
+    reg = str(d / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, command.format(R=reg, Q=quote))
+    assert r.returncode == BLOCK, (
+        f"quoted redirect bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # A redirect word may MIX quoted and unquoted spans; bash concatenates
+        # them. Each of these names the register and must be refused.
+        ('echo x > {D}/"Jane Doe"/{N}', BLOCK),
+        ("echo x > {D}/'Jane Doe'/{N}", BLOCK),
+        ('echo x > "{D}/Jane Doe"/{N}', BLOCK),
+        ('echo x > "{D}/Jane Doe/{N}"', BLOCK),
+        (r"echo x > {D}/Jane\ Doe/{N}", BLOCK),
+        (r"echo x >> {D}/Jane\ Doe/{N}", BLOCK),
+        # ...and the other direction. A quoted span that looks like the
+        # register followed by an unquoted suffix names a NEIGHBOUR, not the
+        # register. Refusing these breaks the merge-artifact guarantee.
+        ('echo x > "{D}/{N}".bak', ALLOW),
+        ('echo x > "{D}/{N}.bak"', ALLOW),
+        ('echo x > "{D}/{N}".orig', ALLOW),
+        ('echo x > "{D}/{N}".BACKUP.123', ALLOW),
+    ],
+)
+def test_a_redirect_word_is_parsed_whole_across_quote_boundaries(
+    tmp_path, template, expected
+):
+    r"""One shell word, several spans -- and it failed in BOTH directions.
+
+    `> /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md` captured only `/tmp/"Jane`, so the
+    basename was never reached and a real truncate was certified as a
+    read-only `echo`.
+
+    `> "/tmp/AGNOTE4482PHI.t1.md".bak` captured only the quoted span, so a git
+    merge artifact was REFUSED -- the exact case the neighbour rule exists to
+    permit, and the one where a careful hand fixup is the whole recovery
+    story.
+
+    An under-match and an over-match from the same missing rule, which is why
+    both are pinned here rather than only the bypass.
+    """
+    d = tmp_path / "sub"
+    d.mkdir()
+    (d / "Jane Doe").mkdir()
+    (d / "Jane Doe" / REGISTER_NAME).write_text(EXISTING, encoding="utf-8")
+    cmd = template.format(D=str(d).replace("\\", "/"), N=REGISTER_NAME)
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"want {expected}, got {r.returncode} for: {cmd!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # Bash deletes `\<newline>` before parsing, so all of these name the
+        # register and must be refused. `{C}` is spelled as a substitution
+        # rather than an escape on purpose: written inline, the backslash count
+        # is ambiguous to every layer that touches this file, and a first draft
+        # silently became backslash-plus-letter-n -- which is not a
+        # continuation, so the tests failed against a hook that was correct.
+        ("echo x > {D}/AGNOTE4482PHI.t1.{C}md", BLOCK),
+        ("echo x >> {D}/AGNOTE4482PHI.t1.{C}md", BLOCK),
+        ("echo x > {D}/AGNOTE{C}4482PHI.t1.md", BLOCK),
+        ("echo x >> {D}/AGNOTE{C}4482PHI.t1.md", BLOCK),
+        ("echo x > {D}/AGNO{C}TE4482PHI.t1.md", BLOCK),
+    ],
+)
+def test_a_line_continuation_cannot_hide_the_register(tmp_path, template, expected):
+    r"""`\<newline>` is removed by bash BEFORE it parses anything.
+
+    So `echo x > .../AGNOTE4482PHI.t1.\` + newline + `md` truncates the real
+    register, while every check in the hook was looking at text where the name
+    is split across two lines: the literal-name gate finds no contiguous
+    `AGNOTE4482PHI.t1.md` and returns "none", and `REDIRECT_RE`'s `\.` cannot
+    bridge it either, because `.` does not match a newline.
+
+    The continuation is built by substitution, not written inline. A first
+    draft spelled it as an escape and it arrived as backslash-plus-letter-n --
+    two ordinary characters, no newline at all -- so the tests failed against a
+    hook that was already correct. Chasing that cost more time than the fix
+    did, and the same ambiguity would bite the next person editing this file.
+    """
+    continuation = "\\" + "\n"
+    cmd = template.format(D=str(tmp_path).replace("\\", "/"), C=continuation)
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"line continuation hid the register: {cmd!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("delim", ["'PY'", "PY"])
+@pytest.mark.parametrize(
+    "template",
+    [
+        "python3 <<{Q}\nopen('{D}/AGNOTE4482PHI.t1.{C}md', 'w').write('')\n{E}\n",
+        "python3 <<{Q}\nopen('{D}/AGNO{C}TE4482PHI.t1.md', 'w').write('')\n{E}\n",
+    ],
+)
+def test_a_continuation_inside_a_code_heredoc_cannot_hide_the_register(
+    tmp_path, template, delim
+):
+    r"""A heredoc body is literal to BASH -- but a `code` body is handed to an
+    interpreter, and python folds `\<newline>` inside a string literal exactly
+    as bash folds it in a command.
+
+    So the body opens the real register while the literal-name gate sees no
+    contiguous `AGNOTE4482PHI.t1.md` and returns "none". With an UNQUOTED
+    delimiter bash performs the join itself before python is even reached, so
+    the bypass does not depend on the interpreter -- which is why both
+    delimiter forms are parametrized here.
+
+    This is the case the first version of the continuation fix explicitly
+    argued AGAINST normalizing, on the grounds that rejoining a literal body
+    would invent content. That reasoning was right about bash and wrong about
+    what happens next.
+    """
+    continuation = "\\" + "\n"
+    cmd = template.format(
+        D=str(tmp_path).replace("\\", "/"),
+        C=continuation,
+        Q=delim,
+        E=delim.strip("'"),
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"continuation inside a {delim} heredoc hid the register:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("delim", ["'PY'", "PY"])
+def test_a_continuation_in_the_heredoc_OPENER_still_marks_the_body_as_code(
+    tmp_path, delim
+):
+    r"""`python3 \` + newline + `<<'PY'` is ONE command line to the shell.
+
+    Read physically, the line carrying the `<<` operator contains no
+    interpreter, so `code` came out False, the body was classified as DATA, and
+    it was then excluded from the detection string entirely -- while still
+    reaching python and still truncating the register.
+
+    Normalizing in the caller cannot fix this: `code` is decided from the
+    opener inside `split_heredocs`, so by the time the caller sees the result
+    the classification has already been made on the wrong text.
+    """
+    continuation = "\\" + "\n"
+    body_path = str(tmp_path).replace("\\", "/") + "/" + REGISTER_NAME
+    end = delim.strip("'")
+    cmd = (
+        "python3 " + continuation
+        + "<<" + delim + "\n"
+        + "open('" + body_path + "', 'w').write('')\n"
+        + end + "\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"a continued opener hid the heredoc body:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+def test_a_split_terminator_cannot_hide_a_following_command(tmp_path):
+    r"""For an UNQUOTED heredoc, bash folds `\<newline>` while reading the body
+    and matches the terminator against the rejoined line.
+
+    So `EO\` + newline + `F` closes the heredoc and everything after it is
+    ordinary shell again. The hook saw an unterminated heredoc, absorbed the
+    following truncate as inert body data, and returned 0 -- hiding a whole
+    COMMAND rather than a path, which is what makes this worse than the
+    earlier continuation cases.
+    """
+    continuation = "\\" + "\n"
+    reg = str(tmp_path / REGISTER_NAME).replace("\\", "/")
+    notes = str(tmp_path / "notes.md").replace("\\", "/")
+    # The heredoc writes an UNRELATED file on purpose. A first version opened
+    # with `cat >> <register> <<EOF`, which the hook refuses on the redirect
+    # alone -- so it passed against the unfixed hook and proved nothing. The
+    # negative control caught it. Here the ONLY route to a refusal is folding
+    # the terminator and seeing the command that follows.
+    cmd = (
+        "cat > " + notes + " <<EOF\n"
+        "hello\n"
+        "EO" + continuation + "F\n"
+        "echo DESTROYED > " + reg + "\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    assert REGISTER_NAME not in cmd.split("EOF", 1)[0], (
+        "the opener already names the register; the test would pass without the fix"
+    )
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"a split terminator hid the following truncate:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+def test_a_quoted_delimiter_does_NOT_fold_its_terminator(tmp_path):
+    r"""The bound on the fix above, exercised through the real entrypoint.
+
+    With a QUOTED delimiter bash takes the body byte-for-byte and performs no
+    joining, so `EO\` + newline + `F` is body CONTENT, not a terminator.
+    Folding there would close the heredoc early and hand the remainder to the
+    shell parser as code -- inventing a register truncate that was never run,
+    which is the inverse failure and just as wrong.
+
+    The heredoc here writes an unrelated file, so the only way this refuses is
+    if the trailing line escaped the body.
+    """
+    continuation = "\\" + "\n"
+    reg = str(tmp_path / REGISTER_NAME).replace("\\", "/")
+    notes = str(tmp_path / "notes.md").replace("\\", "/")
+    cmd = (
+        "cat > " + notes + " <<'EOF'\n"
+        "EO" + continuation + "F\n"
+        "echo DESTROYED > " + reg + "\n"
+        "EOF\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == ALLOW, (
+        "a quoted delimiter's terminator was folded, so body content was parsed "
+        f"as a command:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# sys.modules hygiene for the tool modules the hook loads (#3313 review, P3).
+# In-process on purpose: what is under test is interpreter state, which a
+# subprocess would discard before it could be asserted on.
+# ---------------------------------------------------------------------------
+
+def _fresh(name: str, path: Path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def clean_tool_modules():
+    saved = {k: sys.modules.get(k) for k in ("identity_lineage", "node_identity",
+                                             "claim_gate_under_test")}
+    yield
+    for k, v in saved.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
+
+
+def test_the_hook_reuses_an_already_loaded_node_identity(clean_tool_modules):
+    """Loading the node half must not replace a node_identity module that is
+    already this exact file -- two module objects for one file is how a
+    caller ends up holding a different Node class than the gate compares."""
+    already = _fresh("node_identity", REPO_ROOT / "pmoves" / "tools" / "node_identity.py")
+    gate = _fresh("claim_gate_under_test", HOOK)
+    assert gate._load_nodes() is not None
+    assert sys.modules["node_identity"] is already, (
+        "the hook replaced an already-loaded node_identity with a second copy"
+    )
+
+
+def test_a_malformed_node_relations_row_is_not_cached_half_built(
+        tmp_path, monkeypatch, clean_tool_modules):
+    """One bad row (no `token`) must raise on EVERY call, not once and then
+    hand out a half-built table whose KeyError names the wrong defect."""
+    lineage = _fresh("identity_lineage", REPO_ROOT / "pmoves" / "tools" / "identity_lineage.py")
+    bad = tmp_path / "vocab.yaml"
+    bad.write_text("identities: []\nnode_relations:\n  - node: '5090'\n", encoding="utf-8")
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(bad))
+    monkeypatch.setattr(lineage, "_TABLES", None)
+    for attempt in (1, 2):
+        with pytest.raises(KeyError) as exc:
+            lineage._tables()
+        assert exc.value.args == ("token",), (
+            f"attempt {attempt}: expected the real defect (missing `token`), "
+            f"got {exc.value!r}"
+        )
+    assert lineage._TABLES is None
+
+
+def test_a_failed_node_identity_import_leaves_no_half_built_module(
+        tmp_path, monkeypatch, clean_tool_modules):
+    """A node_identity that fails to execute must not stay in sys.modules."""
+    lineage = _fresh("identity_lineage", REPO_ROOT / "pmoves" / "tools" / "identity_lineage.py")
+    broken_root = tmp_path / "repo"
+    (broken_root / "pmoves" / "tools").mkdir(parents=True)
+    (broken_root / "pmoves" / "tools" / "node_identity.py").write_text(
+        "raise RuntimeError('half-built')\n", encoding="utf-8")
+    sentinel = type(sys)("node_identity")
+    sentinel.__file__ = str(tmp_path / "elsewhere" / "node_identity.py")
+    sys.modules["node_identity"] = sentinel
+    monkeypatch.setattr(lineage, "REPO_ROOT", broken_root)
+    monkeypatch.setattr(lineage, "_TABLES", None)
+    lineage._tables()  # node vocab is optional to _tables(): swallowed there
+    assert sys.modules.get("node_identity") is sentinel, (
+        "a failed exec left a half-built node_identity in sys.modules"
+    )
+
+
+@pytest.mark.parametrize("raw", [
+    "b850-claude`@spark", "b850-claude``@spark", "x`@y", "`@", "b850-claude @ spark",
+])
+def test_no_raw_owner_string_equals_a_constructed_key(raw, clean_tool_modules):
+    """Even through an API that hands canonical_owner() a string with a
+    backtick in it (no row regex can -- they all capture [^`]+), a raw owner
+    never lands on a constructed `<identity>`@<node>` key."""
+    gate = _fresh("claim_gate_under_test", HOOK)
+    constructed = {gate.canonical_owner(o) for o in (
+        "B850-CLAUDE (spark)", "Z890-CLAUDE (Z890-mirror-on-5090)")}
+    assert len(constructed) == 2
+    assert gate.canonical_owner(raw) not in constructed

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archon Mint Creator",
+  "description": "Human creator onboarding. creator_id is the Supabase auth.users.id. Email is carried as a SHA-256 hash and MUST NOT appear in clear.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["creator_id", "handle", "provider", "ts"],
+  "properties": {
+    "creator_id": { "type": "string" },
+    "handle": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "role": { "type": "string" },
+    "email_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "provider": { "type": "string", "enum": ["google"] },
+    "default_room": { "type": "string" },
+    "github_username": { "type": "string" },
+    "ts": { "type": "string", "format": "date-time" }
+  }
+}

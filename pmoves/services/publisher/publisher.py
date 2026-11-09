@@ -42,6 +42,7 @@ try:  # pragma: no cover - optional shared helper
 except Exception:  # pragma: no cover - fallback used in tests without dependency
     import datetime
     import uuid
+    from datetime import timezone
 
     def envelope(
         topic: str,
@@ -77,7 +78,6 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev testi
 
 from services.common.telemetry import (
     PublisherMetrics,
-    PublishTelemetry,
     compute_publish_telemetry,
 )
 
@@ -107,7 +107,7 @@ except Exception:
     _PROM_REG = None  # type: ignore[assignment]
 
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL", "false").lower() == "true"
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "pmoves")

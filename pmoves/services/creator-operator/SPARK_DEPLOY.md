@@ -325,9 +325,9 @@ and the PASS output in a comment on the enabling PR.
 
 ## 7. P7 / PBnJ Launch
 
-The `pbnj/` launcher tree (`pbnj/pinokio/api/pmoves-services/SKILL.md`) is **not present in
+The `PMOVES-pinokio/` launcher tree (`PMOVES-pinokio/api/pmoves-services/SKILL.md`) is **not present in
 this repo** — it lives Pinokio-side. When that tree is wired, the OmniVoice control line
-belongs under `pbnj/pinokio/api/pmoves-services/` and should drive the same compose profile:
+belongs under `PMOVES-pinokio/api/pmoves-services/` and should drive the same compose profile:
 
 ```bash
 # P7 / pterm launch (compose-profile invocation the SKILL should wrap):

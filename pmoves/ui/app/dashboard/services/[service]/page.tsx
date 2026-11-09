@@ -54,7 +54,7 @@ function CatalogFallback({
   service: CatalogServiceDefinition;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="service-catalog-fallback">
       <div className="rounded-lg border border-slate-200 bg-white p-6">
         <h2 className="text-xl font-semibold text-slate-900">Service Overview</h2>
         <p className="mt-2 text-sm text-slate-700">{service.summary}</p>
@@ -173,10 +173,10 @@ function renderServiceDoc(service: IntegrationServiceDefinition, markdown: strin
           <span aria-hidden="true">/</span>
           <span className="font-medium text-slate-900">{service.title}</span>
         </div>
-        <h1 className="text-3xl font-semibold text-slate-900">{service.title}</h1>
+        <h1 className="text-3xl font-semibold text-slate-900" data-testid="service-title">{service.title}</h1>
         <p className="text-sm text-slate-600">{service.summary}</p>
       </header>
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white p-6">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white p-6" data-testid="service-guide">
         <MarkdownRenderer content={markdown} />
       </div>
     </>
@@ -194,7 +194,7 @@ function renderCatalogService(service: CatalogServiceDefinition) {
           <span aria-hidden="true">/</span>
           <span className="font-medium text-slate-900">{service.title}</span>
         </div>
-        <h1 className="text-3xl font-semibold text-slate-900">{service.title}</h1>
+        <h1 className="text-3xl font-semibold text-slate-900" data-testid="service-title">{service.title}</h1>
         <p className="text-sm text-slate-600">{service.summary}</p>
       </header>
       <CatalogFallback service={service} />

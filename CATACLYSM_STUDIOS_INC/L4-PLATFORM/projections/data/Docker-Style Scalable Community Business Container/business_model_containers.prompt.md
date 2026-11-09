@@ -10,7 +10,7 @@ Translate the “Deploy Business Containers” bubble grid into a reusable brief
 ## Regeneration Options
 1. **Plotly rerender**  
    Activate the project virtualenv and run:  
-   `python "CATACLYSM_STUDIOS_INC/ABOUT/notes/Docker-Style Scalable Community Business Container/chart_script.py"`  
+   `python "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Docker-Style Scalable Community Business Container/chart_script.py"`  
    The script will recreate the original scatter grid as `business_model_containers.png`.
 2. **Creator pipeline prompt**  
    ```

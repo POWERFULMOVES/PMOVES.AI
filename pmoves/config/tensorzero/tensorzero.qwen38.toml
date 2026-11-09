@@ -1,0 +1,86 @@
+# =============================================================================
+# PMOVES.AI TensorZero Configuration - Qwen3.8 Suit (Alibaba Coding Plan)
+# =============================================================================
+# Qwen3.8-Max (2.4T MoE, 95B active) + Qwen3.8-27B routing configuration.
+# Mirrors the MiniMax/GLM parity pattern (tensorzero.minimax.toml).
+#
+# KEY-FREE BY DESIGN: the DASHSCOPE_API_KEY value arrives via the secrets
+# funnel (env.tier-llm), never in this file or chat. The operator holds an
+# Alibaba coding plan (2026-08-04); qwen3.8-max is available via DashScope's
+# OpenAI-compatible endpoint. Qwen3.8-27B open weights ship ~2026-08-10 —
+# when pulled locally the 27B model block below can flip routing to ollama.
+#
+# Reference: Qwen3.8-Max release 2026-08-03 (MarkTechPost/SCMP); operator
+# directive "i have alibaba coding plan" — wire as a suit.
+# =============================================================================
+
+[models."qwen3.8-max"]
+# Qwen3.8-Max — flagship, coding-plan access
+routing = ["dashscope"]
+
+[models."qwen3.8-max".providers.dashscope]
+type = "openai-compatible"
+model_name = "qwen3.8-max"
+base_url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+
+[models."qwen3.8-max".parameters]
+max_tokens = 32000
+temperature = 0.7
+top_p = 0.95
+
+[models."qwen3-coder-plus"]
+# Already referenced by Archon env (ALIBABA_QWEN_MODEL) — formalize routing.
+routing = ["dashscope"]
+
+[models."qwen3-coder-plus".providers.dashscope]
+type = "openai-compatible"
+model_name = "qwen3-coder-plus"
+base_url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+
+[models."qwen3-coder-plus".parameters]
+max_tokens = 16000
+temperature = 0.5
+top_p = 0.95
+
+# =============================================================================
+# Suit function — same shape as the GLM/Kimi/MiniMax suits
+# =============================================================================
+
+[functions.pmoves_qwen38]
+type = "chat"
+
+[functions.pmoves_qwen38.variants.max_flagship]
+type = "chat_completion"
+model = "qwen3.8-max"
+max_tokens = 32000
+temperature = 0.7
+retries = { num_retries = 3, max_delay_s = 30 }
+
+[functions.pmoves_qwen38.variants.coder_plus]
+type = "chat_completion"
+model = "qwen3-coder-plus"
+max_tokens = 16000
+temperature = 0.5
+retries = { num_retries = 3, max_delay_s = 30 }
+
+# =============================================================================
+# Provider type
+# =============================================================================
+
+[provider_types.dashscope]
+# Alibaba DashScope OpenAI-compatible API (coding plan)
+# Requires DASHSCOPE_API_KEY environment variable — funnel-delivered only.
+env_vars = ["DASHSCOPE_API_KEY"]
+
+# =============================================================================
+# Environment Variable Requirements
+# =============================================================================
+# DASHSCOPE_API_KEY — Alibaba coding-plan key. Set ONLY via the secrets
+# pipeline (env.tier-llm through secrets-funnel); never in chat or this file.
+# Follow-up when open weights land: add qwen3.8-27b model block routed to
+# ollama (local), and register it as a seat-curator candidate.
+
+# =============================================================================
+# Revision History
+# =============================================================================
+# - 2026-08-04: Initial Qwen3.8 suit, key-free pre-stage (5090-CLAUDE)

@@ -9,7 +9,7 @@ publishes `research.deepresearch.result.v1` responses enriched with Notebook met
 ## Compose profile & runtime
 
 - **Compose service:** `deepresearch`
-- **Profile:** `agents`
+- **Profile:** none (always-on with the agents stack)
 - **Depends on:** `nats`
 - **Dockerfile:** `services/deepresearch/Dockerfile`
 - **Default command:** `python -m services.deepresearch.worker`

@@ -540,7 +540,7 @@ You already had K8s PBnJ stubs; now they line up perfectly with the script inter
 ### 3.1. `pinokio.js` menu (PBnJ app)
 
 ```js
-// pbnj/pinokio/api/pmoves-pbnj/pinokio.js
+// PMOVES-pinokio/api/pmoves-pbnj/pinokio.js
 module.exports = {
   title: "PBnJ | PMOVES + Pinokio",
   description: "One-click bridge into your PMOVES lab, KVM4, and local dev stacks.",
@@ -749,7 +749,7 @@ module.exports = {
          local/
    ```
 
-3. Drop the `pbnj/pinokio/api/pmoves-pbnj/` folder into your Pinokio apps.
+3. Drop the `PMOVES-pinokio/api/pmoves-pbnj/` folder into your Pinokio apps.
 
 4. From Pinokio, run **PBnJ** and hit:
 

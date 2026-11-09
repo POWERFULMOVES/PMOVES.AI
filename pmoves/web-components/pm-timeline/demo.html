@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-timeline&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack {
+      display: grid;
+      gap: 24px;
+      max-width: 640px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-timeline&gt; — v0.1 demo</h1>
+
+  <div class="stack">
+    <pm-timeline id="t1"></pm-timeline>
+    <pm-timeline id="t2" empty-message="No work logged yet — check back after the next sprint review."></pm-timeline>
+  </div>
+
+  <script type="module" src="./pm-timeline.js"></script>
+  <script type="module">
+    document.getElementById('t1').events = [
+      {
+        ts: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        title: 'Mesh gateway came up',
+        body: 'Fordham Hill pilot gateway online. 47 households on the lattice.',
+        icon: '◆',
+      },
+      {
+        ts: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+        title: 'Voice agent RVC model loaded',
+        body: 'Flute-Gateway finished loading the Kokoro + RVC stack. Latency p95 = 142ms.',
+        icon: '◆',
+      },
+      {
+        ts: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+        title: 'Tokenism W1 closed',
+        body: 'G1 export wrapper + G3 firefly compose merge. 156 dry-run transactions.',
+        icon: '◆',
+      },
+      {
+        ts: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        title: 'Community co-design session',
+        body: '12 residents, 3 hours, mapped the pooled-dues ledger schema onto the cooperative model.',
+        icon: '◆',
+      },
+    ];
+  </script>
+</body>
+</html>

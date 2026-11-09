@@ -6,7 +6,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 | Range | Purpose | Examples |
 |-------|---------|----------|
-| 3000-3999 | Web UIs | Grafana 3002 |
+| 3000-3999 | Web UIs | Grafana **host** 3002 (container 3000) |
 | 4000-4999 | Debug/Admin | TensorZero UI 4000 |
 | 5000-5999 | Databases | Postgres 5432* |
 | 6000-6999 | Vector/Search | Qdrant 6333, Meilisearch 7700† |
@@ -25,7 +25,9 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 | Port | Service | Description |
 |------|---------|-------------|
-| 3000 | Grafana | Metrics visualization |
+| 3002 | Grafana | Metrics visualization — **host** 3002 → container 3000 |
+| 3000 | *(host)* Invidious | `${INVIDIOUS_PORT:-3000}:3000` — the actual default claimant of host 3000 |
+| 3010 | PostgREST | Supabase REST API — host 3010 → container 3000 |
 | 3030 | TensorZero Gateway | LLM gateway |
 | 3100 | Loki | Log aggregation |
 | 4000 | TensorZero UI | Metrics dashboard |
@@ -49,7 +51,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | Port | Service | Description |
 |------|---------|-------------|
 | 8055 | Flute Gateway | Voice/TTS layer |
-| 8056 | Flute Gateway WebSocket | Real-time audio |
+| 8056 | Flute Gateway (reserved) | Published by compose but **unbound** — the app serves HTTP + WebSocket on 8055 only |
 | 8077 | PMOVES.YT | YouTube ingestion |
 | 8078 | FFmpeg-Whisper | Media transcription |
 | 8079 | Media-Video Analyzer | YOLO video analysis |
@@ -84,13 +86,14 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 8103 | Tokenism UI API | Tokenism simulator API |
 | 8104 | GitHub Runner Controller | CI/CD runner orchestration |
 | 8181 | Archon | Alternative Archon port |
+| 8189 | PMOVES MCP Gateway | Host port. Container-internal is 8091; the host side moved off 8091 because that is archon's `ARCHON_API_PORT` default and the two collide on any node running both. |
 
 ### Supabase Stack (Self-Hosted)
 
 | Port | Service | Description | Network |
 |------|---------|-------------|---------|
-| 5432 | Supabase DB | PostgreSQL 17 (internal only) | pmoves_data |
-| 3000 | PostgREST | Supabase REST API (container-internal) | pmoves_api, pmoves_data |
+| 5432 | Supabase DB | PostgreSQL 17 (tailnet-bound on the juicefs meta host; internal elsewhere) | pmoves_data, pmoves_api, pmoves_db_egress (dedicated, pg_hba-scoped) |
+| 3010 | PostgREST | Supabase REST API — **host** port (container port stays 3000) | pmoves_api, pmoves_data |
 | 9999 | GoTrue | JWT authentication service | pmoves_api, pmoves_data |
 | 4010 | Realtime | WebSocket for real-time subscriptions (remapped from 4000) | pmoves_api, pmoves_data |
 | 5000 | Storage | S3-compatible file storage | pmoves_api, pmoves_data |
@@ -101,14 +104,33 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 **Notes:**
 - **PostgreSQL (5432):** Internal-only, accessible via pmoves_data network
-- **PostgREST (3000):** Container port 3000 (Grafana on 3002 — no conflict)
+- **PostgREST (host 3010 → container 3000):** `SUPABASE_POSTGREST_PORT` sets the
+  **host** side, not the container side — compose reads it as
+  `${SUPABASE_POSTGREST_PORT:-3010}:3000`. This row previously read "container-internal",
+  which is what let the host default sit at 3000 unchallenged: the doc described a port
+  that never touched the host while compose was publishing exactly there, so
+  `up-supabase` failed with "address already in use" against any unrelated process on
+  3000. `scripts/port_allocator.py` had allocated 3010 for postgrest the whole time —
+  three sources disagreed (allocator 3010, this doc "container-internal", compose 3000)
+  and nothing reconciled them. `scripts/port-consistency-check.sh` does not cover
+  postgrest, which is why the drift was never caught.
+- In-network callers are unaffected either way: they **hardcode** `rest:3000` /
+  `supabase-postgrest:3000`, and Kong routes `rest` → `supabase-postgrest:3000`.
+  An earlier revision of this note credited `services/common/port_resolver.py` for
+  that; it was wrong. `port_allocator.py:32` keys the entry `"postgrest"` while
+  `port_resolver.py:58` looks up the slug `"supabase-postgrest"`, so the lookup
+  returns `None`, `resolve()` yields port 0, and `resolve_all()` filters the service
+  out entirely. The resolver has no callers outside its own `main()`. **The slug
+  mismatch is a real, separate bug** — recorded here rather than silently fixed,
+  because making the resolver work would change behaviour for anything that starts
+  using it.
 - **Kong (8000):** Primary external access point for all Supabase APIs
 - **Services on pmoves_api + pmoves_data:** Need database access for queries
 
 **Environment Variables:**
 ```bash
 # env.tier-supabase
-SUPABASE_POSTGREST_PORT=3000    # Container-internal (Grafana on 3002)
+SUPABASE_POSTGREST_PORT=3010    # HOST port (container stays 3000); matches port_allocator.py
 SUPABASE_GOTRUE_PORT=9999
 SUPABASE_REALTIME_PORT=4010     # Remapped from 4000 to avoid TensorZero UI collision
 SUPABASE_STORAGE_PORT=5000

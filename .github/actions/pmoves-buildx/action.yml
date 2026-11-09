@@ -7,9 +7,15 @@
 #      (setup-buildx-action reuses a builder that already exists with that name).
 #   2. STATE-PRESERVING on cleanup     -> `keep-state: true`
 #      (persistent runners keep the builder + cache between jobs).
-#   3. SELF-BOUNDED via BuildKit GC     -> `buildkitd-config-inline` gc policy
-#      (BuildKit prunes cache periodically to stay under maxUsedSpace, so the
-#       `buildx_buildkit_<name>_state` volume can never grow unbounded).
+#   3. GC-configured                    -> `buildkitd-config-inline` gc policy
+#      (BuildKit GCs 1s after daemon start and after each build), with an
+#      `all = true` catch-all rule; see the comment on the config below.
+#   4. TRIMMED ON ATTACH                -> deploy/provision/pmoves-buildx-cap.sh
+#      The GC policy alone did NOT bound the state volume: measured 2026-09-27 at
+#      139.5GB (kvm4-1) / 146.4GB (kvm4-2) against a 30GB maxUsedSpace, growing
+#      5-9 GiB/day. The builder only exists during a job (setup-buildx removes it
+#      at post, keeping state), so every job now prunes it to the cap right after
+#      attaching, and runner-maintenance.yml does the same nightly between jobs.
 #
 # This is the ROOT fix for the leak that filled kvm4-1 to 100%: without a fixed
 # name each run created a fresh docker-container builder whose multi-GB state
@@ -30,31 +36,93 @@ inputs:
     required: false
     default: pmoves-shared
   max-used-space:
-    description: BuildKit gc maxUsedSpace — hard cap on builder cache before GC prunes.
+    description: >-
+      Cap on builder cache (BuildKit gc maxUsedSpace and the on-attach prune).
+      Empty = the fleet default, read from deploy/provision/pmoves-buildx-cap.sh
+      so the action and the nightly maintenance share ONE value.
     required: false
-    default: "30GB"
+    default: ""
   reserved-space:
     description: BuildKit gc reservedSpace — cache kept even under pressure.
     required: false
     default: "5GB"
   keep-duration:
-    description: BuildKit gc keepDuration — max age of a cache record before it is eligible for GC.
+    description: BuildKit gc keepDuration for the age-out rule (rule 0 only; the catch-all has none).
     required: false
     default: "168h"
+  min-free-space:
+    description: >-
+      BuildKit gc minFreeSpace for the catch-all rule — free-disk target; GC prunes
+      further (never below reserved-space) while the disk has less free than this.
+      "20%" is BuildKit's own default.
+    required: false
+    default: "20%"
 
 runs:
   using: composite
   steps:
+    - name: Resolve builder cache cap
+      id: cap
+      shell: bash
+      env:
+        CAP_INPUT: ${{ inputs.max-used-space }}
+      run: |
+        set -euo pipefail
+        cap="${CAP_INPUT:-$(bash "$GITHUB_ACTION_PATH/../../../deploy/provision/pmoves-buildx-cap.sh" --print-cap)}"
+        echo "value=$cap" >> "$GITHUB_OUTPUT"
+
+    # setup-buildx-action REUSES a builder already registered under this name
+    # and does NOT re-apply buildkitd-config-inline to it, so a leftover builder
+    # (failed job, operator) runs with BuildKit's bare default GC policy —
+    # observed on kvm4-2 2026-09-27. Detach it with --keep-state (volume kept) so
+    # setup-buildx recreates it with the config below; fail if another job on
+    # this host may be using it and it lacks the catch-all rule.
+    - name: Ensure the builder gets this GC config
+      shell: bash
+      env:
+        BUILDER: ${{ inputs.builder-name }}
+      run: bash "$GITHUB_ACTION_PATH/../../../deploy/provision/pmoves-buildx-cap.sh" --preflight --builder "$BUILDER"
+
     - name: Set up Buildx (reused, GC-bounded)
       uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
       with:
         name: ${{ inputs.builder-name }}
         # Reuse the named builder if it already exists; keep its state on cleanup.
         keep-state: true
+        # An inline config REPLACES BuildKit's default policy list, which ends
+        # in an `all = true` catch-all. Rule 0 alone never bounded the volume
+        # (moby/buildkit v0.32.2 cache/manager.go pruneOnce): keepDuration makes
+        # every record used in the last 168h ineligible, and all = false skips
+        # internal, frontend and shared records. The measured result was
+        # 139.5GB / 146.4GB against a 30GB maxUsedSpace, with `buildx du`
+        # reporting all of it reclaimable. Rule 1 is the catch-all, mirroring the
+        # last rule of DefaultGCPolicy (cmd/buildkitd/config/gcpolicy.go).
         buildkitd-config-inline: |
           [worker.oci]
             gc = true
             [[worker.oci.gcpolicy]]
               reservedSpace = "${{ inputs.reserved-space }}"
-              maxUsedSpace = "${{ inputs.max-used-space }}"
+              maxUsedSpace = "${{ steps.cap.outputs.value }}"
               keepDuration = "${{ inputs.keep-duration }}"
+            [[worker.oci.gcpolicy]]
+              all = true
+              reservedSpace = "${{ inputs.reserved-space }}"
+              maxUsedSpace = "${{ steps.cap.outputs.value }}"
+              minFreeSpace = "${{ inputs.min-free-space }}"
+
+    # Composite actions have no `post:` hook, and a trim at the END of the job
+    # would need an `if: always()` step added to all seven callers. Trimming here,
+    # right after attach, bounds the same thing with no caller changes: each job
+    # prunes what the previous jobs left, so the volume stays at the cap plus at
+    # most one job's growth. It also runs when the previous job was cancelled,
+    # which a post step is not guaranteed to. Non-fatal: a failed trim must not
+    # fail the build, but it is surfaced as a warning, not swallowed.
+    - name: Trim shared builder to the cap
+      shell: bash
+      env:
+        BUILDER: ${{ inputs.builder-name }}
+        CAP: ${{ steps.cap.outputs.value }}
+      run: |
+        bash "$GITHUB_ACTION_PATH/../../../deploy/provision/pmoves-buildx-cap.sh" \
+          --attached --builder "$BUILDER" --cap "$CAP" \
+          || echo "::warning::pmoves-buildx: trim of builder $BUILDER to $CAP failed (exit $?)"

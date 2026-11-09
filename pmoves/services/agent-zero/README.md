@@ -80,16 +80,16 @@ The service reads configuration from environment variables and exposes the resol
 
 A GitHub Actions workflow (`agent-zero-upstream-check.yml`) runs daily at 06:00 UTC and checks for new releases of [agent0ai/agent-zero](https://github.com/agent0ai/agent-zero).
 
-**Version tracking:** The current pinned upstream version is stored in `.a0-upstream-version`. This is the single source of truth for "which upstream version are we tracking?"
+**Version tracking:** The current pin is derived from `Dockerfile.multiarch` — the `ARG AGENT_ZERO_REF` value (a fork branch, normally `PMOVES.AI-Edition-<version>`), with an optional `ARG AGENT_ZERO_UPSTREAM_VERSION=<tag>` marker for when the ref is a rolling branch (e.g. `-Hardened`) whose name carries no version. Those committed ARGs are the single source of truth — the old gitignored `.a0-upstream-version` file is retired.
 
 **Detection flow:**
 1. Workflow fetches latest release tag from `agent0ai/agent-zero` via GitHub API
-2. Compares against `.a0-upstream-version`
+2. Compares against the version parsed from `AGENT_ZERO_REF` (or the `AGENT_ZERO_UPSTREAM_VERSION` marker); if the ref carries no comparable version, it reports current and asks the operator to add the marker rather than opening a PR
 3. If different and no existing PR, creates a draft PR
 
 **Draft PR contents:**
 - Bumps `AGENT_ZERO_REF` ARG in `Dockerfile.multiarch` to the new upstream tag
-- Updates `.a0-upstream-version` pin file
+- Updates the `AGENT_ZERO_UPSTREAM_VERSION` marker in `Dockerfile.multiarch` (when present)
 - Updates `upstream-constraints.txt` if new transitive dep pins are needed
 - Includes fork sync instructions and review checklist
 
@@ -138,6 +138,6 @@ upstream_version: "v1.14"  # optional, auto-detects if empty
 | File | Purpose |
 ------|---------|
 | `.github/workflows/agent-zero-upstream-check.yml` | Daily upstream check + PR creation |
-| `.a0-upstream-version` | Current pinned upstream version tag |
+| `Dockerfile.multiarch` | `AGENT_ZERO_UPSTREAM_VERSION` marker — comparable version pin when the ref is a rolling branch |
 | `upstream-constraints.txt` | Transitive dep pins for Stage 1 install |
 | `Dockerfile.multiarch` | `AGENT_ZERO_REF` ARG (bumped by workflow) |

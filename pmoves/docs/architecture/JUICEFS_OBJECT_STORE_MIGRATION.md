@@ -1,8 +1,177 @@
 # JuiceFS Object-Store Migration (replace EOL MinIO)
 
-**Status:** Design spec (2026-06-22). Build deferred. **Owner lane:** Z890-CLAUDE (#10 JuiceFS↔MinIO).
+**Status:** Design spec (2026-06-22), **REOPENED 2026-08-24** — see §0. Build deferred; the §4.1 "confirmed" choices are no longer confirmed. **Owner lane:** Z890-CLAUDE (#10 JuiceFS↔MinIO).
 **Interim:** PR #1862 repins MinIO (both `docker-compose.yml` and the generated split `docker-compose.core.yml`) to its last real community tag. **Until #1862 merges, a normal bring-up still pulls the broken `RELEASE.2025-12-20…` tag and the data profile cannot start** — this spec does not by itself restore the data tier.
 **Related:** `project_supabase_multinode_juicefs_vision` (multi-node dual-write vision), `CAPABILITY_ADAPTIVE_STANDALONE.md` (the data tier this storage layer sits in).
+
+## 0. REVISION 2026-08-24 — both "confirmed" choices reopened
+
+**Status change: the §4.1 choices marked "confirmed" are REOPENED.** Not because
+they were badly reasoned — both were correct for the requirement as stated in
+June — but because the requirement changed and two facts landed since.
+
+**The new requirement (operator, 2026-08-24):** Jellyfin, PMOVES.YT and media are
+to be **hosted on the KVMs**, which is also where egress lives to bypass a slow
+local uplink. Local nodes keep working during a VPS outage. No single node
+offline should stop operators viewing. That is a *placement and availability*
+requirement; §4.1 chose for a single-node stack.
+
+### 0.1 What is actually deployed today (measured, not assumed)
+
+The spec says JuiceFS replaces MinIO via `juicefs gateway`. The `pmoves-media`
+filesystem instead runs **on top of MinIO**:
+
+```
+"Name": "pmoves-media",  "Storage": "minio",
+"Bucket": "http://minio:9000/juicefs"
+```
+
+Metadata is PostgreSQL on **b850**, and `pmoves-minio-1` also runs on **b850**.
+So both halves of the storage layer sit on one workstation, and no VPS is
+involved anywhere. "What if b850 is offline" currently answers: every node loses
+`pmoves-media`, and Jellyfin loses its library with it.
+
+This is not a contradiction of the spec so much as its Status line playing out —
+"Design spec. **Build deferred.**" The gateway that was to *replace* MinIO was
+deferred; the `pmoves-media` content mount shipped meanwhile and picked the
+deprecated store as its backend. Both are "JuiceFS", which is what makes the
+stack read as though MinIO had already been replaced.
+(`JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md` warns not to conflate the two
+deployments; this is what conflating them looks like in practice.)
+
+### 0.2 New fact — the recorded bucket cannot resolve off-host
+
+`http://minio:9000/juicefs` is a **Docker-internal hostname**. The bucket URL is
+baked in at format time, so a remote mount reads that string and cannot resolve
+it. `docker-compose.juicefs.yml:39` anticipated this — "`JUICEFS_S3_ENDPOINT` =
+the tailnet-reachable MinIO endpoint ... so the URL recorded in metadata resolves
+from remote nodes too" — but the single-node fallback was used at format time.
+
+**The existing guard does not catch it.** `juicefs-cross-node-setup.sh:73-82`
+refuses `Storage: file` (the 2026-08-04 blocker). Ours is `Storage: minio`, so
+preflight **passes**, and the mount then fails on open — the exact
+"lists correctly, fails on read" failure the guard was written to prevent. Worse:
+a remote node running its own container named `minio` would silently bind a
+**different object store**. Any fix here must check the bucket *URL*, not just
+the storage *type*.
+
+### 0.3 New fact — MinIO CE is archived, not merely EOL
+
+The spec cites "EOL/archived (Feb 2026)". Since then the repository was
+**archived read-only in April 2026**: no releases, no reviewed patches, no
+official community binaries, and the admin console reduced to a read-only object
+browser. The interim last-real-tag pin (#1862) is now a permanently frozen base.
+
+### 0.4 Reopened choice — data backend
+
+| | |
+|---|---|
+| §4.1 said | **local volume** (`file://` on a hardened named volume), "simplest durable single-node store" |
+| Why it no longer holds | It is *explicitly* single-node. It caused the 2026-08-04 cross-node blocker, and the preflight now refuses `Storage: file` outright. It cannot serve KVM-hosted Jellyfin/PMOVES.YT. |
+| Candidate | **Garage** — [design goals](https://garagehq.deuxfleurs.fr/documentation/design/goals/): "a lightweight geo-distributed data store ... made for multi-sites (eg. datacenters, offices, households) interconnected through regular Internet connections." That is this fleet's topology stated literally. Simple duplication rather than erasure coding; S3 API only; explicitly does **not** emulate POSIX — which costs nothing here, because JuiceFS supplies POSIX above it. Reference deployments: 9 nodes / 3 sites, 15 nodes / 3 sites. |
+| Alternative | **Cloudflare R2** — managed, and CF is already wired into this fleet (tunnels, Pages, DNS-01). Trades self-hosting for egress economics; worth pricing against the KVM uplink the egress requirement exists to exploit. |
+
+### 0.5 Reopened choice — metadata engine
+
+| | |
+|---|---|
+| §4.1 said | **Postgres** on `supabase-db`, rationale included "supports the multi-node vision" |
+| Why it is reopened | Not because Postgres is disqualified — an earlier draft of this section said so and was **wrong**. JuiceFS's [metadata docs](https://juicefs.com/docs/community/databases_for_metadata/) discuss no replication/failover for PostgreSQL, and [best practices](https://juicefs.com/docs/community/postgresql_best_practices/) warns: *"PostgreSQL does not yet support Multi-Shard (Distributed) transactions, do not use a multi-server distributed architecture for the JuiceFS metadata."* **That warning is about multi-writer / sharded layouts, not about replication.** A replicated primary with standby failover behind ONE endpoint still presents JuiceFS a single writable Postgres — the warning does not apply. What is true is narrower: the *current* single `supabase-db` instance is not HA. That is a deployment gap, not an engine verdict. |
+| Candidates | **Replicated Postgres** (primary + standby behind one endpoint, e.g. Patroni/repmgr) — stays a live candidate, and is the *cheapest* option because it needs no metadata migration and no new engine in the stack. **TiKV** — *"It is recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS"*, the only engine the docs push toward a dedicated cluster. **Redis Sentinel/Cluster** — explicitly supported; Cluster pins one filesystem's metadata to a single instance. **etcd** — documented as HA. Evaluate replicated-PG *first*: if it satisfies the requirement, the whole engine migration is avoidable. |
+| Migration cost | Bounded, and this is the load-bearing fact: `juicefs dump <old> \| juicefs load <new>`, and **object data is untouched** — no re-upload of the pool. `dump` has no snapshot consistency, so writes must be suspended for the cutover. |
+
+### 0.6 The constraint that cannot be engineered away
+
+The requirement has two directions — *VPS down, lab keeps working* and *node down,
+operators keep viewing*. **One strongly-consistent metadata store cannot be
+writable on both sides of a partition.** Quorum lives on one side: 2 KVM + 1 local
+means losing the KVMs leaves 1/3 and local mounts fail regardless of engine.
+
+**CORRECTION (this section previously claimed otherwise).** An earlier draft said
+lab nodes would "degrade to cached reads + buffered writes" during a VPS outage.
+That is **wrong**, and the repo already said so:
+
+> "The JuiceFS metadata + storage home is **B850** … the mounts below **fail** if
+> B850 is not up and reachable over the tailnet."
+> — `JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md`
+
+`--writeback` defers **object-block uploads**. It does not queue **metadata
+transactions**, and the block cache is not a metadata service. Opening, creating,
+renaming or stat-ing a file are all metadata operations, so when the metadata
+engine is unreachable the mount does not degrade — **it fails**. The cache
+changes how much object-store bandwidth you need, not whether the filesystem
+works.
+
+So the honest statement of asymmetric availability is blunter than the earlier
+draft:
+
+| | VPS (metadata + object store) up | VPS down |
+|---|---|---|
+| Operators / Jellyfin | works | works (co-located with the data) |
+| Lab nodes — `pmoves-media` | works | **unavailable**, not degraded |
+| Lab nodes — local work | works | works (local disks, unaffected) |
+
+That is a real cost and it should be chosen with eyes open, not discovered during
+an outage. The caching options remain worth setting for **bandwidth** reasons
+over a slow uplink — they are simply not an availability mechanism.
+
+If shared media must survive a VPS outage, the options are (a) reachable local
+metadata quorum — which contradicts putting quorum on the VPS side, or (b) a
+second filesystem with object-level replication and a reconciliation design.
+Both are materially larger than this spec.
+
+### 0.7 Consequences for work in flight
+
+- **PR #2728** (Step 4: multi-home `supabase-db` onto `pmoves_external`, publish
+  the DB port tailnet-bound) **MERGED 2026-08-25**. Under D1 (replicated
+  Postgres, decided; see `JUICEFS_GARAGE_MIGRATION_PLAN.md` §2) it is the
+  **interim** remote-mount path while metadata stays on b850. After the
+  metadata move, JuiceFS no longer needs the tailnet `supabase-db` exposure, and
+  the follow-on plan should retire it unless another consumer depends on it.
+- The `pmoves-media` volume needs a **reformat or a bucket-URL correction**
+  regardless of the engine decision; §0.2 blocks every remote mount on its own.
+- The cross-node preflight should gain a **bucket-URL reachability check** to
+  close the gap in §0.2.
+
+### 0.8 Operator decisions (2026-08-24)
+
+Two of the questions this section opened are now **closed by the operator**:
+
+- **Asymmetric availability is ACCEPTED.** With §0.6's correction in view: during
+  a VPS outage, lab nodes lose `pmoves-media` entirely — not a degraded mode.
+  Local work is unaffected. Operators keep viewing because Jellyfin and the data
+  are co-located on the VPS side, which is the direction that was wanted anyway.
+- **Object substrate: Garage, self-hosted on the KVMs.** Chosen over managed R2.
+  Its stated design target — multi-site over ordinary Internet links, for
+  "datacenters, offices, households" — is this fleet, and self-hosting keeps the
+  egress economics the KVMs exist to provide.
+
+Still open, and now the *first* question rather than a foregone one:
+
+- **Metadata engine.** §0.5's correction means replicated Postgres is a live
+  candidate, not a disqualified one — and it is the only candidate requiring no
+  engine migration. Evaluate it before TiKV.
+  **DECIDED later (2026-09-27): replicated Postgres (D1).** See
+  `JUICEFS_GARAGE_MIGRATION_PLAN.md` §2.
+
+### 0.9 What this revision still does NOT decide
+
+The metadata engine is left open on purpose. This section replaces "confirmed"
+with the evidence needed to choose, and names the requirement each choice must
+now satisfy. §4.1 stays below, unedited, as the record of what was decided in
+June and why — the reasoning was sound for a single-node stack and should not be
+retconned.
+
+**Next (2026-09-26, updated 2026-09-27):** the Garage data-backend move now has a
+plan and runbook: [`JUICEFS_GARAGE_MIGRATION_PLAN.md`](JUICEFS_GARAGE_MIGRATION_PLAN.md).
+Operator direction broadened §0.8 to a **fleet-wide** Garage mesh: every capable
+node is a storage node and a JuiceFS client. The tiers are decided: tier 1
+(always-on) is the KVMs plus Spark, and tier 2 is 5090, Z890, Knuckles and 4090.
+The plan uses RF=3, gates every step, rolls back to MinIO, and soaks before the
+interim MinIO bridge (#3192) retires. The metadata engine is **decided: replicated
+Postgres (D1)**. It moves under a separate follow-on plan, after the data move.
+
+---
 
 ## 1. Problem
 
@@ -36,11 +205,14 @@ S3 consumers ──S3──▶ juicefs-gateway (:9000, S3-compatible)
 - **Metadata engine:** transactional KV/DB holding the filesystem tree + chunk index.
 - **Data backend:** where chunks live.
 
-### 4.1 Component choices (proposed, confirm in review)
+### 4.1 Component choices (confirmed 2026-06-28 — **metadata engine and data backend REOPENED 2026-08-24, see §0.4/§0.5**)
+
+> Left unedited as the record of the June decision. The S3-gateway and image
+> rows still stand; the two rows below them do not.
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Metadata engine | **Postgres** (dedicated DB on `supabase-db`, or a small standalone) | Already in the stack; transactional; supports the multi-node vision better than SQLite. Redis is the alternative (faster, but another stateful service + persistence config). |
+| Metadata engine | **Postgres** on `supabase-db` (schema `juicefs_meta`) | Operator decision 2026-06-28. Already in the stack; transactional; supports the multi-node vision. The Redis PoC metadata engine has been retired — the compose now defaults to the Postgres DSN. The `juicefs_meta` schema ships in `supabase/initdb/00_2_juicefs_meta_schema.sql`. |
 | Data backend | **local volume** initially (`file://` on a hardened named volume) | Simplest durable single-node store; the multi-node dual-write/replicated backend is the follow-on vision. |
 | S3 gateway | `juicefs gateway --multi-buckets --keep-etag` on **:9000** | Drop-in endpoint; `--multi-buckets` is REQUIRED on CE to keep the multiple buckets `assets`/`outputs`/`pmoves-comfyui` (else only one FS-named bucket is exposed). |
 | Image | pinned `juicedata/juicefs` (or build) per F-07 supply-chain | Maintained, unlike MinIO community. |
@@ -59,7 +231,7 @@ For existing data: `mc mirror` (or `rclone`) from the running MinIO (`local/<buc
 
 ## 7. Dependency ordering & hardening
 
-Bring-up order: **metadata engine (healthy) → juicefs format (one-time) → juicefs-gateway (healthy) → S3 consumers**. Wire `depends_on: condition: service_healthy`. Apply the `*tier-data-hardened` anchor (non-root 65532, read-only rootfs + tmpfs, `cap_drop: ALL`, `no-new-privileges`) to the gateway, mirroring MinIO. Fits the capable-tier data layer (`up-core-capable`).
+Bring-up order: **supabase-db (healthy) → juicefs format (one-time, retry loop) → juicefs-gateway (healthy) → S3 consumers**. The `juicefs-format` service has a built-in 15-retry wait loop (2s interval) for Postgres readiness. `make up-juicefs` pre-checks that `supabase-db` is running. Apply the `*tier-data-hardened` anchor to the gateway, mirroring MinIO.
 
 ## 8. Rollback
 
@@ -80,8 +252,75 @@ Keep MinIO (last-real-tag pin from #1862) **available behind a profile/flag** th
 
 ## 11. Open questions (resolve in review)
 
-- Metadata engine: dedicated Postgres DB vs Redis vs reuse `supabase-db` (blast-radius/coupling).
+- ~~Metadata engine: dedicated Postgres DB vs Redis vs reuse `supabase-db` (blast-radius/coupling).~~ **Resolved 2026-06-28: Postgres on `supabase-db`, schema `juicefs_meta` (namespaced, no coupling to app schemas). Redis PoC retired.**
 - Backend durability single-node now vs jumping to a replicated backend for multi-node.
 - Naming: keep `minio:9000` DNS (drop-in) vs new `juicefs-gateway` endpoint var.
 - Presigned-URL semantics parity (expiry, signature) between MinIO and the JuiceFS gateway.
 - Capacity/quota + backup cadence for the JuiceFS volume.
+
+## 12. ADDENDUM 2026-09-26: Supabase Storage S3 as the JuiceFS object store (measured spike)
+
+**Question:** can Supabase Storage's S3 protocol endpoint replace Garage as the JuiceFS data backend?
+**Answer, measured on B850/Knuckles:** it works for reads and writes, but not as a production backend.
+JuiceFS cannot list objects through it, so `gc`, `fsck` and `destroy` silently see nothing.
+It also brings back the single-node `file` store that §0.4 rejects.
+**Recommendation: stay with Garage.**
+
+**Setup (all throwaway, all removed afterwards):** `supabase/storage-api:v1.60.4` with
+`STORAGE_BACKEND=file` and `FILE_SIZE_LIMIT=50MB`. The S3 protocol is on by default
+(`S3_PROTOCOL_ENABLED` is unset, which the code reads as enabled). Region enforcement is off,
+so the region value does not matter. The volume ran in `juicedata/mount:ce-v1.3.0` with a sqlite
+metadata file in scratch and bucket `juicefs-spike-20260926`. The running compose sets **no
+`S3_PROTOCOL_ACCESS_KEY_ID/SECRET`**, so only session-token auth is available: access key =
+tenant id, secret = anon key, session token = a service-role JWT. That grants full RLS bypass,
+and JuiceFS stores it in its format config.
+
+**Addressing blocker.** JuiceFS keeps only the first path segment of the endpoint as the bucket
+and drops the rest (`.../storage/v1/s3/<b>` became `s3://127.0.0.1:8000/storage/`, then 401).
+The Kong route `/storage/v1/s3` is therefore unusable. The only form that worked was to point
+straight at storage-api with `--bucket http://supabase-storage:5000/s3` and give the volume the
+same name as the Supabase bucket. Object I/O works that way. **LIST does not**, because
+`GET /s3?list-type=2` is served as ListBuckets. Results:
+`juicefs gc` scanned 0 objects while 264 existed. `fsck` found 0 blocks and still exited clean.
+`destroy` logged "Deleted 0 objects", returned rc=0 and left 265 orphan rows.
+A path-rewriting proxy would not fix this, because SigV4 signs the path. Fixing it needs either a
+proxy that re-signs every request, or an upstream change in JuiceFS or storage-api.
+
+**Bench** (`juicefs bench -p 4 --big-file-size 256M --small-file-count 100`, `--cache-size 0`, so every read hits the backend):
+
+| Item | Value |
+|---|---|
+| Write big file | 250.9 MiB/s |
+| Read big file | 284.2 MiB/s |
+| Write small file (128 KiB) | 362 files/s (11.05 ms/file) |
+| Read small file | 1157 files/s |
+| Stat | 107,045 files/s (metadata only; sqlite, not the backend) |
+| Put / Get object latency | 128.9 / 181.2 ms/op (656 ops each) |
+| Errors or unsupported ops during bench | none |
+
+A separate `dd` wrote 256 MiB at 287 MB/s. **The storage-api container sat at 100% CPU
+(one Node core) for the whole bench**, which makes it the ceiling. Memory went from 160 to
+283 MiB against a 512 MiB limit. supabase-db peaked at 26% CPU.
+
+**Postgres cost:** every JuiceFS block becomes one `storage.objects` row. A persisted write of
+256 MiB plus 200 files of 128 KiB added **265 rows / 294.6 MB**, which is about 962 rows/GiB for
+that mix. The floor is 256 rows/GiB for large files (4 MiB blocks) and the ceiling is 8,192 rows/GiB
+for 128 KiB files. After that write, `storage.objects` (5 indexes) was 776 kB total. That is only
+indicative, because the table was otherwise empty. The JuiceFS metadata already lives on `supabase-db`
+(§4.1), so this option puts both the file-system index *and* the object index on one Postgres.
+
+**Replication:** none. "Dual-write" exists only as docs (`SUPABASE_DISTRIBUTED.md`,
+`DOCKING_ARCHITECTURE.md`). In `pmoves/scripts/deploy/deploy.sh` the dual-write case is a log line
+plus a comment, and no sync worker exists in `pmoves/services`. Even the design only syncs table
+rows, so a copied `storage.objects` row would not bring its bytes, which sit on the
+`pmoves_supabase-storage-data` volume.
+
+**Other compatibility note:** batch DeleteObjects from boto3 1.43 fails with
+`InvalidRequest: must have required property 'Body'`. Single DeleteObject works, and JuiceFS uses
+that for normal deletes.
+
+**Caveats:** single node, n=1 run, small dataset (about 1.35 GB written in total). There was no
+side-by-side benchmark against MinIO or Garage (COULD-NOT-MEASURE), and JuiceFS publishes no
+comparable figures. MinIO is a documented JuiceFS target (`--storage minio`); Garage is used as a
+generic path-style `s3` target. The throughput numbers are from local loopback on NVMe, so they
+say nothing about WAN performance, which is Garage's intended use.

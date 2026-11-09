@@ -1,5 +1,5 @@
 """
-CHIT (Cognitive Holographic Information Transfer) Module
+CHIT (Compressed Hierarchical Information Transfer) Module
 
 WARNING: This module provides base16 hex ENCODING, not ENCRYPTION.
 Base16 is trivially reversible and provides zero cryptographic protection.
@@ -15,6 +15,7 @@ import hashlib
 import json
 import base64
 import logging
+import os
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -424,7 +425,7 @@ def sync_common_credentials(
                             current = line.split("=", 1)[1].strip()
                             if current != value:
                                 lines[i] = f"{cred}={value}"
-                                changes.append(f"Updated {cred}={value[:8]}..." if len(value) > 8 else f"Updated {cred}={value}")
+                                changes.append(f"Updated credential '{cred}' (value rotated)")
                                 modified = True
                                 logger.info(f"Updated credential '{cred}' in {tier_path.name}")
                         break
@@ -435,7 +436,7 @@ def sync_common_credentials(
                     for j in range(len(lines) - 1, -1, -1):
                         if lines[j].strip() and not lines[j].startswith("#"):
                             lines.insert(j + 1, f"{cred}={value}")
-                            changes.append(f"Added {cred}={value[:8]}..." if len(value) > 8 else f"Added {cred}={value}")
+                            changes.append(f"Added credential '{cred}' (value set)")
                             modified = True
                             logger.info(f"Added credential '{cred}' to {tier_path.name}")
                             break
@@ -480,6 +481,15 @@ def apply_manifest_v2(
         ValueError: If manifest YAML is invalid or malformed
     """
     import yaml
+
+    try:
+        from pmoves.tools.github_secret_targets import normalize as normalize_github_target
+    except ImportError:
+        # Images that COPY only chit/ (agent-zero, a0-elder-melchor) do not
+        # ship the tools module. Bare names then behave exactly as before; a
+        # routed mapping cannot be read without the one definition of the
+        # format, so it is refused rather than guessed at.
+        normalize_github_target = None
 
     if base_dir is None:
         base_dir = manifest_path.parent.parent
@@ -534,9 +544,19 @@ def apply_manifest_v2(
                         tier_files[tier] = []
                     tier_files[tier].append(label)
 
-            if "github_secret" in target:
-                gh_label = target["github_secret"]
-                github_secrets[gh_label] = value
+            # A bare name or a routed {name, repo, env} mapping; this sync file
+            # is keyed by name only. Malformed mappings raise (a ValueError).
+            if normalize_github_target is not None:
+                gh_route = normalize_github_target(target)
+                if gh_route:
+                    github_secrets[gh_route["name"]] = value
+            elif "github_secret" in target:
+                if isinstance(target["github_secret"], dict):
+                    raise ValueError(
+                        "routed github_secret target needs "
+                        "pmoves/tools/github_secret_targets.py, which this install lacks"
+                    )
+                github_secrets[target["github_secret"]] = value
 
             if "docker_secret" in target:
                 docker_name = target["docker_secret"]

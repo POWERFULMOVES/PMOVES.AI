@@ -1,0 +1,37 @@
+{
+  "title": "PMOVES.AI",
+  "subtitle": "A Metal-Organic Framework for distributed machine intelligence",
+  "summary": "Every node is a pore in a crystalline lattice through which autonomous agents flow — capacity-class, not expertise-lane. Rooms-on-a-stage, orchestrated by P7, grounded by CHIT geometry and Hi-RAG hybrid retrieval.",
+  "merkle_root": "mkl_pmoves_mof_2026",
+  "shape_id": "shape.pmoves.grand-convergence.L1-L5",
+  "favorite_words": ["lattice", "pore", "resonance", "convergence", "sovereign", "provenance"],
+  "weighted_terms": [
+    { "term": "MOF", "weight": 0.98, "cluster": "structure" },
+    { "term": "CHIT", "weight": 0.93, "cluster": "geometry" },
+    { "term": "Hi-RAG", "weight": 0.86, "cluster": "retrieval" },
+    { "term": "GEOMETRY_BUS", "weight": 0.8, "cluster": "signal" },
+    { "term": "Agent Zero", "weight": 0.74, "cluster": "orchestration" },
+    { "term": "NATS", "weight": 0.7, "cluster": "event-plane" },
+    { "term": "P7", "weight": 0.66, "cluster": "stage" },
+    { "term": "ToKenism", "weight": 0.62, "cluster": "economics" }
+  ],
+  "sections": [
+    {
+      "heading": "What it is",
+      "body": "A Metal-Organic Framework (MOF) for distributed machine intelligence — the crystalline lattice through which autonomous agents flow. Each node is a pore in the lattice, joined by capacity, not lane. Operationally: rooms-on-a-stage, with P7 as the room-aware stage manager selecting rooms, loading suits, and moving work through rehearsal, live, review, and archive."
+    },
+    {
+      "heading": "How it converges",
+      "body": "Five layers — L1 Structure through L5 Economics — unify MOF, CHIT, the GEOMETRY_BUS, EVO SWARM, and ToKenism into one system. CHIT carries the mathematical through-line as compressed geometric packets; Hi-RAG v2 fuses vector, graph, and full-text retrieval; NATS is the event plane; and a sovereign, layered egress (Tailscale, Mullvad, Reticulum, Haven) keeps the mesh private and self-hosted."
+    },
+    {
+      "heading": "Provenance",
+      "body": "Content is shaped before ingest so one semantic bundle drives living docs, motion clips, and Hyperdimensions overlays without copy drift — reviewable before it becomes an artifact."
+    }
+  ],
+  "provenance_refs": [
+    { "label": "PMOVES_MOF_ARCHITECTURE.md", "kind": "thesis" },
+    { "label": "PMOVES_GRAND_CONVERGENCE.md", "kind": "thesis" },
+    { "label": "AGNOTE4482 convergence gateway", "kind": "surface" }
+  ]
+}

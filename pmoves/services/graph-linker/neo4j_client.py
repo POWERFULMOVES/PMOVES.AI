@@ -9,8 +9,6 @@ CHIT signing is available when CHIT_SIGN_NEO4J=true — see chit_signer.py.
 from __future__ import annotations
 
 import glob
-import logging
-import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -21,7 +19,7 @@ from neo4j.exceptions import ServiceUnavailable, AuthError, Neo4jError
 from config import Settings
 
 # CHIT signing — additive, gated by env var
-from chit_signer import sign_neo4j_node, verify_neo4j_node, CHIT_SIGN_NEO4J
+from chit_signer import sign_neo4j_node, CHIT_SIGN_NEO4J
 
 logger = structlog.get_logger(__name__)
 

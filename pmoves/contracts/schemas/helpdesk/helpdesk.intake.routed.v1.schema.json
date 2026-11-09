@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Helpdesk Intake Routed",
+  "description": "Creator-collab slice 6: the helpdesk routed an intake session to a target room + (optional) fleet node. Carries the parent intake_id, the suggested target room_id, the routing rationale (which intent matched which room capability), and the optional deep-link to the target room's surface. Emitted by pmoves-helpdesk-skill after the visitor accepts (or the helpdesk auto-routes). Consumed by nats_event_bus + dashboard to surface intake outcomes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intake_id", "from_room_id", "to_room_id", "rationale", "routed_at"],
+  "properties": {
+    "intake_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent intake session id (matches helpdesk.intake.opened.v1.intake_id)"
+    },
+    "from_room_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Room that did the routing (typically pmoves.room.helpdesk)"
+    },
+    "to_room_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Target room the intake was routed to (e.g. creator-studio.room.collab, fordham.room.community)"
+    },
+    "to_node": {
+      "type": "string",
+      "description": "Optional fleet node the room session was opened on (e.g. 'POWERFULMOVES', 'pmoves-z890')"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Human-readable explanation of why this target was chosen (which intent matched which room capability)"
+    },
+    "intent_match": {
+      "type": "object",
+      "description": "Structured intent match for debugging + persona-aware ranking",
+      "additionalProperties": false,
+      "properties": {
+        "intents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Intents extracted from the visitor's question"
+        },
+        "matched_room_capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Capabilities of the target room that matched the intents"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Persona-aware ranking score (0..1) used to break ties when multiple rooms match"
+        }
+      }
+    },
+    "deep_link": {
+      "type": "string",
+      "description": "Optional deep-link into the target room's surface (e.g. '/canvas/creator?from=helpdesk')"
+    },
+    "routed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

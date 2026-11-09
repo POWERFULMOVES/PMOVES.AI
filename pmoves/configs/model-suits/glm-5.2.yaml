@@ -1,0 +1,127 @@
+# ============================================================
+# GLM-5.2 Model Suit
+# Role: Flagship — 1M context, long-horizon coding agent
+# Best for: Large-scale implementation, automated research,
+#           deep debugging, sustained engineering, refactoring,
+#           blueprint-first implementation, agentic workflows
+# Provider: Zhipu AI (Z.AI) — Coding Plan
+# Endpoint: https://api.z.ai/api/coding/paas/v4
+# Version: 1.1.0
+# ============================================================
+
+model_suit:
+  name: glm-5.2
+  provider: zai
+  base_url: "https://api.z.ai/api/coding/paas/v4"
+  api_key_env: Z_AI_API_KEY
+
+  architecture:
+    type: moe
+    total_params: "744B+"
+    active_params: "40B+"
+    attention: standard
+
+  context:
+    max_window: 1000000
+    effective_window: 500000
+    working_window: 262144
+
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 131072
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    reasoning_effort: max
+    mtp_steps: shared
+
+  harness_mappings:
+    large_scale_implementation:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 131072
+      system_prompt: directive_architect
+
+    deep_debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 131072
+      system_prompt: directive_debugger
+
+    blueprint_implementation:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+
+    agentic_workflow:
+      temperature: 0.8
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+
+    multi_step_reasoning:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_reasoner
+
+    code_review:
+      temperature: 0.3
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_analyst
+
+    automated_research:
+      temperature: 0.8
+      top_p: 0.97
+      max_tokens: 65536
+      system_prompt: directive_reasoner
+
+    refactoring:
+      temperature: 0.5
+      top_p: 0.92
+      max_tokens: 32768
+      system_prompt: directive_refactorer
+
+    voice_synthesis:
+      temperature: 0.9
+      top_p: 0.95
+      max_tokens: 256
+      system_prompt: directive_companion
+      notes: "Short persona-shaped text for voice casting (<=200 chars per sign_trail constraint). Routed through Flute-Gateway /v1/voice/synthesize/audio or Kokoro CPU fallback."
+
+    expressive_voice_cast:
+      temperature: 0.8
+      top_p: 0.97
+      max_tokens: 512
+      system_prompt: directive_companion
+      notes: "CHIT-sign-triggered voice (Phase 0): agent.graphiti.signed.v1 → voice_cast_on_sign.py → persona resolution → Flute-Gateway expressive path (OmniVoice/UltimateTTS) or Kokoro CPU-floor fallback."
+
+    prosodic_bpm_encoding:
+      temperature: 0.4
+      top_p: 0.90
+      max_tokens: 1024
+      system_prompt: directive_reasoner
+      notes: "BPM/prosody parameter generation for bpm_encoder_worker. CGP v0.2 packets published to bpm.encoded.v1. Lower temperature for deterministic rhythmic structure."
+
+    persona_voice_resolution:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 256
+      system_prompt: directive_companion
+      notes: "FlOO$ persona → voice character mapping (e.g. mr-clean → dramatic/chatterbox). voice_persona_bridge.resolve() determines intent + persona_id for voice synthesis."
+
+  cgp_state_vector:
+    delta: 0.30
+    Hz: 0.08
+    kappa: 1.8
+    A: 0.35
+    F: 0.05
+
+  fallback_to: glm-5.1
+  priority: 4

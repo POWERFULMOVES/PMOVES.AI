@@ -44,7 +44,7 @@ export PMOVES_COMPOSE_PROJECT=pmoves_local
 #
 # Pinokio (PBnJ):
 #   Install Pinokio from https://pinokio.computer
-#   Symlink: ln -s $(pwd)/pbnj/pinokio/api/pmoves-pbnj ~/pinokio/api/
+#   Symlink: ln -s $(pwd)/PMOVES-pinokio/api/pmoves-pbnj ~/pinokio/api/
 #   Restart Pinokio and launch PBnJ from dashboard
 #
 # =============================================================================

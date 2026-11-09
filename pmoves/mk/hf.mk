@@ -27,5 +27,5 @@ hf-model-onboard: ## Onboard a model to HF Hub (MODEL= required)
 	@if [ -z "$(MODEL)" ]; then echo "ERROR: MODEL is required. Usage: make hf-model-onboard MODEL=path/to/model"; exit 1; fi
 	@$(CODEX_PY) tools/hf_model_onboard.py --model "$(MODEL)"
 
-hf-mcp-health: ## Check HF MCP server health
-	@curl -sf http://localhost:8096/healthz && echo " HF MCP server healthy" || echo " HF MCP server unreachable"
+hf-mcp-health: ## Check HF MCP server health (host port 8203)
+	@curl -sf http://localhost:8203/healthz && echo " HF MCP server healthy" || echo " HF MCP server unreachable"

@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/resolve-python.sh"
 
 STATUS=""
-add() { STATUS="${STATUS}${STATUS:+\\n}$1"; }
+add() { STATUS="${STATUS}${STATUS:+@@NL@@}$1"; }
 
 # Platform
 PLATFORM="$(uname -s 2>/dev/null || echo "Unknown")"
@@ -57,7 +57,7 @@ case "$NODE_HOSTNAME" in
   *SONIC*|*sonic*|*Z890*)  NODE_ID="5090-claude" ;;
   *)                        NODE_ID="4090-claude" ;;
 esac
-CIPHER_STATUS="$(curl -sf --max-time 2 http://localhost:8105/health >/dev/null 2>&1 && echo UP || echo DOWN)"
+CIPHER_STATUS="$(curl -sf --max-time 1 http://localhost:8105/health >/dev/null 2>&1 && echo UP || echo DOWN)"
 add ""
 add "PMOVES Node: $NODE_ID | Profile: pmoves-full | Cipher: $CIPHER_STATUS"
 
@@ -76,6 +76,6 @@ add "(repo, branch, worktree, loaded context). (2) What I'm missing (services"
 add "unhealthy, files not read, perms unknown). (3) What I'm about to do."
 
 # Emit additionalContext JSON (escape backslash and double-quote for JSON safety)
-SAFE_STATUS="$(printf '%s' "$STATUS" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+SAFE_STATUS="$(printf '%s' "$STATUS" | sed 's/\\/\\\\/g; s/"/\\"/g; s/@@NL@@/\\n/g')"
 printf '{"hookEventName":"SessionStart","additionalContext":"Environment Check:\\n%s"}' "$SAFE_STATUS"
 exit 0

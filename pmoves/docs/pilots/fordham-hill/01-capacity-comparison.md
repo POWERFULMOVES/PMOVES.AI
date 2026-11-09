@@ -98,7 +98,7 @@ oversubscription_ratio (R:1 vs the 50 Mbps retail plan) = 50 / per_home_effectiv
 | Adds | None | Agents, open MANET, privacy egress, community tokenomics (ToKenism) |
 | Headroom | Owned by the ISP, invisible to you | **Shared** across the co-op; strengthens with every node added |
 
-**Cost intuition (DRAFT — REQUIRES LEGAL REVIEW):** if ~50 homes each drop a $35/mo premium upcharge and instead share three $10/mo KVMs (~$30/mo total, ~$0.60/home/mo), the *upcharge* line item collapses by roughly two orders of magnitude — while adding a static IP, agents, and mesh resilience no single-home plan offers. This is a *pooling-of-the-premium-tier* argument, **not** a claim that PMOVES replaces each home's base access line (it does not — see §6).
+**Cost intuition (DRAFT — REQUIRES LEGAL REVIEW):** if ~50 homes each drop a $35/mo premium upcharge and instead share three $10/mo KVMs (~$30/mo total, ~$0.60/home/mo), the *upcharge* line item collapses by roughly 60× ($35 → ~$0.60/home/mo) — while adding a static IP, agents, and mesh resilience no single-home plan offers. This is a *pooling-of-the-premium-tier* argument, **not** a claim that PMOVES replaces each home's base access line (it does not — see §6).
 
 ---
 

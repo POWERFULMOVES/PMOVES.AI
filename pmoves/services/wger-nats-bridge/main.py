@@ -20,10 +20,8 @@ import json
 import logging
 import os
 import signal
-import sys
 import time
 from datetime import datetime, timezone
-from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp

@@ -1,5 +1,7 @@
 # Neo4j Submodule Promotion Plan
 
+> **SUPERSEDED (2026-10-01).** The submodule described here (its own Makefile, `docker/`, `db/migrations`, `db/seeds`) was never built: `PMOVES-Neo4j` is the upstream neo4j/neo4j source fork and has none of them on any branch. The make targets that called it were rewritten. Current state: [`docs/TAC/TAC_NEO4J.md`](TAC/TAC_NEO4J.md).
+
 **Status:** Architectural Proposal
 **Priority:** HIGH (blocking CONCH Phase 4)
 **Pattern:** Follow `PMOVES-supabase` submodule structure
@@ -225,17 +227,16 @@ load-consciousness-neo4j: ## Load consciousness taxonomy (migration 003)
 
 ### Option 1: Reset Neo4j with Correct Password
 ```bash
-# Stop Neo4j
-docker stop pmoves-neo4j-1
-
-# Remove data volume (WARNING: loses all data)
-docker volume rm pmoves_neo4jdata
-
-# Update env.shared with fresh password from brand_defaults
+# 1. Update env.shared with the fresh password from brand_defaults FIRST.
+#    volume-reset restarts the service itself (pmoves/mk/infra.mk:44), so the
+#    new volume must initialize against credentials that already exist.
 make -C pmoves env-setup
+make -C pmoves secrets-funnel
 
-# Start Neo4j (will initialize with new password)
-docker compose up -d neo4j
+# 2. Reset the volume (WARNING: loses all data). This stops, removes, drops
+#    the matching volumes, and restarts `neo4j` with the new password —
+#    no separate `up` step is needed afterwards.
+make -C pmoves volume-reset SERVICE=neo4j
 
 # Load consciousness schema
 make -C pmoves load-consciousness-neo4j

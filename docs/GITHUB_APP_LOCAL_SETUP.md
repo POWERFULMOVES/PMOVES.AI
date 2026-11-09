@@ -52,6 +52,42 @@ For runtime token minting by services (BoTZ MCP gateway, Archon):
 | `GH_APP_CLIENT_ID` | OAuth Client ID |
 | `GH_APP_INSTALLATION_ID` | Installation ID |
 
+### Delivering These to a Node (operator sequence — required once)
+
+`GH_APP_ID` and `GH_APP_INSTALLATION_ID` are registered in the code-level
+registry (`pmoves/tools/chit_manifest_register.py`), but registering a label
+does **not** deliver it. The secrets manifests are machine-emitted; an operator
+must run the funnel once for the values to appear in `env.tier-agent`:
+
+```bash
+make -C pmoves chit-manifest-register   # add the entries to the v2 manifest
+make -C pmoves chit-manifest-sync       # derive v1 from v2
+make -C pmoves secrets-funnel           # project into the tier env files
+```
+
+`make -C pmoves chit-manifest-register ARGS='--check'` reports what is still
+pending and writes nothing (exit 1 if any). Nothing in CI runs that gate, so
+these three steps happen because an operator runs them, not because a build
+turns red.
+
+Until this runs on a node, `github_webhook_auto_config.py` reports
+`GH_APP_ID or GH_APP_SEC not found in env.tier-agent`, `mint_github_token.py`
+raises on `os.environ["GH_APP_INSTALLATION_ID"]`, and every signing card whose
+`ml.primary_method` is `github-app` has no installation id to resolve — so the
+CHIT room-activation checklist cannot pass on that node.
+
+Shape, not presence: both entries carry a `min_length` floor, so a **truncated**
+id is withheld with a warning naming the variable and both lengths, rather than
+emitted and failing later at runtime. If the funnel prints
+`withheld ... under-length secret(s)` for either name, the stored value is short
+— re-set it, do not raise the floor.
+
+`GH_APP_SEC` is **not** delivered by this path. It is a PEM, and the funnel
+refuses newline-bearing values into line-based env files (compose `env_file` is
+one `VAR=VAL` per line). Deliver it via the `*_FILE` convention
+(`services.common.env.get_secret` reads `KEY` then `KEY_FILE`) or a Docker
+secret.
+
 ### Naming Clarification
 
 - `GH_APP_SEC` = the PEM private key (GitHub Actions secret name)
@@ -134,6 +170,11 @@ Installation tokens expire after 1 hour. Services should mint on-demand, not cac
 - [ ] GHCR login works with minted token
 - [ ] `gh api /user/installations` shows `repository_selection: "all"`
 - [ ] `GH_APP_INSTALLATION_ID` secret is set
+- [ ] The funnel has been run on this node (see "Delivering These to a Node"), so
+      `GH_APP_ID` / `GH_APP_INSTALLATION_ID` are present in `env.tier-agent` —
+      not only in the operator's shell
+- [ ] The funnel printed no `withheld ... under-length secret(s)` warning naming
+      either variable
 
 ## Further Reading
 

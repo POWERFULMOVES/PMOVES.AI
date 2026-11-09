@@ -12,6 +12,8 @@ from typing import Dict, List, Mapping, Sequence
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
+from pmoves.tools.secret_shape import inspect_value
+from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
@@ -30,6 +32,26 @@ class Entry:
     required: bool
     targets: Sequence[Target]
     aliases: Sequence[str] = ()
+    # Minimum usable length, in characters. 0 means "unconstrained".
+    #
+    # Some consumers reject a secret that is present, non-empty, and simply too
+    # short -- and they reject it at RUNTIME, long after the funnel reported
+    # success. Phoenix's cookie store is the worked example: it raises
+    # "cookie store expects conn.secret_key_base to be at least 64 bytes" on
+    # every request, so supabase-realtime answers 500 while its container stays
+    # "running". Measured on 4090 2026-08-22: SECRET_KEY_BASE was 48 chars and
+    # the health check had failed 6118 consecutive times, which reads as a flaky
+    # service rather than a mis-sized secret.
+    min_length: int = 0
+    # Vendor-guaranteed leading substring, when the label declares one. "" means
+    # unconstrained.
+    #
+    # This is the constraint that would have caught E2B_API_KEY. It arrived 42
+    # characters starting `b_` instead of 44 starting `e2b_` -- the leading `e2`
+    # lost in delivery -- and because presence was the only gate, it materialized
+    # into every tier file and the E2B Danger Room simply never ran. min_length
+    # alone would not have caught it: 42 is not obviously short.
+    prefix: str = ""
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
@@ -87,8 +109,22 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
             raise ValueError(f"Entry {entry_id} has no targets")
 
         required = bool(item.get("required", True))
+        min_length = item.get("min_length", 0)
+        if not isinstance(min_length, int) or isinstance(min_length, bool) or min_length < 0:
+            raise ValueError(f"Entry {entry_id} has non-integer min_length")
+        prefix = item.get("prefix", "")
+        if not isinstance(prefix, str):
+            raise ValueError(f"Entry {entry_id} has non-string prefix")
         entries.append(
-            Entry(id=entry_id, label=label, required=required, targets=targets, aliases=aliases)
+            Entry(
+                id=entry_id,
+                label=label,
+                required=required,
+                targets=targets,
+                aliases=aliases,
+                min_length=min_length,
+                prefix=prefix,
+            )
         )
 
     return cgp_path, entries
@@ -108,28 +144,179 @@ def _parse_target(data: Mapping) -> Target:
     return Target(file=file_name, key=key)
 
 
+def _first_usable(secrets: Mapping[str, str], entry: "Entry") -> str | None:
+    """First of label-then-aliases whose value is non-empty after stripping.
+
+    Returns None when every candidate is absent OR present-but-blank, so callers
+    can treat "delivered as empty" and "never delivered" identically — which is how
+    every consumer of a line-based env file already treats them.
+    """
+    for key in (entry.label, *entry.aliases):
+        value = secrets.get(key)
+        if value is not None and value.strip():
+            return key
+    return None
+
+
 def build_outputs(
     secrets: Mapping[str, str],
     entries: Sequence[Entry],
     *,
     strict: bool = True,
+    rejected_out: Dict[str, set] | None = None,
 ) -> tuple[Dict[str, Dict[str, str]], List[str]]:
+    """Materialise per-file outputs.
+
+    ``rejected_out``, when supplied, is filled with ``{file: {key, ...}}`` for
+    values that were WITHHELD. Callers writing in merge mode must delete those
+    keys explicitly: merge reads the existing file and updates it, so simply
+    omitting a key leaves the previous -- rejected -- value in place. Optional
+    rather than a third return value so existing callers keep working.
+    """
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
+    too_short: List[str] = []
+    shape_withheld: List[str] = []
+    shape_warnings: List[str] = []
     for entry in entries:
-        source_key = entry.label
-        if source_key not in secrets:
-            # Honor legacy aliases: an operator may supply a deprecated name
-            # (e.g. MCP_SERVER_TOKEN) that maps to a canonical label. Emit the
-            # canonical target keys from whichever alias value is present.
-            source_key = next((a for a in entry.aliases if a in secrets), None)
+        # Honor legacy aliases: an operator may supply a deprecated name (e.g.
+        # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
+        # target keys from whichever alias carries a USABLE value.
+        #
+        # "Usable" excludes present-but-empty, and that distinction is the whole
+        # point. This previously tested key presence alone (`source_key not in
+        # secrets`), so a canonical label sitting in the bundle with an EMPTY value
+        # won over a populated alias: the empty was written as `KEY=` into every
+        # target file and kept out of `missing` even when required.
+        #
+        # Measured on B850, 2026-08-18: `env.shared` carries CHIT_PROD_PASSPHRASE
+        # with a zero-length value while the GH-delivered CHIT_PASSPHRASE alias
+        # carries the real one. chit-export encodes env.shared into the bundle, so
+        # the blank canonical shadowed the good alias at exactly this line.
+        #
+        # Why blank is worse than absent: compose's `${KEY:?}` rejects empty as well
+        # as unset, but `${KEY?}` accepts it, and anything that SOURCES an env file
+        # and exports it re-exports the blank — where shell environment then beats
+        # every `--env-file`. An empty secret is not a secret; treat it as absent.
+        source_key = _first_usable(secrets, entry)
         if source_key is None:
             if entry.required:
                 missing.append(entry.label)
+            # Cleared or never delivered -- either way this key must NOT survive
+            # in the generated targets. `write_env_files` runs in merge mode by
+            # default (SECRETS_SYNC_FLAGS), and merge PRESERVES keys it is not
+            # given, so omitting one leaves the previous value live for Compose.
+            #
+            # Concretely: clear CIPHER_API_TOKEN in env.shared, rerun
+            # `make -C pmoves secrets-funnel`, and without this the old token
+            # stays in env.tier-agent and Cipher keeps requiring auth -- the
+            # documented way to return it to unauthenticated mode silently does
+            # nothing. Omission is not removal.
+            #
+            # This is the same treatment the min_length branch below already
+            # gives a too-short value, and it is what `_first_usable` documents:
+            # absent and present-but-blank are handled identically.
+            if rejected_out is not None:
+                for target in entry.targets:
+                    rejected_out.setdefault(target.file, set()).add(target.key)
             continue
         value = secrets[source_key]
+        # Charset and shape -- the class this pipeline has never inspected.
+        #
+        # The min_length check below measures a value's LENGTH; nothing ever
+        # measured its CHARACTERS. A delivered GATE_API_KEY carries an EM DASH
+        # (U+2014) inside the key, and the only reason that is known is that a
+        # third-party vendor CLI inspected it before putting it in an HTTP header
+        # and said so in plain language. See pmoves/tools/secret_shape.py for the
+        # full defect, and for why a lookalike glyph withholds while an ordinary
+        # non-ASCII character only warns.
+        #
+        # Withheld, never repaired. Stripping the em dash is a GUESS at the real
+        # value, and a guessed key produces the same opaque 401 as the corrupt one
+        # while destroying the evidence that anything was wrong. Refusing makes
+        # compose's `${VAR:?}` name the variable at `up` time instead. Same
+        # doctrine as the under-length branch: loud beats late.
+        verdict = inspect_value(entry.label, value, prefix=entry.prefix)
+        shape_warnings.extend(verdict.warn)
+        # Branch on `.withhold` explicitly. A ShapeVerdict instance is always
+        # truthy, so `if verdict:` would read as "there is a problem" while being
+        # unconditionally true.
+        if verdict.withhold:
+            shape_withheld.extend(verdict.withhold)
+            if rejected_out is not None:
+                for target in entry.targets:
+                    rejected_out.setdefault(target.file, set()).add(target.key)
+            if entry.required:
+                missing.append(entry.label)
+            continue
+        # A secret can be present, non-empty, and still unusable because it is too
+        # SHORT. That is the same failure family as blank-is-not-absent above, one
+        # rung further along: `_first_usable` already refuses "" because an empty
+        # secret is not a secret, and a 48-character value where the consumer
+        # demands 64 is not a secret either -- it is a value that parses, passes
+        # every gate, materializes into every tier file, and then fails at runtime.
+        #
+        # Withhold rather than emit. Emitting a known-bad value buys a container
+        # that boots and then answers 500 forever; withholding it makes compose's
+        # `${VAR:?}` refuse at `up` time with the variable named. Loud beats late.
+        if entry.min_length and len(value) < entry.min_length:
+            too_short.append(
+                f"{entry.label} (have {len(value)} chars, need >= {entry.min_length})"
+            )
+            if rejected_out is not None:
+                for target in entry.targets:
+                    rejected_out.setdefault(target.file, set()).add(target.key)
+            if entry.required:
+                missing.append(entry.label)
+            continue
         for target in entry.targets:
             outputs[target.file][target.key] = value
+    if too_short:
+        print(
+            "WARNING: withheld "
+            + str(len(too_short))
+            + " under-length secret(s): "
+            + ", ".join(sorted(too_short))
+            + " -- rotate with `make -C pmoves secrets-rotate KEY=<NAME> LEN=<n>`. "
+            "LEN is CHARACTERS, not bytes (bootstrap_env.py truncates: "
+            "`secrets.token_urlsafe(length)[:length]`), and it DEFAULTS TO 48 -- "
+            "which is how an under-length value gets minted without anyone choosing "
+            "one. The value is present but shorter than its consumer accepts, so "
+            "emitting it would produce a service that starts and then fails every "
+            "request.",
+            file=sys.stderr,
+        )
+    if shape_withheld:
+        print(
+            "WARNING: withheld "
+            + str(len(shape_withheld))
+            + " mis-shaped secret(s): "
+            + "; ".join(sorted(shape_withheld))
+            + " -- a lookalike glyph (em dash for hyphen, smart quote, "
+            "non-breaking space, zero-width) or a wrong vendor prefix means the "
+            "value was corrupted BEFORE it reached this pipeline, typically by a "
+            "copy-paste through a PDF, rich-text editor or rendered web page. "
+            "Re-deliver the credential by retyping it or copying from a "
+            "plain-text source. The funnel deliberately does NOT strip the "
+            "character: a guessed value fails identically to a corrupt one while "
+            "hiding that anything was wrong. Nothing above is secret material -- "
+            "only the variable name, the codepoint, the position and the length.",
+            file=sys.stderr,
+        )
+    if shape_warnings:
+        print(
+            "WARNING: "
+            + str(len(shape_warnings))
+            + " delivered secret(s) carry a suspicious character and were emitted "
+            "ANYWAY: "
+            + "; ".join(sorted(shape_warnings))
+            + " -- not withheld, because a human-chosen password may legitimately "
+            "contain these and several registered labels are passwords. But a "
+            "non-ASCII character cannot be placed in an HTTP header at all, and "
+            "surrounding whitespace is emitted verbatim, so verify each against "
+            "its source.",
+            file=sys.stderr,
+        )
     if missing and strict:
         joined = ", ".join(sorted(missing))
         raise KeyError(f"Missing required secrets: {joined}")
@@ -171,9 +358,20 @@ def write_env_files(
     outputs: Mapping[str, Mapping[str, str]],
     *,
     merge: bool = False,
+    remove: Mapping[str, set] | None = None,
 ) -> None:
+    """Write env files. ``remove`` names keys to DELETE in merge mode.
+
+    Omission is not removal. Merge reads the existing file and updates it with
+    the new outputs, so a key left out of ``outputs`` keeps whatever the file
+    already held -- which for a withheld secret means the rejected value stays
+    live for Compose. `--merge` is the funnel default (SECRETS_SYNC_FLAGS), so
+    without this the withholding above would have changed nothing on any node
+    that had already been funnelled once.
+    """
     header = "# Auto-generated by pmoves.tools.secrets_sync. Do not edit.\n"
-    for relative, values in outputs.items():
+    for relative in sorted(set(outputs) | set(remove or {})):
+        values = dict(outputs.get(relative, {}))
         env_path = PROJECT_ROOT / relative
         env_path.parent.mkdir(parents=True, exist_ok=True)
         values = _drop_multiline(relative, values)
@@ -197,6 +395,8 @@ def write_env_files(
                     existing[k] = v
             # Merge: new values override existing for specified keys
             existing.update(values)
+            for key in (remove or {}).get(relative, ()):  # rejected -> absent
+                existing.pop(key, None)
             lines = comments + [""]
             for key in sorted(existing):
                 lines.append(f"{key}={existing[key]}")
@@ -261,13 +461,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         cgp_path = Path(args.cgp).expanduser().resolve()
 
     secrets = decode_secret_map(load_cgp(cgp_path))
+    # Funnel-side guard: fill self-generated secrets (Supabase anon/service_role
+    # JWTs derived from JWT_SECRET) so they project without operator input and
+    # are never emitted as placeholders. Never overwrites an existing value.
+    secrets = fill_self_generated(secrets)
 
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:
         key_set = set(args.keys)
+        # Auto-expand JWT_SECRET rotation to include all derived JWT keys
+        # so derived values (anon/service_role) are regenerated in sync.
+        if "JWT_SECRET" in key_set:
+            key_set |= set(_SUPABASE_JWT_KEYS)
         entries = [e for e in entries if e.label in key_set]
 
-    outputs, missing = build_outputs(secrets, entries, strict=False)
+    rejected: Dict[str, set] = {}
+    outputs, missing = build_outputs(
+        secrets, entries, strict=False, rejected_out=rejected
+    )
+    # Filter out self-generated secrets from the missing report — they are
+    # either derivable (handled by fill_self_generated) or generated elsewhere
+    # (e.g. POSTGRES_PASSWORD at db-init), so they are never operator gaps.
+    missing = [k for k in missing if k not in SELF_GENERATED]
     if missing:
         joined = ", ".join(sorted(missing))
         if args.allow_missing:
@@ -280,7 +495,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(report(outputs))
         return 0
 
-    write_env_files(outputs, merge=args.merge or bool(args.keys))
+    write_env_files(
+        outputs, merge=args.merge or bool(args.keys), remove=rejected
+    )
     print(report(outputs))
     return 0
 

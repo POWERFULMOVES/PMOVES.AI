@@ -1,0 +1,12 @@
+[Unit]
+Description=PMOVES Fleet Docker Cleanup (images + build cache, never volumes)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/docker-fleet-cleanup.sh
+User=root
+Environment=MIN_FREE_GB=5
+# Prevent overlapping runs
+TimeoutStartSec=600

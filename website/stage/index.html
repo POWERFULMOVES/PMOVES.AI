@@ -14,6 +14,12 @@
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/assets/favicon.ico" sizes="any" />
 
+  <!-- P3 (openroom-realization slice 2): Enter button on each room card
+       navigates to this URL + ?room=<id>. stage.js reads the content attribute
+       and uses it as the OpenRoom base URL. The default is for local dev;
+       production deployments override via the same meta tag in the build. -->
+  <meta name="pmoves-openroom-base-url" content="http://localhost:5173/webuiapps" />
+
   <link rel="stylesheet" href="/stage/stage.css" />
   <link rel="modulepreload" href="/stage/vendor/a2ui.mjs" />
 </head>
@@ -22,7 +28,10 @@
 
   <header class="stage-header">
     <a class="stage-home" href="/">&larr; PMOVES.AI</a>
-    <span class="stage-signature" aria-hidden="true">&#10022;</span>
+    <span class="stage-header-right">
+      <span class="stage-badge" role="status" aria-live="polite">&#9679; LIVE</span>
+      <span class="stage-signature" aria-hidden="true">&#10022;</span>
+    </span>
   </header>
 
   <main id="main" class="stage-main">
@@ -36,6 +45,16 @@
       spawnable — this is the recommended opening cast.
     </p>
 
+    <nav class="stage-personas" aria-label="Persona theme switcher">
+      <span class="stage-personas-label">See the stage through an agent's colors:</span>
+      <a href="/stage/">armor</a>
+      <a href="/stage/?agent=5090-claude">5090-claude</a>
+      <a href="/stage/?agent=4090-claude">4090-claude</a>
+      <a href="/stage/?agent=fordham-steward">fordham-steward</a>
+      <a href="/stage/?agent=hermes-agent">hermes-agent</a>
+      <span class="stage-personas-note">(accents resolve via the on-net BoTZ registry; off-net visitors keep the armor palette)</span>
+    </nav>
+
     <section id="stage-surfaces" class="stage-surfaces" aria-label="Public rooms">
       <noscript>The stage needs JavaScript to render its A2UI surfaces.</noscript>
     </section>
@@ -46,5 +65,7 @@
   </footer>
 
   <script type="module" src="/stage/stage.js"></script>
+  <!-- DL-4.2: persona accents + Showtime live flip (?agent=<id>) — no-op without the query param -->
+  <script type="module" src="/stage/persona-boot.js"></script>
 </body>
 </html>

@@ -3,7 +3,14 @@ services:
     image: ${HIRAG_V2_GPU_IMAGE:-ghcr.io/powerfulmoves/hi-rag-gateway-v2-gpu:cu128-py310-stable}
     runtime: nvidia
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    env_file:
+      - env.shared.generated
+      - env.shared
+      - .env.generated
+      # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+      # and hard-failed bring-up on nodes without it.
+      - path: .env.local
+        required: false
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}

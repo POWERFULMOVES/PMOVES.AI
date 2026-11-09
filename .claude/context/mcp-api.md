@@ -1,3 +1,37 @@
+> [!CAUTION]
+> **SUPERSEDED — DO NOT USE AS AN API REFERENCE (marked 2026-08-14).**
+>
+> This document describes an Agent Zero MCP API that **was never implemented**. Verified
+> against `pmoves/services/agent-zero/main.py`, and against `git log --all -S` for every
+> path below — **zero commits**, so none of these existed at any point in history.
+>
+> | Documented here | Reality |
+> |---|---|
+> | `GET /mcp/health` | does not exist — real: `GET /healthz` |
+> | `GET /mcp/agents` | does not exist |
+> | `POST /mcp/command` | does not exist — real: `POST /mcp/execute` with `{cmd, arguments}` |
+> | `GET /mcp/task/{id}` | does not exist — real: `GET /jobs/{context_id}` |
+> | `POST /mcp/subordinate/create` | does not exist |
+> | `POST /mcp/subordinate/create-with-persona` | does not exist |
+> | base URL `http://localhost:8080/mcp/` | there is no `/mcp/*` wildcard mount |
+> | `Authorization: Bearer $MCP_CLIENT_SECRET` | **no inbound auth exists** on these routes, and `MCP_CLIENT_SECRET` is read by no PMOVES service |
+>
+> `GET /mcp/commands` (plural) is the one real route this file names.
+>
+> **Why the credential looked real:** `pmoves/tools/brand_defaults.py:405-410` auto-generates
+> a 32-byte `MCP_CLIENT_SECRET` into tier env files. Nothing consumes it. A producer with no
+> consumer is very likely why this document exists — the secret was genuinely present in
+> `env.tier-agent`, so readers reasonably concluded it must authenticate something.
+>
+> **The three real auth surfaces:**
+> 1. Supervisor core routes (`:8080`) — **no inbound auth at all**
+> 2. A0 runtime (`:8081`) — `X-API-KEY` checked against `mcp_server_token`
+> 3. A2A routes (`:8080`) — Supabase JWT `Authorization: Bearer`, gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC` (both default `false`)
+>
+> The `curl` examples below **cannot work**. Retained for historical intent only.
+>
+> **Canonical:** `pmoves/docs/operations/AGENT_ZERO_API.md`.
+
 # Agent Zero MCP API Reference
 
 **Model Context Protocol (MCP)** is the standardized API for agent-to-agent communication in PMOVES.AI. Agent Zero exposes an MCP server that other services use for orchestration and task delegation.

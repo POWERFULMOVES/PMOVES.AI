@@ -76,12 +76,44 @@ def _apps_line(manifest: dict) -> str:
     return " · ".join(parts)
 
 
+def _enter_button(prefix: str, room_id: str) -> tuple[dict, dict, str]:
+    """Return (button_component, label_text_component, label_id) for the room's Enter button.
+
+    The Button dispatches an `a2ui.action` with name="openroom.enter" and
+    context containing the room_id. stage.js listens for the event and
+    navigates to `${OPENROOM_BASE_URL}/?room=<room_id>`. OPENROOM_BASE_URL
+    is set via <meta name="pmoves-openroom-base-url"> in index.html (default
+    http://localhost:5173/webuiapps/ for local dev).
+    """
+    label_id = f"{prefix}_enter_label"
+    return (
+        {
+            "id": f"{prefix}_enter",
+            "component": {
+                "Button": {
+                    "child": label_id,
+                    "primary": True,
+                    "action": {
+                        "name": "openroom.enter",
+                        "context": [
+                            {"key": "room_id", "value": {"literalString": room_id}}
+                        ],
+                    },
+                }
+            },
+        },
+        _text(label_id, "Enter →", "body"),
+        label_id,
+    )
+
+
 def build_surface_messages(rooms: list[dict]) -> list[dict]:
     components: list[dict] = []
     card_ids: list[str] = []
 
     for index, room in enumerate(rooms):
         manifest = room["manifest"]
+        room_id = manifest["room_id"]
         prefix = f"room{index}"
         glyph = (manifest.get("persona") or {}).get("glyph", "")
         title = f"{glyph} {manifest['display_name']}".strip()
@@ -102,6 +134,14 @@ def build_surface_messages(rooms: list[dict]) -> list[dict]:
         if apps_line:
             child_ids.append(f"{prefix}_apps")
             components.append(_text(f"{prefix}_apps", f"Apps: {apps_line}", "caption"))
+
+        # P3 (openroom-realization slice 2): Enter button to navigate to the
+        # OpenRoom desktop with the room id as ?room= query param. Adapter
+        # header comment in pmovesRoomAdapter documents the wiring.
+        enter_button, enter_label, _ = _enter_button(prefix, room_id)
+        child_ids.append(f"{prefix}_enter")
+        components.append(enter_button)
+        components.append(enter_label)
 
         components.append(
             {

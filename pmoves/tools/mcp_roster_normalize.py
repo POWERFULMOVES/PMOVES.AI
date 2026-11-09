@@ -1,0 +1,686 @@
+#!/usr/bin/env python3
+"""Normalize the tracked MCP roster before handing it to a Claude Code session.
+
+This is the transform that used to live as a heredoc inside
+``deploy/provision/claude-pmoves.sh`` (and, in PowerShell, inside its ``.ps1``
+twin). It moved out here for two reasons: a heredoc cannot be tested, and a
+transform that exists twice drifts. Both launchers now call this.
+
+Five passes, in order:
+
+P2  Drop servers whose key starts with ``_``. ``_disabled`` is a note, not an
+    off-switch, so Claude would otherwise launch the broken duplicate.
+P3  Rewrite repo-relative ``./…`` command and arg paths to absolute, so
+    ``uv --directory ./pmoves-nats-mcp`` launches from any caller CWD.
+P4  Expand ``${VAR}`` in ``url``, ``headers`` and ``env``.
+P5  Act on what would not expand -- DROP a server whose ``url`` is
+    unresolvable, WARN about one whose ``headers``/``env`` are.
+P6  Host reachability: in the ``env`` of a stdio server that runs on the HOST
+    (not via ``docker``/``podman``), rewrite a URL whose host is a compose
+    service name (``nats``) to that service's published loopback port. The env
+    files are written for containers; a host process cannot resolve ``nats``.
+
+P4/P5 are the new ones, and they are the point of the file. Claude Code's
+documented behaviour for an unresolvable reference is to warn and then *use the
+unexpanded ``${VAR}`` text as-is*. So ``http://${TS_Z890}:8105/mcp/sse`` was
+handed over as a literal hostname: the server appeared in the roster, appeared
+configured, and simply never connected. A session lost its whole memory layer
+that way and had no signal distinguishing it from "cipher is down".
+
+WHY THE SPLIT VERDICT IN P5. An unresolvable ``url`` is structurally dead --
+``http://:8105/`` can never connect -- so keeping it only preserves the silence.
+An unresolvable ``headers``/``env`` value is not: several servers here treat an
+absent credential as "run anonymously" (``huggingface``'s own roster note calls
+HF_TOKEN a rate-limit upgrade; ``cloudflare`` authenticates through the local
+wrangler session). Dropping those would remove working servers to fix a
+different bug. They are announced and kept.
+
+Scope is ``url``/``headers``/``env`` and not ``args``. ``args`` carries the
+nested-alias form (``${A:-${B}}``) whose purpose is a fallback chain, and
+widening a *drop* rule over it is a separate, riskier call. Left to Claude
+Code, as today.
+
+Usage:
+    mcp_roster_normalize.py SRC --root REPO [--out-dir DIR] [--label NAME]
+
+Writes the normalized roster to a fresh mode-0600 file in *out-dir* and prints
+its path on stdout. Exit 0 on success, non-zero on any failure -- the caller is
+expected to fall back to the raw roster rather than launch with nothing.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import os
+import re
+import sys
+import tempfile
+import time
+from typing import Any, Iterable, Mapping
+
+# An unresolvable value in these fields makes the server structurally dead.
+_DROP_FIELDS = ("url",)
+# An unresolvable value in these degrades the server but may still work.
+_WARN_FIELDS = ("headers", "env")
+
+_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# P6 -- compose service names that a HOST process cannot resolve, mapped to
+# (env var naming the port the service publishes on the host, container port).
+# Only names whose host publish is measured belong here: `nats` publishes
+# ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222 (pmoves/docker-compose.yml,
+# docker-compose.core.yml; docker-compose.z890.yml binds 127.0.0.1). Loopback
+# reaches either bind. A URL on any OTHER port of the same name (6222 cluster,
+# 8222 monitor) is not the published listener and is left alone.
+_IN_STACK_HOSTS: dict[str, tuple[str, int]] = {"nats": ("NATS_PORT", 4222)}
+# 127.0.0.1, not `localhost`: `localhost` may resolve to ::1 first, and the
+# compose publishes above are IPv4 binds.
+_HOST_LOOPBACK = "127.0.0.1"
+# A stdio server launched through one of these runs INSIDE a container, and
+# `docker run -e NAME` forwards the value there, where the service name is right.
+_CONTAINER_LAUNCHERS = ("docker", "podman")
+
+_OUT_PREFIX = "claude-pmoves-mcp-roster."
+_OUT_SUFFIX = ".json"
+# Startup-read file: the only consumer is Claude Code's config load at session
+# start. 1h bounds token-on-disk tightly with no realistic session-start miss
+# (pair-review nit: the earlier 12h window was 12x looser than needed).
+_STALE_SECONDS = 3600
+
+# Seconds allowed for the Windows command-line query. Exceeding it is not an
+# error, it is "undeterminable" -- which keeps every file.
+_LIVENESS_TIMEOUT_SECONDS = 8.0
+
+# Distinguishes "caller passed no liveness result, compute one" from "caller
+# passed None, meaning undeterminable". None is a MEANINGFUL value here.
+_UNSET_LIVE: Any = object()
+
+# Top-level key carrying the P5 verdicts into the roster itself. Pair-review
+# finding: the stderr warnings print immediately before `exec claude` and the
+# TUI overwrites them within a second -- no agent can read what was dropped or
+# degraded. The payload is the durable channel: Claude Code reads only
+# `mcpServers`, and the tracked roster already ships a `_pinned_versions_note`
+# top-level key, so a `_`-prefixed sibling is established convention and rides
+# the file the session (or any doctor check) can re-read.
+_VERDICTS_KEY = "_pmoves_roster_verdicts"
+
+
+def _match_brace(text: str, start: int) -> int:
+    """Index of the ``}`` closing the ``{`` at *start*, or -1. Nesting-aware."""
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _split_default(body: str) -> tuple[str, str | None]:
+    """Split ``NAME:-default`` at brace depth 0. Returns ``(name, default|None)``.
+
+    The default may itself contain ``${...}``, which is why the scan tracks
+    depth.
+
+    ONLY the ``:-`` form is recognised. POSIX also spells a default ``${A-B}``,
+    but supporting it here would be actively dangerous: ``${TS-Z890}`` is one
+    keystroke from the ``${TS_Z890}`` this whole change is about, and under
+    POSIX rules it parses as "TS, defaulting to Z890" -- yielding the plausible
+    hostname ``http://Z890:8105/`` with no warning and no drop, which is
+    strictly worse than the bug being fixed. An identifier check does not save
+    it, because ``TS`` is a perfectly valid identifier. Refusing the form
+    entirely makes that typo a malformed reference, which gets reported.
+    Nothing in the roster uses it, and Claude Code documents only ``:-``.
+    """
+    depth = 0
+    i = 0
+    while i < len(body):
+        c = body[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+        elif depth == 0 and c == ":" and body[i + 1 : i + 2] == "-":
+            return body[:i], body[i + 2 :]
+        i += 1
+    return body, None
+
+
+def expand(text: str, environ: Mapping[str, str], missing: list[str]) -> str:
+    """Expand ``${VAR}`` and ``${VAR:-default}``, recording misses.
+
+    An unresolvable reference is left as its literal ``${VAR}`` text and its
+    name appended to *missing*. Callers treat a non-empty *missing* as a finding
+    against that server.
+
+    "Set" means set AND non-empty. An exported empty string is the classic
+    shadow -- it satisfies a presence check while producing ``http://:8105/``
+    -- so it counts as missing, not as a value.
+
+    A malformed reference (empty name, unbalanced braces) is recorded too,
+    under its literal text. Passing it through silently would be the same
+    looks-fine-fails-later failure this module exists to end.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] == "$" and text[i + 1 : i + 2] == "{":
+            end = _match_brace(text, i + 1)
+            if end == -1:
+                missing.append(text[i:])  # unbalanced -- report, don't swallow
+                out.append(text[i:])
+                break
+            literal = text[i : end + 1]
+            name, default = _split_default(text[i + 2 : end])
+            name = name.strip()
+            if not _IDENT.match(name):
+                missing.append(literal)  # malformed reference, e.g. "${ }"
+                out.append(literal)
+                i = end + 1
+                continue
+            val = environ.get(name)
+            if val:  # set AND non-empty; see docstring
+                out.append(val)
+            elif default is not None:
+                inner: list[str] = []
+                rendered = expand(default, environ, inner)
+                if inner:
+                    # The whole chain failed. Name the OUTERMOST var first: the
+                    # inner one is typically a deprecated alias, and telling an
+                    # operator to set that is telling them the wrong thing.
+                    missing.append(name)
+                    missing.extend(inner)
+                out.append(rendered)
+            else:
+                missing.append(name)
+                out.append(literal)
+            i = end + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def _abs_path(value: Any, root: str) -> Any:
+    if isinstance(value, str) and value.startswith("./"):
+        return os.path.join(root, value[2:])
+    return value
+
+
+def _runs_on_host(cfg: Mapping[str, Any]) -> bool:
+    """A stdio server is a host process unless it is launched into a container."""
+    cmd = cfg.get("command")
+    if not isinstance(cmd, str):
+        return False
+    base = re.split(r"[\\/]", cmd)[-1].lower()
+    if base.endswith(".exe"):
+        base = base[:-4]
+    return base not in _CONTAINER_LAUNCHERS
+
+
+def _host_reachable_url(url: str, environ: Mapping[str, str]) -> tuple[str, str | None]:
+    """Return ``(url, from_host)``; *from_host* is set only when rewritten.
+
+    Only the host and port change -- scheme, userinfo and path are carried over
+    byte-for-byte, so the credential is never parsed, decoded or re-encoded.
+    """
+    m = re.match(r"^([a-z][a-z0-9+.-]*://)((?:[^@/]*@)?)([^:/?#]+)(?::(\d+))?(.*)$", url, re.I)
+    if not m:
+        return url, None
+    scheme, userinfo, host, port, rest = m.groups()
+    entry = _IN_STACK_HOSTS.get(host.lower())
+    if entry is None:
+        return url, None
+    port_var, container_port = entry
+    if port is not None and int(port) != container_port:
+        return url, None
+    published = (environ.get(port_var) or "").strip()
+    host_port = published if published.isdigit() else str(container_port)
+    return f"{scheme}{userinfo}{_HOST_LOOPBACK}:{host_port}{rest}", host
+
+
+def _host_reachable(value: str, environ: Mapping[str, str]) -> tuple[str, list[str]]:
+    """Apply :func:`_host_reachable_url` to each entry of a comma-separated
+    server list (the NATS client accepts one). Returns ``(value, from_hosts)``."""
+    out: list[str] = []
+    hosts: list[str] = []
+    for part in value.split(","):
+        lead = part[: len(part) - len(part.lstrip())]
+        new, host = _host_reachable_url(part.strip(), environ)
+        out.append(lead + new)
+        if host:
+            hosts.append(host)
+    return ",".join(out), hosts
+
+
+def normalize(
+    data: Mapping[str, Any],
+    root: str,
+    environ: Mapping[str, str],
+    rewritten: list[dict[str, str]] | None = None,
+) -> tuple[dict[str, Any], list[tuple[str, list[str]]], list[tuple[str, list[str]]]]:
+    """Return ``(roster, dropped, degraded)``.
+
+    *dropped* and *degraded* are ``[(server, [missing_names]), ...]``.
+
+    *rewritten*, when given, receives one ``{server, field, from_host,
+    to_host}`` record per P6 rewrite -- hostnames only, never the value, which
+    may carry a credential. It is an out-parameter rather than a fourth return
+    value so every existing ``clean, dropped, degraded = ...`` caller is intact.
+
+    Note there is no special case for a ``"disabled": true`` server. That key
+    is a Cline/Roo convention and is not in Claude Code's documented .mcp.json
+    schema, so treating it as an off-switch would mean betting the exact
+    silent-failure this module prevents on an assumption. A disabled server
+    with an unresolvable url is dropped like any other; it was off anyway.
+    """
+    clean: dict[str, Any] = {}
+    dropped: list[tuple[str, list[str]]] = []
+    degraded: list[tuple[str, list[str]]] = []
+
+    for name, cfg in (data.get("mcpServers") or {}).items():
+        if name.startswith("_"):  # P2
+            continue
+        if not isinstance(cfg, dict):
+            clean[name] = cfg
+            continue
+
+        cfg = copy.deepcopy(cfg)
+
+        # P3 -- repo-relative launch paths
+        if isinstance(cfg.get("command"), str):
+            cfg["command"] = _abs_path(cfg["command"], root)
+        if isinstance(cfg.get("args"), list):
+            cfg["args"] = [_abs_path(a, root) for a in cfg["args"]]
+
+        # P4 -- variable expansion, kept per-field so P5 can tell the
+        # structurally-dead from the merely-degraded.
+        fatal: list[str] = []
+        soft: list[str] = []
+        for field in _DROP_FIELDS:
+            if isinstance(cfg.get(field), str):
+                cfg[field] = expand(cfg[field], environ, fatal)
+        for field in _WARN_FIELDS:
+            block = cfg.get(field)
+            if isinstance(block, dict):
+                cfg[field] = {
+                    k: (expand(v, environ, soft) if isinstance(v, str) else v)
+                    for k, v in block.items()
+                }
+
+        # P5 -- verdict
+        if fatal:
+            dropped.append((name, sorted(set(fatal))))
+            continue
+        if soft:
+            degraded.append((name, sorted(set(soft))))
+
+        # P6 -- host reachability. env.shared is written for CONTAINERS
+        # (NATS_URL's host is the compose service `nats`), but a stdio server
+        # launched by `uv`/`npx`/... is a host process, where that name does not
+        # resolve. Point it at the service's published loopback port instead.
+        env_block = cfg.get("env")
+        if _runs_on_host(cfg) and isinstance(env_block, dict):
+            for key, value in env_block.items():
+                if not isinstance(value, str):
+                    continue
+                new, hosts = _host_reachable(value, environ)
+                if not hosts:
+                    continue
+                env_block[key] = new
+                if rewritten is not None:
+                    for host in hosts:
+                        rewritten.append({"server": name, "field": f"env.{key}",
+                                          "from_host": host, "to_host": _HOST_LOOPBACK})
+        clean[name] = cfg
+
+    out = dict(data)
+    out["mcpServers"] = clean
+    return out, dropped, degraded
+
+
+def _live_roster_paths() -> set[str] | None:
+    """Roster paths named by a currently-running process, or ``None``.
+
+    ``None`` means LIVENESS COULD NOT BE DETERMINED, and every caller must read
+    it as "keep everything". It is not an empty set. An empty set is the
+    positive assertion "I enumerated the process table and nothing references a
+    roster"; ``None`` is "I could not enumerate it". Collapsing the two is the
+    exact shape of the bug this function exists to fix.
+
+    POSIX: scan ``/proc/<pid>/cmdline``. The launcher ``exec``s, so the roster
+    path is an argument of the live session itself (``--mcp-config=<path>``,
+    which is one NUL-separated argv entry, hence a substring test rather than
+    an equality test).
+
+    Races, handled explicitly rather than hopefully:
+
+    * A process exits between ``scandir`` and ``open``. The read raises
+      ENOENT/ESRCH; that pid is genuinely gone, so skipping it is correct and
+      we stay determinable.
+    * A process starts after we scan. Its roster was written seconds ago and is
+      therefore inside the freshness window, so the mtime test keeps it. The
+      two predicates cover each other; neither alone is sufficient.
+    * We are refused a read (EACCES/EPERM, e.g. a ``hidepid`` mount). Now we
+      cannot prove ABSENCE of a reference, so the whole scan degrades to
+      ``None``. A refused read is not a missing reference.
+    * PID reuse cannot produce a false KEEP here: we match on the roster path
+      appearing in argv, not on a recorded pid.
+
+    Windows has no ``/proc``. See ``_windows_live_roster_paths``.
+    """
+    if sys.platform == "win32":
+        return _windows_live_roster_paths()
+    if not os.path.isdir("/proc"):
+        return None
+    try:
+        pids = [e.name for e in os.scandir("/proc") if e.name.isdigit()]
+    except OSError:
+        return None
+
+    live: set[str] = set()
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                raw = fh.read()
+        except (FileNotFoundError, ProcessLookupError):
+            # Exited mid-scan. Genuinely gone; not a gap in our knowledge.
+            continue
+        except PermissionError:
+            # We were refused. We can no longer assert that nothing references
+            # a roster, so the answer for the whole sweep is "unknown".
+            return None
+        except OSError:
+            return None
+        for arg in raw.split(b"\0"):
+            if not arg:
+                continue
+            try:
+                text = arg.decode("utf-8", "surrogateescape")
+            except Exception:  # pragma: no cover - decode above cannot raise
+                continue
+            for token in _roster_paths_in(text):
+                live.add(token)
+    return live
+
+
+def _windows_live_roster_paths() -> set[str] | None:
+    """Windows equivalent of ``_live_roster_paths``; ``None`` when unavailable.
+
+    There is no ``/proc``, and the Win32 way to read another process's command
+    line (``NtQueryInformationProcess`` + a cross-bitness PEB walk) is not
+    something a startup-path script should be doing. ``Get-CimInstance
+    Win32_Process`` exposes ``CommandLine`` supported and without elevation, so
+    we shell out once, with a timeout.
+
+    Every failure mode -- powershell absent, WMI refused, timeout, non-zero
+    exit -- returns ``None``, i.e. KEEP EVERYTHING. On a Windows box where this
+    query never succeeds the sweep is effectively disabled and roster files
+    accumulate until the OS temp cleaner takes them. That is the deliberate
+    direction: a leaked token file is recoverable and detectable, a session
+    silently stripped of its MCP servers is neither.
+    """
+    import subprocess  # local: never imported on the POSIX path
+
+    cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=_LIVENESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    text = proc.stdout.decode("utf-8", "replace")
+    live: set[str] = set()
+    for line in text.splitlines():
+        for token in _roster_paths_in(line):
+            live.add(token)
+    return live
+
+
+def _roster_paths_in(text: str) -> Iterable[str]:
+    """Yield every substring of *text* that looks like one of our roster files.
+
+    Deliberately shape-based rather than an exact path match. The launcher may
+    pass the path as its own argv entry or glued to a flag
+    (``--mcp-config=/run/user/1000/claude-pmoves-mcp-roster.ab12cd.json``), and
+    on Windows the whole command line arrives as one quoted string. Matching
+    ``<prefix>…<suffix>`` inside the text covers all three.
+    """
+    start = 0
+    while True:
+        i = text.find(_OUT_PREFIX, start)
+        if i < 0:
+            return
+        j = text.find(_OUT_SUFFIX, i)
+        if j < 0:
+            return
+        end = j + len(_OUT_SUFFIX)
+        yield text[i:end]
+        start = end
+
+
+def _sweep_stale(out_dir: str, live: Any = _UNSET_LIVE) -> None:
+    """Remove our own expired, UNREFERENCED roster files. Never fatal.
+
+    The file holds expanded bearer tokens and the launcher ``exec``s, so no
+    trap can clean up after the session. Sweeping on the next launch bounds how
+    long a token sits on disk. That goal is unchanged.
+
+    What changed is the predicate. Age alone deleted the roster of a session
+    that was still running: this node had a session alive for over two days
+    whose ``--mcp-config`` file was unlinked an hour in, leaving it with its
+    identity and system prompt and no MCP servers at all -- no memory, no
+    agent-zero, no retrieval -- and nothing reported it. Age now only nominates
+    a candidate; a live reference vetoes the delete.
+
+    *live* is the result of ``_live_roster_paths``. ``None`` means
+    undeterminable, and nothing is deleted.
+    """
+    if live is _UNSET_LIVE:
+        live = _live_roster_paths()
+    if live is None:
+        # Could not determine liveness. Keep everything. This is the safe
+        # direction and it is a real outcome, not a pass.
+        return
+
+    uid = os.getuid() if hasattr(os, "getuid") else None
+    cutoff = time.time() - _STALE_SECONDS
+    try:
+        entries = list(os.scandir(out_dir))
+    except OSError:
+        return
+    for entry in entries:
+        if not entry.name.startswith(_OUT_PREFIX) or not entry.name.endswith(_OUT_SUFFIX):
+            continue
+        try:
+            st = entry.stat(follow_symlinks=False)
+            if uid is not None and st.st_uid != uid:
+                continue
+            if st.st_mtime >= cutoff:
+                continue
+            if _is_referenced(entry.path, live):
+                continue
+            os.unlink(entry.path)
+        except OSError:
+            continue
+
+
+def _is_referenced(path: str, live: set[str]) -> bool:
+    """True if *path* is named by a live process.
+
+    Compared on the basename as well as the full path: the launcher resolves
+    the roster through ``mkstemp``, but a caller may hand Claude a relative or
+    differently-normalized spelling of the same file, and a false KEEP costs a
+    token file while a false DELETE costs a session.
+    """
+    base = os.path.basename(path)
+    real = os.path.realpath(path)
+    for seen in live:
+        if seen == path or seen == real:
+            return True
+        if os.path.basename(seen) == base:
+            return True
+    return False
+
+
+def _default_out_dir() -> str:
+    """Where the roster should live.
+
+    ``XDG_RUNTIME_DIR`` (``/run/user/<uid>``) beats the shared temp dir for a
+    file holding expanded bearer tokens: logind creates it mode 0700 owned by
+    the user, and its lifetime is tied to the login session rather than to an
+    arbitrary age window. Nothing else on the box can even list it.
+
+    It is absent on Windows, in most CI containers, and under ``sudo``/cron, so
+    the temp dir stays as the fallback. ``--out-dir`` still overrides both.
+    """
+    xdg = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg and os.path.isdir(xdg) and os.access(xdg, os.W_OK | os.X_OK):
+        return xdg
+    return tempfile.gettempdir()
+
+
+def _sweep_dirs(out_dir: str, explicit: bool) -> list[str]:
+    """Directories the sweep must cover.
+
+    Moving custody to ``XDG_RUNTIME_DIR`` would otherwise strand every roster
+    already written to the temp dir -- the security goal would quietly stop
+    applying to exactly the files it was written for. So in DEFAULT custody the
+    legacy temp dir stays in scope.
+
+    When the caller passed ``--out-dir`` it does NOT. Reaching outside the
+    directory you were pointed at to delete files in the shared temp dir is a
+    surprise at best, and under test it is a live hazard: the suite runs this
+    CLI repeatedly with a throwaway out-dir on a machine whose real ``/tmp``
+    holds the roster of a running session. A sweep is a delete path; it gets the
+    narrowest scope that still does its job.
+    """
+    if explicit:
+        return [out_dir]
+    dirs = [out_dir]
+    legacy = tempfile.gettempdir()
+    if legacy not in dirs:
+        dirs.append(legacy)
+    return dirs
+
+
+def write_private(out_dir: str, payload: dict[str, Any]) -> str:
+    """Write *payload* to a fresh mode-0600 file in *out_dir*; return its path.
+
+    P4 expands secrets (bearer tokens, API keys) into this file, which the
+    previous version did not -- it only ever held literal ``${VAR}`` text.
+
+    The name is unpredictable rather than ``…-roster.<uid>.json``. A predictable
+    name in a world-writable directory is not only a disclosure surface: another
+    local user could create it first, our write would fail, and the launcher
+    would fall back to the RAW roster -- reinstating the silent ``${TS_Z890}``
+    failure on demand. mkstemp gives us a name nobody can squat.
+    """
+    fd, path = tempfile.mkstemp(dir=out_dir, prefix=_OUT_PREFIX, suffix=_OUT_SUFFIX)
+    try:
+        # mkstemp already creates 0600; re-assert it where the platform lets us.
+        # os.fchmod is POSIX-only -- on Windows mkstemp's ACL is the guarantee.
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            json.dump(payload, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except BaseException:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+    return path
+
+
+def _warn(label: str, lines: Iterable[str]) -> None:
+    for line in lines:
+        print(f"[{label}] {line}", file=sys.stderr)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Normalize the PMOVES MCP roster.")
+    ap.add_argument("src", help="tracked roster, e.g. .claude/mcp.json")
+    ap.add_argument("--root", required=True, help="repo root for ./ rewriting")
+    ap.add_argument("--out-dir", default=None, help="where to write (default: temp dir)")
+    ap.add_argument("--label", default="mcp-roster", help="stderr message prefix")
+    args = ap.parse_args(argv)
+
+    out_dir = args.out_dir or _default_out_dir()
+
+    # utf-8-sig, not the default: it strips a UTF-8 BOM when present and is a
+    # no-op when absent. A BOM'd roster fails a plain open()+json.load() with
+    # "Expecting value: line 1 column 1", and because the roster carries bare
+    # ${VAR}s the caller then takes its fail-closed path and refuses to launch.
+    # Any Windows producer can hand us one -- `Set-Content -Encoding UTF8` under
+    # PowerShell 5.1 writes EF BB BF -- so the reader tolerates it rather than
+    # trusting every writer to get it right.
+    with open(args.src, encoding="utf-8-sig") as fh:
+        data = json.load(fh)
+
+    rewritten: list[dict[str, str]] = []
+    payload, dropped, degraded = normalize(data, args.root, os.environ, rewritten)
+
+    # The durable half of the announcement. stderr still gets the human-facing
+    # lines; this key is what survives the TUI for the session/agent that has to
+    # work out why a server is missing. Written even when clean -- empty lists
+    # are a positive assertion the check RAN, distinguishable from a fallback
+    # path that never invoked this tool at all.
+    payload[_VERDICTS_KEY] = {
+        "source": os.path.abspath(args.src),
+        "dropped": [
+            {"server": server, "missing": missing} for server, missing in dropped
+        ],
+        "degraded": [
+            {"server": server, "missing": missing} for server, missing in degraded
+        ],
+        "rewritten": rewritten,
+        "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    for server, missing in dropped:
+        _warn(args.label, [
+            f"WARN: dropping MCP server '{server}' — unset variable(s): " + ", ".join(missing),
+            "      its url would have been handed over with the literal ${...} "
+            "text and failed silently.",
+        ])
+    for server, missing in degraded:
+        _warn(args.label, [
+            f"WARN: MCP server '{server}' kept but degraded — unset variable(s): "
+            + ", ".join(missing),
+            "      it may run unauthenticated, or fail on first call.",
+        ])
+    for rec in rewritten:
+        _warn(args.label, [
+            f"MCP server '{rec['server']}' runs on the host: {rec['field']} host "
+            f"'{rec['from_host']}' (compose-internal) -> '{rec['to_host']}' (published port)",
+        ])
+
+    # One process-table scan, reused across every directory in scope.
+    live = _live_roster_paths()
+    for sweep_dir in _sweep_dirs(out_dir, explicit=args.out_dir is not None):
+        _sweep_stale(sweep_dir, live)
+    print(write_private(out_dir, payload))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

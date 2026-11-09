@@ -31,6 +31,17 @@ services:
     - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
     - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
     - FRAME_SAMPLE_RATE=${FRAME_SAMPLE_RATE:-5}
+    # env.shared blanks SSL_CERT_FILE/SSL_CERT_DIR/*_CA_BUNDLE to stop Windows
+    # host cert paths leaking in — but an EMPTY value breaks TLS clients that
+    # treat it as a real path: hf-xet's Rust stack (HF model downloads) loads ""
+    # and dies with "No CA certificates were loaded from the system". Re-point
+    # at the container's own CA store (same anti-leak intent, working trust
+    # chain) — mirrors the media-audio block below.
+    - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    - SSL_CERT_DIR=/etc/ssl/certs
+    - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -58,7 +69,9 @@ services:
       start_period: 60s
   media-audio:
     <<: *tier-media-hardened
-    build: ./services/media-audio
+    build:
+      context: ..
+      dockerfile: pmoves/services/media-audio/Dockerfile
     restart: unless-stopped
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
@@ -67,13 +80,26 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    # env.shared blanks SSL_CERT_FILE/SSL_CERT_DIR/*_CA_BUNDLE to stop Windows
+    # host cert paths leaking in — but for Python/OpenSSL an EMPTY value means
+    # "trust nothing" and HF model downloads fail TLS verify. Re-point at the
+    # container's own CA store (same anti-leak intent, working trust chain).
+    - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    - SSL_CERT_DIR=/etc/ssl/certs
+    - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    # The xet downloader panics on slim images ("No CA certificates were
+    # loaded from the system"); disabling it is huggingface_hub's documented
+    # fallback to plain HTTPS downloads.
+    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    # GPU via the NVIDIA runtime + NVIDIA_VISIBLE_DEVICES (environment above),
+    # not deploy.resources.reservations.devices: that path fires the legacy
+    # nvidia prestart hook, which fails on Docker Desktop/WSL2 (ld.so
+    # assertion, driver rpc error; container stuck in Created).
+    runtime: nvidia
     deploy:
       resources:
-        reservations:
-          devices:
-          - capabilities:
-            - gpu
-            count: ${GPU_COUNT:-all}
         limits:
           cpus: '4.0'
           memory: 8G
@@ -105,6 +131,7 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
@@ -117,15 +144,16 @@ services:
     - NO_PROXY=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
+    # GPU via NVIDIA runtime env (NVIDIA_VISIBLE_DEVICES above) — NOT
+    # deploy.resources.devices: the devices path fires the legacy nvidia
+    # prestart hook, which fails on Docker Desktop/WSL2 (ld.so assertion,
+    # driver rpc error, container stuck Created). The runtime itself is
+    # healthy on those hosts (nvidia-smi live, driver 610.57.01) — CUDA
+    # installs fine through runtime+env. Pattern per PR #3358 (media-audio).
+    runtime: nvidia
     deploy:
       resources:
-        reservations:
-          devices:
-          - driver: nvidia
-            capabilities:
-            - compute
-            - utility
-            count: ${GPU_COUNT:-all}
         limits:
           cpus: '4.0'
           memory: 8G
@@ -164,6 +192,29 @@ services:
       dockerfile: backend/Dockerfile
     image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
     restart: unless-stopped
+    # The image ships /app/app/monitoring/logs as dr-xr-xr-x -- owned by nonroot
+    # (the Dockerfile's `chown -R` worked) but writable by NOBODY, because chown
+    # sets ownership and not mode. The app opens a log file there on startup, so
+    # it crash-looped on PermissionError as uid 65532 before serving anything.
+    #
+    # Fixed here rather than in the image: a container writing its own logs into
+    # an image layer is the wrong shape anyway -- it is invisible to `docker logs`,
+    # unbounded by the daemon's log-rotation policy (#2660), and lost on recreate.
+    # tmpfs makes the path writable, keeps it off the disk, and discards it with
+    # the container.
+    #
+    # `size=` is load-bearing, not tidiness. The app still opens its own
+    # sse_monitor_*.log here -- this mount does NOT put that output under Docker's
+    # stdout rotation, and an earlier version of this comment wrongly implied it
+    # did. An unbounded tmpfs defaults to 50% of HOST RAM, while tmpfs pages are
+    # charged to the container's memory cgroup, which is capped at 512M below. So
+    # a busy or long-running worker would grow the log until the cgroup OOM-killed
+    # it -- trading a startup crash-loop for a slower, harder-to-read one.
+    # 32M bounds it well under the limit and is ample for diagnostic logging; the
+    # mount fills and writes fail loudly rather than taking the process with them.
+    # Ref: https://docs.docker.com/engine/storage/tmpfs/
+    tmpfs:
+    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700,size=32m
     environment:
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
@@ -179,6 +230,12 @@ services:
     - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    # LLM keys live in env.tier-llm; this worker-tier service consumes them
+    # via compose interpolation (COMPOSE_ENV_FILES spans all tiers). The
+    # backend hard-requires both at import (psearch clients).
+    - OPENAI_API_KEY
+    - GROQ_API_KEY
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -194,6 +251,7 @@ services:
     - pmoves_bus
     - pmoves_api
     - pmoves_data  # MinIO access (minio:9000)
+    - pmoves_external  # host port publish (tier nets are internal:true)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
       interval: 30s
@@ -201,6 +259,50 @@ services:
       retries: 3
       start_period: 30s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  transcribe-frontend:
+    <<: *tier-worker-hardened
+    build:
+      context: ../PMOVES-transcribe-and-fetch
+      dockerfile: Dockerfile
+    image: ${TRANSCRIBE_FRONTEND_IMAGE:-pmoves-transcribe-frontend:local}
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    # Browser-facing base = backend host port; server-side calls stay in-network
+    - NEXT_PUBLIC_API_BASE=${TRANSCRIBE_PUBLIC_API_BASE:-http://localhost:8074}
+    # Next standalone binds to HOSTNAME; docker injects the container id there
+    - HOSTNAME=0.0.0.0
+    - INTERNAL_BACKEND_URL=http://transcribe-backend:8000
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
+    depends_on:
+      transcribe-backend:
+        condition: service_healthy
+    ports:
+    - ${TRANSCRIBE_FRONTEND_BIND:-0.0.0.0}:${TRANSCRIBE_FRONTEND_HOST_PORT:-448}:448
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_external  # host port publish (tier nets are internal:true)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:448/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -225,8 +327,9 @@ services:
     environment:
     - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
-    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:8093:8093
+    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:${JELLYFIN_BRIDGE_PORT:-8093}:8093
     profiles:
     - orchestration
     networks:
@@ -261,7 +364,8 @@ services:
     - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-    ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_monitoring,pmoves_external
+    ports: ["${TTS_BIND:-127.0.0.1}:${ULTIMATE_TTS_STUDIO_PORT:-7861}:7861"]
     profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
@@ -293,6 +397,10 @@ services:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:***@nats:4222
     - PORT=8055
     - NATS_URL=${NATS_URL}
+    # Voicebox model variant (per-request API param in Voicebox's docs; this is
+    # the node-level default the provider falls back to). 0.6B = GTX 1650 4GB
+    # class — 1.7B OOMs at synthesis time on 4GB cards.
+    - VOICEBOX_MODEL_SIZE=${VOICEBOX_MODEL_SIZE:-0.6B}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     # Default TTS = OmniVoice (k2-fsa, Apache-2.0; license-clean creator-pipeline
@@ -307,8 +415,16 @@ services:
     # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
     # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
     - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}  # NATIVE-first: engines run in the Pinokio-native UTS on host 7860 (feedback_tts_native_not_docker); the GHCR container is a UI/MCP shell WITHOUT engine packages — override to http://ultimate-tts-studio:7860 only if the image ever bakes engines
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
+    # Host-affinity routing (opt-in, #2305): with VOICE_HOST_AFFINITY=1 a cast
+    # host-swaps the configured engine URL to the selected fleet node's Tailscale
+    # hostname (pmoves-<node>, port/path preserved) via resolve_engine_target().
+    # VOICE_FLEET_NODES (comma-sep up-node ids) restricts routing to nodes that
+    # are up; unset → optimistic preferred. Fail-open to the configured URL by
+    # default (both unset) — zero behaviour change unless explicitly enabled.
+    - VOICE_HOST_AFFINITY=${VOICE_HOST_AFFINITY:-}
+    - VOICE_FLEET_NODES=${VOICE_FLEET_NODES:-}
     - FLUTE_API_KEY=${FLUTE_API_KEY:-}
     # CHIT voice attribution: publishes CGP events to tokenism.geometry.event.v1
     # NATS subject for every voice synthesis. Enables downstream consumers
@@ -329,7 +445,8 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
-    ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
+    ports: ["${FLUTE_BIND:-127.0.0.1}:${FLUTE_GATEWAY_8055_PORT:-8055}:8055", "${FLUTE_BIND:-127.0.0.1}:${FLUTE_GATEWAY_8056_PORT:-8056}:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -358,7 +475,7 @@ services:
     environment:
     - PORT=8060
     - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}  # NATIVE-first: engines run in the Pinokio-native UTS on host 7860 (feedback_tts_native_not_docker); the GHCR container is a UI/MCP shell WITHOUT engine packages — override to http://ultimate-tts-studio:7860 only if the image ever bakes engines
     - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
     - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
@@ -366,6 +483,7 @@ services:
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_external
     ports: ["${CAST_TTS_BIND:-0.0.0.0}:${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
@@ -405,6 +523,7 @@ services:
     - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    - PMOVES_NETWORKS=pmoves_bus
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
     networks: [pmoves_bus]
@@ -430,13 +549,58 @@ services:
           memory: 32M
 
   # PMOVES Central UI - Main dashboard (port 4482)
+  voice-sampler:  # media-sourced voice references (VOICE_SAMPLER_SPEC.md): diarize → audition → owner-gated publish
+    <<: *tier-media-hardened
+    build:
+      context: ..
+      dockerfile: pmoves/services/voice-sampler/Dockerfile
+    restart: unless-stopped
+    environment:
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - JUICEFS_ENDPOINT=${JUICEFS_ENDPOINT:-juicefs-gateway:9000}
+    - JUICEFS_ACCESS_KEY=${JUICEFS_S3_USER:-${MINIO_USER}}
+    - JUICEFS_SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
+    - JUICEFS_BUCKET=${VOICE_REFS_BUCKET:-rooms}
+    # Owner-only pub-gate: empty = PUBLISH disabled (fail closed). Set per node.
+    - VOICE_SAMPLER_OWNER_ID=${VOICE_SAMPLER_OWNER_ID:-}
+    - OMNIVOICE_CATALOG_DIR=/omnivoice-voices
+    - VOICE_CLONE_REGISTER_ENABLED=${VOICE_CLONE_REGISTER_ENABLED:-0}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    volumes:
+    # Same host dir omnivoice-server mounts :ro as its ref-voice catalog —
+    # the sampler is the only writer (owner-approved references only).
+    - ./services/creator-operator/voices:/omnivoice-voices
+    ports:
+    - ${VOICE_SAMPLER_BIND:-127.0.0.1}:${VOICE_SAMPLER_PORT:-8124}:8124
+    profiles:
+    - workers
+    - voice
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data  # juicefs-gateway (candidate + reference storage) lives here
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8124/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
+    # Image entrypoint is already `node build/main.js`; repeating the script
+    # here fed it as a positional arg ("too many arguments" crash-loop).
+    command: ["--port", "${BGUTIL_PORT:-4417}"]
     environment:
-    - PORT=4416
+    - PORT=${BGUTIL_PORT:-4417}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
-    - minio
+      minio:
+        condition: service_healthy
     profiles:
     - orchestration
     - yt
@@ -488,6 +652,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external
     volumes:
     - pmoves-ollama-models:/root/.ollama/models
     # Prevent transient Docker embedded-DNS failures from blocking model pull.
@@ -517,6 +682,19 @@ services:
       retries: 5
       start_period: 30s
   nvidia-nim:
+    # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
+    # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
+    # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
+    # nvidia-nim BOTH declare the `gpu` profile -- so under
+    # `docker compose --profile gpu up` they start together and one of them
+    # fails to bind. Override via NIM_HOST_PORT.
+    #
+    # This comment lives INSIDE the service on purpose: the split overlays are
+    # GENERATED from this file, and a comment block that floats above a KEY is
+    # not carried with the service into the overlay that contains it -- it
+    # lands above whatever service the generator emits next. A comment inside
+    # the service body travels with the service into every overlay that has
+    # it, so the note describes the service it is attached to.
     <<: *tier-llm-hardened
     image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
     restart: unless-stopped
@@ -525,8 +703,9 @@ services:
       # Operators launching NIM should still set NGC_API_KEY explicitly.
     - NGC_API_KEY=${NGC_API_KEY:-}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     ports:
-    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
+    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000"
     profiles: ["gpu", "nim"]
     networks:
     - pmoves_api
@@ -567,6 +746,7 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -600,16 +780,14 @@ services:
       retries: 5
       start_period: 60s
     depends_on:
+    # No cross-overlay depends_on: model-registry is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
         required: false
-      model-registry:
-        condition: service_healthy
-        required: false
 
-  # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
-  # Default host port is 8200 (NOT 8000) to avoid colliding with supabase-kong,
-  # which binds 8000 by default. Override via NIM_HOST_PORT.
   llama-throughput-lab:
     build:
       context: ../PMOVES-llama-throughput-lab
@@ -624,6 +802,7 @@ services:
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     volumes:
     - ${LLAMA_MODELS_PATH:-./models}:/models:ro
     - llama-results:/results
@@ -649,7 +828,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - ${LLAMA_LAB_BIND:-0.0.0.0}:8201:8201
+    - ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
 
   # =============================================================================
   # GitHub Automation Services (Phase 3)
@@ -674,6 +853,7 @@ services:
     - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
     - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-${S3_PUBLIC_BASE_URL:-http://${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}}}
     - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_data
     depends_on:
       nats:
         condition: service_healthy

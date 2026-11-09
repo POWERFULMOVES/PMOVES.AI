@@ -150,14 +150,14 @@ def print_audio_analysis(props: AudioProperties, filepath: Path | None = None) -
         print(f"File: {filepath}")
         print(f"Size: {props.file_size:,} bytes")
 
-    print(f"\nFormat:")
+    print("\nFormat:")
     print(f"  Channels:    {props.channels}")
     print(f"  Sample Rate: {props.sample_rate} Hz")
     print(f"  Bit Depth:   {props.sample_width * 8} bits")
     print(f"  Duration:    {props.duration_seconds:.2f} seconds")
     print(f"  Frames:      {props.num_frames:,}")
 
-    print(f"\nAmplitude Analysis:")
+    print("\nAmplitude Analysis:")
     print(f"  Peak:        {props.peak_amplitude:.4f} ({props.peak_amplitude * 100:.1f}%)")
     print(f"  RMS:         {props.rms_amplitude:.4f} ({props.rms_amplitude * 100:.1f}%)")
 
@@ -281,7 +281,7 @@ async def test_flute_gateway_prosodic() -> bool:
         # Test prosodic synthesis
         test_text = "Hello! This is a test of the prosodic synthesis system. Natural pauses should be added."
 
-        print(f"\n📢 Synthesizing prosodic audio...")
+        print("\n📢 Synthesizing prosodic audio...")
         print(f"   Text: \"{test_text}\"")
 
         try:

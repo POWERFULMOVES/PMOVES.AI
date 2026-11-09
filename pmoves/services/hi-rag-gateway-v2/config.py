@@ -5,18 +5,14 @@ Heavy dependencies (torch, qdrant_client, etc.) are wrapped in try/except Import
 """
 
 import os
-import time
-import math
-import json
 import logging
-import re
-import sys
-import copy
-import threading
-import socket
-import ipaddress
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
 
 # --- Optional heavy dependencies (graceful degradation) ---
 try:
@@ -53,9 +49,6 @@ try:
 except ImportError:
     fuzz = None  # type: ignore
 
-import requests
-import urllib3
-from urllib.parse import quote_plus, urlparse
 
 # ---------------------------------------------------------------------------
 # Environment variables
@@ -294,7 +287,7 @@ QUERY_NAMESPACE_DEFAULT = os.environ.get("QUERY_NAMESPACE", "*")
 
 # --- CHIT / Geometry env vars ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
-CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower() == "true"
 CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
 CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower() == "true"
@@ -322,7 +315,7 @@ PGPORT = int(os.environ.get("PGPORT", "5432"))
 PGUSER = os.environ.get("PGUSER")
 PGPASSWORD = os.environ.get("PGPASSWORD")
 PGDATABASE = os.environ.get("PGDATABASE")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 
 # ---------------------------------------------------------------------------
 # Logging

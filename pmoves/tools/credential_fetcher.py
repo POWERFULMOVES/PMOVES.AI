@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-import yaml
 
 logger = logging.getLogger(__name__)
 

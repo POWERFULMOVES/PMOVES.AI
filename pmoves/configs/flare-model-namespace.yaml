@@ -8,21 +8,24 @@ separator: "/"
 mappings:
   # --- Coding Plans ---
   glm-coding:
-    flare_name: "pmoves/glm-5.1"
+    # Re-pinned 2026-09-06 (KILO_FLEET_CONFIG_AUDIT: 5.1 was the stalest load-bearing
+    # pin; re-pin before the first pmoves.agent.task.v1 subscriber exists, when it is free).
+    # 5.3: verifier-gated + proven on the 5090 and the managed VPS. 5.2: SPARK-proven fallback.
+    flare_name: "pmoves/glm-5.3"
     provider: "zai"
-    model_id: "glm-5.1"
+    model_id: "glm-5.3"
     api_endpoint: "https://api.z.ai/api/coding/paas/v4"
     lane: "coding_plan"
     nodes: [5090, z890]
-    fallback: "glm-4.7"
+    fallback: "glm-5.2"
 
   claude-coding:
     flare_name: "pmoves/claude-sonnet-4"
     provider: "anthropic"
     model_id: "claude-sonnet-4-20250514"
     claude_code_mapping:
-      sonnet: "glm-5.1"
-      opus: "glm-5.1"
+      sonnet: "glm-5.3"
+      opus: "glm-5.3"
       haiku: "glm-4.5-air"
     lane: "coding_plan"
     nodes: [z890, 5090]

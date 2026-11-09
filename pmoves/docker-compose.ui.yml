@@ -12,16 +12,49 @@ services:
       context: ./ui
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
+    env_file:
+    - path: env.shared.generated
+      required: false
+    - path: env.shared
+      required: false
+    - path: env.tier-ui
+      required: false
+    - path: .env.generated
+      required: false
+    # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+    # and hard-failed bring-up on nodes without it.
+    - path: .env.local
+      required: false
     environment:
     - NODE_ENV=production
+    - HOSTNAME=0.0.0.0
+      # Server-side Supabase client (health check, service routes): the shared
+      # env carries host-oriented SUPABASE_URL=http://localhost:8000, which is
+      # unreachable from inside the container. supabaseServer.ts checks
+      # SUPABASE_SERVICE_URL first for exactly this split.
+    - SUPABASE_SERVICE_URL=${PMOVES_UI_SUPABASE_SERVICE_URL:-http://supabase-kong:8000}
+      # Room manifests — the rooms API reads catalog.json + the per-room
+      # manifests from this directory. Without it, the Rooms tab on the
+      # home page renders "Room manifests are not available yet" and
+      # /api/rooms returns 500. PMOVES_ROOM_CONFIG_DIR overrides the
+      # default (cwd/../config/rooms) to a path inside the container
+      # where the rooms data is mounted. The volume below maps the host
+      # pmoves/config/rooms to /app/rooms:ro so the standalone Next.js
+      # build can read the room data.
+    - PMOVES_ROOM_CONFIG_DIR=/app/rooms
       # Supabase
     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
     - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:8000/rest/v1}
       # Voice/TTS
     - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
-    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
+      # 8055, not 8056. flute-gateway runs ONE uvicorn process on 8055 and both
+      # WebSocket routes are @app.websocket handlers on that same app. 8056 is
+      # EXPOSEd and published but nothing has ever bound it, so a socket aimed
+      # there accepts TCP and then hangs — worse to debug than a closed port.
+      # This var takes priority over the client-side derivation fixed in #2560,
+      # so leaving it at 8056 re-broke the voice path on every Compose launch.
+    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8055}
       # Agent Services (client-side needs localhost)
     - NEXT_PUBLIC_AGENT_ZERO_URL=${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}
     - NEXT_PUBLIC_AGENT_ZERO_UI_URL=${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}
@@ -49,15 +82,28 @@ services:
     - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
     - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    # Room manifests: the standalone Next.js build can't read host
+    # files by default; mount pmoves/config/rooms read-only at /app/rooms
+    # so the rooms API (/api/rooms) and the home-page Rooms tab work.
+    volumes:
+    - ./config/rooms:/app/rooms:ro
+      # P1 fix: persona living-doc route serves from rooms/persona/dist (rendered
+      # walkthrough.mp4 + pretext/index.html). Without this mount, every request
+      # to /persona/livingdoc hits the line 38 404 in production.
+    - ./rooms/persona:/app/data/rooms/persona:ro
     ports:
-    - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
+    - "${PMOVES_UI_BIND:-0.0.0.0}:${PMOVES_UI_PORT:-4482}:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
     networks: [pmoves_app, pmoves_api, pmoves_external]
     profiles: ["ui"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      # Image has node but no curl/wget — node>=18 fetch keeps the check dependency-free
+      test:
+      - CMD-SHELL
+      - node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 20s
       timeout: 5s
       retries: 3
@@ -92,11 +138,12 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
+    - PMOVES_NETWORKS=pmoves_app
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8504/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -112,7 +159,7 @@ services:
     build:
       context: .
       dockerfile: services/tokenism-simulator/Dockerfile
-    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
     <<:
       env_file:
@@ -135,7 +182,7 @@ services:
     # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+    - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY via secrets funnel}
     - NATS_URL=${NATS_URL}
     - NATS_CLIENT_NAME=tokenism-simulator
     - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
@@ -148,9 +195,12 @@ services:
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
     - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
@@ -180,6 +230,7 @@ services:
       \ninvidious_companion:\n  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\
       \nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}\n\
       \  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\n"
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${INVIDIOUS_BIND:-127.0.0.1}:${INVIDIOUS_PORT:-3000}:3000
     depends_on:
@@ -221,6 +272,7 @@ services:
     - YOUTUBE_API_KEY=${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
     - YOUTUBEI_CLIENT=${INVIDIOUS_COMPANION_YOUTUBEI_CLIENT:-IOS}
     - YOUTUBEI_API_BASE=${INVIDIOUS_COMPANION_CA_URL:-https://www.youtube.com}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     volumes:
     - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
@@ -252,7 +304,7 @@ services:
       invidious-companion:
         condition: service_started
     ports:
-    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:8281:80
+    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
     profiles:
     - invidious
     networks:
@@ -263,6 +315,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -282,7 +335,8 @@ services:
     - env.shared.generated
     - env.shared
     - .env.generated
-    - .env.local
+    - path: .env.local
+      required: false
     environment:
     - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
     - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
@@ -294,6 +348,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
@@ -322,7 +377,8 @@ services:
     - env.shared.generated
     - env.shared
     - .env.generated
-    - .env.local
+    - path: .env.local
+      required: false
     environment:
     - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
     - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-127.0.0.1}
@@ -331,6 +387,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:
@@ -352,3 +409,41 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  openroom:
+    build:
+      context: ../PMOVES-OpenRoom
+      dockerfile: apps/webuiapps/Dockerfile
+      args:
+        ENV: production
+        APP_PATH: /app/apps/webuiapps
+        # The app is served under /webuiapps/ (see the nginx location below and
+        # apps/webuiapps/nginx/default.conf). vite.config.ts::getBase() returns
+        # '/' + BIZ_PROJECT_NAME + '/' for a production build and '/' when the
+        # variable is empty -- its own comment reads "Test: sub-path
+        # /webuiapps/". The Dockerfile already accepts BIZ_PROJECT_NAME as a
+        # build ARG and exports it as ENV for the build; compose was the one
+        # link that never passed a value.
+        #
+        # Without it every asset in index.html is emitted root-relative
+        # (/assets/index-*.js), nginx has no `location /assets/`, and the whole
+        # bundle 404s while /webuiapps/ still answers 200 with the HTML. The
+        # page renders blank and any probe of the app root reports healthy.
+        # Measured on PMOVES-4090 2026-09-08.
+        BIZ_PROJECT_NAME: webuiapps
+        # PMOVES room adapter build-time inputs; empty = auto-detect via
+        # same-origin /api/rooms/ + URL/hostname matching. Node-local overrides:
+        # OPENROOM_ROOM_DEFAULT pins a room; OPENROOM_ROOM_IFRAMES is a JSON map
+        # of panel_id|kind -> url for embedded app panels.
+        VITE_PMOVES_ROOM_DEFAULT: ${OPENROOM_ROOM_DEFAULT:-}
+        VITE_PMOVES_ROOM_IFRAMES: ${OPENROOM_ROOM_IFRAMES:-}
+    image: pmoves-openroom:latest
+    container_name: pmoves-openroom
+    restart: unless-stopped
+    volumes:
+    - ./config/rooms:/etc/pmoves/rooms:ro
+    ports:
+    - "${OPENROOM_BIND:-0.0.0.0}:${OPENROOM_PORT:-5173}:3000"
+    networks: [pmoves_app, pmoves_external]
+    profiles: ["ui", "p7"]
+    environment:
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external

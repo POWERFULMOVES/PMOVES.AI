@@ -10,6 +10,7 @@ name: Review Comment Monitor
 on:
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
 
 concurrency:
   group: review-monitor-${{ github.event.pull_request.number }}-${{ github.event.review.id }}
@@ -17,16 +18,30 @@ concurrency:
 
 jobs:
   triage:
-    # React only to known automated reviewers. Do NOT also require a non-empty
-    # review body: bots often post findings as inline comments with no top-level
-    # summary, and those are exactly the line-level comments we want to triage —
-    # the action fetches the review's comments itself.
+    # Re-enabled 2026-08-24, restoring the original bot-filter guard.
+    #
+    # It was disabled because ANTHROPIC_API_KEY was empty AND the OAuth token
+    # had expired, so every bot review produced a failing `triage` check — noise
+    # on a non-required gate. Both premises have changed: CLAUDE_CODE_OAUTH_TOKEN
+    # was rotated, and this job now authenticates with the coding plan instead of
+    # a metered API key, so running it costs plan quota rather than per-token spend.
+    #
+    # This does not replace CodeRabbit or the Codex bot. It triages what they
+    # produce, which is the step that went missing while this was off.
+    # Deliberately NOT same-repo-gated, unlike claude-code-review.yml and
+    # review-autofix.yml. The fork-secret restriction applies to `pull_request`
+    # events; this fires on `pull_request_review`, which runs in the BASE repo
+    # context and does receive secrets. review-autofix.yml shares this trigger
+    # and gates on same-repo for a different reason it states itself: it holds
+    # contents:write and pushes to the PR head, so it needs head==base. This job
+    # only posts a comment, so triage works on fork PRs and gating it would
+    # remove that.
     if: |
       github.event.review.user.login == 'coderabbitai' ||
       github.event.review.user.login == 'coderabbitai[bot]' ||
       github.event.review.user.login == 'chatgpt-codex-connector' ||
       github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Least-privilege: reads the diff, posts ONE summary comment. No contents:write
     # (it must not be able to push), no thread-resolution scope.
     permissions:
@@ -36,13 +51,18 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Triage automated review
-        uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
+        uses: anthropics/claude-code-action@51db78a4b844e144f8d02425cb280435c04a3474 # v1.0.224
         with:
+          # Coding plan, not the metered API key. The subscription credential does
+          # expire and needs re-minting with `claude setup-token` — but ANTHROPIC_API_KEY
+          # was empty, so "persistent" meant persistently unauthenticated. An expiring
+          # credential that works beats a permanent one that is not set.
+          # Same across claude.yml, claude-code-review.yml and review-autofix.yml.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # claude-code-action rejects bot-triggered runs by default; this job is
           # *intentionally* triggered by bot reviews, so allow exactly those bots.

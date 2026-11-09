@@ -1,4 +1,8 @@
-import os, asyncio, json, re, glob
+import os
+import asyncio
+import json
+import re
+import glob
 from nats.aio.client import Client as NATS
 from neo4j import GraphDatabase
 
@@ -6,7 +10,7 @@ NEO4J_URL = os.environ.get("NEO4J_URL","bolt://neo4j:7687")
 NEO4J_USER = os.environ.get("NEO4J_USER","neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD","neo4j")
 NEO4J_DATABASE = os.environ.get("NEO4J_DATABASE","neo4j")
-NATS_URL = os.environ.get("NATS_URL","nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL","nats://nats:4222")
 
 def apply_migrations(driver):
     files = sorted(glob.glob("migrations/*.cypher"))

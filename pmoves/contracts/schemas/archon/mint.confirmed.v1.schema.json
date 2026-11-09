@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archon Mint Confirmed",
+  "description": "Agent is live and registered. Emitted ONLY after archon.qa.result.v1 returned status=pass.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agent_id", "confirmed_at"],
+  "properties": {
+    "agent_id": { "type": "string", "format": "uuid" },
+    "confirmed_at": { "type": "string", "format": "date-time" }
+  }
+}

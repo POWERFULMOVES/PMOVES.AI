@@ -47,6 +47,7 @@ KNOWN_SERVICES: Dict[str, int] = {
     "deepresearch": 8098,
     "supaserch": 8099,
     "a2ui-renderer": 8100,
+    "p7-room-orchestrator": 8122,
     "ultimate-tts": 7861,
     "tensorzero": 3030,
     "tensorzero-ui": 4000,

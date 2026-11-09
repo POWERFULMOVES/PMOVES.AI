@@ -28,15 +28,44 @@ def parse_args() -> argparse.Namespace:
         help="Virtual environment path relative to pmoves/ (default: .venv-pmoves).",
     )
     parser.add_argument(
+        "--python",
+        default="3.11",
+        help=(
+            "Python version for fresh venv creation (default: 3.11 — the fleet "
+            "standard; pyproject requires-python is >=3.11). Ignored when the "
+            "venv already exists."
+        ),
+    )
+    parser.add_argument(
         "--requirements",
         action="append",
         default=["tools/requirements-lite.txt"],
         help="Requirements file(s) relative to pmoves/ (repeatable).",
     )
     parser.add_argument(
+        "--with-embeddings",
+        action="store_true",
+        help=(
+            "Also install tools/requirements-lite-embeddings.txt (torch stack, "
+            "hundreds of MB — only for embedding-decode tools; the core lite "
+            "venv is deliberately CUDA-free)."
+        ),
+    )
+    parser.add_argument(
         "--skip-install",
         action="store_true",
         help="Create/check the venv but skip package installation.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Precheck only: NO venv creation, NO installs. Verifies the venv "
+            "exists and the requirement files' imports resolve; exit 3 with a "
+            "remediation message when they do not. For funnel/preflight gates — "
+            "a secrets run must fail before it starts, not discover a missing "
+            "venv mid-flight and start downloading wheels."
+        ),
     )
     parser.add_argument(
         "--strict-tools",
@@ -63,13 +92,64 @@ def venv_python_path(venv_path: Path) -> Path:
     return venv_path / "bin" / "python"
 
 
-def ensure_venv(venv_path: Path) -> tuple[str | None, Path]:
+def resolve_pinned_interpreter(python_pin: str) -> str | None:
+    """Find an interpreter matching `python_pin` (e.g. "3.11") without uv.
+
+    Tries the version-suffixed name first, then the Windows launcher. Returns
+    None when nothing matching is on the host -- the caller decides what that
+    means.
+    """
+    exact = shutil.which(f"python{python_pin}")
+    if exact:
+        return exact
+    if os.name == "nt":
+        launcher = shutil.which("py")
+        if launcher:
+            probe = subprocess.run(
+                [launcher, f"-{python_pin}", "-c", "import sys; print(sys.executable)"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            if probe.returncode == 0 and probe.stdout.strip():
+                return probe.stdout.strip()
+    return None
+
+
+def ensure_venv(
+    venv_path: Path, python_pin: str = "3.11", *, strict: bool = False
+) -> tuple[str | None, Path]:
     uv_bin = shutil.which("uv")
     if not venv_path.exists():
         if uv_bin:
-            run([uv_bin, "venv", str(venv_path)])
+            # Pin the interpreter: bare `uv venv` grabs uv's newest managed
+            # CPython (3.14.x), which produced broken venvs on fleet nodes.
+            run([uv_bin, "venv", "--python", python_pin, str(venv_path)])
         else:
-            run([sys.executable, "-m", "venv", str(venv_path)])
+            # No uv is a supported state for non-strict `env-bootstrap-lite`,
+            # but --python must not be silently dropped here: the whole point of
+            # the pin is that an off-version interpreter produces exactly the
+            # broken venv this script exists to prevent. Resolve the pinned
+            # interpreter from the host; only fall back to sys.executable, and
+            # only loudly, when it cannot be found.
+            interpreter = resolve_pinned_interpreter(python_pin)
+            if interpreter is None:
+                running = f"{sys.version_info.major}.{sys.version_info.minor}"
+                if running != python_pin:
+                    msg = (
+                        f"requested Python {python_pin} but neither uv nor a "
+                        f"python{python_pin} interpreter is on PATH; the venv would be "
+                        f"built with Python {running} ({sys.executable})"
+                    )
+                    if strict:
+                        raise SystemExit(
+                            f"ERROR: {msg}.\n"
+                            f"       Install uv, or install Python {python_pin}, "
+                            f"or pass --python {running} to accept it."
+                        )
+                    print(f"WARN: {msg} — proceeding unpinned (--strict-tools would fail here)")
+                interpreter = sys.executable
+            run([interpreter, "-m", "venv", str(venv_path)])
 
     py = venv_python_path(venv_path)
     if not py.exists():
@@ -152,16 +232,81 @@ def activation_hint(venv_path: Path) -> None:
         print(f"Activate (bash/zsh): source {venv_path}/bin/activate")
 
 
+def _precheck_only(venv_path: Path, req_files: list[Path]) -> int:
+    """Fail-cast gate for funnel/preflight entry points.
+
+    Never creates, never installs: a run that would otherwise bootstrap
+    mid-flight (and pull wheels on a full disk) stops HERE with the exact
+    remediation command instead.
+    """
+    import importlib
+
+    # import name mapping for the lite requirement files
+    _IMPORT = {
+        "pyyaml": "yaml",
+        "scikit-learn": "sklearn",
+        "sentence-transformers": "sentence_transformers",
+    }
+
+    venv_python = venv_path / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not venv_python.exists():
+        print(
+            f"precheck FAIL: lite venv missing at {venv_path}\n"
+            "  remediation: make -C pmoves env-bootstrap-lite",
+            file=sys.stderr,
+        )
+        return 3
+
+    missing: list[str] = []
+    for req_file in req_files:
+        for line in req_file.read_text(encoding="utf-8").splitlines():
+            line = line.split("#")[0].strip()
+            if not line or line.startswith("-"):
+                continue
+            dist = line.split(";")[0].split("[")[0].split("=")[0].split(">")[0].split("<")[0].split("!")[0].split("~")[0]
+            dist = dist.strip().lower()
+            if not dist:
+                continue
+            module = _IMPORT.get(dist, dist.replace("-", "_"))
+            probe = subprocess.run(
+                [str(venv_python), "-c", f"import {module}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode != 0:
+                missing.append(f"{dist} (import {module})")
+
+    if missing:
+        print(
+            "precheck FAIL: lite venv present but requirements unsatisfied:\n  "
+            + "\n  ".join(missing)
+            + f"\n  remediation: make -C pmoves env-bootstrap-lite",
+            file=sys.stderr,
+        )
+        return 3
+
+    print(f"precheck OK: {venv_path} satisfies {', '.join(p.name for p in req_files)}")
+    return 0
+
+
 def main() -> int:
     args = parse_args()
     venv_path = resolve_under_pmoves(args.venv)
     req_files = [resolve_under_pmoves(item) for item in args.requirements]
+    if args.with_embeddings:
+        req_files.append(resolve_under_pmoves("tools/requirements-lite-embeddings.txt"))
+
+    if args.check:
+        return _precheck_only(venv_path, req_files)
 
     print(f"PMOVES root: {PMOVES_ROOT}")
     print(f"Repository root: {REPO_ROOT}")
     print(f"Venv path: {venv_path}")
 
-    uv_bin, venv_python = ensure_venv(venv_path)
+    uv_bin, venv_python = ensure_venv(
+        venv_path, python_pin=args.python, strict=args.strict_tools
+    )
     print(f"Using venv python: {venv_python}")
     print(f"uv available: {'yes' if uv_bin else 'no'}")
 

@@ -1,0 +1,42 @@
+# Accepted `github_secret` target divergences — chit_target_drift_check.py
+#
+# An entry declares a source label and a set of targets. The generators emit the
+# GitHub target FROM that label, so a freshly generated entry always agrees with
+# itself. An entry whose `github_secret` names something ELSE is either:
+#
+#   a MISROUTE   the value is written to, or read from, another secret entirely
+#   an ALIAS     one credential deliberately stored under a different name
+#
+# The check cannot tell those apart. A human can, once. Record the aliases here
+# WITH THE REASON; anything undeclared fails the gate.
+#
+# An entry listed without a reason is an allowlist with extra steps: nobody
+# meeting it later can tell whether it was judged or merely tolerated.
+
+accepted:
+  - entry: service_password_postgres
+    github_secret: SERVICE_PASSWORD_POSTGRES
+    reason: >-
+      One credential under a service-specific GitHub name. The source label is
+      SUPABASE_DB_PASSWORD because that is what consumes it; the GitHub secret
+      is named for the service that owns the rotation. Reviewed 2026-08-29 and
+      recorded rather than "corrected" — renaming the target would break the
+      existing secret, and enforcing target == label would have rewritten this
+      silently.
+
+# NOT accepted, and deliberately absent so the gate reports it:
+#
+#   minimax_token_plan_api_key   label  MINIMAX_TOKEN_PLAN_API_KEY
+#                                target MINIMAX_API_KEY
+#
+# That routes the token-plan credential to the pay-as-you-go secret name — issue
+# #2748's defect reproduced in the manifest. Two entries then declare the same
+# github_secret, and MINIMAX_TOKEN_PLAN_API_KEY is declared by nothing, which is
+# why github_secret_capacity_audit.py reports it as an orphan.
+#
+# Fixing it needs the registry to learn to reconcile TARGETS: today
+# chit_manifest_register.py is additive-only with
+# RECONCILED_FIELDS = ("min_length",), so a drifted target has no legal path to
+# repair — the doctrine forbids hand-editing the machine-emitted manifest and
+# the tooling does not cover the fix. This check makes that visible; it does not
+# close it.

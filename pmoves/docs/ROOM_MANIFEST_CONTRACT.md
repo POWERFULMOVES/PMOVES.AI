@@ -4,9 +4,10 @@ _Last updated: 2026-03-27_
 ## Purpose
 Define one interface contract for agent-owned rooms so OpenRoom-style browser desktops and Open Notebook-style durable workspaces can converge on a shared PMOVES control plane.
 
-This contract makes four things explicit:
+This contract makes five things explicit:
 - the room shell an agent sees
 - the notebook state the room reads and writes
+- the file storage the room draws from and delivers into
 - the apps/actions available inside the room
 - the skills bound to those surfaces
 
@@ -43,7 +44,23 @@ It owns:
 
 A room may mirror notebook state or treat it as authoritative, but it should not replace it.
 
-### 3. Apps and Actions
+### 3. Storage
+The storage plane is the durable **file** plane. The notebook owns *structured* state; storage owns *opaque files* — media, inbound drops, exports.
+
+It owns:
+- logical mounts declared by role: `inbox`, `outbox`, `library`, `scratch`
+- the volume those mounts resolve against
+- whether arrivals raise an event, and on which subject
+
+It does **not** own host paths, node names, or absolute filesystem locations. Those are per-node runtime concerns; a manifest that hardcodes them stops being portable across the fleet. A room says *"my inbox is `rooms/<room>/inbox` on volume `pmoves-media`"* and the runtime decides where that actually lives.
+
+Guarantees enforced by the schema:
+- `path` is volume-relative. Absolute paths and any `..` segment are rejected — a room cannot escape its volume.
+- `visibility` describes reach only. It never widens `access.visibility`, and it never bypasses `policies.publish.egress_redaction_floor`. A `public` mount in a private room is still gated by the floor.
+
+Rooms without files omit `storage` entirely; it is optional.
+
+### 4. Apps and Actions
 Apps are surface providers inside the room. They expose structured actions instead of free-form UI assumptions.
 
 Examples:
@@ -55,7 +72,7 @@ Examples:
 
 The room manifest declares which apps are present and which action namespace they speak.
 
-### 4. Skill Bindings
+### 5. Skill Bindings
 Skills are reusable capabilities. A room binding makes a skill executable in context.
 
 A binding answers:
@@ -68,7 +85,7 @@ A binding answers:
 ## Core Rules
 1. Room owns presentation and session ergonomics; notebook owns durable state.
 2. Skills never bind directly to raw UI assumptions; they bind to declared surfaces and action namespaces.
-3. Suits and personas are runtime overlays on the platform — they control appearance, voice, and model routing within a room, but do not define the platform's topology or contract shape. The platform exists before any suit is applied.
+3. Overlays (formerly "suits") and personas are runtime bindings on the platform — they control appearance, voice, and model routing within a room, but do not define the platform's topology or contract shape. The platform exists before any overlay is applied. See `pmoves/docs/ROOMS_ON_A_STAGE.md` for the canonical "rooms / stages / overlays" model and the 2026-07-20 vocabulary-consolidation note.
 4. Skills may write back into notebook state only through declared targets.
 5. Room policy must remain compatible with PMOVES model routing, Graphiti, and CHIT rails.
 6. Rooms should be additive overlays, not hard forks of upstream interface systems.
@@ -85,6 +102,12 @@ Git is now the canonical seed for room manifests.
   - `pmoves/config/rooms/4090-field.room.control.json`
   - `pmoves/config/rooms/5090-voice.room.studio.json`
   - `pmoves/config/rooms/z890-infra.room.fabric.json`
+  - `pmoves/config/rooms/5090-kilocode.room.studio.json`
+  - `pmoves/config/rooms/demo.room.json`
+  - `pmoves/config/rooms/hermes-agent.room.control.json`
+  - `pmoves/config/rooms/fordham.room.community.json`
+  - `pmoves/config/rooms/darkxsides.room.json`
+  - `pmoves/config/rooms/tokenism.room.exchange.json`
 
 Supabase or another runtime store can mirror these later, but the seed shape starts here so rooms can be reviewed, diffed, and versioned like any other PMOVES control-plane asset.
 
@@ -97,10 +120,97 @@ The room manifest declares:
 - shell: theme, layout, panels
 - apps: routes, capabilities, action namespaces
 - notebook: provider, workspace/thread refs, sync mode
+- storage: optional file plane — provider, volume, and role-tagged logical mounts (`inbox`/`outbox`/`library`/`scratch`)
+- hardware requirements: optional capability floor — what the room *needs*, never which node it runs on (see below)
 - skill bindings: room-local binding records
 - policies: model routing, publish policy, memory policy
-- stage: current lifecycle state (`rehearsal` | `live` | `review` | `archive`)
+- stage: required persistent lifecycle state (`rehearsal` | `live` | `review` | `archive`)
+- activation metadata: optional structured `meta.chit` signing-card reference
 - telemetry/provenance: optional observability and trace context
+
+## Hardware Requirements
+
+`hardware_requirements` is the room's **capability floor**: the minimum a host must
+offer for the room to run. It is the mechanism behind the portability rule above —
+a room says what it *needs*, a node says what it *has*, and the runtime negotiates.
+The room never names a node.
+
+The field is **optional**. It is not in the schema's top-level `required` list, and
+14 of the 16 seed manifests omit it entirely.
+
+Defined in `pmoves/contracts/schemas/room/room.manifest.v1.schema.json`
+(`properties.hardware_requirements`, `additionalProperties: false`). Added
+2026-07-27 by the creator-collab lane; documented here 2026-09-08, which is why
+adoption is thin — the field shipped without a contract entry.
+
+### Fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `gpu` | bool | **yes** (within the block) | Does the room's own session need a GPU? A room that *triggers* renders elsewhere is still `false` — see "session vs render" below. |
+| `min_vram_mb` | int ≥ 0 | **yes** (within the block) | Minimum total VRAM on the host. Conditionally constrained: `gpu: false` ⇒ must be exactly `0`; `gpu: true` ⇒ must be ≥ 1. Enforced by an `allOf` block in the schema, so `gpu: true` with no VRAM budget is rejected. |
+| `gpu_arch` | array of enum | no | Allowed NVIDIA compute capabilities. Enum: `sm_75`, `sm_80`, `sm_86`, `sm_87`, `sm_89`, `sm_90`, `sm_100`, `sm_110`, `sm_120`. Omit for CPU-only rooms. See the known defect below before adding a Blackwell value. |
+| `node_roles` | array of enum | no | Coarse routing preference by fleet role. Enum: `primary-gpu-tts`, `infra-coordinator`, `mobile-relay`, `gpu-inference`, `edge-ai`, `api-gateway`, `data-storage`, `exit-proxy`. Sourced from `pmoves/configs/pinokio-network-inventory.yaml`. |
+| `cpu_arch` | array of enum | no | Host CPU architectures the room runs on. Enum: `x86_64`, `arm64`. **Declare `arm64` unless something in the room is genuinely x86-only.** Omitting it is not neutral in practice: a reader that treats the list as an allowlist will exclude every arm64 node, including SPARK (DGX Grace-Blackwell). |
+
+`additionalProperties: false` — an unrecognized key inside the block fails
+validation. Add fields to the schema first, then to manifests.
+
+### Session vs render
+
+`gpu` describes the **room session**, not work the room can dispatch. The helpdesk
+and Fordham rooms are `gpu: false` because their sessions are chat and routing
+surfaces; a render triggered *from* one of those rooms is a separate request that
+goes to a GPU node through the mesh-render path. Setting `gpu: true` because a room
+can ask for a picture pins the session to a GPU host it does not need, and takes
+VRAM away from the fleet that does.
+
+### What happens when it is absent
+
+Measured 2026-09-08 against the tree, not inferred:
+
+- **Schema validation** — passes. `python pmoves/scripts/validate_room_manifests.py`
+  reports OK for the 14 manifests without the block. Absence is legal.
+- **`pmoves/tools/creator-collab-evidence/render_dashboard.py:69-71`** — the room
+  card renders the literal string `no hardware_requirements` instead of a hardware
+  summary. Cosmetic; nothing is blocked.
+- **`pmoves/services/pinokio_bridge`** — nothing happens, because the bridge never
+  reads a room manifest. Its `GET /v1/gpu/match` (`app.py:445`) takes `min_vram` and
+  `gpu_arch` as **required query parameters** and reports whether *the host it is
+  running on* satisfies them. It is a host-side probe that a scheduler is meant to
+  feed; the docstring at `app.py:453` names the `hardware_requirements` schema as the
+  source of those parameters but does not parse it. Repo-wide, the only callers of
+  `/v1/gpu/match` are its own tests and documentation.
+- **P7 session-open** — nothing happens. The schema description and
+  `pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md` both state that
+  P7's session-open handler reads this field plus the node profile to pick a host.
+  `pmoves/services/p7-room-orchestrator/` contains **zero** references to
+  `hardware_requirements`, `vram`, `gpu`, `cpu_arch`, or `node_roles`. That routing
+  is specified, not implemented.
+
+So today the block is a **declaration with one cosmetic reader**. Declare it
+correctly anyway: it is the machine-readable statement of what the room needs, and
+it is what the scheduler will read when the routing lands. But do not write a
+manifest whose correctness depends on enforcement that does not exist yet.
+
+### Known defect: Blackwell compute capability
+
+`creator-studio.room.collab.json` declares `gpu_arch: ["sm_120", "sm_121"]`, and
+`sm_121` is **not in the schema enum**. That manifest fails validation today:
+
+```
+FAIL creator-studio.room.collab: 'sm_121' is not one of
+  ['sm_75','sm_80','sm_86','sm_87','sm_89','sm_90','sm_100','sm_110','sm_120']
+```
+
+The two sides disagree about how to name GB10 (DGX Spark). The schema's own enum
+description assigns it `sm_110`; the hardware reports compute capability `12.1`,
+which the bridge's `_to_sm` normalizer (`app.py:461-478`) converts to `sm_121`. Both
+identifiers are in the tree and only one can be right. Copying either existing room
+verbatim is therefore not a safe pattern — validate against the schema, not against
+a sibling manifest. Resolving this needs its own claim; it changes what a real SPARK
+host will match at schedule time.
+
 
 ## Skill-to-Room Binding Model
 A skill binding is intentionally separate from the skill definition.
@@ -117,6 +227,56 @@ Binding dimensions:
 - guardrails: approval, runtime cap, one-run-at-a-time, fail-open vs fail-closed
 
 This keeps the marketplace portable while letting each agent room feel distinct.
+
+## Publish Policy
+
+### `allowed_subjects` is a ceiling, not a topology claim
+
+`policies.publish.allowed_subjects` is the **allowlist of subjects this room may
+ever emit on**. It is not an assertion that anything emits them today.
+
+Read it from its neighbours in the schema. Every other field under
+`policies.publish` is a gate: `allow_nats_emit`, `allow_external_publish`,
+`gate_param`, `gate_mode`, `egress_redaction_floor`. `allow_external_publish:
+false` does not mean "this agent does not publish externally", it means "it is
+not permitted to". `allowed_subjects` has the same grammar — a bound, not a
+declaration.
+
+**The authoritative statement of what actually flows is
+`pmoves/config/agent_registry.yaml` → `<agent>.nats.publishes`.** That is the
+list registry-derived topology reads, and the one that must never overstate.
+
+### The two lists cannot be the same list
+
+`room.session.updated.v1` appears in the `allowed_subjects` of eight seed rooms
+(`creator-studio`, `demo`, `fordham`, `hermes-agent`, `persona.livingdoc`,
+`pmoves.helpdesk`, `tokenism.exchange`, `b850-ledger`) and is published by
+**P7, the room orchestrator** —
+`pmoves/services/p7-room-orchestrator/nats_pub.py:42` — never by the room's
+bound agent. A room-scoped allowlist necessarily covers room-*runtime*
+emissions alongside agent emissions, so it can never be a copy of any single
+agent's `publishes`.
+
+### What a gap between them means
+
+A subject in `allowed_subjects` that is absent from the bound agent's
+`nats.publishes` is a **not-yet-wired** emission. At `stage: rehearsal` that is
+the expected state, not a defect. It holds for three seed rooms already on
+`main` — `4090-field.room.control`, `5090-voice.room.studio` and
+`z890-infra.room.fabric` — and for `b850-ledger.room.evidence`, because all
+four are bound to node-CLI Claude identities (`claude_4090`, `claude_5090`,
+`claude_z890`, `claude_b850`) that each declare `nats.publishes: []`. Those
+sessions genuinely publish nothing.
+
+### The direction that *is* a defect
+
+Adding entries to `<agent>.nats.publishes` so it matches a room's ceiling. That
+declares publisher edges for emissions that do not exist and is precisely what
+issue #2734 exists to prevent; `claude_b850`'s registry entry carries a comment
+saying so.
+
+**Rule:** narrow the ceiling when a room will never emit a subject. Never widen
+`publishes` to match a ceiling. Wire the emission first, then declare it.
 
 ## Example Manifest
 ```json
@@ -328,13 +488,17 @@ Example:
 ```
 
 ## Recommended Next Implementation Steps
-1. Add a `room_events_subject` consumer in the UI/launcher layer so room changes become observable.
+1. Add a `room_events_subject` consumer in the UI layer so P7's versioned
+   `p7.room.*.v1` facts become visible as stage/session indicators. P7 command
+   consumption is DONE in `pmoves/services/p7-room-orchestrator/`.
 2. Map existing Notebook Workbench surfaces onto declared `action_namespace` values.
 3. ~~Add room defaults for `5090-voice`, `4090-field`, and `z890-infra` as first manifest examples.~~ DONE — seeded under `pmoves/config/rooms/`.
 4. Mirror room manifests into Supabase or another runtime store only after a loader exists; keep git as canonical seed.
 5. ~~Add one smoke path that loads a manifest and verifies app routes, notebook refs, and skill bindings resolve.~~ DONE — `validate_room_manifests.py`.
 6. Add `/dashboard/review`, `/dashboard/voice`, `/dashboard/media` route implementations. DONE — PR #1142.
 7. Populate `team_refs`/`service_refs`/`launcher_refs` in all room manifests. DONE — PR #1143.
+8. Keep room stage and session state separate: manifests persist room stage;
+   P7 records transient `planned|active|paused|ended|archived` sessions.
 
 ## Related References
 - `pmoves/docs/MODEL_FABRIC_CONTRACT.md`
@@ -345,12 +509,22 @@ Example:
 
 ## CHIT Signing-Card Activation Checklist
 
-A room manifest is not considered activated until the following are true:
+> **CANONICAL.** This is the single source of truth for the room activation gate.
+> `pmoves/docs/ROOMS_ON_A_STAGE.md` and `pmoves/docs/AGENTS/AGNOTE4482.md` link here.
+> Last updated: 2026-07-20 (open-room-lane consolidation; see AGNOTE4482PHI.t1.md).
 
-- [ ] `meta.chit.card_id` is present and non-empty, or the room skill supplies an active card at runtime.
-- [ ] The referenced card passes `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` validation with `active: true`.
+A room manifest is not considered activated (i.e., may not transition `rehearsal` → `live`) until the following are true:
+
+- [ ] `meta.chit.card_id` is present and non-empty in the room manifest, **OR** the owning room skill supplies an active card ID at runtime that resolves to a row in `pmoves/config/signing_identity_cards.yaml`.
+- [ ] The referenced card passes `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` validation: `card_id` is a UUID, `ml.primary_method` is one of `[ssh, gpg, github-app]`, `h.agent_id` matches the manifest's `agent_id`, and `active: true`.
 - [ ] `pmoves/config/signing_identity_cards.yaml` has a row for the room's operating agent with matching key material (`ssh_fingerprint`, `gpg_key_id`, or `github_app_installation_id`).
-- [ ] `make sign-trail AGENT=<agent_id>` returns a signed or explicitly accepted `unsigned-local` advisory before the room transitions to `live`.
-- [ ] All `mcp_servers` / `a2a_servers` declared in the manifest are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
-- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` values in `sidecar.env` match the intended topology gradient (`standalone` → `docked` → `fleet`).
+- [ ] `make sign-trail AGENT=<agent_id>` returns a `signed` envelope, OR the `unsigned-local` advisory is explicitly accepted by the operator for the stage transition.
+- [ ] All `mcp_servers` and `a2a_servers` declared in the manifest are present in `pmoves/config/agent_registry.yaml` and are reachable in the target topology mode (`standalone` / `docked` / `fleet`).
+- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` in the postgREST service config includes every schema the room's skills touch; PostgREST returns HTTP 200 on a representative schema-qualified endpoint.
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles in `sidecar.env` are documented for the target topology gradient (`standalone` → `docked` → `fleet`).
+
+### Transition vocabulary
+
+The room lifecycle uses four stages: `rehearsal` → `live` → `review` → `archive`.
+Earlier drafts of this checklist used `planned` → `active` (an apps-status vocabulary, not a room-stage vocabulary); that wording is deprecated. The room manifest contract is authoritative on stage names.
 

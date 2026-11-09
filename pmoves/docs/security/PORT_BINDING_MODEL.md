@@ -51,7 +51,7 @@ These are the surfaces the abandoned stash tried to widen and this lane intentio
 |---------|----------|-----------------------|
 | Supabase DB / Auth / REST / Realtime / Storage / Studio / Pooler | `SUPABASE_*_BIND` | Database, auth, and admin surface area |
 | Kong Admin | `KONG_ADMIN_BIND` | Direct admin plane |
-| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `NEO4J_BIND`, `CLICKHOUSE_BIND` | Data-tier stores |
+| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `CLICKHOUSE_BIND` (Neo4j publishes no host port: internal-only, reached through the `neo4j-tailnet` forwarder, `docs/TAC/TAC_NEO4J.md`) | Data-tier stores |
 | MinIO API / Console | `MINIO_BIND`, `MINIO_CONSOLE_BIND` | Object store + admin console |
 
 ### Reviewed Mesh Override Allowlist
@@ -62,7 +62,7 @@ These services are reviewed for opt-in direct mesh exposure, but the preferred p
 |---------|----------|------|
 | Kong Proxy | `KONG_PROXY_BIND` | 8000 |
 | Agent Zero | `AGENT_ZERO_BIND` | 8080/8081 |
-| Flute-Gateway | `FLUTE_BIND` | 8055/8056 |
+| Flute-Gateway | `FLUTE_BIND` | 8055/8056 (8056 published but unbound) |
 | TensorZero Gateway | `TENSORZERO_BIND` | 3030 |
 | Hi-RAG v1 / v2 | `HIRAG_V1_BIND`, `HIRAG_BIND` | 8089 / 8086/8087/8187 |
 | DeepResearch | `DEEPRESEARCH_BIND` | 8098 |

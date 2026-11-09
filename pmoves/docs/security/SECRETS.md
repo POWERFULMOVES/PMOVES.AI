@@ -59,7 +59,7 @@ The bootstrap automatically detects:
 
 ### What is CHIT?
 
-CHIT (Cognitive Holographic Information Transfer) is PMOVES.AI's proprietary encoding system that transforms secrets into geometric data points. Secrets are encoded as 3D coordinates in a Geometry Packet.
+CHIT (Compressed Hierarchical Information Transfer) is PMOVES.AI's proprietary encoding system that transforms secrets into geometric data points. Secrets are encoded as 3D coordinates in a Geometry Packet.
 
 **Advantages:**
 - ✅ Portable across all submodules

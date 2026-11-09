@@ -31,7 +31,7 @@ the consuming application no longer accepts.
 Anything not in this table — column insertion, formula edits, style
 changes, named-range tweaks, merged-cell expansion, chart series ranges
 (via `openpyxl.chart`), simple conditional formatting (`openpyxl.formatting`)
-— belongs in the library cookbook (see `SKILL.md` §3 and
+— belongs in the library cookbook (see [`create-edit-guide.md`](create-edit-guide.md) and
 `docs/create-edit-guide.md`).
 
 ---
@@ -195,7 +195,7 @@ artefact from §1; reach for the library cookbook in every other case.
 | Restyle a range (font, fill, border) | `cell.font = Font(...)`, `cell.fill = PatternFill(...)`, etc. | XML restyle requires appending `<font>` / `<fill>` / `<border>` / `<xf>` entries with paired `count` updates and a fresh `cellXfs` index |
 | Add a chart | `openpyxl.chart.LineChart()` + `add_data` + `add_chart` | Chart XML has thirty-plus required nodes; hand-writing them is a waste of context |
 | Add conditional formatting (single rule) | `openpyxl.formatting.rule.CellIsRule(...)` + `add` | Multi-rule color-scale + icon-set composites belong to §1 — but a single rule is a one-line library call |
-| Recalculate after edits | `python scripts/recalc.py output.xlsx 60` | Already covered by `SKILL.md` §4 |
+| Recalculate after edits | `python scripts/recalc.py output.xlsx 60` | Already covered by [`recalc-guide.md`](recalc-guide.md) |
 
 If you find yourself reaching for `unpack.py` to do any of the rows in
 that table, stop and rewrite the operation in `openpyxl` first.

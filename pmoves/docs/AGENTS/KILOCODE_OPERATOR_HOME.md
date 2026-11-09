@@ -206,7 +206,7 @@ All trail entries must carry:
 | Archon | `http://${TS_Z890}:8091` | Agent service |
 | TensorZero | `http://${TS_Z890}:3030` | LLM gateway |
 | NATS | `nats://${TS_Z890}:4222` | Message bus |
-| Cipher Memory | `http://${TS_Z890}:8105/sse` | Agent memory (MCP SSE) |
+| Cipher Memory | `http://${TS_Z890}:8105/mcp/sse` | Agent memory (MCP SSE) |
 | Ollama (Z890) | `http://${TS_Z890}:11434` | Z890 model serving |
 
 ---

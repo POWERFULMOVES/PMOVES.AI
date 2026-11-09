@@ -22,7 +22,6 @@ import time
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
-from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 

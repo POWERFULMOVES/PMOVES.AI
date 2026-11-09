@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ class BenchmarkComparator:
         current = self.load_result(current_id)
 
         if not baseline or not current:
-            logger.error(f"Could not load results for comparison")
+            logger.error("Could not load results for comparison")
             return None
 
         # Extract model name
@@ -395,7 +395,6 @@ def calculate_geometric_mean(values: List[float]) -> float:
     if not values:
         return 0.0
 
-    import math
 
     product = 1.0
     for v in values:

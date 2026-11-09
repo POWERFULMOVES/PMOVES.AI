@@ -35,24 +35,14 @@ CREATE INDEX IF NOT EXISTS idx_room_sessions_room_id_state
 -- Enable RLS
 ALTER TABLE IF EXISTS pmoves_core.room_sessions ENABLE ROW LEVEL SECURITY;
 
--- Revoke anon; grant service_role full, authenticated read
-DO $$ BEGIN
-  EXECUTE 'REVOKE ALL ON pmoves_core.room_sessions FROM anon';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'REVOKE from anon on room_sessions: %', SQLERRM;
-END $$;
-
-DO $$ BEGIN
-  EXECUTE 'GRANT ALL ON pmoves_core.room_sessions TO service_role';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'GRANT to service_role on room_sessions: %', SQLERRM;
-END $$;
-
-DO $$ BEGIN
-  EXECUTE 'GRANT SELECT ON pmoves_core.room_sessions TO authenticated';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'GRANT SELECT to authenticated on room_sessions: %', SQLERRM;
-END $$;
+-- Revoke anon; grant service_role full, authenticated read. These grants are
+-- part of P7's durable activation contract and must fail the migration if the
+-- expected Supabase roles or privileges are unavailable.
+GRANT USAGE ON SCHEMA pmoves_core TO service_role;
+GRANT USAGE ON SCHEMA pmoves_core TO authenticated;
+REVOKE ALL ON pmoves_core.room_sessions FROM anon;
+GRANT ALL ON pmoves_core.room_sessions TO service_role;
+GRANT SELECT ON pmoves_core.room_sessions TO authenticated;
 
 -- Drop existing policies if re-running
 DROP POLICY IF EXISTS "room_sessions_svc_all" ON pmoves_core.room_sessions;

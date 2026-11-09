@@ -1,0 +1,181 @@
+# PMOVES MCP Gateway — one MCP endpoint reachable by every agent.
+#
+# Overlay, not an edit to the 5k-line base compose, so it can be brought up and
+# torn down independently while the catalog is still being filled in.
+#
+#   make -C pmoves up-mcp-gateway
+#   make -C pmoves mcp-gateway-verify
+#
+# Why this gateway: docker/mcp-gateway server entries support `type: remote`
+# (url / transport_type / headers), so MCP servers that ALREADY RUN are
+# federated as-is. The Microsoft McpGateway fork requires ImageName+ImageVersion
+# on every adapter and deploys them through a Kubernetes-only deployment
+# manager, so it cannot point at an existing endpoint at all. Microsoft's stays
+# for Kubernetes. See pmoves/docs/architecture/MCP_GATEWAY_WIRING_RESEARCH.md.
+
+services:
+  mcp-gateway:
+    # Pinned by digest, matching the convention already used in this repo
+    # (e.g. minio/mc@sha256:...). `:latest` on a security boundary means the
+    # thing that authenticates every agent's MCP traffic can change under you
+    # on any `up`. Digest resolved from the image actually pulled and verified
+    # on B850 (built 2026-07-23). Re-pin deliberately after reviewing upstream.
+    image: ${MCP_GATEWAY_IMAGE:-docker/mcp-gateway@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688}
+    container_name: pmoves-mcp-gateway
+    hostname: mcp-gateway
+    restart: unless-stopped
+    command:
+      # RELATIVE on purpose. pkg/catalog/catalog.go:133 resolves the catalogs
+      # root as $HOME/.docker/mcp/catalogs and rejects anything outside it with
+      # "local file path must resolve within Docker MCP catalogs directory". A
+      # relative path is joined onto that root; an absolute one is checked
+      # against it and fails. The gateway's OWN example
+      # (examples/remote_mcp/compose.yaml) mounts at /mcp/catalog.yaml and does
+      # NOT work against this build — verified by starting it: the container
+      # crash-looped on that exact error.
+      - --catalog=pmoves.yaml
+      # Must match the ENABLED entries in catalog.yaml. cipher is catalogued but
+      # commented out there (its SSE handshake 400s — full diagnosis in the
+      # catalog), so it is not listed here either. Change both together.
+      - --servers=botz-mcp-bridge
+      - --transport=streaming
+      - --port=8091
+      - --host=0.0.0.0
+      # Long-lived so federated remotes keep their session rather than being
+      # torn down between calls.
+      - --long-lived
+      - --log-calls
+      # REQUIRED to run without the Docker socket. pkg/gateway/run.go:326 guards
+      # pullAndVerify() and guessNetworks() behind `if !g.Static`, and
+      # guessNetworks runs whenever DOCKER_MCP_IN_CONTAINER=1 — so a non-static
+      # gateway in a container dials /var/run/docker.sock at startup and dies
+      # with "guessing network: Cannot connect to the Docker daemon" even when
+      # every catalogue entry is `remote` and nothing needs pulling.
+      #
+      # Measured, not assumed: removing the socket without this flag crash-looped
+      # on exactly that error. Static mode is correct here because remote entries
+      # are pre-started by definition — there is nothing for the gateway to pull,
+      # verify or attach to a network. Adding the first `type: server` entry means
+      # dropping --static AND mounting the socket, together.
+      - --static
+      # EXPECTED WARNING, do not chase it: without --secrets the gateway tries
+      # Docker Desktop's secrets API and logs
+      #   Failed to fetch secrets from secrets engine: ... dial unix
+      #   /root/.cache/docker-secrets-engine/engine.sock: no such file
+      # This is Docker CE, not Desktop, so that socket never exists. It is
+      # harmless while no catalogued server declares `secrets:` — none does
+      # today. When one does (cipher's bearer token is the likely first), point
+      # --secrets at an env file materialized by the PMOVES secrets pipeline
+      # rather than baking values into this file.
+    environment:
+      # The gateway authenticates HTTP/SSE callers with this token. It is NOT
+      # optional-by-omission: leaving it unset without --allow-unauthenticated
+      # makes the gateway refuse remote callers, which is the correct default
+      # for something bound on 0.0.0.0 across four fleet networks.
+      MCP_GATEWAY_AUTH_TOKEN: ${MCP_GATEWAY_AUTH_TOKEN:?set MCP_GATEWAY_AUTH_TOKEN - the gateway is reachable fleet-wide and must not be open}
+      # Required for `type: remote` entries on plain http. The gateway's default
+      # policy is "public HTTPS destinations only" (pkg/remoteurl/remoteurl.go:15
+      # — "Production defaults allow only public HTTPS destinations"), and
+      # without this it refuses every PMOVES endpoint:
+      #
+      #   > Can't start cipher: unsafe remote MCP URL: remote URL must use https
+      #   > Can't start botz-mcp-bridge: unsafe remote MCP URL: ...
+      #   > 0 tools listed
+      #
+      # …while still starting, binding 8091 and reporting itself up. Federating
+      # nothing is the exact failure `make mcp-gateway-verify` exists to catch.
+      #
+      # SCOPE OF THIS RELAXATION, stated plainly because docs/security.md calls
+      # it "a development and test opt-out": with it set, the gateway's
+      # remote-URL boundary is OFF. By default that boundary rejects userinfo,
+      # unsafe hostnames, loopback, private, link-local and metadata-service
+      # ranges and validates redirect destinations — and PMOVES service IPs are
+      # private, so nothing here would pass. docs/security.md also notes that
+      # vulnerability reports depending on this opt-out are out of scope, i.e.
+      # we are outside the upstream security model for this surface and own it
+      # ourselves.
+      #
+      # What still holds: every URL in catalog.yaml resolves to a container on
+      # an internal Docker bridge network (pmoves_app / pmoves_pmoves_app), none
+      # is public, and the gateway's OWN listener remains Bearer-authenticated
+      # via MCP_GATEWAY_AUTH_TOKEN above.
+      #
+      # The real fix is TLS on the internal MCP endpoints, after which this line
+      # is deleted. A public `remote` entry must use https and needs no
+      # exemption — never add one here to paper over a certificate problem.
+      DOCKER_MCP_ALLOW_INSECURE_REMOTE_URLS: "1"
+    volumes:
+      # Mounted INSIDE the catalogs root the gateway will accept. HOME is /root
+      # in docker/mcp-gateway:latest (verified), so this is the path that
+      # --catalog=pmoves.yaml resolves to.
+      - ./config/mcp-gateway/catalog.yaml:/root/.docker/mcp/catalogs/pmoves.yaml:ro
+      # NO DOCKER SOCKET, deliberately. An earlier revision of this file mounted
+      # /var/run/docker.sock "for future type: server entries" — granting the
+      # daemon socket for a capability nothing in this catalog uses. Every entry
+      # here is type: remote, which starts no containers. The gateway's own
+      # remote-only example (examples/remote_mcp/compose.yaml) mounts the
+      # catalog and nothing else. Add the socket in the SAME change that adds
+      # the first type: server entry, not in advance of it.
+    ports:
+      # REACHABILITY CAVEAT, from docs/security.md — worth knowing before anyone
+      # points a browser-based agent at this from another host: requests
+      # carrying an `Origin` header are accepted ONLY from localhost origins
+      # (localhost, 127.0.0.1, ::1). Requests WITHOUT an Origin header are
+      # allowed, which is how non-browser MCP clients connect — so CLI agents,
+      # SDK clients and other services reach this fine across the fleet, while a
+      # browser extension on another node would be rejected by that check rather
+      # than by the Bearer token. Verified in pkg/gateway/transport.go:99
+      # (isAllowedOrigin).
+      # Host default 8189, not 8091: 8091 is archon's ARCHON_API_PORT default
+      # (docker-compose.yml ${ARCHON_API_PORT:-8091}:3090) — any node running both
+      # cannot bind the gateway at all (observed on SPARK 2026-08-22: archon up
+      # healthy, gateway "port is already allocated"). Container-internal stays 8091.
+      - "${MCP_GATEWAY_BIND:-0.0.0.0}:${MCP_GATEWAY_PORT:-8189}:8091"
+    networks:
+      # BOTH app networks on purpose. pmoves-botz-mcp-bridge lives on
+      # pmoves_pmoves_app (the BoTZ project's own network, 2 containers) while
+      # the fleet is on the external pmoves_app. Attaching to both is what
+      # federates the partition — verified from a container joined to both:
+      # http://pmoves-botz-mcp-bridge:8100/mcp -> 200.
+      - pmoves_app
+      - pmoves_pmoves_app
+      - pmoves_api
+      - pmoves_bus
+    healthcheck:
+      # /health, not /mcp. An earlier revision POSTed tools/list to /mcp with no
+      # Authorization header — that endpoint requires a Bearer token, so the
+      # check would have 401'd on every interval and the container would never
+      # have gone healthy.
+      #
+      # /health is the right target and is a real status signal: pkg/gateway/
+      # transport.go:87 answers 200 when healthy and 503 when not, and
+      # pkg/gateway/auth.go:56 exempts it from auth by design ("The /health
+      # endpoint is not an MCP protocol endpoint and is intentionally
+      # unauthenticated" — docs/security.md). A status-code check is correct
+      # here; the body-reading pattern from PMOVES-BoTZ#190 is for services that
+      # encode degradation in a 200 body, which this one does not.
+      #
+      # It reports on the GATEWAY PROCESS, not on federation — the gateway
+      # happily serves an empty tool list. `make mcp-gateway-verify` is what
+      # proves each catalogued server actually contributes tools.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8091/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    profiles: ["mcp", "agents"]
+
+networks:
+  pmoves_app:
+    external: true
+  pmoves_pmoves_app:
+    external: true
+  pmoves_api:
+    external: true
+  pmoves_bus:
+    external: true

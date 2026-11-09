@@ -177,7 +177,7 @@ Your 32GB VRAM is the orchestral hall:
 
 1. **GPU model serving validation** — Pull models via Ollama, verify TensorZero catalog (17/17 models), benchmark inference latency.
 2. **TTS engine benchmark** — All 7 engines via Ultimate-TTS-Studio (port 7861). Focus on Kokoro and KittenTTS quality at scale.
-3. **Pipecat session design** — WebSocket voice streaming (port 8056). Prosodic synthesis with natural pauses per the BPM mapping in this note.
+3. **Pipecat session design** — WebSocket voice streaming (shipped on port 8055: `/v1/voice/stream/tts`, `/v1/voice/agent`). Prosodic synthesis with natural pauses per the BPM mapping in this note.
 4. **Media pipeline e2e** — YouTube ingest → Whisper → Extract Worker → Hi-RAG indexing. The SoundCloud channels are live — verify end-to-end.
 5. **Claim W1 CLI bridge + W3 Discord** — Per AGNOTE4482_ROADMAP_W1-W5.md, these are yours.
 6. **Your `mesh.agent.5090.capabilities.v1`** announces 32GB VRAM, voice-pipeline-design, media-ingestion to the topology.

@@ -10,7 +10,7 @@
 # Guard: SERVICE must be set for volume-reset
 VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-db nats
 
-.PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
+.PHONY: volume-reset volume-list docker-prune docker-prune-all cleanup-parity-check branch-audit branch-cleanup \
        tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
        fleet-status fleet-rustdesk-fix fleet-enroll fleet-stale-audit \
        up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit \
@@ -79,20 +79,159 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo "Current disk usage:"
 	@docker system df
 	@echo ""
-	@echo "Step 1/3: Removing stopped containers..."
+	@echo "Step 1/4: Removing stopped containers..."
 	@docker container prune -f
 	@echo ""
-	@echo "Step 2/3: Removing unused images older than 72h..."
+	@echo "Step 2/4: Removing unused images older than 72h..."
 	@docker image prune -a -f --filter "until=72h"
 	@echo ""
-	@echo "Step 3/3: Removing unused build cache older than 72h..."
+	@echo "Step 3/4: Removing unused build cache older than 72h..."
 	@docker builder prune -f --filter "until=72h" || true
+	@echo ""
+	@echo "Step 4/4: Reclaiming inactive buildx builders + state volumes (parity with #2473)..."
+	@# `docker builder prune` clears cache INSIDE builders but leaves the builders
+	@# (and their named *_state volumes) standing — the exact 40G/28G leak found on
+	@# the KVMs 2026-08-07. `docker buildx rm --all-inactive` is name-agnostic and
+	@# can't kill an in-flight build (those stay ACTIVE). Mirrors the canonical fix
+	@# in pmoves/scripts/pmoves-disk-cleanup.sh + deploy/provision/docker-fleet-cleanup.sh.
+	@docker buildx rm --all-inactive --force 2>/dev/null || true
+	@# Sweep *_state volumes left by builders already gone. Name-filtered to
+	@# buildx_buildkit_ so pmoves_* data volumes are never touched (NOT volume prune).
+	@docker volume ls -q --filter dangling=true --filter name=buildx_buildkit_ 2>/dev/null \
+	  | while read -r v; do docker volume rm "$$v" >/dev/null 2>&1 || true; done || true
 	@echo ""
 	@echo "Final disk usage:"
 	@docker system df
 	@echo ""
 	@echo "Volumes NOT pruned. Use 'make volume-reset SERVICE=...' for targeted resets."
 	@echo "=== Docker prune-all complete ==="
+
+cleanup-parity-check: ## Assert the 3 Docker-cleanup implementations have not drifted apart
+	@$(PYTHON) tools/check_cleanup_parity.py
+
+# ── Fleet Docker Cleanup (scheduled + on-demand) ─────────────────────
+# Installs a systemd timer on the current node for daily Docker cleanup.
+# Prevents BuildKit cache accumulation (root cause of 148GB disk-full events).
+# NEVER prunes volumes (fleet data is co-hosted).
+CLEANUP_SCRIPT := ../deploy/provision/docker-fleet-cleanup.sh
+# Called by CLEANUP_SCRIPT from its own directory (bounds the shared CI builder).
+CLEANUP_CAP_SCRIPT := ../deploy/provision/pmoves-buildx-cap.sh
+CLEANUP_SERVICE := ../deploy/provision/docker-fleet-cleanup.service
+CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
+
+.PHONY: docker-fleet-cleanup-install docker-fleet-cleanup-status docker-fleet-cleanup-run
+
+docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
+	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
+
+# READ-ONLY. Run BEFORE any Docker Desktop restart/reset after an engine hang.
+# Docker's wsl-bootstrap cannot tell an unreadable data disk from a blank one
+# and will try to FORMAT it (z890, 2026-10-14). Never mounts, repairs or
+# restarts anything. Tool exit 0 pass / 1 warn / 2 fail / 3 could-not-measure;
+# make itself collapses any non-zero to 2, so read the RESULT line (or the
+# --json exit_code) for the real verdict.
+# Runbook: docs/handoffs/z890-docker-data-disk-usb-spof-2026-10-14.md
+.PHONY: docker-disk-preflight
+docker-disk-preflight: ## Read-only Docker Desktop data-disk check (junction/USB, vhdx header, disk events, health, VM log). ARGS='--json'
+	@$(PRECHECK_PY) tools/docker_disk_preflight.py $(ARGS)
+
+# Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
+# Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
+# `docker compose up -d` here would skip COMPOSE_ENV_FILES injection and the
+# gateway's ${MCP_GATEWAY_AUTH_TOKEN:?} would fail to resolve — the pipeline
+# bypass the deploy guard exists to catch. Run `make -C pmoves secrets-funnel`
+# first on a fresh node so the tier env files carry the token.
+up-botz-mcp-bridge: ## Start the BoTZ MCP bridge (23 tools) — the gateway federates it
+	@# Nothing canonical started this before. `up-bots` starts botz-gateway, the
+	@# local work-item SHIM on 8054, which is a different service entirely. The
+	@# bridge lives in the PMOVES-BoTZ compose project and creates the
+	@# pmoves_pmoves_app network the gateway attaches to.
+	@$(BOTZ_STACK_DC) up -d mcp-bridge $(ARGS)
+
+mcp-gateway-preflight: ## Check the gateway's external deps exist before starting it
+	@# The gateway federates servers it does not own. pmoves_pmoves_app is created
+	@# by the PMOVES-BoTZ project, not by this repo, so on a clean node `up`
+	@# aborts with a bare "network not found" — and pre-creating the network by
+	@# hand still yields an EMPTY federation because the bridge is not running.
+	@# Codex P1 on #2665: verification passed on B850 only because that stack
+	@# happened to be up.
+	@missing=0; \
+	for n in pmoves_app pmoves_pmoves_app pmoves_api pmoves_bus; do \
+	  docker network inspect "$$n" >/dev/null 2>&1 || { echo "MISSING network: $$n"; missing=1; }; \
+	done; \
+	docker ps --filter name=pmoves-botz-mcp-bridge --filter status=running -q | grep -q . \
+	  || { echo "NOT RUNNING: pmoves-botz-mcp-bridge (the only catalogued server)"; missing=1; }; \
+	if [ "$$missing" -ne 0 ]; then \
+	  echo ""; \
+	  echo "Fix: make -C pmoves up-botz-mcp-bridge"; \
+	  echo "then: make -C pmoves up-mcp-gateway"; \
+	  exit 1; \
+	fi; \
+	echo "preflight ok: networks present, mcp-bridge running"
+
+up-mcp-gateway: mcp-gateway-preflight ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
+	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
+	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8189}/mcp"
+
+down-mcp-gateway: ## Stop the PMOVES MCP Gateway
+	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)
+
+# Path is needed on its own (not just inside $(MCP_GATEWAY_DC)) so the
+# config-check can read the service's command list back out of it.
+MCP_GATEWAY_COMPOSE_FILE := docker-compose.mcp-gateway.yml
+
+mcp-gateway-config-check: ## Validate the gateway catalog WITHOUT listening (docker's documented --dry-run)
+	@# Docker documents --dry-run as "Start the gateway but do not listen for
+	@# connections (useful for testing the configuration)". This is the cheap,
+	@# no-network gate: it parses the catalog, resolves every entry and exits.
+	@# It does NOT prove federation — a config can be valid and still connect to
+	@# nothing — which is why mcp-gateway-verify exists as well.
+	@# `compose run` REPLACES the service command, so the flags have to be
+	@# supplied again. They are READ OUT OF THE COMPOSE FILE rather than restated
+	@# here: duplicating them in the Makefile is precisely the drift that made
+	@# pmoves-daemon-log-rotation.sh disagree with deploy/provision/daemon.json.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	args=$$($(PRECHECK_PY) -c "import yaml,shlex,sys; \
+c=yaml.safe_load(open('$(MCP_GATEWAY_COMPOSE_FILE)'))['services']['mcp-gateway']['command']; \
+print(' '.join(shlex.quote(a) for a in c))"); \
+	$(MCP_GATEWAY_DC) run --rm --no-deps mcp-gateway $$args --dry-run $(ARGS)
+
+mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per server
+	@# Sources the same env the gateway itself runs with, so the Bearer token
+	@# comes from the tier files rather than the caller's shell. Without this the
+	@# verifier gets 401 and exits 3 (unmeasured) — correct behaviour, useless
+	@# result.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
+
+docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
+	@echo "=== Installing Docker Fleet Cleanup Timer ==="
+	@if [ "$$(id -u)" -ne 0 ]; then \
+		echo "ERROR: Must run as root (sudo make docker-fleet-cleanup-install)"; \
+		exit 1; \
+	fi
+	@cp $(CLEANUP_SCRIPT) /usr/local/bin/docker-fleet-cleanup.sh
+	@chmod +x /usr/local/bin/docker-fleet-cleanup.sh
+	@cp $(CLEANUP_CAP_SCRIPT) /usr/local/bin/pmoves-buildx-cap.sh
+	@chmod +x /usr/local/bin/pmoves-buildx-cap.sh
+	@cp $(CLEANUP_SERVICE) /etc/systemd/system/
+	@cp $(CLEANUP_TIMER) /etc/systemd/system/
+	@systemctl daemon-reload
+	@systemctl enable --now docker-fleet-cleanup.timer
+	@echo "✓ Timer installed. Next run: $$(systemctl show docker-fleet-cleanup.timer -p NextElapseUSecRealtime --value)"
+	@echo "  Manual run: systemctl start docker-fleet-cleanup.service"
+	@echo "  Logs: journalctl -u docker-fleet-cleanup"
+
+docker-fleet-cleanup-status: ## Show cleanup timer status + last/next run
+	@echo "=== Docker Fleet Cleanup Timer ==="
+	@systemctl status docker-fleet-cleanup.timer 2>/dev/null \
+		|| echo "Timer not installed. Run: sudo make docker-fleet-cleanup-install"
+	@echo ""
+	@echo "Last run log (tail):"
+	@journalctl -u docker-fleet-cleanup --no-pager -n 5 2>/dev/null || true
+
+docker-fleet-cleanup-run: ## Run cleanup immediately (no sudo needed — uses docker group)
+	@bash $(CLEANUP_SCRIPT)
 
 # ── Tailscale Docker Container ────────────────────────────────────────
 # NOTE: Host-level tailscale-* targets are in the main Makefile.
@@ -112,6 +251,23 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 # ── Fleet Management (RustDesk + Tailscale) ──────────────────────────
 # Skills: /fleet:status, /fleet:rustdesk-check, /fleet:enroll, /fleet:fix-relay
 # Docs:   pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md
+
+.PHONY: up-sentinel
+up-sentinel: ensure-env-shared ## Start fleet-sentinel (announce listener + health poller + self-heal, :8116)
+	@$(DC) up -d fleet-sentinel
+	@echo "✔ fleet-sentinel up — registry at http://localhost:$${SENTINEL_PORT:-8116}/registry.json"
+
+.PHONY: fleet-registry
+fleet-registry: ## Show the live service registry (fleet-sentinel /registry.json)
+	@echo "=== Fleet Service Registry (sentinel) ==="
+	@if command -v curl >/dev/null 2>&1; then \
+		curl -fsS "$${SENTINEL_URL:-http://localhost:8116}/registry.json" \
+		  | $$(command -v jq >/dev/null 2>&1 && echo jq . || echo cat) \
+		|| echo "sentinel unreachable at $${SENTINEL_URL:-http://localhost:8116} (make up-sentinel?)"; \
+	else \
+		echo "curl not available"; exit 1; \
+	fi
+
 
 fleet-status: ## Show Tailscale nodes (hostnames only) + RustDesk relay health
 	@echo "=== Tailscale Fleet Status ==="
@@ -180,13 +336,17 @@ fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
 
 # ── Secrets Sync ────────────────────────────────────────────────────
 # Triggers the sync-secrets-local.yml GitHub Actions workflow on the
-# self-hosted ai-lab runner, which hydrates local.env from GH Secrets.
+# self-hosted ai-lab runner(s) named by TARGETS (comma-separated runner
+# sub-labels; the workflow's own default is spark). Runnerless nodes
+# (5090, Z890) instead pull the uploaded bundle afterwards via
+# `make secrets-funnel-from-prod` — see SECRETS_DISTRIBUTION_PATTERNS.md
+# Pattern B.
 
-secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
-	@echo "=== Triggering secrets sync workflow ==="
+secrets-sync-trigger: ## Trigger GH Actions secrets sync (TARGETS=spark[,z890...], OUTPUT_FORMAT=env|cgp)
+	@echo "=== Triggering secrets sync workflow (targets: $(or $(TARGETS),spark)) ==="
 	@gh workflow run sync-secrets-local.yml \
-		--field output_format=env \
-		--field target_os=$$(case "$$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo Windows;; Linux) echo Linux;; *) echo any;; esac)
+		--field output_format=$(or $(OUTPUT_FORMAT),env) \
+		--field targets=$(or $(TARGETS),spark)
 	@echo "Waiting for workflow to start..."
 	@sleep 8
 	@gh run list --workflow=sync-secrets-local.yml --limit=1 --json status,conclusion,createdAt,displayTitle \
@@ -299,7 +459,19 @@ gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub 
 	fi
 	@echo "=== Preflight complete ==="
 
-gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
+gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop (pulls first; RUNNER_SKIP_PULL=1 skips the pull when the registry is unreachable)
+	@# Pull first -- same stale-cached-image failure as gha-runner-up (2026-09
+	@# incident: deprecated bundled runner v2.335.1 crash-looped on B850).
+	@# RUNNER_SKIP_PULL=1 is the offline escape hatch (see gha-runner-up).
+	@if [ "$(RUNNER_SKIP_PULL)" = "1" ]; then \
+	  echo "  ⚠ RUNNER_SKIP_PULL=1: starting on the CACHED image without pulling."; \
+	  echo "    It may bundle a deprecated runner that crash-loops -- pull as soon as the registry is reachable."; \
+	else \
+	  RUNNER_ACCESS_TOKEN= docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) pull || { \
+	    echo "  ✗ FAIL: runner image pull failed; the cached image may bundle a deprecated runner."; \
+	    echo "    Registry unreachable and you accept that risk? Re-run with RUNNER_SKIP_PULL=1."; \
+	    exit 1; }; \
+	fi
 	@_pat="$(call _runner_pat)"; \
 	RUNNER_ACCESS_TOKEN=$$_pat docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) up -d
 
@@ -323,15 +495,48 @@ gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner 
 # project so up/down/status/logs only touch that node's runners. Canonical
 # entrypoint — do NOT bring these up with a raw `docker compose up` (skips the
 # pipeline token resolution + preflight).
-#   make -C pmoves gha-runner-up RUNNER_NODE=z890
+#   make -C pmoves gha-runner-up RUNNER_NODE=spark
+#
+# LABEL COLLISION WARNING: do NOT use RUNNER_NODE=4090 or RUNNER_NODE=5090.
+# Those labels already belong to the NATIVE WINDOWS ai-lab runners on those
+# nodes, which are secrets-funnel CONSUMERS. sync-secrets-local.yml refuses
+# 4090/5090 as targets (PRODUCER_TARGETS), so a Docker Linux runner carrying
+# either label can never be selected as a producer, and any other workflow
+# targeting the label would land on either runner at random. Give a Docker
+# runner on those hosts a distinct label if one is ever needed.
+#
+# RUNNER_SKIP_PULL=1 skips the pre-start image pull (offline escape hatch: a
+# stopped runner cannot restart while the registry is unreachable). It warns
+# that the cached image may bundle a deprecated runner.
 RUNNER_NODE ?= host
+RUNNER_SKIP_PULL ?=
 RUNNER_COMPOSE := docker/runner/docker-compose.runner.yml
 RUNNER_PROJECT := pmoves-runners-$(RUNNER_NODE)
 
-gha-runner-up: ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+gha-runner-up: ## Start cross-node ai-lab Docker Linux runners (RUNNER_NODE=spark|b850|z890|…; NOT 4090/5090 -- label collides with their Windows consumer runners). Pulls first; RUNNER_SKIP_PULL=1 skips the pull
 	@echo "Pre-creating host config dirs (user-owned) for the runner bind mount..."
 	@mkdir -p "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets" && \
 	  chmod 700 "$$HOME/.config/pmoves" "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets"
+	@# Always PULL before `up -d`. 2026-09 incident: the B850 runners ran a
+	@# myoung34/github-runner:ubuntu-jammy image cached since 2026-07-10, whose
+	@# bundled runner (v2.335.1) GitHub had deprecated ("Runner version v2.335.1
+	@# is deprecated and cannot receive messages"). With auto-update disabled in
+	@# the image, the containers crash-looped ~5600 times each and never took a
+	@# job, so sync-secrets-local.yml could not produce CHIT bundles for the
+	@# consumer nodes (4090/5090). `up -d` alone never refreshes a cached tag.
+	@if [ "$(RUNNER_SKIP_PULL)" = "1" ]; then \
+	  echo "  ⚠ RUNNER_SKIP_PULL=1: starting on the CACHED image without pulling."; \
+	  echo "    It may bundle a deprecated runner that crash-loops -- pull as soon as the registry is reachable."; \
+	else \
+	  echo "Pulling the runner image (a stale cached image may carry a deprecated runner)..."; \
+	  RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) pull || { \
+	    echo "  ✗ FAIL: runner image pull failed. Refusing to start on the cached image:"; \
+	    echo "    it may bundle a runner version GitHub has deprecated, which crash-loops"; \
+	    echo "    with 'Runner version vX is deprecated and cannot receive messages'."; \
+	    echo "    Fix registry/network access, then re-run this target. If the registry is"; \
+	    echo "    unreachable and you accept that risk, re-run with RUNNER_SKIP_PULL=1."; \
+	    exit 1; }; \
+	fi
 	@echo "Resolving runner credential for node '$(RUNNER_NODE)'..."
 	@_pat="$(call _runner_pat)"; \
 	if [ -n "$$_pat" ] && GH_TOKEN="$$_pat" gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners >/dev/null 2>&1; then \
@@ -378,6 +583,17 @@ up-ollama: ## Start Ollama service (default profile, always available)
 	@echo ""
 	@echo "Ollama API: http://localhost:11434"
 	@echo "Pull models: make model-pull MODEL=qwen3:8b"
+
+# Host-native Ollama binds loopback; containers reach it through a proxy on the
+# docker gateway address. Mutating the host (systemd + ufw) is an operator step.
+.PHONY: ollama-host-bridge ollama-host-bridge-status
+ollama-host-bridge: ## Plan (dry-run) exposing HOST Ollama to containers on the docker gateway; apply with sudo (printed)
+	@bash ../deploy/provision/ollama-docker-bridge.sh --dry-run
+	@echo ""
+	@echo "Apply (operator, needs root):  sudo deploy/provision/ollama-docker-bridge.sh --apply"
+
+ollama-host-bridge-status: ## Is the host-Ollama docker bridge provisioned? Needs root (state file + ufw); run the script directly for the 0/1/3 code
+	@bash ../deploy/provision/ollama-docker-bridge.sh --status
 
 up-gpu-orchestrator: ## Start GPU orchestrator (gpu profile)
 	@echo "=== Starting GPU Orchestrator ==="
@@ -438,6 +654,21 @@ safe-opening-audit: ## Audit reachable surfaces for the bind->auth coupling (Saf
 	@$(PYTHON) tools/safe_opening_audit.py
 	@echo "=== Safe-opening audit complete ==="
 
+# ── Pub-Gate Bridge (PR B) ────────────────────────────────────────────
+# Operator demo for the hi-rag-gateway-v2 gate->publish bridge. Publishes a
+# test geometry.publish.gate.v1 event; a clean item flows through the
+# fail-closed egress floor to content.publish.approved.v1. Needs NATS
+# reachable at $NATS_URL. See pmoves/services/hi-rag-gateway-v2/PUB_GATE_BRIDGE.md
+gate-emit: ## Publish a test geometry.publish.gate.v1 event (ARTIFACT=s3://.. TITLE=..)
+	@if [ -z "$(ARTIFACT)" ] || [ -z "$(TITLE)" ]; then \
+		echo "ERROR: ARTIFACT and TITLE are required."; \
+		echo "Usage:  make -C pmoves gate-emit ARTIFACT=s3://pmoves/reports/r1.md TITLE=\"Report 1\""; \
+		exit 1; \
+	fi
+	@$(PYTHON) tools/gate_emit.py --artifact "$(ARTIFACT)" --title "$(TITLE)" $(if $(APPROVED_BY),--approved-by "$(APPROVED_BY)",)
+
+.PHONY: gate-emit
+
 # ── Branch Management ─────────────────────────────────────────────────
 branch-audit: ## List stale remote branches with age and merge status
 	@$(CODEX_PY) tools/branch_cleanup.py
@@ -450,3 +681,153 @@ else
 	@echo ""
 	@echo "Dry-run only. Set EXECUTE=1 to perform cleanup."
 endif
+
+# ── TensorZero Config Render ──────────────────────────────────────────
+# Substitutes ONLY the Ollama EMBEDDING api_base in tensorzero.toml so
+# each node points at its own backend. TensorZero api_base does NOT support
+# env:: substitution (only credential fields do) and the config dir is
+# mounted :ro — so we render host-side before starting the gateway.
+#
+# Codex P1: uses with-env.sh to load tier files (env.tier-llm is NOT
+#   sourced into Make recipes by default — it's a compose --env-file).
+# Codex P1: targets embedding providers ONLY — replacing all 11434
+#   endpoints would also rewrite chat/reranker/vision providers.
+#
+# Set OLLAMA_EMBED_BASE_URL in env.tier-llm per node:
+#   CUDA native:  http://host.docker.internal:11434/v1
+#   B850 ROCm:    http://host.docker.internal:8080/v1
+#   KVM (no GPU): leave unset (cloud fallback)
+
+TZ_CONFIG := tensorzero/config/tensorzero.toml
+
+.PHONY: tensorzero-render
+tensorzero-render: ## Render tensorzero.toml Ollama EMBEDDING api_base from OLLAMA_EMBED_BASE_URL
+	@bash scripts/with-env.sh bash -c '
+		TZ_URL="$${OLLAMA_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}"; \
+		if [ -f "$(TZ_CONFIG)" ]; then \
+			sed -i "/^\[embedding_models.*ollama_local_embedding\]$$/,/^\[/ s|api_base = \"http://[^\"]*\"|api_base = \"$$TZ_URL\"|" "$(TZ_CONFIG)"; \
+			echo "✓ TensorZero embedding api_base → $$TZ_URL"; \
+		else \
+			echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
+		fi
+	'
+
+# -- Service dependency matrix ------------------------------------------------
+# Layered bring-up and graceful shutdown both need a TRUTHFUL dependency order.
+# With ~52 compose files and ~170 depends_on edges a hand-written order drifts the
+# moment a service is added -- and a drifted runbook is worse than none, because it
+# reads as authoritative. So the order is DERIVED from the graph, never authored.
+# Paths are relative to pmoves/ (make's CURDIR here). Kept on one line on purpose:
+# backslash continuations inside a make variable did not survive expansion into
+# the recipe shell, producing a literal backslash-n in the command.
+DEP_MATRIX_DOC ?= docs/SERVICE_DEPENDENCY_MATRIX.md
+COMPOSE_MATRIX_FILES ?= docker-compose.yml docker-compose.core.yml docker-compose.agents.yml docker-compose.workers.yml docker-compose.media.yml docker-compose.ui.yml docker-compose.external.yml docker-compose.juicefs.yml
+DEP_MATRIX_RUN = uv run --quiet --with pyyaml python tools/service_dependency_matrix.py
+
+dep-matrix: ## Regenerate docs/SERVICE_DEPENDENCY_MATRIX.md from the compose graph
+	@# Write to a TEMP file first. A shell redirect truncates the destination
+	@# BEFORE the command runs, so a runner failure (uv unable to fetch PyYAML,
+	@# argparse error) would otherwise replace the canonical matrix with an EMPTY
+	@# file and still report success. Only exit 0 (clean) or 3 (advisory) may
+	@# publish; anything else is a failed run and must not touch the doc.
+	@tmp=$$(mktemp); $(DEP_MATRIX_RUN) --format markdown $(COMPOSE_MATRIX_FILES) > $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ] && [ $$rc -ne 3 ]; then rm $$tmp; echo "dep-matrix: run FAILED (exit $$rc) - matrix left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "dep-matrix: produced EMPTY output - matrix left unchanged"; exit 1; fi; \
+	 mv $$tmp $(DEP_MATRIX_DOC)
+	@echo "regenerated pmoves/$(DEP_MATRIX_DOC)"
+dep-matrix-check: ## Validate graph (1=blocking fails, 3=advisory warns, other=runner failure). STRICT=1 fails on advisory
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; \
+	 if [ $$rc -eq 0 ]; then exit 0; \
+	 elif [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; \
+	 elif [ $$rc -eq 3 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; exit 0; \
+	 else echo "dep-matrix-check: RUNNER FAILURE (exit $$rc) - the tool did not run; this is NOT a pass"; exit 1; fi
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; elif [ $$rc -eq 2 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; fi; exit 0
+
+dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up layers)
+	@$(DEP_MATRIX_RUN) --format shutdown $(COMPOSE_MATRIX_FILES)
+
+agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
+	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
+
+# The PMOVES-registry SUBMODULE pinned in this repo (make -C pmoves runs from
+# pmoves/, hence ../). Not a repo-root sibling clone: a stale sibling silently
+# dropped newer entries. Populate with `git submodule update --init PMOVES-registry`.
+ACP_REGISTRY_PATH ?= ../PMOVES-registry
+acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping from the pinned PMOVES-registry submodule
+	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --write
+
+acp-registry-map-check: ## Fail if acp_registry_map.json drifted from the pinned PMOVES-registry submodule
+	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --check
+
+ACP_PROBE_ENTRIES ?= kilo,glm-acp-agent,minimax-code,qwen-code,codex-acp,claude-acp
+acp-launcher-probe: ## Verify ACP registry launchers on this node (see pmoves/docs/TAC/TAC_ACP_REGISTRY.md); scope with ACP_PROBE_ENTRIES=kilo
+	@uv run --quiet --with pyyaml python tools/acp_launcher_probe.py --registry $(ACP_REGISTRY_PATH) --entries "$(ACP_PROBE_ENTRIES)"
+
+# ── Agent Zero dependency overlay ──────────────────────────────
+# The image installs deps twice into one venv: the fork's requirements first,
+# ours second as a --constraint. Ours therefore wins. These two targets keep
+# that from silently overriding the fork's declared pins.
+
+A0_REQ_DIR = services/agent-zero
+
+agent-zero-pin-check: ## Assert our lock never violates a pin the Agent Zero fork declares
+	@uv run --quiet --with packaging python tools/agent_zero_pin_check.py
+
+agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY sanctioned way)
+	@# --upgrade is load-bearing: without it uv treats the existing lock as
+	@# PREFERENCES and carries a stale resolution forward while showing no diff.
+	@# --python-platform linux because the image is Linux and this repo is worked
+	@# on from Windows.
+	@# UV_CUSTOM_COMPILE_COMMAND makes the lock header record THIS target, which
+	@# is what agent-zero-pin-check verifies - a hand-run of `uv pip compile`
+	@# writes its own command line there and fails the check.
+	@tmp=$$(mktemp); \
+	 UV_CUSTOM_COMPILE_COMMAND="make -C pmoves agent-zero-lock" \
+	 uv pip compile $(A0_REQ_DIR)/requirements.txt \
+	   --python-version 3.11 --python-platform linux --generate-hashes \
+	   --upgrade -o $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then rm $$tmp; echo "agent-zero-lock: compile FAILED (exit $$rc) - lock left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "agent-zero-lock: produced EMPTY output - lock left unchanged"; exit 1; fi; \
+	 mv $$tmp $(A0_REQ_DIR)/requirements.lock; \
+	 echo "agent-zero-lock: regenerated ($$(grep -cE '^[a-zA-Z0-9._-]+==' $(A0_REQ_DIR)/requirements.lock) packages)"; \
+	 $(MAKE) --no-print-directory agent-zero-pin-check
+
+compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
+	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py
+
+room-manifest-check: ## Assert every room manifest validates against the schema + catalog
+	@# THE VALIDATOR EXISTED AND RAN NOWHERE. ROOM_MANIFEST_CONTRACT.md line 362
+	@# records this smoke path as DONE, struck through, naming the script -- and
+	@# nothing invoked it: no make target, no workflow, no gate. Two manifests
+	@# had been failing schema validation invisibly as a result
+	@# (creator-studio.room.collab, jons-edge.room.control), because the only
+	@# thing that would have said so was never called.
+	@#
+	@# `referencing` as well as `jsonschema`: the script imports it for $ref
+	@# resolution and falls back when absent, and the fallback path is not the
+	@# one CI should be exercising.
+	@uv run --quiet --with jsonschema --with referencing --with pyyaml python scripts/validate_room_manifests.py
+
+# ── Service recovery (engine-restart safe) ──────────────────────────
+# After a Docker Desktop/WSL2 engine restart, containers can sit in
+# "Created" (image pulled, never started). This starts them via compose
+# (no raw docker), so the Known Road covers the recovery case.
+.PHONY: svc-start svc-status
+svc-start: ## Start one service's containers after engine restart. Usage: make svc-start SVC=flute-gateway
+	@if [ -z "$(SVC)" ]; then echo "usage: make svc-start SVC=<compose-service>"; exit 2; fi
+	@case "$(SVC)" in *[!a-z0-9-]*|'') echo "invalid service slug: $(SVC)"; exit 2;; esac
+	@echo "svc-start $(SVC): starting via compose"
+	@$(DC) start $(SVC) 2>/dev/null || { echo "  not startable directly — falling back to up -d --no-deps"; $(DC) up -d --no-deps $(SVC); }
+	@$(DC) ps $(SVC)
+
+svc-status: ## Show compose status for one service. Usage: make svc-status SVC=flute-gateway
+	@if [ -z "$(SVC)" ]; then echo "usage: make svc-status SVC=<compose-service>"; exit 2; fi
+	@$(DC) ps $(SVC)
+
+# ── Room stage provenance ───────────────────────────────────────────
+# Placed at the end of this file on purpose: PR #2992 inserts
+# `room-manifest-check` directly after `compose-yaml-check`, and keeping the
+# two additions apart keeps them from conflicting in the merge train.
+.PHONY: room-catalog-stage-check
+room-catalog-stage-check: ## Assert every catalog current_stage was earned (P7 receipt) or matches its manifest
+	@python scripts/validate_room_catalog.py

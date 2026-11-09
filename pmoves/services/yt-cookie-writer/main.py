@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import signal
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +36,7 @@ logger = logging.getLogger("yt-cookie-writer")
 
 NATS_SUBJECT = "ingest.cookies.refreshed.v1"
 COOKIE_OUTPUT_PATH = os.environ.get("YT_COOKIE_OUTPUT_PATH", "/app/config/cookies/yt-cookies.txt")
+PO_TOKEN_OUTPUT_PATH = os.environ.get("YT_PO_TOKEN_OUTPUT_PATH", "/app/config/cookies/yt-po-token.txt")
 TABLE_PATH = "/rest/v1/yt_oauth_cookies"
 DEFAULT_USER_ID = "darkxside"
 VALID_STATUSES = {"success", "failed", "revoked"}
@@ -50,7 +50,23 @@ def _get_fernet() -> Optional[Fernet]:
     if not key_hex:
         return None
     try:
-        key_bytes = bytes.fromhex(key_hex)
+        # VAULT_ENC_KEY_DECODE_V1 -- keep identical in all three consumers:
+        #   pmoves/tools/yt_oauth_flow.py
+        #   pmoves/services/yt-cookie-writer/main.py
+        #   pmoves/services/yt-cookie-refresher/supabase_client.py
+        # One side encrypting with a different derivation than the other decrypts
+        # with is worse than both failing: consent reports success, ciphertext
+        # lands, and the writer silently never produces the refresh-token file.
+        # Hex first (the registry's declared spec for this key), then base64url,
+        # then raw bytes.
+        try:
+            key_bytes = bytes.fromhex(key_hex)
+        except ValueError:
+            try:
+                _padded = key_hex + "=" * (-len(key_hex) % 4)
+                key_bytes = base64.urlsafe_b64decode(_padded) or key_hex.encode("utf-8")
+            except Exception:
+                key_bytes = key_hex.encode("utf-8")
         key_bytes = (key_bytes + b"\x00" * 32)[:32]
         return Fernet(base64.urlsafe_b64encode(key_bytes))
     except Exception:
@@ -91,16 +107,40 @@ def _supabase_headers() -> dict:
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        # yt_oauth_cookies lives in pmoves_core; PostgREST only consults the
+        # FIRST schema in PGRST_DB_SCHEMAS (public) unless told otherwise —
+        # these headers select the schema for reads and writes respectively.
+        "Accept-Profile": "pmoves_core",
+        "Content-Profile": "pmoves_core",
     }
 
 
+# pmoves-yt runs as this non-root uid (Dockerfile useradd 65532); the writer
+# runs as root, so files land root:root and 0o660 alone is unreadable there.
+CONSUMER_UID = int(os.environ.get("YT_COOKIES_CONSUMER_UID", "65532"))
+CONSUMER_GID = int(os.environ.get("YT_COOKIES_CONSUMER_GID", "65532"))
+
+
+def _share_with_consumer(path: Path) -> None:
+    """chown+chmod a shared-volume file so the pmoves-yt user can read/write it."""
+    try:
+        os.chown(path, CONSUMER_UID, CONSUMER_GID)
+    except (PermissionError, OSError) as e:
+        logger.warning(f"chown {path} to consumer uid failed (non-root writer?): {e}")
+    path.chmod(0o660)
+
+
 async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
-    """Fetch encrypted cookies from Supabase, decrypt, atomically write to disk.
+    """Fetch encrypted cookies + refresh token from Supabase, decrypt, write to disk.
+
+    Writes the Netscape cookie file AND the plaintext refresh token to the
+    shared volume. pmoves-yt reads the refresh token to call YouTube Data API
+    v3 for metadata (works from datacenter IPs, unlike yt-dlp extraction).
 
     Returns True on success. Uses async httpx + atomic write (tmp + rename)
     so the yt-dlp per-request readers never see a torn cookie file.
     """
-    url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies"
+    url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies,encrypted_po_token,encrypted_refresh_token"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=_supabase_headers())
@@ -131,12 +171,54 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
     try:
         tmp.write_text(cookies_str)
         tmp.replace(output)
+        _share_with_consumer(output)
     except OSError as e:
         logger.error(f"Cookie write failed: {e}")
         tmp.unlink(missing_ok=True)
         return False
 
     logger.info(f"Wrote {len(cookies_str)} bytes to {output} (atomic)")
+
+    # Bridge the orphaned PO token: the refresher harvests it alongside cookies
+    # but the writer previously discarded it. Writing it to the shared volume
+    # lets pmoves-yt use the harvested token instead of relying solely on
+    # bgutil-pot-provider's headless browser solver.
+    enc_po = rows[0].get("encrypted_po_token")
+    if enc_po:
+        try:
+            po_token = _decrypt(enc_po)
+        except RuntimeError as e:
+            logger.warning(f"PO token decryption failed (cookies still written): {e}")
+            po_token = None
+
+        if po_token and po_token.strip():
+            po_output = Path(PO_TOKEN_OUTPUT_PATH)
+            po_tmp = po_output.with_suffix(po_output.suffix + ".tmp")
+            try:
+                po_tmp.write_text(po_token.strip())
+                po_tmp.replace(po_output)
+                _share_with_consumer(po_output)
+                logger.info(f"Wrote PO token ({len(po_token)} bytes) to {po_output}")
+            except OSError as e:
+                logger.warning(f"PO token write failed (cookies still valid): {e}")
+                po_tmp.unlink(missing_ok=True)
+
+    # Write the decrypted OAuth refresh token so pmoves-yt can call YouTube
+    # Data API v3 for IP-agnostic metadata enrichment.
+    enc_refresh = rows[0].get("encrypted_refresh_token") if rows else None
+    if enc_refresh:
+        try:
+            refresh_token = _decrypt(enc_refresh)
+            if refresh_token:
+                token_path = output.parent / "yt-refresh-token.txt"
+                tmp_tok = token_path.with_suffix(".txt.tmp")
+                tmp_tok.write_text(refresh_token.strip())
+                tmp_tok.replace(token_path)
+                _share_with_consumer(token_path)
+                logger.info(f"Wrote refresh token to {token_path}")
+        except (RuntimeError, OSError) as e:
+            logger.warning(f"Refresh token write failed: {e}")
+
     return True
 
 
@@ -181,7 +263,7 @@ async def _on_message(msg):
 
 async def run() -> None:
     """Main event loop — connect to NATS, subscribe, wait."""
-    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
     logger.info(f"Connecting to NATS at {nats_url}")
 
     nc = await nats.connect(nats_url)

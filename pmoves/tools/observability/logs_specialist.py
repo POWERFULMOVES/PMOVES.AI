@@ -301,7 +301,7 @@ def main():
     try:
         if args.command == "query":
             result = specialist.query(args.logql, args.limit)
-            print(f"[+] Query results:")
+            print("[+] Query results:")
             print(json.dumps(result, indent=2))
 
         elif args.command == "errors":

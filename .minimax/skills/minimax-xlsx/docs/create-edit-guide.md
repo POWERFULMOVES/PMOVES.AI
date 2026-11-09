@@ -1,7 +1,7 @@
 # create-edit-guide — openpyxl + xlsxwriter cookbook
 
 > Detailed recipes for the two write-side libraries. The minimal
-> one-liners live in [`SKILL.md`](../SKILL.md) §3; this file is for
+> one-liners are below; this file is for
 > when a one-liner is not enough — full styling, charts, conditional
 > formatting, in-place edits, and the merged-cell / shared-strings
 > gotchas.

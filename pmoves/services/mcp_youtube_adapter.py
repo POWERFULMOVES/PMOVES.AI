@@ -13,12 +13,9 @@ Usage:
 """
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 from urllib.parse import urlparse
 
 try:
@@ -126,10 +123,6 @@ async def lifespan(app: FastAPI):
         await _embedding_api_client.aclose()
     print("👋 MCP YouTube Adapter shut down")
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
 
 app = FastAPI(
     title="PMOVES.yt MCP Adapter",

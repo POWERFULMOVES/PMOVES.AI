@@ -6,7 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from config.settings import Settings
+    pass
 
 
 class ModelState(str, Enum):

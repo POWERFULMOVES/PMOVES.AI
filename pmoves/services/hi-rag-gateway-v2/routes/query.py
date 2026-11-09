@@ -19,7 +19,7 @@ except ImportError:
 
 from config import (
     RERANK_ENABLE, RERANK_PROVIDER, RERANK_TOPN, RERANK_K, RERANK_FUSION,
-    USE_MEILI, GRAPH_BOOST, COLL, MEILI_URL, MEILI_API_KEY, NAMESPACE_DEFAULT, logger, _reranker,
+    USE_MEILI, GRAPH_BOOST, COLL, MEILI_URL, MEILI_API_KEY, NAMESPACE_DEFAULT, logger,
 )
 from models import QueryReq, QueryResp, UpsertReq
 from embeddings import embed_query

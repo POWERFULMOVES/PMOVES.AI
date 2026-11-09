@@ -191,7 +191,7 @@ Discord is the first adapter. Design for migration to open-source:
 
 ### Phase 3: Voice + Streaming (Next 5090 Session)
 - [ ] discord.js voice connection via @discordjs/voice
-- [ ] Flute-Gateway WebSocket (port 8056) → Discord voice
+- [ ] Flute-Gateway WebSocket (port 8055, `/v1/voice/agent`) → Discord voice
 - [ ] Real-time STT → LLM → TTS loop in voice channels
 
 ### Phase 4: Gating + Onboarding (Multi-agent)

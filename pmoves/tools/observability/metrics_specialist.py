@@ -115,7 +115,7 @@ class PrometheusMetricsSpecialist:
         anomalies = []
 
         # Check for high error rate
-        error_rate_query = f'rate({{service}}_errors_total[5m]) > 0.05'
+        error_rate_query = 'rate({service}_errors_total[5m]) > 0.05'
         try:
             result = self.query_range(error_rate_query, start, end)
             if result["data"]["result"]:
@@ -123,7 +123,7 @@ class PrometheusMetricsSpecialist:
                     "type": "high_error_rate",
                     "severity": "critical",
                     "service": service,
-                    "description": f"Error rate exceeding 5% threshold",
+                    "description": "Error rate exceeding 5% threshold",
                     "metric": "error_rate",
                     "value": result["data"]["result"]
                 })
@@ -131,7 +131,7 @@ class PrometheusMetricsSpecialist:
             print(f"[WARN] Error rate check failed: {e}")
 
         # Check for high latency
-        latency_query = f'rate({{service}}_latency_seconds_bucket[5m])'
+        latency_query = 'rate({service}_latency_seconds_bucket[5m])'
         try:
             result = self.query_range(latency_query, start, end)
             if result["data"]["result"]:
@@ -139,7 +139,7 @@ class PrometheusMetricsSpecialist:
                     "type": "high_latency",
                     "severity": "warning",
                     "service": service,
-                    "description": f"Latency percentile p95 above threshold",
+                    "description": "Latency percentile p95 above threshold",
                     "metric": "latency_p95",
                     "value": result["data"]["result"]
                 })
@@ -155,7 +155,7 @@ class PrometheusMetricsSpecialist:
                     "type": "cpu_saturation",
                     "severity": "warning",
                     "service": service,
-                    "description": f"CPU usage above 80%",
+                    "description": "CPU usage above 80%",
                     "metric": "cpu_usage",
                     "value": result["data"]["result"]
                 })
@@ -290,7 +290,7 @@ def main():
     try:
         if args.command == "query":
             result = specialist.query(args.promql, args.time)
-            print(f"[+] Query result:")
+            print("[+] Query result:")
             print(result)
 
         elif args.command == "anomaly":

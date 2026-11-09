@@ -12,7 +12,6 @@ Validates the 6-tier environment architecture:
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -321,7 +320,7 @@ def validate_tier(tier: str, base_dir: Optional[Path] = None) -> ValidationRepor
     for var in required:
         if var not in env_vars:
             report.add_error(
-                ValidationError(tier, var, f"Required variable not set", "error")
+                ValidationError(tier, var, "Required variable not set", "error")
             )
         else:
             error = validate_variable(tier, var, env_vars[var])
@@ -433,7 +432,7 @@ def run_connectivity_checks(base_dir: Optional[Path] = None) -> List[ValidationE
                     ValidationError(
                         "connectivity",
                         service_name,
-                        f"Service is not running",
+                        "Service is not running",
                         "warning",
                     )
                 )

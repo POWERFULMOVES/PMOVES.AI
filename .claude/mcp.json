@@ -1,13 +1,32 @@
 {
-  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1, postgres-mcp=0.3.0",
+  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=POWERFULMOVES fork @094e38c (v1.35.7; replaced the npm 0.2.1 pin), tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1, postgres-mcp=0.3.0, minimax-mcp=0.0.18 (matches the audited PMOVES-MiniMax-MCP gitlink f4d6a61b, whose pyproject.toml declares version 0.0.18)",
   "mcpServers": {
     "pmoves-cipher": {
-      "_note": "Cipher SSE requires bearer auth when the API token is set (hardened container, post-#2005 recreate). The claude-pmoves launcher injects the token env var; without it the header expands empty and cipher returns 401 (same as before this header existed - no regression).",
+      "_note": "Cipher SSE requires bearer auth once CIPHER_API_TOKEN is set on the serving node. The ':-' fallback was REMOVED 2026-09-02 (B850): it was the right remedy only while NO node had a token, because an empty bearer was then accepted (200). Once the token is provisioned (`python pmoves/scripts/bootstrap_env.py --rotate CIPHER_API_TOKEN`, then chit-export + secrets-funnel + `make -C pmoves up-cipher`), an empty bearer is a MEASURED 401. WHY BARE, STATED ACCURATELY: the ':-' failure was never invisible -- pmoves/scripts/session_check.py classifies it `soft` and prints `!`. Bare ${CIPHER_API_TOKEN} is classified `hard` and prints `x`, and also lands in the _pmoves_roster_verdicts degraded list. So this is a SEVERITY UPGRADE in a manually-run tool (! -> x), not silence turned into signal; _pmoves_roster_verdicts has no production reader yet (writer is mcp_roster_normalize.py:80) and wiring one is a follow-up lane. ORDERING, MEASURED: once the var is set BOTH forms put identical bytes on the wire, so the roster form cannot protect the window between secrets-funnel and the container recreate -- in that window the real token 401s against a still-fail-open server (measured on B850). Provision each node FIRST, verify, land the roster change LAST. FLEET: deploy/provision/claude-pmoves.sh reads the roster from `git show origin/main:.claude/mcp.json`, not the working tree, so this file changes behaviour on EVERY node the moment it merges, whatever branch that node is on. A node with no CIPHER_API_TOKEN goes 200 -> 401 for claude-code and crush; .kimi/mcp.json, all 7 Hermes profiles and all 17 configs/claws entries are already bare on origin/main and already 401 there. A bare `claude` session does NOT show this as degraded -- there is no .mcp.json in this repo, so a bare session loads NO PMOVES servers at all (MEASURED: `claude mcp list` returns 14 servers, none of them PMOVES) and never runs the normalizer. Start sessions through the launcher. MEASURED 2026-09-02 against a sidecar cipher process with the token set: no header 401, 'Bearer ' (empty) 401, literal 'Bearer ${CIPHER_API_TOKEN}' 401, correct token -> /mcp/sse 200 + initialize + tools/list = 10 tools. NOTE /health is 200 in BOTH postures -- it cannot tell you the auth posture. PATH VERIFIED 2026-08-12, unchanged: /mcp/sse answers; /api/mcp/sse and /sse both 404. Runbook: pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md",
       "type": "sse",
-      "url": "http://localhost:8105/mcp/sse",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
       "headers": {
         "Authorization": "Bearer ${CIPHER_API_TOKEN}"
-      }
+      },
+      "description": "Agent memory (Neo4j knowledge graph)"
+    },
+    "pmoves-hirag-mcp": {
+      "_purpose": "Hi-RAG v2 MCP bridge \u2014 hybrid vector (Qdrant) + graph (Neo4j) + full-text (Meilisearch) retrieval with cross-encoder reranking, over the existing PMOVES retrieval APIs. STDIO, per the submodule's own README (\"Thin stdio MCP bridge\") and the invocation it documents. It was first registered here as SSE against http://pmoves-hirag-mcp:8080/sse \u2014 no compose service by that name exists, the submodule ships no Dockerfile and no SSE server, so the endpoint was unreachable. If an SSE container is built later, switch this back and add the compose service in the same change. Source of truth for the active flag: pmoves/config/agent_registry.yaml `pmoves_hirag_mcp.status`.",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./pmoves-hirag-mcp",
+        "run",
+        "python",
+        "-m",
+        "hirag_mcp.server"
+      ]
+    },
+    "agent-zero": {
+      "_purpose": "Agent Zero orchestrator for cross-agent task dispatch and memory operations.",
+      "type": "sse",
+      "url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
+      "description": "Agent Zero orchestrator (SSE with MCP token auth)"
     },
     "_pmoves-cipher-legacy-python-wrapper": {
       "_disabled": "Replaced 2026-05-15 with direct SSE to Cipher's native MCP endpoint. The Python wrapper called non-existent /api/memory routes. Kept here commented for rollback; remove in follow-up after SSE validated for 2 weeks.",
@@ -40,23 +59,28 @@
       }
     },
     "hostinger-mcp": {
+      "_note": "POWERFULMOVES fork (hostinger-api-mcp v1.35.7, 320 tools, per-service binaries) pinned to commit 094e38c \u2014 interim local wiring until the PMOVES MCP-gateway hub hosts it as an adapter. The fork reads HOSTINGER_API_TOKEN (or API_TOKEN); both are fed from the established env.shared var HOSTINGER_API_KEY so the launcher's existing sourcing resolves them. Source GH secret is HOSTINGER_API_KEY (Prod env); HOSTINGER_API_TOKEN is the consumer var only.",
       "command": "npx",
       "args": [
-        "hostinger-api-mcp@0.2.1"
+        "-y",
+        "github:POWERFULMOVES/pmoves-hostinger-api-mcp-server#094e38c"
       ],
       "env": {
+        "HOSTINGER_API_TOKEN": "${HOSTINGER_API_KEY}",
         "API_TOKEN": "${HOSTINGER_API_KEY}"
       }
     },
     "tailscale": {
       "command": "npx",
       "args": [
+        "-y",
         "tailscale-mcp@2026.4.10-1"
       ],
       "env": {
         "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
         "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}"
-      }
+      },
+      "description": "Tailscale network administration"
     },
     "pmoves-nats-fleet": {
       "_purpose": "Cross-node NATS publish/subscribe to the fleet hub on KVM4-2. Replaces SSH-from-CLI dance for signal dispatch (e.g., claw.task.assign.v1 SPARK cascades). Server code shipped in PR #1490; this is the .claude/mcp.json registration enabling the tools at runtime.",
@@ -70,8 +94,11 @@
         "nats_mcp.server"
       ],
       "env": {
-        "NATS_URL": "${NATS_URL}"
-      }
+        "NATS_URL": "${NATS_URL}",
+        "NATS_CREDS": "${NATS_CREDS:-}",
+        "_NATS_CREDS_NOTE": "v0.2 (spec \u00a77b): path to a CORE-account .creds (nsc-minted, CHIT-vault-held). When set, the MCP binds to the CORE account (transport-trust gate) and CHIT-signs CHIT-aware subjects (payload-provenance gate) \u2014 two-gate model, spec \u00a711. Unset = legacy NATS_URL user/pass (single-principal bus). Fallback is enforced in code, not assumed: _nats_creds() rejects an empty value AND an unresolved \"${...}\" placeholder (a bare \"${NATS_CREDS}\" survives literally when the var is absent and would otherwise be a truthy bogus path), so the MCP uses NATS_URL until the funnel materializes the .creds. \"${NATS_CREDS:-}\" also collapses to empty where the launcher supports default-expansion."
+      },
+      "description": "NATS fleet messaging bridge"
     },
     "cloudflare": {
       "_purpose": "Cloudflare MCP for Pages deploy + DNS zone management (cataclysmstudios.com). Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in env. Added Layer 2.1 of COMBINER pipeline (2026-05-26).",
@@ -83,6 +110,11 @@
         "CLOUDFLARE_API_TOKEN": "${CLOUDFLARE_API_TOKEN}",
         "CLOUDFLARE_ACCOUNT_ID": "${CLOUDFLARE_ACCOUNT_ID}"
       }
+    },
+    "cloudflare-api": {
+      "_purpose": "Cloudflare's official REMOTE API MCP (https://mcp.cloudflare.com/mcp) \u2014 the ENTIRE Cloudflare API (2,500+ endpoints incl. all of DNS) exposed via two Code-Mode tools search()/execute(), ~1k tokens instead of ~1M for native schemas. OAuth on first connect uses the operator's admin-scoped Cloudflare account. Use this (not the stdio 'cloudflare' entry, which needs a CLOUDFLARE_API_TOKEN that is currently empty in env.shared) to list/manage pmoves.ai DNS records and to mint/verify a Zone:DNS:Edit token for Traefik ACME (CLOUDFLARE_DNS_API_TOKEN). Ref: Cloudflare docs /agents/model-context-protocol/cloudflare/servers-for-cloudflare/ (verified 2026-08-18).",
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
     },
     "pmoves-4090-web": {
       "_note": "D-Proxy SSE gateway for pmoves_4090_web profile. Requires `make mcp-4090-gateway-start` first. Claude Code skips gracefully if gateway is not running.",
@@ -97,11 +129,12 @@
       "command": "npx",
       "args": [
         "-y",
-        "@llmindset/hf-mcp-server"
+        "@llmindset/hf-mcp-server@0.3.30"
       ],
       "env": {
         "HF_TOKEN": "${HF_TOKEN}"
-      }
+      },
+      "description": "HuggingFace model/paper/space search"
     },
     "pmoves-supabase": {
       "_purpose": "Self-hosted PMOVES Supabase via PostgREST (NOT cloud mcp.supabase.com). Replaces the cloud 'supabase' plugin MCP for data-plane access. apiUrl points at the self-hosted Kong/PostgREST REST endpoint; falls back to local supabase-local Kong :8000 if SUPABASE_REST_URL is unset. PostgREST-based per the 'never raw psql' rule (CATALOG.md canonical http://supabase-kong:8000/rest/v1). Pinned per F-07 supply-chain note above.",
@@ -112,14 +145,21 @@
         "--apiUrl",
         "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
         "--apiKey",
-        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+        "${SUPABASE_SERVICE_ROLE_KEY}",
         "--schema",
         "public"
-      ]
+      ],
+      "description": "Supabase PostgREST API"
+    },
+    "comfy": {
+      "_purpose": "Official ComfyUI MCP (comfy.org) \u2014 exposes the ComfyUI engine over MCP: build/edit/run + save/re-run workflows, search models/nodes/templates, generate image/video/audio/3D. Lets the creator-operator computer-use agent drive workflows via MCP instead of clicking the UI.",
+      "_note": "This is the HOSTED CLOUD endpoint (drives Comfy's cloud). OAuth sign-in on first use in Claude Code (no key needed). For the SELF-HOSTED fleet ComfyUI (project_creator_comfyui_selfhost), a local ComfyUI-API MCP (community, via ComfyUI /prompt) is a separate follow-up to drive the operator's own instance. Claude Code skips gracefully if not signed in.",
+      "type": "http",
+      "url": "https://cloud.comfy.org/mcp"
     },
     "supabase-db": {
-      "_purpose": "Postgres MCP (crystaldba/postgres-mcp 'Postgres MCP Pro') for the SELF-HOSTED Supabase Postgres — the DDL/RLS/migration sibling of pmoves-supabase. Does what PostgREST CANNOT: run SQL, inspect schema + RLS policies, apply migrations, EXPLAIN/health/index analysis. DELIBERATE, SCOPED EXCEPTION to the 'never raw psql' rule (CATALOG.md): data-plane CRUD still goes through pmoves-supabase (PostgREST); this is for schema/migration/RLS work only (the same class as bootstrap's docker-exec psql).",
-      "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port — use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
+      "_purpose": "Postgres MCP (crystaldba/postgres-mcp 'Postgres MCP Pro') for the SELF-HOSTED Supabase Postgres \u2014 the DDL/RLS/migration sibling of pmoves-supabase. Does what PostgREST CANNOT: run SQL, inspect schema + RLS policies, apply migrations, EXPLAIN/health/index analysis. DELIBERATE, SCOPED EXCEPTION to the 'never raw psql' rule (CATALOG.md): data-plane CRUD still goes through pmoves-supabase (PostgREST); this is for schema/migration/RLS work only (the same class as bootstrap's docker-exec psql).",
+      "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port \u2014 use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
       "command": "uvx",
       "args": [
         "postgres-mcp@0.3.0",
@@ -127,7 +167,49 @@
       ],
       "env": {
         "DATABASE_URI": "${SUPABASE_DB_URI}"
+      },
+      "description": "Supabase Postgres database"
+    },
+    "pmoves-minimax-mcp": {
+      "_purpose": "PMOVES-MiniMax-MCP \u2014 MiniMax model surface (text/image/video/TTS/voice-clone) over MCP stdio. Submodule POWERFULMOVES/PMOVES-MiniMax-MCP (f4d6a61b) at PMOVES-MiniMax-MCP/; entry point `uvx minimax-mcp` per the submodule's pyproject.toml. Mavis harness v0 follow-ups (PR #2568) consume this for model access; the sidecar lane (Pinokio on operator devices) calls the same surface via Pmoves-minimax-cli. Requires MINIMAX_API_KEY.",
+      "command": "uvx",
+      "args": [
+        "minimax-mcp==0.0.18"
+      ],
+      "env": {
+        "MINIMAX_API_KEY": "${MINIMAX_API_KEY}",
+        "MINIMAX_API_HOST": "${MINIMAX_API_HOST:-https://api.minimax.chat}",
+        "MINIMAX_API_RESOURCE_MODE": "${MINIMAX_API_RESOURCE_MODE:-url}"
       }
+    },
+    "hostinger": {
+      "description": "Hostinger VPS API (requires pmz-hostinger container)",
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "pmz-hostinger",
+        "hostinger-api-mcp"
+      ],
+      "env": {
+        "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}"
+      }
+    },
+    "_pmoves-docker-gateway": {
+      "_disabled": "REMOVED from the fleet roster 2026-09-13. This entry hardcoded `--profile pmoves_5090_web` — one node's profile in the file deploy/provision/claude-pmoves.sh reads from `git show origin/main:.claude/mcp.json` on EVERY node, whatever branch that node sits on. So every node launched a gateway serving the 5090's server set. It failed silently: measured on the 4090, `docker mcp profile ls` lists BOTH pmoves_4090_web and pmoves_5090_web, so the wrong-profile gateway starts fine. WHY REMOVED RATHER THAN PARAMETERIZED: the profile lives in `args`, and mcp_roster_normalize.py expands ${VAR} in url/headers/env and deliberately NOT in args (its own docstring: widening a drop rule over the nested-alias form is a separate, riskier call). Nothing needs to be widened, because the gateway entry was never supposed to come from the fleet roster — the launcher omits --strict-mcp-config precisely so the PER-NODE .mcp.json written by `make -C pmoves mcp-toolkit-connect` stays live alongside this file. Keeping it here duplicated that entry under a second key, so both loaded: MEASURED 2026-09-13, `MCP_DOCKER` (per-node) and `pmoves-docker-gateway` (this entry) BOTH appear in one session's failed-server list. The per-node file is now the single writer, and mcp-toolkit-connect.sh resolves the profile via pmoves/tools/node_gateway_profile.py instead of defaulting to a node name. If you have no gateway, run `make -C pmoves mcp-toolkit-connect`. Key is underscore-prefixed so the normalizer's P2 rule drops it — it is a record, not a server."
+    },
+    "pmoves-cipher-local": {
+      "description": "Local agent memory on this node (cipher is published on loopback, so the fleet URL is unreachable cross-node)",
+      "type": "sse",
+      "url": "http://localhost:8105/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer ${CIPHER_API_TOKEN}"
+      }
+    },
+    "composio": {
+      "description": "Composio Connect hosted MCP - SaaS toolkits behind 7 COMPOSIO_* meta-tools with in-band managed OAuth (search tools, connect apps, execute, remote sandbox)",
+      "type": "http",
+      "url": "https://connect.composio.dev/mcp"
     }
   }
 }

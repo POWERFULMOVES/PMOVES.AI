@@ -75,7 +75,7 @@ def check_submodule_integration_md(report: EnforcementReport) -> None:
                 severity="P3",
                 category="submodule-integration",
                 path=sub_path,
-                message=f"Submodule directory does not exist (uninitialized?)",
+                message="Submodule directory does not exist (uninitialized?)",
             ))
             continue
 

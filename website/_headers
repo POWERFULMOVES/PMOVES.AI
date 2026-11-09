@@ -48,12 +48,25 @@
 /hyperdim/*
   Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data:; connect-src 'self' https://unpkg.com; worker-src 'self' blob:; object-src 'none'
 
+# --- CHIT Visual Tour (interactive D3 + Three.js explainer at /chit-tour/) ---
+#   - Scripts are fully vendored (chit-tour/vendor/d3.v7.min.js + three.module.js),
+#     so script-src stays STRICT 'self' — NO unsafe-inline, NO unsafe-eval, NO CDN.
+#   - D3 and Three.js position/animate by writing inline styles at runtime
+#     (element.style.*), plus static style="" attributes. Under the inherited
+#     /* `style-src 'self'` the browser blocks all of these.
+#   - Narrowest fix: split style-src — keep `style-src-elem 'self'` and allow only
+#     `style-src-attr 'unsafe-inline'`. Scoped to /chit-tour/* only — root / untouched.
+#   - CF Pages STACKS matching rules, so detach the inherited CSP with `! ` first.
+/chit-tour/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src-elem 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; upgrade-insecure-requests
+
 # --- Beats Constellation embed (self-contained canvas; stricter than hyperdim) ---
 # Single-file canvas star-chart: inline <script type="module"> + inline <style>, no external
 # hosts, no eval/new Function. Needs 'unsafe-inline' for the inline tags only — deliberately
 # NO 'unsafe-eval' and no CDN hosts, so it's tighter than /hyperdim/*.
 /embeds/beats-constellation/*
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://esm.sh; font-src 'self' data:; connect-src 'self' https://esm.sh; object-src 'none'
 
 # --- Stage (A2UI rooms-on-a-stage, DL-4.1) ---
 # Vendored @a2ui/lit bundle (no CDN, no eval — verified in stage/vendor/README.md).
@@ -62,8 +75,12 @@
 # this exact policy, strict style-src blanks the card surfaces. So ONLY the
 # attribute channel is opened (style-src-attr); style-src stays 'self', meaning
 # no <style> injection and no external sheets. script-src stays strict 'self'.
+# connect-src includes the same LOOPBACK-ONLY origins as the root policy for the
+# DL-4.2 persona demo (?agent= → BoTZ Gateway :8054 accents; Showtime :9225 live
+# flip) — the *visitor's* loopback: harmless off-net, functional on-net, and
+# persona-theme.js restricts ?gw= overrides to loopback.
 /stage/*
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' http://localhost:8054 http://127.0.0.1:8054 http://localhost:9225 http://127.0.0.1:9225; object-src 'none'
 
 # --- Long-cache static assets ---
 /assets/*

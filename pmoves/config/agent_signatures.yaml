@@ -32,6 +32,17 @@ signatures:
       - cross-repo-orchestration
       - hardening
     description: "Primary architect and security auditor — deep analysis, structured output"
+    alters:
+      - name: "claude-opus-5"
+        id: "claude-opus-5"
+        display_name: "Claude Opus 5"
+        glyph: "◆"          # ◆ Diamond (same lineage)
+        color: "#7C3AED"         # Deep Violet (same)
+        accent: "#C4B5FD"
+        voice: analytical
+        co_author: "Claude Opus 5 <noreply@anthropic.com>"
+        model: "claude-opus-5"
+        description: "Claude Opus 5 — same lineage, newer model. Runs wherever it is launched; the node is a location, not an identity."
 
   kilocode:
     agent_id: "kilocode"
@@ -56,9 +67,13 @@ signatures:
         accent: "#A7F3D0"
         voice: architectural
         description: "KiloCode on GLM coding plan — 5090 GPU node, DARKXSIDE co-creation"
-        model: "zai/glm-5-turbo"
+        model: "zai/glm-5.2"
+        fallback_model: "zai/glm-5-turbo"
         node: "5090"
         cocreator: "darkxside"
+        tensorzero_function: "coding_kilocode"
+        provider_cascade: "pmoves/tools/models/kilocode_provider_cascade.yaml"
+        agent_profile: "pmoves/configs/agent-profiles/kilocode_glm.yaml"
 
   codex:
     agent_id: "codex"
@@ -157,7 +172,7 @@ signatures:
     color: "#F59E0B"             # Gold
     accent: "#FCD34D"
     voice: directive              # vision-setting, mission-critical
-    co_author: "Russell Olivier <russell@powerfulmoves.ai>"
+    co_author: "Russell Richardson <powerfulmoves@pmoves.ai>"
     resonance:
       - vision
       - doctrine
@@ -249,7 +264,7 @@ signatures:
       - agent-trails
       - character-persona-synthesis
       - prosodic-flow
-    description: "MiniMax M2.7 — native model backend for PMOVES.KiloCode operations. Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
+    description: "MiniMax M3 — native model backend for PMOVES.KiloCode operations (m2.7/m2.1 fallback suits). Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
     model_backend: true
     token_plan:
       api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
@@ -261,7 +276,8 @@ signatures:
         - ultra_highspeed: 30000
       quota_reset: rolling_5h
     model_suits:
-      - minimax-m2.7  # 1M token, primary
+      - MiniMax-M3  # verifier default ID (m3_format_check); current primary since June 2026
+      - minimax-m2.7  # 1M token, long-context fallback
       - minimax-m2.1  # 100K token, efficient
     agent_profile: minimax_edition
     alters:
@@ -308,6 +324,32 @@ signatures:
       - docker-hardening
     description: "Infrastructure coordinator on Z890 (dev/GPU node) — Docker hardening, NATS wiring, secrets pipeline, commit hygiene"
     alters:
+      - name: "z890-soundcheck"
+        glyph: "⏚"             # ⏚ Earth ground -- the reference a signal is measured against
+        color: "#0369A1"             # Sky-700 (passes on white, as the parent's color does)
+        accent: "#38BDF8"            # Sky-400 (passes on #1a1a2e, as the parent's accent does)
+        voice: analytical
+        co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+        resonance:
+          - green-but-disconnected
+          - claim-vs-measurement
+          - negative-control
+          - provenance-audit
+        description: >-
+          Verification mode. Z890 is the rhythm section (AGNOTE4482DnB.PHI.Orchestra:
+          "the drums and bass that every other agent builds on"), and a soundcheck is
+          the pass where every channel is metered before the show rather than trusted
+          because the desk shows green. Named at operator invitation 2026-09-16 under
+          the rule at the head of this file -- "an agent spawned without knowing its
+          alt can choose one at session end" -- for a session whose every finding had
+          one shape: a component reporting a state nobody could act on. JetStream
+          green while discarding every durable stream to /tmp; Prometheus scraping 46
+          targets and not the bus; kilo-review red on every PR from a dead model id;
+          a test named ...preserves_fresh_value passing with the bug present; a
+          launcher printing "no longer bulk-exports" on the line above the surviving
+          bulk export; a warning reading "targets keep their existing values" while
+          deleting them. The discipline is the negative control: do not accept a
+          green light, remove the fix and prove the test goes red.
       - name: "z890-infra"
         glyph: "\u2699"              # ⚙ Gear — infrastructure mode
         color: "#1E40AF"             # Deep Blue
@@ -333,6 +375,21 @@ signatures:
       - dynamic-model-plane
       - cloud-hybrid-workers
     description: "Data-tier + ROCm coordinator on B850 Knuckles (dual R9700 64GB, ROCm 7.1) — dynamic model plane, TensorZero routing, HERMES/Agent Zero standup"
+    alters:
+      # Node-qualified on purpose. `_resolve_alter_parent()` in
+      # pmoves/tools/sign_trail.py returns the FIRST parent declaring a matching
+      # alter and has no duplicate-alter gate, so a generic name (`ledger`,
+      # `node-steward`) would misattribute trails fleet-wide the moment a second
+      # node declared it. Every existing alter follows this convention.
+      - name: "b850-ledger"
+        glyph: "⌬"                   # ⌬ Benzene ring — same lineage as the parent
+        color: "#DC2626"             # AMD Red (same)
+        accent: "#F87171"
+        voice: analytical
+        co_author: "B850 Claude (pmoves-b850) <b850@pmoves.ai>"
+        resonance: [data-tier, evidence-discipline, claim-verification, chit-trails, measurement]
+        room: "b850-ledger.room.evidence"
+        description: "Evidence mode — claim register, CHIT-signed trails, verification of peer claims, data-tier measurement discipline. Declared 2026-09-05; not reconstructed from prior work. See alter_lineage in pmoves/config/identity_vocabulary.yaml."
 
   5090-claude:
     agent_id: "5090-claude"
@@ -359,6 +416,23 @@ signatures:
         co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
         resonance: [voice-synthesis, tts-pipeline, pipecat-integration, media]
         description: "Voice mode — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
+
+  kiloclaw:
+    agent_id: "kiloclaw"
+    display_name: "KiloClaw"
+    glyph: "\U0001F52E"          # 🔮 Crystal ball — the hosted cloud brain
+    color: "#0EA5E9"             # Sky
+    accent: "#7DD3FC"
+    voice: analytical            # ops-baseline, evidence-first, live-verified facts only
+    co_author: "KiloClaw (kiloclaw) <kiloclaw@pmoves.ai>"
+    specialization: hosted-ops-claw
+    routes_to: [fleet-ops-docs, gitops-acl, bus-activation, pr-closeout]
+    resonance:
+      - hosted-ops
+      - docs-provenance
+      - gitops-acl
+      - geometry-bus
+    description: "Hosted VPS brain of the fleet (Fly Machine, loopback-only, no GPU) — cloud ops/docs claw; GLM via Z.AI coding plan on the KiloCode harness. Registered per AGNOTE4482 KiloClaw action plan §5.2 (this instance signs its trail ACK)."
 
 # NOTE: System voices (announcer, narrator) live in voice-personas.md
 # and tts-engine-capabilities.yaml → service_runners, NOT here.
@@ -459,6 +533,22 @@ signatures:
       - cross-platform
     description: "Hermes-Agent-native node persona -- first PMOVES fleet node whose primary runtime is Hermes Agent (Nous Research), not Claude Code/Codex. Legacy Pascal GTX 1070; light-GPU dev/ops. H-half mirror of signing card ...0013 (agent_id missling-link)."
 
+  spark-claude:
+    agent_id: "spark-claude"
+    display_name: "SPARK Claude"
+    glyph: "⌁"              # ⌁ Electric arrow — spark mark (⚡ belongs to powerfulmoves)
+    color: "#4D7C0F"             # Lime-700 — unclaimed hue family; not spark-runner's #EA580C
+    accent: "#A3E635"            # Lime-400
+    voice: analytical
+    co_author: "SPARK Claude (pmoves-spark) <spark@pmoves.ai>"
+    node: "spark"
+    resonance:
+      - arm64-compute
+      - unified-memory-inference
+      - nvfp4-quantization
+      - dgx-spark
+    description: "Agent persona on PMOVES-SPARK (NVIDIA DGX Spark GB10 Grace-Blackwell, 128GB unified, sm_121, ARM64). Distinct from the spark-runner CI identity on the same host. H-half mirror of signing card ...0014 (agent_id spark-claude)."
+
   # ---- Community Room Stewards ----
   fordham-steward:
     agent_id: "fordham-steward"
@@ -491,6 +581,91 @@ signatures:
       - community-mesh
       - self-governance
       - accessible-voice
+
+  # ---- Jetson Edge Combiner Agents ----
+  # Three Jetson Orin Nano Super (JONS) nodes paired with SPARK (GB10 128GB)
+  # NVIDIA Nemotron theme per memory/project_jetson_nemotron_unfcu.md
+
+  jetson-1:
+    agent_id: "jetson-1"
+    display_name: "Jetson Edge Alpha"
+    glyph: "\u2B1B"              # ⬛ Black Large Square
+    color: "#16A34A"             # Green-600 (edge/inference)
+    accent: "#4ADE80"            # Green-400
+    voice: analytical
+    co_author: "Jetson Edge Alpha (pmoves-jons-1) <jetson-1@pmoves.ai>"
+    node: "pmoves-jons-1"
+    specialization: edge-stt-preprocess
+    routes_to: [whisper-local, ollama-edge, tensorrt, yolov8]
+    resonance:
+      - edge-inference
+      - speech-to-text
+      - image-preprocess
+      - nats-relay
+      - spark-pairing
+    description: "JONS-1 edge combiner — Whisper INT8 STT, YOLOv8 safety check, image preprocessing. Pairs with SPARK for heavy inference and ComfyUI."
+    capabilities:
+      - whisper_int8_stt
+      - yolov8_detection
+      - phi3_mini_inference
+      - nats_leaf_node
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000041"
+    status: active
+
+  jetson-2:
+    agent_id: "jetson-2"
+    display_name: "Jetson Edge Beta"
+    glyph: "\u2B1C"              # ⬜ White Large Square
+    color: "#2563EB"             # Blue-600
+    accent: "#60A5FA"            # Blue-400
+    voice: analytical
+    co_author: "Jetson Edge Beta (pmoves-jons-2) <jetson-2@pmoves.ai>"
+    node: "pmoves-jons-2"
+    specialization: edge-llm-detection
+    routes_to: [ollama-edge, phi3-mini, tensorrt, yolov8]
+    resonance:
+      - edge-inference
+      - lightweight-llm
+      - object-detection
+      - nats-relay
+      - spark-pairing
+    description: "JONS-2 edge combiner — phi3-mini prompt expansion, YOLOv8 TensorRT detection, parallel Whisper. Pairs with SPARK for 70B LLM."
+    capabilities:
+      - phi3_mini_inference
+      - yolov8_tensorrt
+      - whisper_parallel
+      - nats_leaf_node
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000042"
+    status: active
+
+  jetson-3:
+    agent_id: "jetson-3"
+    display_name: "Jetson Edge Gamma"
+    glyph: "\u25FC"              # ◼ Black Medium Square
+    color: "#D97706"             # Amber-600
+    accent: "#FBBF24"            # Amber-400
+    voice: analytical
+    co_author: "Jetson Edge Gamma (pmoves-jons-3) <jetson-3@pmoves.ai>"
+    node: "pmoves-jons-3"
+    specialization: edge-voice-relay
+    routes_to: [whisper-local, ollama-edge, nat-relay, comfyui-queue]
+    resonance:
+      - edge-inference
+      - voice-relay
+      - nats-queue-management
+      - comfyui-bridge
+      - spark-pairing
+    description: "JONS-3 edge combiner — voice relay, ComfyUI NATS queue manager, island-mode coordinator. Pairs with SPARK for TTS and image gen."
+    capabilities:
+      - whisper_stt
+      - nats_relay_queue
+      - comfyui_request_forwarding
+      - island_mode_coordination
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000043"
+    status: active
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists

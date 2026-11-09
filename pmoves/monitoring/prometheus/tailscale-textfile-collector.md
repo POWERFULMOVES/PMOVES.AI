@@ -150,18 +150,34 @@ Tailscale hostname. Prometheus reaches them over the tailnet.
 ```yaml
   # === Fleet node-exporter (carries Tailscale textfile metrics) ===
   - job_name: node-exporter
+    scrape_interval: 60s
+    scrape_timeout: 15s
     static_configs:
       - targets:
           - pmoves-kvm2:9100
           - pmoves-kvm4-1:9100
           - pmoves-kvm4-2:9100
-          - pmoves-4090:9100
 ```
 
-The matching commented stanza in `prometheus.yml` points back to this runbook. To
-activate, uncomment that block (or the snippet above), confirm each node runs
-node-exporter with `--collector.textfile.directory` set and the timer enabled, then
-reload Prometheus.
+**Status: ENABLED 2026-08-04** in `prometheus.yml`. It had shipped commented-out, so
+the producers deployed by #2012 wrote metrics no one collected and the Grafana board
+rendered empty — which reads as "exit node offline" while every node is healthy. If
+you are debugging that symptom, check this job exists before touching the nodes.
+
+Two constraints worth keeping:
+
+- **The job name must stay `node-exporter`.** `grafana/dashboards/tailscale-network.json`
+  keys its reachability panel off `up{job="node-exporter"}`.
+- **`pmoves-4090:9100` is deliberately not a target.** No exporter is deployed there and
+  the connection times out; a permanently-down target paints a false "offline" node on
+  the exact panel this feeds. Add it back once the exporter is installed.
+
+`scrape_interval` is 60s rather than the 15s global because both writer timers fire once
+a minute — faster scraping just resamples identical values across the mesh.
+
+To add a node: confirm it runs node-exporter with `--collector.textfile.directory` set
+and the timers enabled (`systemctl list-timers '*observer*' '*tailscale-metrics*'`), then
+add the target and reload Prometheus.
 
 ---
 

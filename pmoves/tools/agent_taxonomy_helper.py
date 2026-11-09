@@ -146,6 +146,43 @@ def cmd_show(registry, args):
 
     agent_id = args.name.lower().replace("-", "_").replace(" ", "_")
     agent = agents.get(agent_id)
+
+    if not agent:
+        # Runtime id -> registry key is NOT always reversible, so the hyphen/underscore
+        # swap above is not sufficient on its own.
+        #
+        # Registry keys must match validate_agent_registry.SNAKE (^[a-z][a-z0-9_]*$) —
+        # they must begin with a LETTER. Runtime ids match KEBAB
+        # (^[a-z0-9][a-z0-9.-]*$) and may begin with a DIGIT. For an id like
+        # `4090-claude` the only underscore form is `4090_claude`, which is an
+        # ILLEGAL key, so no registry key can ever derive from it. Those entries
+        # carry the runtime id in `signature` instead (the same field agent_zero
+        # uses to point at `claude-opus`).
+        #
+        # Without this branch such an agent is registered but unreachable under the
+        # id the rest of the repo actually uses — present in the file, invisible to
+        # the lookup.
+        # Resolve ONLY on a unique hit. `signature` is not a unique key —
+        # `claude-opus` is carried by six agents (agent_zero plus the four
+        # observability specialists and llm_observability). Taking the first match
+        # would answer an ambiguous question with a confident wrong card, which is
+        # worse than not resolving at all.
+        wanted = {args.name.lower(), agent_id}
+        by_signature = [
+            key for key, entry in agents.items()
+            if str((entry or {}).get("signature", "")).lower() in wanted
+        ]
+        if len(by_signature) == 1:
+            agent_id = by_signature[0]
+            agent = agents[agent_id]
+        elif len(by_signature) > 1:
+            print(
+                f"'{args.name}' is a signature shared by {len(by_signature)} agents: "
+                f"{', '.join(sorted(by_signature))}. Ask for one by its registry key.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     if not agent:
         # Fuzzy match
         matches = [k for k in agents if agent_id in k or agent_id in agents[k].get("name", "").lower()]
@@ -165,9 +202,9 @@ def cmd_show(registry, args):
     toggles = agent.get("chit_toggles", {})
     nats = agent.get("nats", {})
 
-    print(f"╔══════════════════════════════════════════╗")
+    print("╔══════════════════════════════════════════╗")
     print(f"║  {agent.get('name', agent_id):^38}  ║")
-    print(f"╠══════════════════════════════════════════╣")
+    print("╠══════════════════════════════════════════╣")
     print(f"║  ID:        {agent_id:<28} ║")
     print(f"║  Class:     {cls:<12} ({cls_info.get('prefix', '?')})       ║")
     type_display = f"{primary}/{secondary}" if secondary else primary
@@ -178,15 +215,20 @@ def cmd_show(registry, args):
     print(f"║  Health:    {str(agent.get('health') or '—'):<28} ║")
     print(f"║  Stage:     {agent.get('evolution_stage', 'base'):<28} ║")
     print(f"║  Layers:    {', '.join(layers):<28} ║")
+    # `submodule` is for real gitlinks; `path` is for first-party in-repo code.
+    # Both are shown, labelled honestly, so a reader is never told to
+    # `git submodule update --init` something that is not a submodule.
     if agent.get("submodule"):
         print(f"║  Submodule: {agent['submodule']:<28} ║")
-    print(f"╠══════════════════════════════════════════╣")
-    print(f"║  CHIT Toggles:                           ║")
+    elif agent.get("path"):
+        print(f"║  Path:      {agent['path']:<28} ║")
+    print("╠══════════════════════════════════════════╣")
+    print("║  CHIT Toggles:                           ║")
     for k, v in toggles.items():
         icon = "●" if v else "○"
         print(f"║    {icon} {k:<36} ║")
-    print(f"╠══════════════════════════════════════════╣")
-    print(f"║  NATS Subjects:                          ║")
+    print("╠══════════════════════════════════════════╣")
+    print("║  NATS Subjects:                          ║")
     pubs = nats.get("publishes", [])
     subs = nats.get("subscribes", [])
     if pubs:
@@ -196,8 +238,8 @@ def cmd_show(registry, args):
         for s in subs:
             print(f"║    SUB  {s:<32} ║")
     if not pubs and not subs:
-        print(f"║    (none)                                ║")
-    print(f"╠══════════════════════════════════════════╣")
+        print("║    (none)                                ║")
+    print("╠══════════════════════════════════════════╣")
     desc = agent.get("description", "")
     # Word-wrap description to 38 chars
     words = desc.split()
@@ -213,7 +255,7 @@ def cmd_show(registry, args):
         lines.append(current)
     for line in lines:
         print(f"║  {line:<38}  ║")
-    print(f"╚══════════════════════════════════════════╝")
+    print("╚══════════════════════════════════════════╝")
 
 
 def cmd_connections(registry, args):
@@ -434,7 +476,7 @@ def cmd_render_card(registry, args):
     voice = sig.get("voice", "unknown")
     co_author = sig.get("co_author", "")
     resonance = sig.get("resonance", [])
-    description = sig.get("description", "")
+    sig.get("description", "")
     alters = sig.get("alters", [])
 
     def box_line(text, pad=w - 4):

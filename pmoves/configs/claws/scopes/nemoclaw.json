@@ -2,7 +2,7 @@
   "identity": {
     "node": "jetson",
     "role": "edge-gpu",
-    "description": "NemoClaw — NVIDIA Jetson edge GPU node for local inference and model ops",
+    "description": "NemoClaw \u2014 NVIDIA Jetson edge GPU node for local inference and model ops",
     "hostname": "nemoclaw"
   },
   "openclaw_overrides": {
@@ -21,20 +21,72 @@
   "exec_approvals": {
     "main": {
       "allowlist": [
-        { "pattern": "/usr/bin/nvidia-smi", "note": "GPU status and monitoring" },
-        { "pattern": "/usr/bin/tegrastats", "note": "Jetson system telemetry" },
-        { "pattern": "/usr/bin/jetson_clocks", "note": "Jetson clock management" },
-        { "pattern": "/usr/bin/python3", "note": "Python runtime for model ops" },
-        { "pattern": "/usr/bin/trtexec", "note": "TensorRT engine builder" },
-        { "pattern": "/usr/local/bin/ollama", "note": "Ollama local model server" },
-        { "pattern": "/usr/bin/curl", "note": "Health checks to local services" },
-        { "pattern": "/usr/bin/git", "note": "Git operations (model repos)" }
+        {
+          "pattern": "/usr/bin/nvidia-smi",
+          "note": "GPU status and monitoring"
+        },
+        {
+          "pattern": "/usr/bin/tegrastats",
+          "note": "Jetson system telemetry"
+        },
+        {
+          "pattern": "/usr/bin/jetson_clocks",
+          "note": "Jetson clock management"
+        },
+        {
+          "pattern": "/usr/bin/python3",
+          "note": "Python runtime for model ops"
+        },
+        {
+          "pattern": "/usr/bin/trtexec",
+          "note": "TensorRT engine builder"
+        },
+        {
+          "pattern": "/usr/local/bin/ollama",
+          "note": "Ollama local model server"
+        },
+        {
+          "pattern": "/usr/bin/curl",
+          "note": "Health checks to local services"
+        },
+        {
+          "pattern": "/usr/bin/git",
+          "note": "Git operations (model repos)"
+        }
       ]
     }
   },
-  "mcp_servers": {},
+  "mcp_servers": {
+    "pmoves-cipher": {
+      "description": "Agent memory (Neo4j knowledge graph)",
+      "type": "sse",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer ${CIPHER_API_TOKEN}"
+      }
+    },
+    "agent-zero": {
+      "description": "Agent Zero orchestrator",
+      "type": "http",
+      "url": "http://${TS_Z890}:8080/mcp"
+    },
+    "tailscale": {
+      "description": "Tailscale network administration",
+      "command": "npx",
+      "args": [
+        "-y",
+        "tailscale-mcp@2026.4.10-1"
+      ],
+      "env": {
+        "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
+        "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}"
+      }
+    }
+  },
   "nats_subjects": {
-    "subscribe": ["mesh.gpu.command.v1"],
+    "subscribe": [
+      "mesh.gpu.command.v1"
+    ],
     "publish": [
       "mesh.gpu.status.v1",
       "mesh.gpu.model.loaded.v1",

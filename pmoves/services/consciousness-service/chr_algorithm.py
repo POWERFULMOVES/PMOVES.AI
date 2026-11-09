@@ -13,11 +13,19 @@ import hmac
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:  # pragma: no cover - typing helper only
+    from sentence_transformers import SentenceTransformer
+
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +63,8 @@ except ImportError:  # standalone image without pmoves.tools on the path
         so signatures verify identically across the fleet."""
         signing_key = (
             passphrase
-            or os.environ.get("CHIT_SIGNING_KEY")
-            or os.environ.get("CHIT_PASSPHRASE", "")
+            or get_secret("CHIT_SIGNING_KEY")
+            or get_secret("CHIT_PASSPHRASE", "")
         )
         if not signing_key:
             raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var is required")
@@ -76,8 +84,8 @@ except ImportError:  # standalone image without pmoves.tools on the path
         """Fallback mirroring pmoves.tools.chit_security.verify_cgp exactly."""
         signing_key = (
             passphrase
-            or os.environ.get("CHIT_SIGNING_KEY")
-            or os.environ.get("CHIT_PASSPHRASE", "")
+            or get_secret("CHIT_SIGNING_KEY")
+            or get_secret("CHIT_PASSPHRASE", "")
         )
         if not signing_key:
             raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var is required")
@@ -102,9 +110,9 @@ def get_chit_signing_key() -> str:
     that still set it. Returns "" when unset (dev mode — CGP goes unsigned).
     """
     return (
-        os.environ.get("CHIT_SIGNING_KEY")
-        or os.environ.get("CHIT_PASSPHRASE")
-        or os.environ.get("CHIT_PROD_PASSPHRASE", "")
+        get_secret("CHIT_SIGNING_KEY")
+        or get_secret("CHIT_PASSPHRASE")
+        or get_secret("CHIT_PROD_PASSPHRASE", "")
     )
 
 

@@ -85,7 +85,17 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="session")
 async def http_client():
-    """Shared async HTTP client for smoke tests."""
+    """Shared async HTTP client for smoke tests.
+
+    Session-scoped teardown runs after pytest-asyncio may have closed the
+    event loop (async tests + trailing sync tests in one session — b850
+    smoke runner hit 'Event loop is closed' via this exact fixture).
+    Close defensively instead of raising.
+    """
     timeout = httpx.Timeout(10.0, connect=5.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        yield client
+    client = httpx.AsyncClient(timeout=timeout)
+    yield client
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass  # loop already closed at session teardown

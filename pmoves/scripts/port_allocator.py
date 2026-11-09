@@ -47,14 +47,22 @@ DEFAULT_PORTS = {
     # Agent & Orchestration
     "agent-zero": 8080,
     "agent-zero-ui": 8081,
-    "archon": 8091,
-    "archon-ui": 3737,
+    "archon": 8091,  # 3737 is the consolidated UI port (mapped to same container)
+    # HOST port only; the gateway listens on 8091 INSIDE the container. The host
+    # side had defaulted to 8091 too, which is archon's ARCHON_API_PORT default --
+    # so any node running both could not bind the gateway at all (observed on
+    # SPARK 2026-08-22: archon healthy, gateway "port is already allocated").
+    # Registered here so validate_ports() will refuse a future service that
+    # claims 8189 and quietly recreates the same collision.
+    "mcp-gateway": 8189,
     "mesh-agent": 0,  # No HTTP interface
     "service-registry": 8100,
+    "p7-room-orchestrator": 8122,
 
     # Retrieval & Knowledge
     "hi-rag-gateway-v2": 8086,
     "hi-rag-gateway-v2-gpu": 8087,
+    "hi-rag-gateway-v1-gpu": 8187,  # container 8086; 8090 reserved for retrieval-eval
     "deepresearch": 8098,
     "supaserch": 8099,
 
@@ -79,7 +87,7 @@ DEFAULT_PORTS = {
     "publisher-discord": 8094,
     "jellyfin-bridge": 8093,
     "n8n": 5678,
-    "botz-gateway": 8090,
+    "botz-gateway": 8054,  # compose publishes 8054; 8090 is reserved for retrieval-eval
 }
 
 # Port ranges to avoid
@@ -137,7 +145,7 @@ class PortAllocator:
         """Load port assignments from file."""
         if self.ports_file.exists():
             try:
-                with open(self.ports_file) as f:
+                with open(self.ports_file, encoding="utf-8") as f:
                     self.ports = json.load(f)
             except (json.JSONDecodeError, IOError):
                 self.ports = {}
@@ -145,7 +153,7 @@ class PortAllocator:
     def _save_ports(self):
         """Save port assignments to file."""
         self.ports_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.ports_file, "w") as f:
+        with open(self.ports_file, "w", encoding="utf-8") as f:
             json.dump(self.ports, f, indent=2)
 
     def get_port(self, service: str, default: Optional[int] = None) -> int:

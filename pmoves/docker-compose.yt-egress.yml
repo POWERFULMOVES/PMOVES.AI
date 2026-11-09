@@ -2,14 +2,33 @@
 # ============================================================================
 # Phase 9Q (2026-04-16)
 #
-# Purpose
+# ⚠️ NOT THE DEFAULT — FALLBACK ONLY (corrected 2026-08-06)
+# ---------------------------------------------------------------------------
+# The Purpose text below originally claimed this overlay bypasses "YouTube's
+# residential-IP anti-bot 403s" by routing through the datacenter. That is
+# BACKWARDS. Per the 2026-07-28 discovery recorded in mk/egress.mk:7-10:
+#
+#   "YouTube datacenter IPs get FLAGGED by YouTube's bot detection.
+#    Residential IPs work. ... the DEFAULT for YT download traffic should be
+#    host-direct (residential)."
+#
+# So this overlay routes YouTube traffic through the IP class that is KNOWN to
+# be bot-gated. Bringing it up today makes ingestion WORSE, not better, while
+# the old header presented it as the fix.
+#
+#   Want working YouTube ingest?   ->  make -C pmoves yt-direct
+#   Check which mode you are in?   ->  make -C pmoves yt-egress-check
+#
+# Kept (not deleted) because datacenter egress remains a legitimate fallback
+# for nodes with no residential path, and because the Tailscale plumbing here
+# is still correct — only the claim about which IP class YouTube flags was wrong.
+#
+# Purpose (original text, retained for history — see correction above)
 # -------
 # Routes all YouTube-facing services (pmoves-yt, bgutil-pot-provider,
 # invidious-companion, invidious) through the KVM4-1 Tailscale exit node
-# (pmoves-kvm4-1, Hostinger datacenter) to bypass YouTube's residential-IP
-# anti-bot 403s. Home residential fingerprints are invisible to YouTube once
-# every yt-dlp request + PO token fetch + companion stream resolves through
-# the datacenter egress.
+# (pmoves-kvm4-1, Hostinger datacenter). The original rationale — that this
+# bypasses residential-IP 403s — is inverted; see the correction above.
 #
 # KVM4-1 was approved as a Tailscale exit node on 2026-04-12 by 4090-CLAUDE
 # (see pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md, 2026-04-12 RELEASE entry).

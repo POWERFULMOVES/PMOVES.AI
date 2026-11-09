@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/comfy/collab.prompt.v1.schema.json",
+  "title": "Comfy Collab Prompt v1",
+  "description": "A new creative prompt submitted to a ComfyUI collab session. Carries the prompt text, target Pinokio app (e.g. comfyui-desktop), and parent-prompt link for chain-of-edits. Published by creator-collab surfaces (notebook-workbench, creator-canvas-primary) and consumed by comfy-watcher / comfyui services to enqueue a workflow run.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "session_id",
+    "prompt_id",
+    "app_slug",
+    "prompt",
+    "submitted_by",
+    "submitted_at"
+  ],
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Room manifest identifier the prompt targets (e.g. creator-studio)."
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "P7 room session id this prompt belongs to."
+    },
+    "prompt_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id for this prompt. Used as the correlation handle for follow-up progress + artifact events."
+    },
+    "app_slug": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinokio app slug the prompt targets (e.g. comfyui-desktop, ace-step, wan)."
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The creative prompt text. Free-form; length checked by app_slug-specific consumers, not the schema."
+    },
+    "submitted_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "User handle, agent name, or service identifier that submitted the prompt."
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp the prompt was submitted."
+    },
+    "parent_prompt_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "If this prompt is a revision, the prompt_id of the prompt it revises. Null for fresh prompts."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional app_slug-specific knobs (negative_prompt, seed, sampler, model, etc.). Free-form; consumers should ignore unknown keys.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    }
+  },
+  "additionalProperties": false
+}

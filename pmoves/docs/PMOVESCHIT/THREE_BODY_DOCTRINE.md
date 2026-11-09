@@ -4,6 +4,11 @@
 
 # Three-Body Doctrine
 
+> **Companion:** [THIRD_ANCHOR_DOCTRINE.md](THIRD_ANCHOR_DOCTRINE.md) covers the epistemic half of
+> this shape — why *agreement* between two parties needs a third, externally-authored referent,
+> and which anchors PMOVES actually runs. This doc covers the dynamics: why three *bodies* are
+> needed for stability.
+
 > PMOVES is a three-body problem. Human, AI, and System orbit each other.
 > Without stabilization, their trajectories diverge — the human loses sight of
 > the big picture, the AI hallucinates into noise, the system calculates without

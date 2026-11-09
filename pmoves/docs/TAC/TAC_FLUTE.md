@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Flute Gateway |
-| **Ports** | 8055 (HTTP), 8056 (WebSocket) |
+| **Ports** | 8055 (HTTP + WebSocket) |
 | **Health** | `GET /healthz` |
 | **Metrics** | `GET /metrics` |
 | **Service Path** | `pmoves/services/flute-gateway` |
@@ -41,7 +41,8 @@
 | `/healthz` | GET | Health check |
 | `/metrics` | GET | Prometheus metrics |
 | `/v1/voice/synthesize/prosodic` | POST | Prosodic TTS synthesis |
-| WebSocket `:8056` | WS | Real-time audio streaming |
+| WebSocket `:8055/v1/voice/stream/tts` | WS | TTS audio streaming |
+| WebSocket `:8055/v1/voice/agent` | WS | Duplex voice agent (requires `PIPECAT_ENABLED=true`) |
 
 ## NATS Subjects
 
@@ -68,7 +69,7 @@
 |-------------|--------|-------|
 | `/healthz` endpoint | GREEN | Implemented |
 | `/metrics` (Prometheus) | GREEN | Implemented |
-| Auth (JWT/Bearer) | Partial | `FLUTE_API_KEY` for API auth |
+| Auth (`X-API-Key`) | Partial | `X-API-Key: $FLUTE_API_KEY` header only — no JWT/Bearer support (`main.py:218`). Fails open (no auth) when `FLUTE_API_KEY` is unset (`main.py:221`). |
 | Docker hardening | GREEN | Non-root (UID 65532), hash-verified requirements.lock |
 | NATS auth | GREEN | Uses authenticated NATS connection |
 | `env.shared` format | GREEN | No `export` syntax issues |

@@ -19,6 +19,11 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
     build:
       context: .
@@ -28,10 +33,68 @@ services:
     - PORT=8080
     # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
-    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
+    # Readiness via the DOCUMENTED connector surface: capabilities returns
+    # 200 + protocol/version dict only when the plugin system (including the
+    # connector) booted — a stronger signal than the bare /health route, which
+    # only proves Flask is up. Fallback chain kept for older forks.
+    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/api/plugins/_a0_connector/v1/capabilities}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
+    # The connector capabilities route is POST-only; the wrapper health probe
+    # method must match or it gets 405 and degrades to the 404-means-alive
+    # heuristic (measured live on SPARK 2026-08-28).
+    - AGENT_ZERO_HEALTH_METHOD=${AGENT_ZERO_HEALTH_METHOD:-POST}
+    # Inner-call timeout for message sends. Was hardcoded 60s, so any agent
+    # task longer than a minute surfaced as a wrapper 503 (SPARK 2026-08-28:
+    # three failed long-research dispatches before root cause).
+    - AGENT_ZERO_MESSAGE_TIMEOUT=${AGENT_ZERO_MESSAGE_TIMEOUT:-600}
+    # Supervisor startup budget for the inner runtime (services/agent-zero/main.py
+    # startup_timeout, default 180s). Measured 2026-10-09 (Windows node): a fresh
+    # boot re-downloads Playwright Chromium+FFmpeg after 'Preload completed.' and
+    # cannot bind :80 within 180s -> TimeoutError -> unless-stopped restart loop
+    # (30+ cycles). 1800s covers a cold boot; the playwright volume below makes
+    # the download a one-time cost.
+    - AGENT_ZERO_STARTUP_TIMEOUT=${AGENT_ZERO_STARTUP_TIMEOUT:-1800}
+    # OTEL traces for cloud-model calls — parity with tensorzero-gateway
+    # (the A0 runtime honors the OTLP env contract for provider calls).
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    # Wrapper -> inner contract (validated live 2026-08-26 on SPARK):
+    #   1. The inner fork registers its handlers under the /api/ prefix
+    #      (helpers/api.py register_api_route -> "/api/<path:path>"), so the
+    #      message endpoint is /api/api_message — the fork's own
+    #      docs/developer/connectivity.md lists the logical name without the
+    #      prefix, which is what the old default encoded. Posting the bare
+    #      /api_message hit Flask's catch-all and returned a werkzeug 405.
+    #   2. api_message is decorated requires_api_key -> the inner runtime
+    #      validates X-API-KEY against its mcp_server_token setting, which
+    #      normalize_settings() seeds from A0_SET_mcp_server_token (set below
+    #      from MCP_SERVER_TOKEN). AGENT_ZERO_API_KEY is the wrapper-side
+    #      client field that sends that header.
+    # Documented integration point: the fork's _a0_connector plugin exposes a
+    # versioned v1 HTTP API (POST /api/plugins/_a0_connector/v1/<handler>)
+    # with 29 handlers — message_send, chats_list, chat_get, log_tail, pause,
+    # nudge, model_switcher... This is the stable external contract the fork
+    # maintains (plugin AGENTS.md), unlike the raw api/api_message handler
+    # which is internal surface. message_send returns the SAME shape the
+    # wrapper requires ({context_id, status, response}) — live-verified on
+    # SPARK: 200 in 6.3s. Auth: ProtectedConnectorApiHandler accepts the
+    # loopback caller the wrapper is (127.0.0.1 in-container).
+    - AGENT_ZERO_MESSAGE_PATH=${AGENT_ZERO_MESSAGE_PATH:-/api/plugins/_a0_connector/v1/message_send}
+    # Same resolved value A0_SET_mcp_server_token below pins the inner runtime
+    # to: fleet-canonical AGENT_ZERO_MCP_TOKEN (issue #2056), legacy
+    # MCP_SERVER_TOKEN fallback. Do NOT source AGENT_ZERO_API_KEY from env:
+    # env.shared provides MCP_SERVER_TOKEN via the secrets funnel (variable reference)
+    # that would win interpolation and never match the inner token.
+    # NOTE: when BOTH token vars are unset the inner runtime auto-generates a
+    # token the wrapper cannot know — /sessions will then 401 by design
+    # (api_message requires the key). The wrapper session path REQUIRES a
+    # pinned token; the auto-generate mode only serves the UI/MCP discovery.
+    - AGENT_ZERO_API_KEY=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
+    # --dockerized=true is REQUIRED on A0 2.5: runtime.is_development() is
+    # simply "not --dockerized", and a development-mode inner routes file
+    # browsing + prompt extensions through RFC calls that die with
+    # "No RFC password" inside the container.
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0 --dockerized=true}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
@@ -65,28 +128,37 @@ services:
     # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"}}}'
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    # Cipher MCP endpoints — two transports, two DIFFERENT paths:
+    #   CIPHER_MCP_URL      = legacy SSE stream  (…/mcp/sse), kept for SSE consumers
+    #   CIPHER_MCP_HTTP_URL = modern streamable-http (…/mcp), what A0 mounts below
+    # A remote/non-default Cipher deployment MUST override BOTH (the paths differ, so
+    # one can't stand in for the other) — declared here + in env templates so an
+    # override is never silently dropped.
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
+    - CIPHER_MCP_HTTP_URL=${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,pmoves_core,pmoves_kb"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer
+      ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${OPEN_NOTEBOOK_API_TOKEN}"}},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer
+      ${FIREFLY_ACCESS_TOKEN}"}}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
-    - A0_SET_chat_model_provider=openai
-    # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
-    - A0_SET_chat_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
-    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
-    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_embed_model_provider=openai
-    # Embed wrapper does NOT add openai/ prefix — must include it here
-    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
-    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
-    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    # Same placeholder for the A0 2.5 preset plugin: get_api_key() resolves
+    # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
+    # "Missing API Key for model presets" even though the gateway needs none.
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
+    # Model routing moved to the GENERATED presets file:
+    #   data/agent-zero/usr/plugins/_model_config/presets.yaml (make a0-model-sync).
+    # The A0_SET_{chat,util,embed,browser}_model_* env lane above is gone: the
+    # A0 2.5 preset plugin ignores it. tensorzero-gateway stays out of
+    # depends_on: T0 is now an optional lane inside the generated presets.
     - A0_SET_a2a_server_enabled=true
+    # Expose Agent Zero's MCP SSE server so external clients (Crush, Archon,
+    # other nodes) can connect via standard MCP transport at /t-{token}/sse.
+    - A0_SET_mcp_server_enabled=true
     # A0_SET_mcp_server_token: soft default (CANONICAL_NAMES.md §5). The previous
     # ${MCP_SERVER_TOKEN:?...} hard-require made *every* compose invocation on the
     # shared file fail interpolation on nodes without the var — blocking bring-up
@@ -98,22 +170,28 @@ services:
     # MCP_SERVER_TOKEN project-env is the fallback; both unset → empty, no
     # hard-fail, Agent Zero auto-generates at startup.
     - A0_SET_mcp_server_token=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
-    # Host environment leak guard (see x-host-leak-guard docs above)
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
-    - REQUESTS_CA_BUNDLE=
+    # Host environment leak guard (see x-host-leak-guard docs above) — except
+    # SSL_CERT_FILE/SSL_CERT_DIR/REQUESTS_CA_BUNDLE: the empty-string guard
+    # breaks TLS clients that treat "" as a real path. Agent Zero downloads
+    # embedding/rerank models from HuggingFace at first use; with the blanks it
+    # dies with "Can't load the model for
+    # 'sentence-transformers/all-MiniLM-L6-v2'" (no CA to verify hf.co).
+    # Re-point at the container's own store (same anti-leak intent, working
+    # chain) — same fix already shipped for media-audio/media-video.
+    - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    - SSL_CERT_DIR=/etc/ssl/certs
+    - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - CURL_CA_BUNDLE=
     - NODE_EXTRA_CA_CERTS=
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      tensorzero-gateway:
-        condition: service_healthy
     ports:
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
@@ -123,6 +201,16 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # A0 2.5 user-config tree (same pattern as the sidecars' ./usr mount).
+    # Carries usr/plugins/_model_config/presets.yaml — WITHOUT it the
+    # _model_config plugin bootstrap downloads the stock agent0ai/a0-presets
+    # collection and the instance chats via openrouter/gpt-5.6-terra instead
+    # of TensorZero (observed on first 2.5 boot). Seed from
+    # pmoves/config/agent-zero/model-presets-docked.yaml. Mount the WHOLE
+    # usr tree, not a nested subdir: a nested bind makes Docker pre-create
+    # /a0/usr path components as root before init-a0.sh populates /a0,
+    # breaking the runtime user's write to /a0/usr/.env (PermissionError).
+    - ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}:/a0/usr
     # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
     # Read-only: forms are introspective metadata; runtime never rewrites them.
     - ./configs/agents/forms:/app/configs/agents/forms:ro
@@ -140,6 +228,10 @@ services:
     # intentional posture for the primary orchestrator. Note: :ro on the socket
     # is cosmetic (the Docker API is bidirectional regardless of file mode).
     - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+    # Persist Playwright browser downloads (Chromium+FFmpeg, ~150MB). Without
+    # this every recreate re-downloads into the ephemeral tmp and can blow the
+    # startup budget (measured 2026-10-09: 30+ restart crash-loop, Windows).
+    - agent-zero-playwright-tmp:/a0/tmp/playwright
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
@@ -148,8 +240,15 @@ services:
       start_period: 30s
     # Grant the runtime user (uid/gid 65532) access to the mounted Docker socket
     # (root:docker 0660 on Linux hosts) so the docker MCP (mcp/docker) can reach
-    # the daemon without weakening socket perms. DOCKER_GID must match the host's
-    # docker group gid; Docker Desktop (Win/Mac) proxies the socket and ignores it.
+    # the daemon without weakening socket perms. DOCKER_GID must match the gid
+    # that owns the socket *as seen inside the container* — verify per node with
+    #   docker exec <ctr> ls -ln /var/run/docker.sock
+    # Linux: the host docker group (commonly 999/998), hence the default.
+    # Docker Desktop (Windows/macOS): the proxied socket appears as root:root
+    # 0660, i.e. gid 0 — 999 grants nothing and the docker MCP fails with
+    # "permission denied ... /var/run/docker.sock". Set DOCKER_GID=0 on those
+    # nodes. (An earlier comment here claimed Desktop "ignores" group_add; that
+    # is wrong — the gid is enforced, it is simply 0 rather than the docker group.)
     group_add:
     - "${DOCKER_GID:-999}"
     networks:
@@ -162,46 +261,109 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Archon 0.6.0 — TypeScript/Bun remote-coding-agent, built from the PMOVES-Archon
+  # submodule (0.6.0 rewrote the old Python service to TS; the vendored Python
+  # wrapper under services/archon/ is dead — see #2217). Serves HTTP + UI + MCP on
+  # a single port (3090, /api/health). Backed by a dedicated Postgres (pg_notify
+  # realtime); Archon auto-inits its schema on first boot.
   archon:
     <<: *tier-agent-hardened
     build:
-      context: .
-      dockerfile: ./services/archon/Dockerfile
-      args:
-      - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
-      - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+      context: ../PMOVES-Archon
+      dockerfile: Dockerfile
+    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:current}
+    # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+    # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
+    hostname: archon
     restart: unless-stopped
     environment:
-      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
-    - PORT=8091
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-    - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-    - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
-    - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
-    - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
-    - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-      # Compose-first Archon Supabase wiring. CLI mode can override via
-      # ARCHON_SUPABASE_* / SUPABASE_* env values.
-    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
-    - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
-    - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL}
-    - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
-      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
-    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      # GitHub App credentials — archon MCP cross-repo cloning (planned)
-    - GH_APP_ID=${GH_APP_ID:-}
-    - GH_APP_SEC=${GH_APP_SEC:-}
-    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
-      # Host environment leak guard (see x-host-leak-guard docs above)
+    - PORT=3090
+    - HOST=0.0.0.0
+    - NODE_ENV=production
+    # Highest-priority input to services/archon/main.py:_ensure_supabase_env(),
+    # which otherwise ranks SUPA_REST_URL -- shipped fleet-wide as
+    # host.docker.internal:54321, the Supabase CLI topology -- ABOVE the correct
+    # SUPABASE_URL, and forces it to a host this container has no extra_hosts
+    # mapping for. That rewrite, not the network, is what kept /api/health
+    # reporting Errno -2 even after pmoves_api was attached.
+    #
+    # The ${VAR:-default} form is load-bearing: a service-level environment entry
+    # OVERRIDES env_file, so a bare value would silently discard an operator
+    # override -- the same nested-default lesson already documented above for
+    # ANTHROPIC_AUTH_TOKEN.
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
+    - ARCHON_DOCKER=true
+    # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
+    - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
+    - BETTER_AUTH_SECRET=${ARCHON_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:-}}
+      # Credentials from NATS_USER/NATS_PASSWORD, host pinned to nats:4222 —
+      # the shape nats-init and both P7 stanzas use since #2610. The hardcoded
+      # `nats:pmoves` default this replaces fails auth on any node with a rotated
+      # NATS_PASSWORD. ARCHON_BUS_NATS_URL remains the explicit per-node override.
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
+    # OTEL traces for cloud-model calls — same collector endpoint the
+    # tensorzero-gateway already exports to. Both agent runtimes support the
+    # OTLP env contract; previously only TZ received it.
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
+    # Claude auth — the TS server exits(1) at boot if none of these is present.
+    - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+    - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    # -- Coding-plan auth for the bundled Claude Code CLI --
+    #
+    # Two separate facts, both measured in-container against Claude Code 2.1.209
+    # (the binary the Agent SDK ships at
+    #  /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude):
+    #
+    # 1. That CLI does NOT read CLAUDE_CODE_OAUTH_TOKEN. It reads
+    #    ANTHROPIC_AUTH_TOKEN, which it sends as `Authorization: Bearer`.
+    #      ANTHROPIC_AUTH_TOKEN=<plan token>     -> OK
+    #      CLAUDE_CODE_OAUTH_TOKEN=<same token>  -> 401 Invalid bearer token
+    #    The same token authenticates fine against the API with a Bearer header,
+    #    so this is about which variable the CLI reads, not the credential.
+    #    CLAUDE_CODE_OAUTH_TOKEN is still set above because the Archon TS server
+    #    exits(1) at boot if none of its expected auth vars is present -- it gates
+    #    startup, it does not authenticate the CLI.
+    #
+    # 2. ANTHROPIC_API_KEY OUTRANKS the bearer token, so it must be emptied or the
+    #    plan is never reached:
+    #      api key + AUTH_TOKEN    -> "Credit balance is too low"  (key wins)
+    #      AUTH_TOKEN alone        -> OK
+    #      api key="" + AUTH_TOKEN -> OK                           (empty == absent)
+    #    Emptying is sufficient; no vector-style entrypoint `unset` wrapper needed.
+    #    This is NOT about one stale key: the account bills through a coding plan,
+    #    so any ANTHROPIC_API_KEY it carries is creditless. Verified against both
+    #    the pre- and post-rotation keys -- both "Credit balance is too low".
+    #
+    # Scoped to archon: other services keep what the shared env provides.
+    #
+    # The nested default is load-bearing. env.shared.example:90 documents
+    # ANTHROPIC_AUTH_TOKEN as a variable an operator may set directly, and a
+    # service-level `environment:` entry OVERRIDES what env_file supplies -- so a
+    # bare ${CLAUDE_CODE_OAUTH_TOKEN:-} would expand to empty and wipe out a
+    # perfectly good token that was configured the documented way. Falling back to
+    # the inherited value keeps both setups working. Verified with
+    # `docker compose config`:
+    #   only CLAUDE_CODE_OAUTH_TOKEN -> that value
+    #   only ANTHROPIC_AUTH_TOKEN    -> preserved (was silently emptied before)
+    #   both                         -> CLAUDE_CODE_OAUTH_TOKEN wins
+    #   neither                      -> ""
+    - ANTHROPIC_API_KEY=
+    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-${ANTHROPIC_AUTH_TOKEN:-}}
+    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
+    # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
+    # Default empty (uses $PATH). The upstream Archon Dockerfile installs
+    # Claude at /usr/local/bin/claude; set this only if the image builds
+    # Claude at a non-standard path or you want to pin a specific binary.
+    # ARM64 (SPARK): the SDK installs at the path below — set in env.tier-agent.
+    - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
+    # TensorZero as OpenAI-compatible provider for Archon's LLM calls.
+    # Archon reads OPENAI_API_KEY / OPENAI_API_BASE for its model calls.
+    # Derives from the canonical TENSORZERO_BASE_URL used across the fleet.
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - OPENAI_API_BASE=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}/openai/v1
+    # gh auth — non-fatal warning if absent.
+    - GH_TOKEN=${GH_TOKEN:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
@@ -210,43 +372,67 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
+      archon-postgres:
+        condition: service_healthy
       nats:
         condition: service_healthy
-      tensorzero-gateway:
-        condition: service_healthy
-    command:
-    - python
-    - -c
-    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
     ports:
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_PORT:-3090}:3090
+    # UI compat: keep the historical 3737 host port pointing at the unified server
+    # (NEXT_PUBLIC_ARCHON_UI_URL default is http://localhost:3737).
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_UI_PORT:-3737}:3090
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_API_PORT:-8091}:3090
+    volumes:
+    - archon-data:/.archon
+    # archon-user-home replaced with tmpfs on Windows nodes — named volume
+    # breaks entrypoint find+chown (permission denied). tmpfs supports POSIX
+    # ownership correctly. archon-data persists workspaces/worktrees.
+    - type: tmpfs
+      target: /home/appuser
     networks:
       pmoves_app:
         aliases:
         - archon-server
-      pmoves_api:
       pmoves_bus:
+      # Archon needs egress to reach the Claude API + GitHub with the configured
+      # credentials; pmoves_app/pmoves_bus are internal-only.
       pmoves_external:
-    extra_hosts:
-    - host.docker.internal:host-gateway
+      # Supabase REST and auth live on pmoves_api. Without this the container
+      # cannot resolve supabase-kong at all -- Errno -2 here is a network
+      # MEMBERSHIP failure, not a DNS outage (nats resolves fine from inside).
+      # pmoves_data is deliberately NOT added: supabase-db is reachable from
+      # pmoves_api and the failing path is REST, not direct postgres.
+      pmoves_api:
+    profiles:
+    - agents
     healthcheck:
-      test:
-      - CMD-SHELL
-      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)"
-      interval: 20s
-      timeout: 5s
-      retries: 12
-      start_period: 15s
-
-  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+      # READINESS-AWARE HEALTHCHECK. `curl -f` keys on the HTTP status code only,
+      # and this endpoint answers 200 while its body says ready:false -- so the
+      # previous check reported `healthy` with FailingStreak=0 for nine days while
+      # the service told anyone who read the body that it was not ready.
+      #
+      # Deliberately asserts on `status`, NOT on `ready`: the `ready` field is
+      # emitted ONLY by the failure branch (api_routes/knowledge_api.py), so a
+      # grep for '"ready":true' would be a check that can never pass. Verified
+      # against both body shapes with real Docker health machinery.
+      #
+      # Fail-closed on an unrecognised status word, which is correct for a health
+      # probe. Reusable shape for any PMOVES service whose /health carries a
+      # status string -- copy this rather than writing another one-off.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -qE '\"status\"[[:space:]]*:[[:space:]]*\"(healthy|ok|ready|up)\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot runs bun install + Postgres schema init — allow generous slack.
+      start_period: 90s
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
   gateway-agent:
     build: ./services/gateway-agent
     restart: unless-stopped
@@ -261,6 +447,7 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus
     ports:
     - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
@@ -331,6 +518,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     ports:
     - ${HIRAG_V1_BIND:-127.0.0.1}:${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
@@ -363,6 +551,9 @@ services:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
     environment:
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -422,6 +613,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
@@ -497,6 +689,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -508,7 +701,7 @@ services:
           cpus: '4.0'
           memory: 8G
     ports:
-    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V1_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
       qdrant:
         condition: service_healthy
@@ -540,7 +733,21 @@ services:
       - SETGID
       - SETUID
 
-# PMOVES.AI production compose project
+# ── Network-tier anchors (§1465 PR-A) ─────────────────────────────────────────
+# Mirrors the x-tier-*-hardened service anchors above: the tier DECISION becomes
+# a named, greppable thing instead of a bare `internal:` literal repeated seven
+# times. Each network still carries its own name/ipam; only the tier is shared.
+#
+# `internal: true` does more than block egress. A service attached ONLY to
+# internal networks has its published ports stored and never activated, silently
+# -- Docker documents `internal` as "externally isolated" and says nothing about
+# published ingress; the behaviour lives in moby/moby#36174 (open since 2018).
+# Verify what a node actually publishes with `make -C pmoves net-reality`.
+#
+# There is NO publish-without-egress primitive: internal:false grants both.
+# See docs/operations/DOCKER_NETWORK_HARDENING.md Rules 1, 4 and 5.
+
+# Air-gapped: container-to-container only. Ports declared here never publish.
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
@@ -558,6 +765,9 @@ services:
     - --port
     - '8086'
     environment:
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -571,6 +781,10 @@ services:
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
     - ALPHA=${ALPHA:-0.7}
@@ -620,6 +834,8 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - HF_HOME=/data/huggingface
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     gpus: all
     deploy:
       resources:
@@ -647,6 +863,8 @@ services:
     - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
     extra_hosts:
     - host.docker.internal:host-gateway
+    volumes:
+    - hi-rag-gpu-hf-cache:/data/huggingface
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
@@ -656,6 +874,11 @@ services:
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
+  #
+  # The accounts/leaf hub (SYS/CORE/EDGE/CLOUD, 7422 leafnodes) is `nats-hub`
+  # below — spec §9 Phase 2, profile-gated OFF so default bring-up is unchanged
+  # until the funnel renders the trust material. Spec:
+  # pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md
   mesh-agent:
     <<: &tier-agent-hardened-ro
       env_file:
@@ -673,10 +896,15 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
-    depends_on: [nats]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
     healthcheck:
@@ -696,42 +924,74 @@ services:
     <<: *tier-agent-hardened
     build:
       context: ../Pmoves-cipher
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.pmoves
     restart: unless-stopped
     environment:
-    - CIPHER_API_PREFIX=
     - NODE_ENV=production
-    - NEO4J_URI=bolt://neo4j:7687
-    - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
     - NATS_URL=${NATS_URL}
-    - OLLAMA_BASE_URL=http://pmoves-ollama:11434
-    - DOCKED_MODE=${DOCKED_MODE:-true}
-    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
-    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
+    # Per-agent token resolution (auth.ts resolveToken) presents this key to
+    # PostgREST on every cipher_<uuid> bearer lookup. env.shared carries TWO
+    # JWT key pairs (legacy ANON_KEY/SERVICE_ROLE_KEY and newer
+    # SUPABASE_ANON_KEY/SUPABASE_SERVICE_KEY); the running postgrest validates
+    # only the pair it was configured with (measured 2026-09-22 on B850:
+    # PGRST301 on the SUPABASE_* pair, legacy pair verifies). Default keeps
+    # current behavior; a node whose postgrest accepts only the other pair
+    # steers with CIPHER_DB_SERVICE_KEY=<the key postgrest accepts> in
+    # pmoves/.env.local (loaded by with-env.sh into the compose process env).
+    - SUPABASE_SERVICE_KEY=${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}
+    # MCP per-request identity (Pmoves-cipher 36b28d0f, src/pmoves/mcp-sse.ts).
+    # Empty by default = ADVISORY: '' is in ADVISORY_VALUES (recognised, no
+    # WARN), and envNumber() treats '' as unset, so the interval/budget fall
+    # back to 60000ms / 200 with no clamp WARN. Set CIPHER_MCP_ENFORCE=true in
+    # pmoves/.env.local to refuse identity mismatches instead of logging them.
+    - CIPHER_MCP_ENFORCE=${CIPHER_MCP_ENFORCE:-}
+    - CIPHER_MCP_ADVISORY_INTERVAL_MS=${CIPHER_MCP_ADVISORY_INTERVAL_MS:-}
+    - CIPHER_MCP_ADVISORY_BUDGET=${CIPHER_MCP_ADVISORY_BUDGET:-}
+    - PMOVES_STORAGE_DIR=/data/cipher
+    - PMOVES_PORT=8105
+    - PMOVES_HOST=0.0.0.0
+    - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+    - OLLAMA_BASE_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+    - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    # Graph backend — same interpolation class as OLLAMA_URL above (#3082).
+    # Image-baked bolt://neo4j:7687 left every node without a local Neo4j
+    # dark (fleet graph layer 100% down 2026-09-15: spark 7474/7687 dead,
+    # elder-melchor never launched). Nodes that can host the graph run it
+    # local; hardware-limited nodes point at a mesh donor (capability-based
+    # routing, operator doctrine: "ok to have graph on cipher unless PC
+    # can't handle nodes — only hardware limited, and even then we have mesh").
+    - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
+    - NEO4J_AUTH=${NEO4J_AUTH:-}
+    - QDRANT_URL=http://qdrant:6333
+    - QDRANT_API_KEY=${QDRANT__API_KEY:-}
+    - QDRANT_COLLECTION=pmoves_cipher_memory
+    - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
+    - EMBEDDING_DIM=2560
+    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external,pmoves_api
+    - PMOVES_EMBED_TIMEOUT_MS=${PMOVES_EMBED_TIMEOUT_MS:-30000}
     ports:
-    # Default to localhost-only — cipher is now on pmoves_external (host-publishable),
-    # so a 0.0.0.0 default would expose the API/SSE on all interfaces with an empty
-    # CIPHER_API_TOKEN. Operators override CIPHER_BIND for intentional LAN exposure.
-    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:3000"
+    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
-      neo4j:
-        condition: service_healthy
       nats:
         condition: service_healthy
-    profiles: ["agents"]
-    # pmoves_external (non-internal) lets the host-side MCP client reach cipher's
-    # SSE on 127.0.0.1:8105 — pmoves_app/data/bus are internal:true and cannot
-    # publish host ports. CIPHER_BIND defaults to 127.0.0.1 (localhost-only inbound).
-    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
+      qdrant:
+        condition: service_healthy
+    profiles: ["agents", "cipher"]
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external, pmoves_api]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "node", "-e", "const http=require('http');http.get('http://127.0.0.1:8105/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    volumes:
+    - cipher-data:/data/cipher
 
     deploy:
       resources:
@@ -739,6 +999,11 @@ services:
           cpus: '1.0'
           memory: 512M
   notebooklm-agent:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     build:
       context: ./services/notebooklm-agent
       dockerfile: Dockerfile
@@ -747,14 +1012,9 @@ services:
     - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_external]
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
     build:
@@ -773,8 +1033,9 @@ services:
     # CHIT fail-closed verification gate (house pattern, mirrors hi-rag-gateway*)
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
-    - ${A2UI_BIND:-0.0.0.0}:9224:9224
+    - ${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224
     depends_on:
       nats:
         condition: service_healthy
@@ -800,6 +1061,12 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # A2UI Renderer - Remotion-based animation engine (port 8107)
+  # Lane 2228 (2026-08-02): first-class compose service so the living-doc
+  # animation lane is a fleet capability rather than npm-scripts-only.
+  # Issue #2228: previously the Dockerfile existed at services/a2ui-renderer/
+  # but no compose service anywhere - this stanza fixes that.
+  # See pmoves/docs/specs/a2ui-renderer-compose-2026-08-02.md for the spec.
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:
@@ -809,8 +1076,10 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
@@ -836,8 +1105,10 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
@@ -871,9 +1142,10 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PYTHONUNBUFFERED=1
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks: [pmoves_app, pmoves_bus]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()\" || exit 1"]
       interval: 30s
@@ -882,7 +1154,7 @@ services:
       start_period: 10s
     depends_on:
       nats-init:
-        condition: service_healthy
+        condition: service_completed_successfully
 
   # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
     deploy:
@@ -890,6 +1162,71 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  p7-room-orchestrator:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    image: ${P7_ROOM_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-p7-room-orchestrator:pmoves-latest}
+    container_name: pmoves-p7-room-orchestrator
+    hostname: p7-room-orchestrator
+    restart: unless-stopped
+    environment:
+    # Service reads P7_* names (services/p7-room-orchestrator/config.py) and
+    # resolves relative paths against P7_PMOVES_ROOT. Root is /app (the image
+    # WORKDIR) so defaults like pmoves/config/rooms/catalog.json land on the
+    # mounted tree — /app/pmoves would double-prefix to
+    # /app/pmoves/pmoves/config/rooms and rooms_loaded stays 0.
+    - P7_HTTP_PORT=8122
+    - P7_PMOVES_ROOT=/app
+      # Same shape as the canonical P7 stanza above, and for the same reason:
+      # credentials come from NATS_USER/NATS_PASSWORD, the host stays pinned to
+      # nats:4222, and host-session NATS_URL is deliberately kept out of the
+      # chain. This is the legacy stanza that previously read ${NATS_URL}
+      # directly — the form that made a shell export poison the container.
+    - P7_NATS_URL=${P7_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
+    - P7_ROOM_MANIFEST_SCHEMA=/app/pmoves/contracts/schemas/room/room.manifest.v1.schema.json
+    - SUPABASE_URL=${P7_SUPABASE_URL:-http://supabase-kong:8000}
+    - P7_SUPABASE_REST_URL=${P7_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
+    - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
+    - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    volumes:
+    # Room catalog + manifests: rw so stage transitions can write back
+    # current_stage (same contract as the `p7` service stanza).
+    - ./config/rooms:/app/pmoves/config/rooms:rw
+    # Room manifest schema: CatalogLoader.get_manifest() validates against it,
+    # and it is not part of the service dir copied into the image.
+    - ./contracts/schemas:/app/pmoves/contracts/schemas:ro
+    ports:
+    - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      supabase-kong:
+        condition: service_healthy
+        # kong is profile-gated (supabase-local); without required:false any
+        # --profile agents invocation fails project-wide as "depends on
+        # undefined service" when the supabase profile isn't active.
+        required: false
+    profiles: ["agents", "orchestration"]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8122/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   evo-controller:
     <<: *tier-agent-hardened-ro
     build:
@@ -900,6 +1237,9 @@ services:
     environment:
     # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - PORT=8113
+    # neutralize the leaked Windows SSL_CERT_FILE / REQUESTS_CA_BUNDLE (house pattern — httpx falls back to bundled certifi)
+    - SSL_CERT_FILE=
+    - REQUESTS_CA_BUNDLE=
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
     # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
@@ -911,7 +1251,8 @@ services:
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
+    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:${EVO_CONTROLLER_PORT:-8113}:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -930,3 +1271,321 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+  # MAI-UI agent — GUI grounding + screenshot OCR (Tongyi-MAI/MAI-UI-2B, Qwen3-VL 2.1B).
+  # /v1/gui/ground returns pixel click coordinates; /v1/gui/describe does OCR; there is
+  # also an OpenAI-compatible /v1/chat/completions so any agent can use it as a drop-in.
+  #
+  # MAI_UI_BACKEND decides where inference happens WITHOUT changing the API surface:
+  #   local   load the ~2.1B bfloat16 weights (SPARK GB10 holds these comfortably)
+  #   remote  proxy MAI_UI_BASE_URL, an OpenAI-compatible endpoint (Ollama cloud, etc.)
+  # Default is remote here so a node without the weights cached starts clean instead of
+  # pulling ~4GB on first request; docker-compose.arm64.override.yml flips SPARK to local.
+  mai-ui-agent:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/mai-ui-agent/Dockerfile
+    image: ${MAI_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-mai-ui-agent:latest}
+    restart: unless-stopped
+    environment:
+    - MAI_UI_PORT=8220
+    - MAI_UI_BACKEND=${MAI_UI_BACKEND:-remote}
+    - MAI_UI_BASE_URL=${MAI_UI_BASE_URL:-}
+    - MAI_UI_REMOTE_MODEL=${MAI_UI_REMOTE_MODEL:-MAI-UI-2B}
+    - MAI_UI_MAX_TOKENS=${MAI_UI_MAX_TOKENS:-512}
+    # Neutralize the leaked Windows SSL_CERT_FILE / REQUESTS_CA_BUNDLE so the remote
+    # backend's httpx/requests calls fall back to bundled certifi (house pattern —
+    # the same leak crash-looped evo-controller, see #2470).
+    - SSL_CERT_FILE=
+    - REQUESTS_CA_BUNDLE=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
+    ports: ["${MAI_UI_BIND:-127.0.0.1}:${MAI_UI_AGENT_PORT:-8220}:8220"]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_api, pmoves_external]
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8220/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Local backend loads weights lazily on first request, not at boot, so /healthz
+      # answers quickly either way — no long start_period needed.
+      start_period: 20s
+
+  hf-agent:
+    # HF Agent — autonomous HuggingFace model patrol. Publishes
+    # hf.model.discovered.v1. Polls HF Hub on HF_POLL_INTERVAL (default 300s).
+    <<: &tier-agent-hardened-rw
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build: ./services/hf-agent
+    image: ${HF_AGENT_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-agent:pmoves-latest}
+    container_name: pmoves-hf-agent
+    hostname: hf-agent
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - HF_AGENT_PORT=8201
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HF_TOKEN_FILE=/run/secrets/hf_token
+    - HF_POLL_INTERVAL=${HF_POLL_INTERVAL:-300}
+    - HF_TASK_FILTER=${HF_TASK_FILTER:-text-generation}
+    - HF_TAGS=${HF_TAGS:-}
+    - HF_AUTHOR=${HF_AUTHOR:-}
+    - HF_LIMIT=${HF_LIMIT:-50}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    ports:
+    - ${HF_AGENT_BIND:-0.0.0.0}:${HF_AGENT_PORT:-8201}:8201
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8201/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  hf-research-agent:
+    # HF Research Agent — model evaluation worker. Subscribes to
+    # hf.model.discovered.v1, evaluates against benchmark criteria
+    # (downloads / likes / tags), publishes hf.model.evaluated.v1.
+    # Pass/fail threshold via HF_MIN_SCORE (default 50).
+    <<: *tier-agent-hardened-ro
+    build: ./services/hf-research-agent
+    image: ${HF_RESEARCH_AGENT_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-research-agent:pmoves-latest}
+    container_name: pmoves-hf-research-agent
+    hostname: hf-research-agent
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - HF_RESEARCH_PORT=8202
+    - HF_MIN_DOWNLOADS=${HF_MIN_DOWNLOADS:-100}
+    - HF_MIN_LIKES=${HF_MIN_LIKES:-10}
+    - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
+    - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-text-generation,text2text-generation,feature-extraction,code-generation,chat,conversational}
+    - HF_AVOID_TAGS=${HF_AVOID_TAGS:-text-to-image,image-generation,image-segmentation,object-detection,automatic-speech-recognition}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      hf-agent:
+        condition: service_started
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8202/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
+  hf-mcp-server:
+    # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
+    # Provides hf.model.search/info/download/list/convert_gguf and publishes
+    # hf.model.downloaded.v1. Models download to /models; inference services
+    # can mount the same host path or import converted GGUF artifacts.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/hf-mcp-server
+      dockerfile: Dockerfile
+    image: ${HF_MCP_SERVER_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-mcp-server:pmoves-latest}
+    container_name: pmoves-hf-mcp-server
+    hostname: hf-mcp-server
+    restart: unless-stopped
+    environment:
+    - PORT=8096
+    - NATS_URL=${NATS_URL}
+    - HF_HOME=/models
+    - HF_HUB_CACHE=/models/hub
+    - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    ports:
+    - ${HF_MCP_SERVER_BIND:-127.0.0.1}:${HF_MCP_SERVER_PORT:-8203}:8096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    volumes:
+    - ${HF_MODELS_HOST_PATH:-./data/models}:/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  notebook-mcp:
+    # notebook-mcp — MCP wrapper for Open Notebook (build once, mount by any agent).
+    # Exposes save_note/search_notes over MCP (streamable-http) so A0's :8081 client,
+    # deepseek-harness (dsh-mcp-client), and Claude/Codex all mount ONE wrapper instead
+    # of re-implementing the REST calls. Reuses the exact pmoves_notes REST contract
+    # (POST /api/notes, POST /api/search) + the same OPEN_NOTEBOOK_API_TOKEN bearer auth.
+    # Tenant seam stays in the mounting harness (dsh ctx.credentials / A0 per-context).
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/notebook-mcp
+      dockerfile: Dockerfile
+    image: ${NOTEBOOK_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-notebook-mcp:pmoves-latest}
+    container_name: pmoves-notebook-mcp
+    hostname: notebook-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${NOTEBOOK_MCP_TRANSPORT:-streamable-http}
+    # In-network service DNS via a DEDICATED override var — do NOT inherit
+    # ${OPEN_NOTEBOOK_API_URL}, which the env pipeline sets to http://localhost:5055
+    # for HOST-side tools (inside a container localhost is itself, not Open Notebook).
+    # Default = the standalone `open-notebook` alias (verified /api/search -> HTTP 200).
+    # On the `make up-external` topology set NOTEBOOK_MCP_API_URL=http://open-notebook-ext:5055
+    # (that stack registers open-notebook-ext / pmoves-open-notebook-ext, not open-notebook).
+    - OPEN_NOTEBOOK_API_URL=${NOTEBOOK_MCP_API_URL:-http://open-notebook:5055}
+    # Token IS required — /api/* returns 401 without it. Sourced from the env pipeline
+    # (same OPEN_NOTEBOOK_API_TOKEN the pmoves_notes plugin uses). Per-tenant credential
+    # resolution is the mounting harness's job on top of this baseline.
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8207}:8092
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]  # open-notebook reachable on pmoves_app
+    # python:3.12-slim has no curl; use a stdlib TCP-connect probe on the MCP port.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  wealth-mcp:
+    # wealth-mcp — MCP wrapper for Firefly III (build once, mount by any agent).
+    # Exposes list_accounts/list_transactions/search_transactions/create_transaction
+    # over MCP (streamable-http) so A0's :8081 client, deepseek-harness, and Claude/Codex
+    # mount ONE wrapper. Tenancy supports BOTH Firefly models: a per-request Bearer PAT
+    # forwarded by the mounting harness (shared Firefly + per-tenant PATs), or
+    # WEALTH_MCP_FIREFLY_URL per tenant instance. FIREFLY_PAT is the baseline fallback.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/wealth-mcp
+      dockerfile: Dockerfile
+    image: ${WEALTH_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth-mcp:pmoves-latest}
+    container_name: pmoves-wealth-mcp
+    hostname: wealth-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${WEALTH_MCP_TRANSPORT:-streamable-http}
+    # Firefly reachable in-network on pmoves_app (alias `firefly`). Do NOT inherit a
+    # host-oriented URL; this is a compose service, always in-network.
+    - FIREFLY_API_URL=${WEALTH_MCP_FIREFLY_URL:-http://firefly:8080/api/v1}
+    # Fleet convention: FIREFLY_ACCESS_TOKEN (integration-auth-setup.sh lands it in
+    # env.shared). FIREFLY_PAT kept as a back-compat fallback. Per-tenant PATs are
+    # forwarded per-request by the mounting harness (they win over these baselines).
+    - FIREFLY_ACCESS_TOKEN=${FIREFLY_ACCESS_TOKEN:-}
+    - FIREFLY_PAT=${FIREFLY_PAT:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${WEALTH_MCP_BIND:-127.0.0.1}:${WEALTH_MCP_PORT:-8208}:8092
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]  # firefly reachable on pmoves_app
+    # python:3.12-slim has no curl; stdlib TCP-connect probe on the MCP port.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
+  fleet-sentinel:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/fleet_sentinel/Dockerfile
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SENTINEL_POLL_INTERVAL=${SENTINEL_POLL_INTERVAL:-30}
+    - SENTINEL_FAILURE_THRESHOLD=${SENTINEL_FAILURE_THRESHOLD:-3}
+    - SENTINEL_RESTART_COOLDOWN=${SENTINEL_RESTART_COOLDOWN:-600}
+    - SENTINEL_SELF_HEAL=${SENTINEL_SELF_HEAL:-1}
+    # Restart actions shell out to make on the host checkout
+    - SENTINEL_PMOVES_DIR=${SENTINEL_PMOVES_DIR:-/srv/pmoves}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    volumes:
+    # Read-only mount of the repo root for Known-Road restart invocations
+    # (restarts run make -C /srv/pmoves/pmoves via with-env.sh; docker socket
+    # intentionally NOT mounted — restart actions require a host-side runner
+    # until the dsh agent runtime provides a constrained route)
+    - ${PWD}/..:/srv/pmoves:ro
+    - fleet-sentinel-data:/data/fleet-sentinel
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external
+    ports:
+    - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8116}:8116
+    depends_on:
+    - nats
+

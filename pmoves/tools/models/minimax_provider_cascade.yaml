@@ -23,7 +23,10 @@ token_plan:
   enabled: true
   api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
   fallback_api_key_env: MINIMAX_API_KEY
-  api_base: https://api.minimax.chat/v1
+  api_base: https://api.minimax.io/v1
+  # Anthropic-compatible endpoint for coding tools (Claude Code/Cline/KiloCode):
+  #   https://api.minimax.io/anthropic  (ANTHROPIC_BASE_URL; Bearer or x-api-key)
+  # api.minimax.chat + chatcompletion_v2 are RETIRED (2026-08-25).
   documentation: https://platform.minimax.io/docs/token-plan/intro
   quickstart: https://platform.minimax.io/docs/token-plan/quickstart
   
@@ -78,7 +81,7 @@ cascade:
     
     # Provider endpoints
     endpoints:
-      api_base: "https://api.minimax.chat/v1"
+      api_base: "https://api.minimax.io/v1"
       api_key_env: "MINIMAX_API_KEY"
     
     # Model-specific configurations

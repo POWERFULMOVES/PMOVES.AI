@@ -36,7 +36,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -643,7 +643,6 @@ class CheckpointManager:
         Returns:
             Number of checkpoints deleted
         """
-        keep = keep_per_thread or self._max_checkpoints
         cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
         deleted = 0
 

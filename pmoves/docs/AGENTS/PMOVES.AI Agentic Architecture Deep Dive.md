@@ -122,7 +122,7 @@ The system interacts with the world through **Publisher** and **Channel Monitor*
 
 **5\. Geometric Cognitive Architectures: The Frontier of Shape-Attribution**
 
-The most avant-garde aspect of PMOVES is its move beyond semantic (text-based) reasoning into **Geometric Cognitive Architectures**. This involves the **Shape-Attribution** pipeline and the **CHIT** (Cymatic-Holographic Information Transfer) bus, representing a fundamental rethinking of how information is encoded and reasoned upon.21
+The most avant-garde aspect of PMOVES is its move beyond semantic (text-based) reasoning into **Geometric Cognitive Architectures**. This involves the **Shape-Attribution** pipeline and the **CHIT** (Cymatic Holographic Information Theory) bus, representing a fundamental rethinking of how information is encoded and reasoned upon.21
 
 ### **5.1 From Semantics to Topology**
 

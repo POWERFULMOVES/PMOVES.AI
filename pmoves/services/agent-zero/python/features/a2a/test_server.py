@@ -8,7 +8,6 @@ Run with: pytest features/a2a/test_server.py -v
 """
 
 import asyncio
-import json
 import uuid
 from contextlib import asynccontextmanager
 from typing import Generator
@@ -18,16 +17,11 @@ from httpx import AsyncClient, ASGITransport
 from fastapi import status
 from jose import jwt as jose_jwt
 
-from .server import JWT_ALGORITHM, create_app, lifespan, _tasks, _tasks_lock
+from .server import JWT_ALGORITHM, create_app, _tasks, _tasks_lock
 from .types import (
     AgentCard,
-    Task,
     TaskState,
-    TaskStatusMessage,
     ArtifactType,
-    Message,
-    SendMessageRequest,
-    AGENT_ZERO_CARD,
 )
 
 

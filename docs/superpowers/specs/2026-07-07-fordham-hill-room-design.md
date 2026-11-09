@@ -2,8 +2,8 @@
 
 _Spec date: 2026-07-07 · Status: DRAFT · Room id: `fordham.room.community` · Stage: `rehearsal`_
 
-> One shared box delivers cheaper+more-private internet **and** the tamper-evident ledger/ballot box
-> for co-op self-governance. This spec turns that four-lane pilot into one **room-on-a-stage** so P7 can
+> One shared box can deliver cheaper+more-private internet and host a separately governed election
+> rehearsal; it is not yet a ballot box. This spec turns that four-lane pilot into one **room-on-a-stage** so P7 can
 > launch it, Archon can mint its agents, and residents get a single audience-facing surface instead of
 > four disconnected docs. Every dollar/vote/governance claim in this room is
 > **DRAFT — REQUIRES LEGAL REVIEW** (pmoves/docs/pilots/fordham-hill/README.md:3).
@@ -13,8 +13,8 @@ _Spec date: 2026-07-07 · Status: DRAFT · Room id: `fordham.room.community` · 
 This room inherits the pilot's three-tier framing verbatim — no claim may cross a tier boundary in the UI:
 
 - **PROVEN (measured this session):** the 3 KVM exit nodes run and were measured (845/683/448 Mbps down,
-  ~1,976 aggregate; $10/mo/node); HMAC `sign_cgp` vote-receipt primitive exists and is tested
-  (pmoves/docs/pilots/fordham-hill/README.md:10).
+  ~1,976 aggregate; $10/mo/node). HMAC `sign_cgp` is tested for agent trails only and cannot underwrite
+  a contested ballot (pmoves/docs/pilots/fordham-hill/README.md:10).
 - **MODELED (projected arithmetic, not adopted):** homes-per-node (~84/node, ~197 fleet), the ~$10 pooled
   due, ~$25/mo ($300/yr, 71%) per-home saving, Dirichlet contribution attribution
   (pmoves/docs/pilots/fordham-hill/README.md:12).
@@ -78,7 +78,7 @@ Mirrors the shape of the validated `4090-field.room.control.json` seed
 |---|---|---|---|
 | `voice-console` | `chat` | left | FlOO$ spoken interaction (the accessibility front door) |
 | `pilot-overview` | `custom` | center | the four-lane dashboard, each tile tier-badged |
-| `ledger-graph` | `graph` | right | contribution/roll trail (who contributed == who may vote) |
+| `ledger-graph` | `graph` | right | contribution trail only; not a legal voter roll |
 
 **Apps** (each declares `route` + `action_namespace` + `capabilities`, room.manifest.v1.schema.json:125):
 
@@ -88,7 +88,7 @@ Mirrors the shape of the validated `4090-field.room.control.json` seed
 | `mesh-ab` | `dashboard` | `/dashboard/fordham/capacity` | `capacity` | `active` | A/B measured vs. raw uplink (mesh-egress-ab skill) |
 | `coop-ledger` | `dashboard` | `/dashboard/fordham/wealth` | `wealth` | `planned` | Firefly III co-op ledger view (life-team `wealth` agent, agent-teams.yaml:166) |
 | `voter-roll` | `notebook` | `/dashboard/fordham/roll` | `governance` | `planned` | eligible-voter roll + enrollment; `planned` because roll = 1 of N today (users.yaml:9) |
-| `ballot-box` | `dashboard` | `/dashboard/fordham/governance` | `governance` | `planned` | HMAC vote receipts; `planned` — MUST NOT go `active` until legal + one-member-one-vote basis resolved |
+| `ballot-box` | `dashboard` | `/dashboard/fordham/governance` | `governance` | `planned` | Disabled rehearsal; no ballot event contract/service; MUST NOT go `active` without the full legal, resident, evidence, and accessibility gates |
 
 App `status` values are schema-supported (`active|planned|deprecated`,
 room.manifest.v1.schema.json:153) — governance surfaces ship as `planned` so the room can **declare**
@@ -168,14 +168,12 @@ How each of the four lanes (one system, four angles) appears as a concrete room 
 | **Capacity** | PROVEN | `mesh-ab` · `capacity` (`/dashboard/fordham/capacity`) | fordham-onboarding (mesh side) | `mesh-egress-ab`, `fleet:enroll` | README:10 (measured 845/683/448 Mbps; honest caveat 305/70 vs 520/101) |
 | **Wealth** | MODELED | `coop-ledger` · `wealth` (`/dashboard/fordham/wealth`) | fordham-transaction | `pmoves-chit-sign` + Firefly (`wealth`) | README:12,36 ($35→~$10, ~$25/mo saved = surplus) |
 | **Tokenism** | MODELED + FLAGGED | `pilot-dashboard` contribution tile · `fordham` | fordham-transaction | Dirichlet/CHIT attribution (attribution-preview only) | README:12 (12-wk decay; flags: localEconomicActivities inert, Dirichlet not wired to distribution) |
-| **Governance** | SCAFFOLDED | `voter-roll` + `ballot-box` · `governance` (both `status: planned`) | fordham-onboarding (roll) / fordham-voice (accessible read-out) | `fleet:enroll`, `pmoves-chit-sign` (`vote.signed.v1` HMAC receipts) | README:14,39 (roll 1 of N; governor plutocratic — DO NOT SHIP as-is) |
+| **Governance** | SCAFFOLDED | `voter-roll` + `ballot-box` · `governance` (both `status: planned`) | fordham-onboarding (roll) / fordham-voice (accessible read-out) | `fleet:enroll`; committee-tally model (no active ballot subject) | README:14,39 (roll 1 of N; no binding election service) |
 
 **The convergence in the room:** the dollars the capacity tile frees are the dollars the wealth tile books
-as surplus; the contribution the tokenism tile attributes is what earns roll standing; the governance
-surfaces are how the co-op votes on that surplus — all on **one mesh + one signing key**
-(pmoves/docs/pilots/fordham-hill/README.md:39). The room makes that literal: the same
-`pmoves-chit-sign` HMAC primitive that receipts a dues trail (wealth) receipts a vote
-(`vote.signed.v1`, governance) — no blockchain, no wallets.
+as surplus, while tokenism records contribution. Governance may share the mesh transport, but eligibility
+is independently attested and the tally uses distinct non-operator committee keys. Agent-trail HMAC,
+Mode-B attribution identity, and Mode-A ballot identity must never be one key or roster.
 
 ---
 
@@ -224,8 +222,8 @@ surface it governs (pmoves/docs/pilots/fordham-hill/README.md:58-69):
 - **Voting basis & quorum legality** (one-member vs unit vs share; roll-percentage quorum) must be
   counsel-confirmed against the certificate/bylaws/NY law before any binding vote → gates governance
   namespace (:62).
-- **E-voting / remote-quorum validity** — whether HMAC-receipted (`vote.signed.v1`) mesh ballots satisfy NY
-  cooperative-meeting/notice/quorum requirements → hard gate on `ballot-box` (:63).
+- **E-voting / remote-quorum validity** — whether a future receipt-free, committee-audited mesh ballot
+  satisfies NY cooperative-meeting/notice/quorum requirements → hard gate on `ballot-box` (:63).
 - **Board/management transition process** — legal mechanics stay counsel-led; the platform provides
   auditable records only and must not be represented as conferring legal authority (:64).
 - **Fraud-investigation boundary** — tooling outputs are transparency/audit artifacts only; no accusations;

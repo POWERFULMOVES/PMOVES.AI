@@ -1,7 +1,6 @@
 """Configuration settings for GPU Orchestrator service."""
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic_settings import BaseSettings
 
@@ -16,7 +15,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # NATS configuration
-    nats_url: str = "nats://nats:pmoves@nats:4222"
+    nats_url: str = "nats://nats:4222"
     nats_reconnect_delay: float = 2.0
 
     # Provider URLs

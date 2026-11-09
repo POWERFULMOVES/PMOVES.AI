@@ -308,9 +308,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             start = end - timedelta(hours=hours)
 
             if trace_id:
-                logql = f'{{service="{service}"}} |~ "{trace_id}"'
+                logql = f'{{}} |~ "{trace_id}"'
             else:
-                logql = f'{{service="{service}"}} |~ "{request_id}"
+                logql = f'{{}} |~ "{request_id}"'
 
             result = client.query_range(logql, start, end, limit=1000)
 

@@ -1,0 +1,278 @@
+{
+  "room_id": "pmoves.room.helpdesk",
+  "version": "1.0.0",
+  "display_name": "PMOVES Helpdesk (Intake & Routing)",
+  "description": "First-stop intake room for residents of every PMOVES community: 'how can PMOVES help me today?' The helpdesk reads the room directory (room.directory.v1, slice 3) + the Pinokio apps registry (slice 4) to route a visitor to the right room (creator-studio for rendering, fordham.room.community for community-mesh questions, 5090-voice for TTS, etc.) and the right local-or-fleet GPU. Ambient mesh-render button (creator_surface=ambient) hands off to creator-studio rather than rendering inline — the helpdesk itself is CPU-only and runs on the infra-coordinator node (z890, 24GB 3090ti reserved for orchestration, not rendering). Stage: rehearsal. creator-collab-lane slice 6 — 2026-07-28.",
+  "stage": "rehearsal",
+  "agent_id": "pmoves-helpdesk-steward",
+  "alter": "pmoves-helpdesk",
+  "room_type": "hybrid",
+  "room_purpose": "intake",
+  "creator_surface": "ambient",
+  "owner_mode": "shared",
+  "access": {
+    "visibility": "unlisted",
+    "invite_list": [
+      "darkxside-persona",
+      "fordham-steward",
+      "creator-steward",
+      "5090-claude",
+      "4090-claude",
+      "z890-claude",
+      "pmoves-helpdesk-steward"
+    ]
+  },
+  "meta": {
+    "chit": {
+      "card_id": "00000000-0000-4000-8000-000000000051",
+      "creator_id": "darkxside",
+      "interim": true,
+      "transition_to": "pmoves-helpdesk-steward",
+      "transition_date": "2026-08-15"
+    }
+  },
+  "hardware_requirements": {
+    "gpu": false,
+    "min_vram_mb": 0,
+    "node_roles": ["infra-coordinator"],
+    "cpu_arch": ["x86_64", "arm64"]
+  },
+  "pinokio_app_refs": [
+    {
+      "slug": "comfyui-desktop",
+      "role": "primary",
+      "gpu_reservation_mb": 0,
+      "autostart": false
+    }
+  ],
+  "shell": {
+    "theme": {
+      "theme_id": "helpdesk-intake",
+      "accent_color": "#0EA5E9",
+      "skin": "intake-grid",
+      "icon": "lifebuoy"
+    },
+    "layout": {
+      "default_route": "/helpdesk/intake",
+      "panels": [
+        { "panel_id": "helpdesk-chat", "kind": "chat", "position": "center", "size": 56, "pinned": true },
+        { "panel_id": "room-suggestions", "kind": "custom", "position": "right", "size": 22, "pinned": true },
+        { "panel_id": "ambient-mesh-render", "kind": "browser", "position": "floating", "size": 22, "pinned": false },
+        { "panel_id": "helpdesk-log", "kind": "logs", "position": "bottom", "size": 12, "pinned": false }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "helpdesk-chat",
+      "kind": "chat",
+      "route": "/helpdesk/intake",
+      "provider": "pmoves-ui",
+      "action_namespace": "helpdesk",
+      "capabilities": ["intake-form", "natural-language-question", "followup-clarify", "tts-readout"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "room-suggestions",
+      "kind": "dashboard",
+      "route": "/helpdesk/room-suggest",
+      "provider": "pmoves-ui",
+      "action_namespace": "helpdesk",
+      "capabilities": ["list-rooms", "match-intent", "deep-link", "persona-aware-ranking"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "ambient-mesh-render",
+      "kind": "browser",
+      "route": "/helpdesk/render",
+      "provider": "pmoves-openroom",
+      "action_namespace": "creator",
+      "capabilities": ["prompt-handoff", "artifact-render", "redirect-to-creator-studio"],
+      "pinned": false,
+      "status": "planned"
+    },
+    {
+      "app_id": "helpdesk-log",
+      "kind": "custom",
+      "route": "/helpdesk/log",
+      "provider": "pmoves-ui",
+      "action_namespace": "helpdesk",
+      "capabilities": ["intake-trail", "routing-decisions", "redirect-counts"],
+      "pinned": false,
+      "status": "active"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "pmoves-helpdesk",
+    "thread_ref": "intake-sessions",
+    "default_page": "current-session",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads", "snapshots"],
+      "artifact_prefix": "rooms/pmoves-helpdesk"
+    }
+  },
+  "persona": {
+    "signature_ref": "pmoves-helpdesk-steward",
+    "voice": "plain-spoken",
+    "glyph": "✿",
+    "resonance": ["intake", "routing", "triage", "concierge", "ambient", "helpful", "no-jargon"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "helpdesk-intake",
+      "skill_id": "pmoves-helpdesk-skill",
+      "room_id": "pmoves.room.helpdesk",
+      "display_name": "PMOVES Helpdesk Intake",
+      "intent": ["intake", "routing", "triage", "help", "how-do-i"],
+      "activation": {
+        "invocation_mode": "ambient",
+        "trigger_phrases": ["how can PMOVES help", "what can I do here", "I need help with", "where do I go"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "helpdesk-chat", "target": "composer", "route": "/helpdesk/intake" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 5 },
+      "context": {
+        "sources": ["user-intent", "room-state", "agent-registry", "notebook-thread"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "chat-response", "delivery": "notify", "artifact_type": "text" },
+        { "target": "nats-event", "delivery": "emit", "subject": "helpdesk.intake.opened.v1", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "threads/intake-sessions", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 120, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["intake", "routing", "ambient", "no-render-inline"]
+    },
+    {
+      "binding_id": "room-suggest",
+      "skill_id": "room-suggest-skill",
+      "room_id": "pmoves.room.helpdesk",
+      "display_name": "Persona-aware Room Suggestion",
+      "intent": ["routing", "discovery", "next-room", "persona-aware"],
+      "activation": {
+        "invocation_mode": "ambient",
+        "trigger_phrases": ["which room should I open", "where should this go", "suggest a room", "next move"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "room-suggestions", "target": "panel", "route": "/helpdesk/room-suggest" },
+      "execution": { "mode": "inline", "run_as": "agent", "stream": "status", "max_steps": 3 },
+      "context": {
+        "sources": ["agent-registry", "room-state", "persona", "notebook-thread"],
+        "include_last_turns": 2,
+        "notebook_writeback": false,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "app-action", "delivery": "open", "subject": "/helpdesk/room-suggest", "artifact_type": "json" },
+        { "target": "chat-response", "delivery": "notify", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 30, "fail_open": true, "one_active_run": false },
+      "enabled": true,
+      "tags": ["routing", "persona", "ambient", "discovery"]
+    },
+    {
+      "binding_id": "ambient-mesh-render",
+      "skill_id": "pinokio-bridge-skill",
+      "room_id": "pmoves.room.helpdesk",
+      "display_name": "Ambient Mesh Render (handoff to creator-studio)",
+      "intent": ["creator", "image", "video", "audio", "render"],
+      "activation": {
+        "invocation_mode": "ambient",
+        "trigger_phrases": ["render this", "queue the prompt", "make me an image"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "ambient-mesh-render", "target": "floating", "route": "/helpdesk/render" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "events", "max_steps": 4 },
+      "context": {
+        "sources": ["notebook-thread", "open-apps", "room-state", "user-intent"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json", "image"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "comfy.collab.prompt.v1", "artifact_type": "json" },
+        { "target": "app-action", "delivery": "open", "subject": "/canvas/creator?from=helpdesk", "artifact_type": "json" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 60, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["creator", "ambient", "handoff", "no-inline-render"]
+    },
+    {
+      "binding_id": "voice-suit-intake",
+      "skill_id": "persona-bind",
+      "room_id": "pmoves.room.helpdesk",
+      "display_name": "Accessible Voice Readout (FlOO$ suit)",
+      "intent": ["voice", "accessibility", "readout", "elders"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["read it out loud", "speak the suggestion", "play the route"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "helpdesk-chat", "target": "composer", "route": "/helpdesk/intake" },
+      "execution": { "mode": "inline", "run_as": "agent", "stream": "status", "max_steps": 3 },
+      "context": {
+        "sources": ["notebook-selection", "persona", "room-state"],
+        "include_last_turns": 4,
+        "notebook_writeback": false,
+        "artifact_types": ["audio", "text"]
+      },
+      "outputs": [
+        { "target": "artifact-store", "delivery": "append", "path": "voice/helpdesk-readouts", "artifact_type": "audio" },
+        { "target": "chat-response", "delivery": "notify", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 120, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["voice", "floos", "elders", "accessibility"]
+    }
+  ],
+  "team_refs": ["orchestration", "media", "data", "research", "fordham_community"],
+  "service_refs": ["nats", "nats-event-bus", "supabase", "agent-zero", "archon", "cipher-memory", "pinokio-bridge"],
+  "launcher_refs": ["up-agents", "up-nats", "up-supabase", "up-cipher", "helpdesk-serve"],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "room.session.updated.v1",
+        "room.directory.v1",
+        "room.presence.v1",
+        "helpdesk.intake.opened.v1",
+        "helpdesk.intake.routed.v1",
+        "helpdesk.room.suggested.v1",
+        "comfy.collab.prompt.v1",
+        "comfy.collab.progress.v1",
+        "comfy.collab.artifact.v1",
+        "agent.graphiti.signed.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Helpdesk Intake",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "creator-collab-lane slice 6 (2026-07-28)",
+    "updated_at": "2026-07-28T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md",
+      "pmoves/docs/specs/helpdesk-and-room-suggest-2026-07-28.md",
+      "pmoves/contracts/schemas/room/room.directory.v1.schema.json",
+      "pmoves/configs/pinokio-network-inventory.yaml"
+    ]
+  }
+}

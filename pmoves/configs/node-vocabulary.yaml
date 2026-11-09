@@ -1,0 +1,181 @@
+version: 1
+# CIPHER AGENT IDS — `cipher_agent_id`, per harness, declared and never derived.
+#
+# Cipher requires an `agentId` on every call and it must be the SIGNING-CARD
+# spelling from pmoves/config/signing_identity_cards.yaml, not the registry
+# spelling in `default_identity` above. The two differ on every node:
+# claude_b850 vs b850-claude. Measured 2026-09-17 --
+# `cipher_identity.py --agent claude_b850` reports `signing card: no`, and
+# `--agent b850-claude` reports `yes`, so every launcher that fed the registry
+# identity to the carry check got a false "uncarded" verdict.
+#
+# WHY NOT DERIVE IT. `claude_<x>` -> `<x>-claude` holds for all four claude-code
+# nodes, which is exactly what makes a transform tempting and wrong: knuckles'
+# crush identity is `crush_glm52` and its card is plain `crush`, so the same rule
+# yields `glm52-crush`, which is no card at all.
+#
+# DELIBERATELY ABSENT, not forgotten: crush, codex, hermes and kilo have no
+# cipher_agent_id on any node. `crush` and `hermes` are nodeless cards, so
+# whether one card covers the whole fleet or each node needs its own has not been
+# measured; `codex` and `hermes` each have TWO candidate cards (codex /
+# agent-zero-codex, hermes / hermes-agent) and picking one would be a guess.
+# node_identity.py reports the absence with that reason rather than inventing a
+# spelling, and a session told "declare your agentId yourself" is better served
+# than one told a wrong id that cipher answers 403 to.
+#
+# kimi RESOLVED 2026-09-19: `kimi` carries a per-node cipher_agent_id starting
+# with knuckles (`knuckles-kimi`, card 00000000-0000-4000-8000-000000000051) —
+# the first harness to leave this absent list. The spelling is <node>-<harness>
+# matching the claude cards (b850-claude), NOT the <harness>-<node> order the
+# mint-lane doc examples show (crush-spark, kimi-spark); the card is the
+# normative spelling because cipher's assertAgentId answers to it.
+#
+# Every value here is checked against an ACTIVE card by
+# pmoves/tests/test_node_identity.py, so a revoked card fails CI instead of
+# surfacing as a runtime 403.
+nodes:
+- canonical: '4090'
+  kind: node
+  reach: pmoves-4090
+  aliases:
+  - '4090'
+  - laptop-4090
+  - pmoves-4090
+  - pmoves-4090
+  - PMOVES-4090
+  - pmoves-laptop
+  note: The mobile node. `4090` matches operator_nodes.yaml (the scheduler's vocabulary);
+    the rest are spellings found in the registry, the automode doc, and this machine's
+    own hostname.
+  default_identity:
+    claude-code: claude_4090
+  cipher_agent_id:
+    claude-code: 4090-claude
+- canonical: '5090'
+  kind: node
+  reach: pmoves-5090
+  aliases:
+  - '5090'
+  - pmoves-5090
+  - PMOVES-5090
+  note: Primary workhorse. 38 registry entries spell it as a YAML integer.
+  default_identity:
+    claude-code: claude_5090
+  cipher_agent_id:
+    claude-code: 5090-claude
+- canonical: spark
+  kind: node
+  reach: pmoves-spark
+  aliases:
+  - spark
+  - pmoves-spark
+  - dgx-spark
+  - PMOVES-SPARK
+  default_identity:
+    claude-code: claude_spark
+  cipher_agent_id:
+    claude-code: spark-claude
+- canonical: z890
+  kind: node
+  reach: pmoves-z890
+  aliases:
+  - z890
+  - pmoves-z890
+  - Z890
+  - PMOVES-Z890
+  default_identity:
+    claude-code: claude_z890
+  cipher_agent_id:
+    claude-code: z890-claude
+- canonical: knuckles
+  kind: node
+  reach: pmoves-b850-ai-top
+  aliases:
+  - knuckles
+  - pmoves-b850
+  - b850
+  - pmoves-b850-ai-top
+  - PMOVES-B850
+  note: AMD 9850X3D + dual R9700. operator_nodes.yaml calls it `knuckles`; the registry
+    and the automode doc call it `pmoves-b850`.
+  default_identity:
+    claude-code: claude_b850
+    crush: crush_glm52
+    kimi: kimi_knuckles
+  cipher_agent_id:
+    claude-code: b850-claude
+    kimi: knuckles-kimi
+- canonical: nano-1
+  kind: node
+  reach: pmoves-nano-1
+  aliases:
+  - nano-1
+  - pmoves-nano-1
+  note: Not schedulable -- see operator_nodes.yaml.
+- canonical: kvm4-1
+  kind: node
+  reach: pmoves-kvm4-1
+  aliases:
+  - kvm4-1
+  - pmoves-kvm4-1
+- canonical: kvm4-2
+  kind: node
+  reach: pmoves-kvm4-2
+  aliases:
+  - kvm4-2
+  - pmoves-kvm4-2
+- canonical: kvm2
+  kind: node
+  reach: pmoves-kvm2
+  aliases:
+  - kvm2
+  - pmoves-kvm2
+- canonical: rdna4
+  kind: node
+  reach: pmoves-rdna4
+  aliases:
+  - rdna4
+  - pmoves-rdna4
+- canonical: elder-melchor
+  kind: node
+  reach: pmoves-elder-melchor
+  aliases:
+  - elder-melchor
+  note: Hermes elder node; `pmoves/config/pinokio/hermes-elder-melchor.pinokio.json`
+    sets PMOVES_NODE_ID to this value.
+- canonical: powerfulmoves
+  kind: unresolved
+  aliases:
+  - powerfulmoves
+  note: 'Used by 9 registry entries. It is the GitHub org/account name, not a machine,
+    and no node in operator_nodes.yaml answers to it. Needs an owner decision: either
+    it means a specific node or those entries want a class.'
+- canonical: jetson
+  kind: class
+  aliases:
+  - jetson
+  note: A hardware class covering the nano-* nodes, not one machine.
+- canonical: kiloclaw
+  kind: node
+  reach: kiloclaw.internal
+  aliases:
+  - kiloclaw
+  - pmoves-kiloclaw
+  note: The hosted Fly-Machine VPS brain (KiloClaw) -- loopback-only, no GPU,
+    not tailnet-reachable; reach is a placeholder token, not a diallable name.
+- canonical: ai-lab
+  kind: runner-label
+  aliases:
+  - ai-lab
+  note: A GitHub Actions runner label (see `topology.ci_runner`), which landed in
+    node_affinity on one entry. Almost certainly a field mix-up.
+- canonical: cloud
+  kind: placeholder
+  aliases:
+  - cloud
+  note: 7 entries. Means "not pinned to the local fleet".
+- canonical: any
+  kind: placeholder
+  aliases:
+  - any
+  note: Explicitly unpinned.

@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit, urlunsplit
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 import numpy as np
@@ -59,11 +59,8 @@ from providers import (
 
 # Prosodic sidecar imports
 from prosodic import (
-    BoundaryType,
     ProsodicChunk,
     parse_prosodic,
-    format_prosodic_analysis,
-    prosodic_stitch,
     stitch_chunks,
 )
 
@@ -301,6 +298,7 @@ async def _publish_chit_voice_event(
     text_length: int,
     audio_duration: float,
     voice: Optional[str] = None,
+    voice_provenance_meta: Optional[dict] = None,
 ) -> None:
     """Publish voice synthesis event to CHIT geometry bus (best-effort).
 
@@ -311,6 +309,9 @@ async def _publish_chit_voice_event(
     when `FLUTE_GEOMETRY_DUAL_PUBLISH` is true (default), so canonical
     consumers (graphiti, matrix monitor, cymatic visualizer) get a
     schema-valid packet.
+
+    When voice_provenance_meta is supplied (from provenance_gate.build_cgp_meta),
+    it is injected into the CGP v0.2 `meta` field per §8 provenance attribution.
 
     Both publishes are gated by `CHIT_VOICE_ATTRIBUTION`. Errors on either
     publish are logged but do not fail the request.
@@ -363,7 +364,7 @@ async def _publish_chit_voice_event(
         geometry_bridge = GeometryBridge()
     canonical_subject = cgp_subject()
     try:
-        cgp_packet = geometry_bridge.encode_packet(payload)
+        cgp_packet = geometry_bridge.encode_packet(payload, meta=voice_provenance_meta)
         await nats_client.publish(
             canonical_subject,
             json.dumps(cgp_packet).encode("utf-8"),
@@ -404,6 +405,11 @@ class SynthesizeResponse(BaseModel):
     duration_seconds: float = Field(..., description="Audio duration")
     sample_rate: int = Field(24000, description="Sample rate in Hz")
     format: str = Field("pcm16", description="Audio format")
+    node: Optional[str] = Field(
+        None,
+        description="Fleet node the cast was routed to via host-affinity, or None "
+        "when routing is disabled / the configured URL was used.",
+    )
 
 
 class RecognizeResponse(BaseModel):
@@ -604,55 +610,76 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# MCP bridge (mcp_bridge.py) — the curated 6-tool surface over all 14 engines
+# (tts_list_engines/intents/synthesize/engine_status/load/unload). Written for
+# the vei.contract.mcp-bridge TAC contract (:8055/sse) but never mounted until
+# now. Callables defer to the module globals set during lifespan startup.
+from mcp_bridge import create_mcp_router  # noqa: E402
+
+app.include_router(
+    create_mcp_router(
+        get_provider=lambda: ultimate_tts_provider,
+        get_nats_client=lambda: nats_client,
+    ),
+    dependencies=[Depends(verify_api_key)],
+)
+
 
 # Health check endpoint
 @app.get("/healthz", response_model=HealthResponse)
 async def health_check():
     """Check service health and provider availability."""
-    providers = {}
+    # The five provider probes and the Supabase probe are INDEPENDENT, but were awaited
+    # strictly in sequence, so every unreachable dependency added its own full timeout to
+    # the wall clock. With whisper (DNS resolution failure), voicebox and omnivoice all
+    # down on B850 this endpoint took 15.038s against a 15s container healthcheck timeout
+    # — it answered HTTP 200 and was marked unhealthy by 38 milliseconds, 1,950 times in
+    # a row, for a service that was serving correctly the whole time.
+    #
+    # Concurrency makes the wall clock the SLOWEST probe rather than their sum, so the
+    # endpoint no longer degrades linearly with the number of dependencies that are down —
+    # which is exactly when a health endpoint is most needed and least affordable to hang.
+    _probes = {
+        "vibevoice": vibevoice_provider,
+        "whisper": whisper_provider,
+        "ultimate_tts": ultimate_tts_provider,
+        "voicebox": voicebox_provider,
+        "omnivoice": omnivoice_provider,
+    }
 
-    # Check VibeVoice
-    if vibevoice_provider:
-        providers["vibevoice"] = await vibevoice_provider.health_check()
-    else:
-        providers["vibevoice"] = False
+    async def _supabase_probe() -> str:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
+                return "connected" if resp.status_code in [200, 401] else "error"
+        except Exception as exc:
+            logger.warning("Supabase health check failed: %s", exc)
+            return "disconnected"
 
-    # Check Whisper
-    if whisper_provider:
-        providers["whisper"] = await whisper_provider.health_check()
-    else:
-        providers["whisper"] = False
+    _names = [n for n, p in _probes.items() if p]
+    _results = await asyncio.gather(
+        *(_probes[n].health_check() for n in _names),
+        _supabase_probe(),
+        return_exceptions=True,
+    )
 
-    # Check Ultimate-TTS
-    if ultimate_tts_provider:
-        providers["ultimate_tts"] = await ultimate_tts_provider.health_check()
-    else:
-        providers["ultimate_tts"] = False
+    providers = {name: False for name in _probes}
+    for name, result in zip(_names, _results):
+        if isinstance(result, BaseException):
+            # Never silently downgrade to False: a probe that RAISED and a provider that
+            # answered "not ready" are different facts, and only one of them is a bug.
+            logger.warning("provider %s health check raised: %r", name, result)
+            providers[name] = False
+        else:
+            providers[name] = bool(result)
 
-    # Check Voicebox
-    if voicebox_provider:
-        providers["voicebox"] = await voicebox_provider.health_check()
-    else:
-        providers["voicebox"] = False
-
-    # Check OmniVoice
-    if omnivoice_provider:
-        providers["omnivoice"] = await omnivoice_provider.health_check()
-    else:
-        providers["omnivoice"] = False
+    _supabase_result = _results[-1]
+    supabase_status = (
+        "disconnected" if isinstance(_supabase_result, BaseException) else _supabase_result
+    )
 
     # Check NATS
     nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
-
-    # Check Supabase
-    supabase_status = "unknown"
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
-            supabase_status = "connected" if resp.status_code in [200, 401] else "error"
-    except Exception as exc:
-        logger.warning("Supabase health check failed: %s", exc)
-        supabase_status = "disconnected"
 
     REQUESTS_TOTAL.labels(endpoint="/healthz", status="200").inc()
 
@@ -699,6 +726,85 @@ async def get_config():
 
 
 # TTS synthesis endpoint
+class VoiceBindingResponse(BaseModel):
+    """Resolved agent→voice binding (see AGENT_VOICE_BINDING_CONTRACT.md).
+
+    Read-only metadata — which engine/voice/provider an agent uses, its FlOO$
+    prosody, and the host-affinity node + target URL. Consumed by the CLI
+    (persona-bind) and OpenRoom helper agents so both resolve identically.
+    """
+    agent_id: str
+    alter: Optional[str] = None
+    engine: str
+    voice_id: Optional[str] = None
+    provider: str
+    prosody: Optional[Dict[str, float]] = None
+    node: Optional[str] = None
+    target_url: Optional[str] = None
+    floos_suit: Optional[str] = None
+    source: str
+
+
+def _configured_url_for_provider(provider: str) -> Optional[str]:
+    """Configured base URL for a provider, used to host-swap under host-affinity."""
+    return {
+        "ultimate_tts": ULTIMATE_TTS_URL,
+        "omnivoice": OMNIVOICE_URL,
+        "vibevoice": VIBEVOICE_URL,
+        "voicebox": VOICEBOX_URL,
+    }.get(provider) or None
+
+
+@app.get("/v1/voice/binding", response_model=VoiceBindingResponse, dependencies=[Depends(verify_api_key)])
+async def voice_binding(agent_id: str, alter: Optional[str] = None, intent: Optional[str] = None):
+    """Resolve an agent identity to its VoiceBinding — the HTTP consumption seam
+    for the CLI (persona-bind) and OpenRoom helper agents.
+
+    Read-only. When ``VOICE_HOST_AFFINITY`` is enabled the ``target_url`` is
+    host-swapped to the selected fleet node (``pmoves-<node>``); otherwise it is
+    the provider's configured URL. Fail-open: unresolved layers fall through to
+    the provider default, so this never errors on an unknown agent.
+    """
+    from persona_selector import resolve_agent_voice, resolve_engine_target
+
+    binding = await resolve_agent_voice(agent_id, alter=alter, intent=intent)
+    configured = _configured_url_for_provider(binding.get("provider", ""))
+    if configured:
+        target_url, node = resolve_engine_target(binding["engine"], configured)
+        binding["target_url"] = target_url
+        binding["node"] = node
+        if node and "affinity" not in binding["source"]:
+            binding["source"] = f"{binding['source']}+affinity"
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/binding", status="200").inc()
+    return VoiceBindingResponse(**binding)
+
+
+def _route_engine_provider(singleton, provider_cls, engine: str, configured_url: str):
+    """Host-affinity seam: pick the provider instance for this cast.
+
+    When ``VOICE_HOST_AFFINITY`` selects a node whose URL differs from the
+    configured one, return a transient provider bound to that node's URL;
+    otherwise return the startup singleton. Fail-open: any construction error
+    falls back to the singleton (routing never blocks a cast).
+
+    Returns ``(provider, selected_node)`` — ``selected_node`` is surfaced in the
+    response so callers can see where the cast ran.
+    """
+    from persona_selector import resolve_engine_target
+
+    target_url, node = resolve_engine_target(engine, configured_url)
+    if node and target_url != configured_url:
+        try:
+            return provider_cls(target_url), node
+        except Exception as exc:  # noqa: BLE001 - fail-open to the configured host
+            logger.warning(
+                "host-affinity: could not build %s for node=%s (%s); using configured URL",
+                provider_cls.__name__, node, exc,
+            )
+            return singleton, None
+    return singleton, node
+
+
 @app.post("/v1/voice/synthesize", response_model=SynthesizeResponse, dependencies=[Depends(verify_api_key)])
 async def synthesize_speech(request: SynthesizeRequest):
     """
@@ -757,10 +863,14 @@ async def synthesize_speech(request: SynthesizeRequest):
                 format="pcm16"
             )
         elif provider_name == "ultimate_tts" and ultimate_tts_provider:
-            audio_data = await ultimate_tts_provider.synthesize(
+            ut_engine = request.engine or "kitten_tts"
+            ut_provider, ut_node = _route_engine_provider(
+                ultimate_tts_provider, UltimateTTSProvider, ut_engine, ULTIMATE_TTS_URL,
+            )
+            audio_data = await ut_provider.synthesize(
                 text=request.text,
                 voice=request.voice,
-                engine=request.engine or "kitten_tts",
+                engine=ut_engine,
             )
             if not audio_data:
                 raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio.")
@@ -783,7 +893,8 @@ async def synthesize_speech(request: SynthesizeRequest):
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
                 sample_rate=24000,
-                format="wav"
+                format="wav",
+                node=ut_node,
             )
         elif provider_name == "voicebox" and voicebox_provider:
             audio_data = await voicebox_provider.synthesize(
@@ -823,7 +934,10 @@ async def synthesize_speech(request: SynthesizeRequest):
                 format="wav"
             )
         elif provider_name == "omnivoice" and omnivoice_provider:
-            audio_data = await omnivoice_provider.synthesize(
+            ov_provider, ov_node = _route_engine_provider(
+                omnivoice_provider, OmniVoiceProvider, "omnivoice", OMNIVOICE_URL,
+            )
+            audio_data = await ov_provider.synthesize(
                 text=request.text,
                 voice=request.voice,
                 instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
@@ -857,7 +971,8 @@ async def synthesize_speech(request: SynthesizeRequest):
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
                 sample_rate=sample_rate,
-                format="wav"
+                format="wav",
+                node=ov_node,
             )
         else:
             if provider_name == "vibevoice" and not vibevoice_provider:
@@ -899,7 +1014,7 @@ async def synthesize_speech(request: SynthesizeRequest):
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
@@ -1075,7 +1190,7 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     except HTTPException as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status=str(exc.status_code)).inc()
         raise
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
         logger.exception("TTS synthesis (audio) failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
@@ -1276,7 +1391,7 @@ async def recognize_speech(
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
         logger.exception("STT recognition failed")
         raise HTTPException(status_code=500, detail="STT recognition failed")
@@ -1506,7 +1621,7 @@ async def websocket_tts(websocket: WebSocket):
                     "message": "VibeVoice provider not available"
                 })
 
-    except Exception as exc:
+    except Exception:
         logger.exception("WebSocket TTS error")
         try:
             await websocket.send_json({"type": "error", "message": "Internal server error"})

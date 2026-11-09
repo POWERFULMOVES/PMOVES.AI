@@ -1,4 +1,15 @@
-import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io, socket
+import os
+import re
+import time
+import threading
+import ipaddress
+import math
+import requests
+import logging
+import json
+import sys
+import io
+import socket
 import urllib3
 from pathlib import Path
 from urllib.parse import urlparse
@@ -17,6 +28,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
+from services.common.env import get_secret
 from sentence_transformers import SentenceTransformer
 try:
     from sentence_transformers import CrossEncoder  # for optional rerank
@@ -164,7 +176,7 @@ _hrm_controller = HrmDecoderController(get_decoder_pack)
 
 # --- CHIT security and decode flags ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
-CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower() == "true"
 CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
 CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
@@ -210,7 +222,7 @@ def _load_codebook(path: str):
         return items
     except FileNotFoundError:
         return []
-    except Exception as e:
+    except Exception:
         logger.exception("codebook load error")
         return []
 
@@ -372,7 +384,7 @@ def refresh_warm_dictionary():
                 tmp.setdefault(t, set()).add(v)
         _warm_entities = tmp
         _warm_last = time.time()
-    except Exception as e:
+    except Exception:
         logger.exception("warm dictionary error")
 
 def warm_loop():
@@ -695,7 +707,7 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
                 prelim = prelim[:max(k, RERANK_K)]
             except HTTPException:
                 raise
-            except Exception as e:
+            except Exception:
                 logger.exception("Rerank error; falling back to preliminary scores")
 
     if not reranked:
@@ -842,7 +854,7 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         pts = []
         if const_id and const:
             for p in const.get("points", []) or []:
-                cid = p.get("id");
+                cid = p.get("id")
                 if not cid: continue
                 pts.append({
                     "id": cid,
@@ -860,7 +872,6 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
 
 
 def _js_divergence(p: List[float], q: List[float]) -> float:
-    import math
     def _kl(a, b):
         eps = 1e-9
         s = 0.0
@@ -876,7 +887,6 @@ def _wasserstein_1d(p: List[float], q: List[float]) -> float:
     # discrete 1D: sum |CDF_p - CDF_q|
     import itertools
     from itertools import accumulate
-    import math
     cdp = list(accumulate(p))
     cdq = list(accumulate(q))
     return sum(abs(a-b) for a, b in itertools.zip_longest(cdp, cdq, fillvalue=1.0)) / max(1, len(cdp))

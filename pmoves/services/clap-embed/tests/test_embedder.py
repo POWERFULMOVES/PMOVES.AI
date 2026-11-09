@@ -41,7 +41,6 @@ def test_embed_is_deterministic():
 
 
 import os
-import pytest
 
 
 @pytest.mark.skipif(os.environ.get("CLAP_RUN_MODEL_TESTS") != "1",

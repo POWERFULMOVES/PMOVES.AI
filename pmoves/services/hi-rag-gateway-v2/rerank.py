@@ -18,7 +18,6 @@ from config import (
     RERANK_ENABLE,
     RERANK_PROVIDER,
     DEVICE,
-    _RERANK_FP16_EFFECTIVE,
     TENSORZERO_BASE_URL,
     TENSORZERO_RERANK_FUNCTION,
     TENSORZERO_RERANK_TIMEOUT,
@@ -138,7 +137,7 @@ def _get_reranker():
             _cfg.RERANKER_TYPE = reranker_type
             return _cfg._reranker
 
-        except Exception as e:
+        except Exception:
             logger.exception("Reranker init failed")
             return None
 

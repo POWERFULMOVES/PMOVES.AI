@@ -20,10 +20,8 @@ import json
 import logging
 import os
 import signal
-import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 from urllib.parse import urlparse
 
 from nats.aio.client import Client as NATS

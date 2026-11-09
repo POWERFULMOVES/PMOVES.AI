@@ -1,0 +1,65 @@
+# docker-compose.amd-voice.yml — AMD ROCm voice stack override
+#
+# Override for AMD GPU nodes (RDNA3/RDNA4). Replaces NVIDIA device
+# reservations with ROCm device passthrough (/dev/kfd, /dev/dri).
+# OmniVoice is NVIDIA-only (k2-fsa CUDA dependency) so it is excluded;
+# Flute-Gateway defaults to Ultimate TTS with chatterbox engine.
+#
+# Usage:
+#   make -C pmoves up-voice-amd
+#   # or manual:
+#   docker compose -p pmoves --project-directory pmoves \
+#     -f pmoves/docker-compose.base.yml \
+#     -f pmoves/docker-compose.core.yml \
+#     -f pmoves/docker-compose.media.yml \
+#     -f pmoves/docker-compose.voice.yml \
+#     -f pmoves/docker-compose.amd-voice.yml \
+#     --profile supabase-local --profile media --profile voice --profile tts \
+#     up -d flute-gateway ultimate-tts-studio voice-relay
+#
+# RDNA4 (gfx1201, R9700/RX9000): set HSA_OVERRIDE_GFX_VERSION=12.0.1
+# RDNA3 (gfx1100/1101/1151, RX7000): set HSA_OVERRIDE_GFX_VERSION=11.0.0
+# RDNA2 (gfx1030/1031, RX6000): set HSA_OVERRIDE_GFX_VERSION=10.3.0
+services:
+  ultimate-tts-studio:
+    build:
+      context: ./docker/ultimate-tts-studio
+      dockerfile: Dockerfile.rocm
+    image: ${ULTIMATE_TTS_ROCM_IMAGE:-ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:rocm-latest}
+    environment:
+    - HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION:-12.0.1}
+    - PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.6,max_split_size_mb:512
+    - ULTIMATE_TTS_DEFAULT_ENGINE=${ULTIMATE_TTS_DEFAULT_ENGINE:-chatterbox}
+    - DISABLE_NVIDIA=true
+    # No `deploy.resources.reservations.devices` block: Docker's device-reservation
+    # API only implements the `nvidia` driver. `driver: amd` passes `compose config`
+    # but fails at container start with "failed to discover GPU vendor from CDI".
+    # ROCm is wired via the /dev/kfd + /dev/dri passthrough below instead.
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+        limits:
+          memory: 16G
+          cpus: '8.0'
+    devices:
+    - /dev/kfd:/dev/kfd
+    - /dev/dri:/dev/dri
+    security_opt:
+    - seccomp:unconfined
+    # Numeric GID, not a name: group_add resolves names against the *container*
+    # image's /etc/group (alpine video=27), never the host's render group that
+    # owns /dev/kfd (gid 110 here) -> EACCES. Find yours with:
+    #   getent group render | cut -d: -f3
+    group_add:
+    - "${RENDER_GID:-110}"
+    ipc: host
+    volumes:
+    - /dev/shm:/dev/shm
+
+  flute-gateway:
+    environment:
+    - DEFAULT_VOICE_PROVIDER=ultimate_tts
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://ultimate-tts-studio:7861}
+    - ULTIMATE_TTS_DEFAULT_ENGINE=${ULTIMATE_TTS_DEFAULT_ENGINE:-chatterbox}
+    - NATS_URL=${NATS_URL}

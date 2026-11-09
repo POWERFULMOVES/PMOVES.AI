@@ -11,10 +11,10 @@
 name: "Node 4090 Laptop"
 version: "1.0.0"
 description: >
-  Per-node TAC tree for the 4090 laptop (pmoves-laptop).
+  Per-node TAC tree for the 4090 laptop (pmoves-4090).
   Mobile relay node — consumer of 5090 TTS and Z890 infrastructure.
   PR triage, code review, and lightweight agent work.
-  Hostname: pmoves-laptop | Tailscale: pmoves-laptop.ts | Role: Mobile Relay
+  Hostname: pmoves-4090 | Tailscale: pmoves-4090.ts | Role: Mobile Relay
 
 root:
   id: n4090
@@ -153,11 +153,11 @@ root:
       agent_hint: 4090-claude
       children:
         - id: n4090.mesh.status
-          task: "pmoves-laptop online in Tailscale"
+          task: "pmoves-4090 online in Tailscale"
           action:
             type: shell
             command: "tailscale status"
-            expect: "pmoves-laptop online at pmoves-laptop.ts"
+            expect: "pmoves-4090 online at pmoves-4090.ts"
           agent_hint: 4090-claude
 
         - id: n4090.mesh.ssh-enabled
@@ -168,7 +168,7 @@ root:
             expect: "ssh-enabled (or SSH feature listed in debug features output)"
           context: >
             Tailscale SSH allows SPARK and other fleet nodes to SSH into
-            pmoves-laptop without Windows password. Auth via Tailscale identity.
+            pmoves-4090 without Windows password. Auth via Tailscale identity.
             Enable with: tailscale set --ssh (operator runs once).
           agent_hint: 4090-claude
 
@@ -282,7 +282,7 @@ root:
             type: manual
             instruction: >
               Verify mesh agent publishes capability announcement.
-              Payload should include: hostname (pmoves-laptop),
+              Payload should include: hostname (pmoves-4090),
               role (mobile-relay), capabilities (pr-triage, code-review),
               no GPU, no TTS, consumer-only.
             expect: "NATS message received with 4090 relay capabilities"

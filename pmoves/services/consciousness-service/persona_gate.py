@@ -8,7 +8,7 @@ taxonomy, ensuring that personas meet quality gates before publishing.
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import nats
@@ -17,7 +17,7 @@ from nats.aio.client import Client as NATS
 logger = logging.getLogger(__name__)
 
 # Configuration
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://postgrest:3000")
 
 # NATS subjects

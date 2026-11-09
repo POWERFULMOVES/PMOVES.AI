@@ -1,24 +1,50 @@
 ---
 name: pmoves-pair-review
-description: Reciprocal pair-review workflow for parallel-CLAUDE PRs. Invoke when peer CLAUDE ships a PR and you're trading reviews; walks the 4-class observation taxonomy (reasoning gap / semantic-naming drift / contract-correctness / defense-in-depth), the review-anatomy template, and the AGNOTE signing flow. Pairs with pmoves-chit-sign.
+description: Reciprocal pair-review workflow for parallel agent-session PRs — any fleet harness (Claude Code, Crush, peer nodes) and the operator (DARKXSIDE/POWERFULMOVES). Walks the 4-class observation taxonomy (reasoning gap / semantic-naming drift / contract-correctness / defense-in-depth), the review-anatomy template, skills-PR review (SKILL.md diffs), and the AGNOTE signing flow. Pairs with pmoves-chit-sign.
 disable-model-invocation: false
 user-invocable: true
 ---
 
 # pmoves-pair-review
 
-Codified workflow for reciprocal PR review across parallel-CLAUDE sessions in the PMOVES.AI fleet. Three orthogonal reviewer surfaces (peer CLAUDE, automated reviewer, self) produce compounding quality gains per PR. Originated 2026-05-20/21 during the 5090 + Z890→5090 mirror exchange on PRs #1555/#1559/#1560/#1567 (~21 distinct improvements across 7 PRs).
+Codified workflow for reciprocal PR review across parallel agent sessions in the PMOVES.AI fleet. Four orthogonal reviewer surfaces (peer agent session, automated reviewer, self, and the operator — DARKXSIDE/POWERFULMOVES as Control) produce compounding quality gains per PR. Originated 2026-05-20/21 during the 5090 + Z890→5090 mirror exchange on PRs #1555/#1559/#1560/#1567 (~21 distinct improvements across 7 PRs); generalized 2026-09-04 from CLAUDE-only to any fleet harness (Crush included) plus the operator surface.
 
 ## When to invoke
 
-- A peer CLAUDE session has just shipped a PR and you're the reciprocal reviewer
-- You're auditing whether a PR your CLAUDE shipped has received its full three-angle review (peer + automated + self)
-- You're onboarding a new CLAUDE session into a parallel-orchestration setup and want the cadence on the table early
+- A peer agent session has just shipped a PR and you're the reciprocal reviewer — **any harness counts**: Claude Code, Crush, Codex CLI, Hermes, a KiloCode claw, or a DARKXSIDE/POWERFULMOVES operator session
+- The PR touches skills (`.claude/skills/**`, `skills/PMOVES-skills/**`) and you want the skills-review checklist below
+- You're auditing whether a PR your session shipped has received its full review angles (peer + automated + self + operator)
+- You're onboarding a new session (any harness) into a parallel-orchestration setup and want the cadence on the table early
 
 **Do NOT invoke when:**
 - The PR is your own (use `pmoves-chit-sign` for AGNOTE rows on your own work)
-- No peer CLAUDE is active (Codex/CodeRabbit + honest self-review suffice solo)
+- No peer session is active (Codex/CodeRabbit + honest self-review + operator suffice solo)
 - Hotfix / damage-control / time-critical — defer to post-merge retrospective
+
+## Harness notes (Crush, operator, and other non-Claude sessions)
+
+The workflow is harness-agnostic; these specifics were learned live (SPARK, 2026-09):
+
+- **Same mechanics**: `gh` CLI, AGNOTE rows, `make -C pmoves sign-trail`, the 4-class scan — identical from Crush or an operator terminal.
+- **Self-approval**: GitHub blocks `gh pr review --request-changes`/`--approve` on same-account PRs from any harness — use `gh pr comment` for the substantive body (this skill already says COMMENTED, not APPROVED).
+- **Signature**: sign with your registered identity from `pmoves/config/agent_signatures.yaml` (e.g. `crush` ◇, `claude-opus` ◆, `z890-claude` ⚙, `darkxside` ✦, `powerfulmoves` ⚡) — the `ACK::<reviewing-agent>::` slot takes the agent_id, not the harness name. An operator review signs as `darkxside`/`powerfulmoves`.
+- **The operator IS a review surface** (Three-Body Control): DARKXSIDE's challenge of a PR's claims mid-review is the highest-signal angle in the fleet — PR #2942's `:8091` port-map correction and PR #2938's topology challenge both came from operator pushback on an agent's confident draft. Operator review lands as PR comments and the `[ACK: control]` line in `AGNOTE4482_SIGNOFF_CHECKLIST.md`; the merge gate does not pass without it.
+- **Skills load on demand**: Crush loads a skill only when invoked (`loaded_this_session 0/44` is normal). Reviewing a skills PR from Crush is an extra angle — you can verify the frontmatter `description` actually works as a **trigger** you would have fired on, not just as documentation.
+- **Cross-harness reviewers are the point**: a Crush review of a Claude-authored PR (and vice versa) surfaces harness-assumption drift — paths that only exist under one launcher, env vars one harness sources and the other doesn't (the `TS_Z890` roster drop was exactly this class). The operator catches what no harness sees: that the task itself was wrong.
+
+## Reviewing skills PRs (SKILL.md diffs)
+
+Skills are load-bearing contracts — a wrong skill misroutes every session that loads it. Map the 4 classes onto the skills surface:
+
+| Class | Skills-specific catch | Check |
+|---|---|---|
+| Contract-correctness | frontmatter `name` must equal the directory name (Crush's validator rejects colon-style names like `4090:probe`); `description` required | Tier 1 CI covers this — but read the diff yourself |
+| Semantic-naming drift | `description` is a **trigger**, not a summary — it decides when a harness loads the skill; a description that describes outcomes but not WHEN to fire will never be invoked | Would YOU have loaded it on the relevant task? Would the operator's phrasing of the task have fired it? |
+| Contract-correctness | every `make -C pmoves <target>` / path the SKILL.md names must exist | `python pmoves/tools/validate_command_anchors.py` — the ratchet fails PRs naming ghost targets |
+| Reasoning gap | SKILL.md documenting a live surface (ports, endpoints, handler lists) that has drifted from reality | Probe the live service — PR #2942's `:8091` correction is the canonical case: docs asserted a dead port map that one live probe disproved after the operator challenged it |
+| Defense-in-depth | skills shipping scripts (`scripts/`, hooks) without tests; paths relative to the wrong root | Tier 2 (hooks + skill scripts) CI must pass; check the script resolves the repo root from its own location |
+
+Also: skills in the `skills/PMOVES-skills` package submodule follow the **submodule workflow** (land in the fork, promote the gitlink) — pair-review applies there identically, plus the usual gitlink-integrity check.
 
 ## How to run
 
@@ -36,7 +62,7 @@ gh pr list --repo POWERFULMOVES/PMOVES.AI --state open --json number,title,autho
 # observations are independent of peer-CLAUDE angle; let them surface before your review
 ```
 
-### 2. Scan the diff for the four observation classes
+### 2. Scan the diff for the five observation classes
 
 | Class | Catch | Example |
 |-------|-------|---------|
@@ -44,6 +70,7 @@ gh pr list --repo POWERFULMOVES/PMOVES.AI --state open --json number,title,autho
 | **Semantic-naming drift** | Name/label suggests one meaning, code/spec uses another | `timestamp_iso` field on a payload whose canonical spec uses `timestamp` |
 | **Contract-correctness shortfall** | PR establishes contract but doesn't validate other side | New NATS subject without entry in `nats-subjects.md` |
 | **Defense-in-depth gap** | Correct primary mechanism, skipped cheap redundancy | `grep -F connected` works only because `disconnected` happens to start with `dis-` |
+| **Overlay paper-over** | PMOVES layer replaces a harness mechanism instead of connecting to it (`pmoves/docs/danger-room/anti-patterns.md` § `overlay-paper-over`) | launcher greps `kimi --help` to choose a code path; regen deletes a guard the harness shipped; operator home path committed in a settings template |
 
 ### 3. Write the review
 
@@ -102,6 +129,34 @@ gh pr diff <PR-number> --repo POWERFULMOVES/PMOVES.AI | less
 # Resolve threads if you opened any (inline comments typically don't need explicit resolution)
 gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { id isResolved } } }'
 ```
+
+### 7. The 6 lessons from the 2026-08-08 3-PR pass
+
+Codified from the Mavis harness v0 review pass (PMOVES.AI #2477 +
+PMOVES-hermes-agent #4 + PMOVES-pinokio #1, all cross-fork
+consumers of the same CGP schema). The full discussion is in
+`pmoves/docs/operations/PAIR_REVIEW_RECIPROCITY.md` § "Lessons
+from the 2026-08-08 3-PR pass"; the short version:
+
+1. **Byte-compare vendored schemas against canonical** (SHA-256 +
+   `diff -q`). Use `text eol=lf` in `.gitattributes` for vendored
+   JSON to avoid Windows-CRLF false-positives.
+2. **Schema descriptions that say "MUST" should map to `required`**.
+   Cross-check: for every "MUST" in a description, is the field in
+   the `required` array?
+3. **Tighten `additionalProperties: false` on well-defined leaf
+   objects only.** Top-level + open-extension objects stay `true`
+   for forward-compat.
+4. **Normalize CRLF before byte-comparing.** Or add `.gitattributes`.
+5. **`key=str` for mixed-type sorted lists.** A loader that skips
+   malformed entries to a list can leave mixed types; `sorted()`
+   on `str + int + None + dict` raises TypeError.
+6. **The "stub vs real" bootstrap pattern needs a deterministic
+   stub.** Hard-coded `created_at` in the no-CGP fallback means
+   SHA-256(canonical_json) collides across processes. Add
+   uniqueness only if a downstream consumer derives session IDs
+   from the stub.
+
 
 ## Anti-patterns
 

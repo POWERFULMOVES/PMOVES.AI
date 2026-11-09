@@ -116,7 +116,7 @@ Services for audio, video, and image processing.
 | **Media Video** | 8079 | Object/frame analysis (YOLO) |
 | **Media Audio** | 8082 | Audio analysis (emotion/speaker) |
 | **Ultimate TTS Studio** | 7861 | Multi-engine TTS (GPU) |
-| **Flute Gateway** | 8055 HTTP, 8056 WebSocket | Prosodic TTS synthesis |
+| **Flute Gateway** | 8055 (HTTP + WebSocket) | Prosodic TTS synthesis |
 
 ### Tier: Research (Advanced AI)
 

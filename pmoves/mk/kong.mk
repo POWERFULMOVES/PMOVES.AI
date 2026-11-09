@@ -11,8 +11,8 @@
 # =============================================================================
 
 KONG_ADMIN_URL ?= http://localhost:8001
-SEEDER_SCRIPT  := pmoves/tools/kong_route_seeder.py
-MODEL_SUITS_DIR := pmoves/configs/model-suits
+SEEDER_SCRIPT  := tools/kong_route_seeder.py
+MODEL_SUITS_DIR := configs/model-suits
 
 .PHONY: kong-seed-routes kong-prune-routes kong-list-routes kong-reset-routes kong-health kong-dry-run kong-sync kong-list-services kong-help
 

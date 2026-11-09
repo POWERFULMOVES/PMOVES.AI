@@ -1,5 +1,50 @@
-# Repository Guidelines
+# Repository Guidelines — `pmoves/`
 
+> **Format.** This file follows the [agents.md open format](https://agents.md); the PMOVES fork of the
+> spec lives at [`PMOVES-agents.md/`](../PMOVES-agents.md/) (submodule). The three canonical sections —
+> `## Dev environment tips`, `## Testing instructions`, `## PR instructions` — are present below;
+> PMOVES-specific extensions are marked inline as `<!-- PMOVES-EXT: <name> -->` so cold-start agents
+> can find the extension boundaries, same convention as [`../AGENTS.md`](../AGENTS.md).
+>
+> **Scope.** This is the `pmoves/` subtree contract: service layout, ports, bring-up order, smoke
+> commands. For the repo-wide contract read [`../AGENTS.md`](../AGENTS.md) first — this file does not
+> replace it, it narrows it.
+>
+> **Read alongside** (a cold-start agent needs all four to act safely here):
+> - [`../AGENTS.md`](../AGENTS.md) — repo-wide agent contract
+> - [`../.claude/BOOTSTRAP.md`](../.claude/BOOTSTRAP.md) — Known Roads, MCP entrypoints, disclosure rules
+> - [`docs/AGENTS/AGNOTE4482_SITREP.md`](docs/AGENTS/AGNOTE4482_SITREP.md) — cold-start orientation
+> - [`docs/AGENTS/AGNOTE4482PHI.t1.md`](docs/AGENTS/AGNOTE4482PHI.t1.md) — active claim register
+>
+> **CHIT awareness.** Work in this subtree is provenance-bearing. Claim a lane before editing and sign
+> on completion (`claim → work → sign → release`); the Known Road is
+> `make -C pmoves sign-trail SUMMARY=... AGENT=...`. Signing is optional locally and never skipped for
+> session-end provenance. If `sign-trail` warns `identity not resolved`, the signature is a FALLBACK
+> presentation and **not** your registered identity — fix the interpreter rather than accepting it
+> (`make -C pmoves check-prereqs-env`). CHIT-aware service ports and per-service status live in
+> [`docs/audit/CHIT_INTEGRATION_STATUS.md`](docs/audit/CHIT_INTEGRATION_STATUS.md).
+
+<!-- PMOVES-EXT: agintz_keystone -->
+## AGInTZ keystone — the AGNOTE4482 corpus
+
+The AGNOTE4482 corpus under `docs/AGENTS/` is the keystone for ALL AGInTZ
+(agent harness identities), per operator 2026-09-19:
+
+- [`docs/AGENTS/AGNOTE4482.md`](docs/AGENTS/AGNOTE4482.md) — P7 stage-manager definition + the AGInTZ awareness ledger
+- [`docs/AGENTS/AGNOTE4482PHI.t1.md`](docs/AGENTS/AGNOTE4482PHI.t1.md) — the active claim register (claim → work → sign → release)
+- [`docs/AGENTS/AGNOTE4482_SITREP.md`](docs/AGENTS/AGNOTE4482_SITREP.md) — cold-start orientation
+
+**Skills.** The canonical skills home is the [`PMOVES-skills`](https://github.com/POWERFULMOVES/PMOVES-skills)
+fork (package submodule at `skills/PMOVES-skills/`); the autoclaw-managed install
+directory remains the runtime discovery target (see the root AGENTS.md skill-path
+guidance).
+
+**Spec rename (gated).** The `PMOVES-agents.md/` spec submodule keeps its current
+name until it is wired to PMOVES-AGInTZ, at which point it is renamed
+(operator 2026-09-19). Recorded here so no agent treats the current name as final
+or forks documentation against the wrong one.
+
+<!-- PMOVES-EXT: project_structure -->
 ## Project Structure & Module Organization
 - `services/`: Python microservices (FastAPI workers, utilities). Examples: `agent-zero/`, `hi-rag-gateway/`, `retrieval-eval/`, `graph-linker/`, `publisher/`.
 - `contracts/`: Event contracts (`schemas/`) and `topics.json` mapping topics → schema paths.
@@ -9,6 +54,7 @@
 - `datasets/`, `docs/`: Sample data and documentation.
 - Root: `docker-compose.yml`, `Makefile`, `env.shared.example`.
 
+<!-- PMOVES-EXT: planning_docs -->
 ## Planning & Documentation Expectations
 - **Mandatory context before changes:** read `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` and `pmoves/docs/NEXT_STEPS.md` to align with the current sprint focus (M2 — Creator & Publishing). These documents spell out the active priorities, including Jellyfin refresh polish, Discord embeds, and Supabase→Discord automation; confirm your work reinforces or explicitly updates those targets before you start coding.
 - **Maintainer cadence:** when significant features ship, priorities move between columns, or we start a new sprint, refresh both `docs/ROADMAP.md` and `docs/NEXT_STEPS.md` (and adjust their `_Last updated` timestamps) so contributors always land on the latest plan.
@@ -18,11 +64,14 @@
   - Jellyfin integration runbooks live under `pmoves/docs/PMOVES.AI PLANS/` (see `JELLYFIN_BRIDGE_INTEGRATION.md`, `JELLYFIN_BACKFILL_PLAN.md`, and `Enhanced Media Stack with Advanced AudioVideo Analysis/`).
   - Additional operational primers live alongside services (e.g., `services/**/README.md`) and should be consulted when touching those areas.
 
-## Build, Test, and Development Commands
+## Dev environment tips
 - `make up`: Starts core data services and workers (qdrant, neo4j, meilisearch, hi-rag-gateway, retrieval-eval) via Docker Compose profiles, assuming Supabase CLI is already running on the `pmoves-net` network.
 - `make down`: Stops all containers.
 - `make clean`: Stops and removes volumes (destructive for local data).
-- Run a service locally (example): `python services/agent-zero/main.py` (installs deps first: `pip install -r services/agent-zero/requirements.txt`).
+- Run a service locally (example): `uv run --with-requirements services/agent-zero/requirements.txt python services/agent-zero/main.py`.
+  Use `uv`, never `pip` — see `.claude/PATTERNS.md`. `make -C pmoves venv-bringup` provisions the
+  canonical environment; `make -C pmoves check-prereqs-env` verifies the interpreter it resolves to
+  can actually import the tool dependencies.
 - Logs: `docker compose logs -f <service>`.
 
 ## Coding Style & Naming Conventions
@@ -31,15 +80,15 @@
 - Event contracts: keep `v{n}` suffix in filenames (e.g., `*.v1.schema.json`) and update `contracts/topics.json` when adding topics.
 - Keep modules small and single‑purpose; share helpers in `services/common/`.
 
-## Testing Guidelines
+## Testing instructions
 - Current repo has minimal automated tests. When adding tests, use `pytest` with `tests/` per service (e.g., `services/<name>/tests/test_*.py`).
 - Mock external systems (NATS, MinIO, Neo4j) and validate envelope/schema with sample payloads.
-- Suggested commands: `pip install -r services/<name>/requirements.txt pytest` then `pytest -q`.
+- Suggested commands: `uv run --with-requirements services/<name>/requirements.txt --with pytest pytest -q`.
 - Before pushing, mirror the GitHub Actions checks documented in `docs/LOCAL_CI_CHECKS.md` (pytest suites, `make chit-contract-check`, `make jellyfin-verify` when the publisher is affected, SQL policy lint, env preflight). Capture each command/output in the PR template’s Testing section.
 - If you intentionally skip one of those checks (docs-only change, etc.), record the rationale in the PR Reviewer Notes so reviewers know the risk envelope.
 - UI updates: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` to lint the Next.js bundle and validate Supabase connectivity. Reference `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` when collecting smoke evidence.
 - Hi-RAG gateway: after touching reranker or embedding code, run `make -C pmoves smoke-gpu`. The target now pipes the validation query through `docker compose exec` so FlagEmbedding/Qwen rerankers that only accept batch size 1 still report `"used_rerank": true` (first run downloads the 4B checkpoint).
-- Agents/Archon: for full-stack validation, follow the “All Services Up, Then Tests (Archon + Agents Flow)” section in `pmoves/docs/SMOKETESTS.md` and the Archon service guide in `pmoves/docs/services/archon/README.md`; use `make -C pmoves agents-headless-smoke`, `make -C pmoves smoke-gpu`, and (when available) `make -C pmoves verify-all`/`make -C pmoves archon-smoke` to exercise health endpoints and Supabase wiring.
+- Agents/Archon: for full-stack validation, follow the “All Services Up, Then Tests (Archon + Agents Flow)” section in `pmoves/docs/SMOKETESTS.md` and the Archon service guide in `pmoves/docs/services/archon/README.md`; use `make -C pmoves agents-headless-smoke`, `make -C pmoves smoke-gpu`, and (when available) `make -C pmoves verify-all`/`make -C pmoves archon-ui-smoke` to exercise health endpoints and Supabase wiring.
 
 - Storage unified to Supabase Storage S3 endpoint. Ensure in `pmoves/env.shared`:
   - `MINIO_ENDPOINT=http://host.docker.internal:65421/storage/v1/s3`
@@ -76,6 +125,7 @@
 - Re‑enable GPU rerank and add an integration smoke.
 - Force offline transcript provider (`YT_TRANSCRIPT_PROVIDER=qwen2-audio`) in smoketest IDs; broaden fallback detection.
 
+<!-- PMOVES-EXT: console_personas -->
 ### Console & Personas
 - Console dev helpers: `make -C pmoves ui-dev-start` (port 3001, auto-loads env and boot JWT), `ui-dev-stop`, and `ui-dev-logs`.
 - Personas (v5.12): `pmoves_core.personas` is created and seeded with the `Archon` persona. To reapply schema/seeds: `make -C pmoves supabase-bootstrap`. Verify with:
@@ -85,12 +135,44 @@
   ```
 - JetStream drift can surface as `nats: JetStream.Error cannot create queue subscription…` in the Agent Zero container logs. Rebuild with `docker compose build agent-zero && docker compose up -d agent-zero` so the pull-subscribe controller code ships and the consumer metadata is recreated automatically.
 
+<!-- PMOVES-EXT: secrets -->
 ### Secrets handling (everyone)
 - Never commit secrets. Keep personal scratch in ignored files only, and store shared credentials in GitHub Actions secrets (with environment scoping for dev/prod), Docker/compose secrets via `*_FILE` envs, and the team vault for human retrieval.
 - Approved secret names and onboarding steps live in `docs/SECRETS_ONBOARDING.md`.
 - Single-env + branded defaults: integrations run against one environment bundle. Keep branded login defaults/API tokens in GitHub secrets and the vault; avoid committing real secrets in `pmoves/env.shared` (rotate and load through secrets for production values).
 - Quick start (local): `cp pmoves/env.shared.example pmoves/env.shared`, fill values, `make env-setup`, `make env-check`, then `./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev` to mirror into GitHub Secrets.
 
+#### Adding a NEW secret label — never hand-edit the manifests
+
+The CHIT secrets manifests are **machine-emitted**. Agents and operators edit
+the code-level registry, never the YAML — `pmoves/tools/chit_manifest_register.py`
+states the doctrine in its own docstring, and a hand-edited entry either gets
+overwritten or drifts from what the generator would produce.
+
+The road, in order:
+
+1. add the label to `REGISTRY` in `pmoves/tools/chit_manifest_register.py`
+2. `make -C pmoves chit-manifest-register` — emits the v2 entry (additive; never reorders or modifies existing ones)
+3. `make -C pmoves chit-manifest-sync` — derives v1 from v2
+4. `make -C pmoves secrets-funnel` — projects the tier env files
+
+Gate it without writing: `make -C pmoves chit-manifest-register ARGS='--check'`
+reports pending additions and exits 1 if any.
+
+To check whether a secret is actually funnel-owned rather than operator-set:
+`python pmoves/tools/github_secret_capacity_audit.py` lists **orphans** — present
+in GitHub, declared in no manifest — alongside per-scope capacity. GitHub caps
+secrets at 100 **per scope**, and `env:Prod` is at that ceiling today, so a new
+`github_secret` target is not free.
+
+Stated here rather than only in the root `AGENTS.md` because that is where it
+was: the root file carries the pipeline, this file did not, and an agent working
+inside `pmoves/` reads this one. Root `AGENTS.md` already records that "a
+duplicate funnel has been written twice by agents who checked only the root
+Makefile" — the same discoverability gap, one directory down.
+
+
+<!-- PMOVES-EXT: health_badges -->
 #### Health badges and custom endpoints
 
 The console Quick Links probe Agent Zero and Archon using `/healthz` by default. If your forks expose different health endpoints, set:
@@ -105,13 +187,15 @@ Personas page fallback when Supabase CLI REST hides `pmoves_core`:
 
 See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 
+<!-- PMOVES-EXT: agents_ui_bringup -->
 ### Agents UIs one‑click bring‑up
 
 - Published images (default):
-  - `make -C pmoves up-agents-ui` — starts NATS, Agent Zero API, Archon API, and the Archon UI. Open the UIs:
+  - `make -C pmoves up-agents-ui` — starts NATS, Agent Zero API, and the consolidated Archon service (API on 8091 + UI on 3737). Open the UIs:
     - Agent Zero UI: `${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}`
-    - Archon UI: `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}` (uses the Vite proxy to reach the Archon API on the Docker alias `archon-server`; keep `ARCHON_UI_API_URL` unset unless you explicitly need to point the UI at a remote/hosted Archon instance)
+    - Archon UI: `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}` (served by the same `archon` container that hosts the API)
 
+<!-- PMOVES-EXT: mcp_wiring -->
 ### MCP (Agent‑to‑Agent) wiring
 
 - Preferred: set discrete MCP defaults in `pmoves/env.shared` and let the seed tool build
@@ -120,7 +204,7 @@ See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 ```
 A0_MCP_ENABLE_DEFAULTS=true
 A0_MCP_FILESYSTEM_ROOTS=/data
-A0_MCP_ARCHON_ENDPOINT=http://archon-server:8051
+A0_MCP_ARCHON_ENDPOINT=http://archon-server:3090
 A0_MCP_NEO4J_URL=bolt://neo4j:7687
 A0_MCP_SUPABASE_URL=http://kong:8000
 A0_MCP_GATEWAY_ENDPOINT=http://gateway:8086
@@ -131,7 +215,7 @@ A0_MCP_SERVERS=
 - Optional advanced override (must be a single line):
 
 ```
-A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:8051";
+A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:3090";
 ```
 
 - Seed the runtime mapping file for Agent Zero (writes to `pmoves/data/agent-zero/runtime/mcp/servers.env`):
@@ -140,33 +224,34 @@ A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=
 make -C pmoves a0-mcp-seed
 ```
 
-- Quick MCP smoke for Archon’s bridge (port only, 404 acceptable):
+- Quick native Archon health check (:3090, JSON body — the SPA catch-all makes status-only probes false-positive):
 
 ```
-make -C pmoves archon-mcp-smoke
+make -C pmoves archon-native-health
 ```
 
-Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while the Archon UI can also issue MCP requests to the same headless bridge.
+Archon runs headless for orchestrations (Agent Zero → Archon native REST) while the Archon UI serves the same API.
 - From your forks (integrations workspace):
   - `make -C pmoves agents-integrations-clone` (once)
   - `make -C pmoves build-agents-integrations`
   - `make -C pmoves up-agents-integrations`
 
+<!-- PMOVES-EXT: ghcr_images -->
 ### Reproducible integration images (GHCR)
 
 The GHCR workflow (`.github/workflows/integrations-ghcr.yml`) builds/publishes multi‑arch images nightly and on demand for:
 
 - Agent Zero API (`pmoves-agent-zero`)
-- Archon API (`pmoves-archon`)
-- Archon UI (`pmoves-archon-ui`)
+- Archon API + UI (`pmoves-archon`)
 - Open Notebook (`pmoves-open-notebook`)
 - Jellyfin (`pmoves-jellyfin`)
 - Firefly III (`pmoves-firefly-iii`)
 - Wger (`pmoves-health-wger`)
 - PMOVES.YT (`pmoves-yt`)
 
-Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and `PMOVES_YT_IMAGE` in `pmoves/env.shared`.
+Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, and `PMOVES_YT_IMAGE` in `pmoves/env.shared`.
 
+<!-- PMOVES-EXT: bringup_sequence -->
 ## Bring-Up Sequence (CLI on pmoves-net)
 - Prefer `make first-run` (see `docs/FIRST_RUN.md`) to bootstrap secrets, start Supabase CLI, seed data, and run smokes.
 - Manual flow:
@@ -184,6 +269,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 - Default: published images set in `pmoves/env.shared` (`AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `DEEPRESEARCH_IMAGE`, `SUPASERCH_IMAGE`). Use `up-agents-published` to pull and run them.
 - Custom code: build a thin overlay FROM the published image, copy only your changes, tag it (e.g., `my/archon:dev`), set the corresponding `*_IMAGE` in `pmoves/env.shared`, then rerun `up-agents-published`. Pin tags only when a new upstream release breaks you.
 
+<!-- PMOVES-EXT: smoketests -->
 ## Smoketests & Diagnostics
 - Full harness: `make smoke`
 - Discord publisher: `make discord-smoke` (requires `DISCORD_WEBHOOK_URL` in `env.shared`/`.env.local`; host port 8094).
@@ -193,6 +279,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 - Creative CGP demos: `make demo-health-cgp`, `make demo-finance-cgp`, plus manual WAN/Qwen/VibeVoice webhook triggers (see `pmoves/creator/README.md`).
 - Environment sanity: `make preflight` (tooling) and `make flight-check` (runtime)
 
+<!-- PMOVES-EXT: ui_quickstart -->
 ### UI Quickstart & Links
 - Supabase Studio → http://127.0.0.1:65433 (`make -C pmoves supa-start`; status via `make -C pmoves supa-status`).
 - Notebook Workbench → http://localhost:4482/notebook-workbench (`npm run dev` in `pmoves/ui`; the launcher now layers `env.shared` + `.env.local` automatically; smoke with `make -C pmoves notebook-workbench-smoke`).
@@ -205,7 +292,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 - Open Notebook UI → http://localhost:8503 (`docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep password/token aligned).
 - n8n Automation → http://localhost:5678 (`make -C pmoves up-n8n`; flows sync from `pmoves/integrations`).
 
-## Commit & Pull Request Guidelines
+## PR instructions
 - Prefer Conventional Commits (e.g., `feat(hi-rag): hybrid search option`).
 - PRs should include: clear description, linked issues, affected services, run/rollback notes, and screenshots for UI/flows (e.g., retrieval-eval dashboard).
 - When opening a PR, start from `STARTER_PR_BODY.md` (repo root) and adjust sections as needed.
@@ -220,6 +307,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 - Validate payloads against schemas before publishing events (`services/common/events.py`).
 
 
+<!-- PMOVES-EXT: env_bootstrap -->
 ## Environment Bootstrap (Codex + Local)
 
 - Preferred Python: Conda 3.11+ (env name: `PMOVES.AI` or `pmoves-ai`). A ready-to-use `environment.yml` is at the repo root.

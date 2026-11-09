@@ -1,0 +1,42 @@
+# Persona living-doc room — PUBLIC static site served behind the Traefik edge
+# (docker-compose.traefik.yml, #2221) at persona.pmoves.ai.
+#
+# This serves the RENDERED living-doc (a2ui shell + PreTeXt HTML + Remotion
+# walkthrough), NOT the OpenRoom operator desktop — that adapter (Mavis-5090)
+# stays private. Same room manifest, two surfaces.
+#
+# Bring-up (Known Road): make persona-render && make up-persona
+# Prereq: the Traefik edge must be up so the external pmoves_external network
+# exists and the router resolves. The route is intentionally PUBLIC — it does
+# NOT attach the pmoves-forward-auth middleware.
+services:
+  persona-room:
+    image: ${PERSONA_NGINX_IMAGE:-nginxinc/nginx-unprivileged:1.27-alpine}
+    container_name: pmoves-persona-room
+    restart: unless-stopped
+    volumes:
+      # Rendered static bundle, produced by `make persona-render` (gitignored).
+      - ./rooms/persona/dist:/usr/share/nginx/html:ro
+      - ./config/nginx/persona.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      pmoves_external: {}
+    # Hardening: unprivileged nginx (uid 101, binds :8080), no new privileges,
+    # all caps dropped, read-only rootfs with tmpfs for nginx's writable paths.
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.persona.rule=Host(`persona.pmoves.ai`)
+      - traefik.http.routers.persona.entrypoints=websecure
+      - traefik.http.routers.persona.tls.certresolver=cf
+      - traefik.http.services.persona.loadbalancer.server.port=8080
+      # PUBLIC route — intentionally NO pmoves-forward-auth middleware.
+networks:
+  pmoves_external:
+    external: true

@@ -12,7 +12,7 @@
 ## Notes
 
 - **Hostinger VPS**: Terraform configs exist at `pmoves/terraform/`, Python SDK at `docs/Hostingerapi/`, MCP server available
-- **Pinokio PBNJ**: Launcher configs at `pbnj/pinokio/api/pmoves-services/` (submodule — may be empty)
+- **Pinokio PBNJ**: Launcher configs at `PMOVES-pinokio/api/pmoves-services/` (submodule — may be empty)
 - **GrapheneOS**: No code exists yet. Strategy: PWA on Hostinger + Tailscale for device access
 - **DGX Spark**: Ollama should be pre-installed on GB10. Verify port 11434 accessible via Tailscale
 

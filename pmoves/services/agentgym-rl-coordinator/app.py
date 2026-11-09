@@ -2,14 +2,12 @@ import os
 import json
 import logging
 import re
-import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import FastAPI, HTTPException
 import nats
-from nats.errors import ConnectionClosedError, TimeoutError, NoServersError
 
 # Import coordinator modules
 from coordinator import (
@@ -24,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentgym-coordinator")
 
 # Configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase_kong_PMOVES.AI:8000")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -91,11 +89,11 @@ async def lifespan(app: FastAPI):
                             "Processed geometry event: trajectory_id=%s",
                             result.get("trajectory_id"),
                         )
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     logger.exception("Invalid JSON in geometry event")
-                except (KeyError, TypeError) as e:
+                except (KeyError, TypeError):
                     logger.exception("Invalid geometry event structure")
-                except Exception as e:
+                except Exception:
                     logger.exception("Unexpected error processing geometry event")
 
         # Subscribe to geometry events
@@ -246,7 +244,7 @@ async def lifespan(app: FastAPI):
         await nc.subscribe("agentgym.train.completed.v1", cb=training_completed_handler)
         logger.info("Subscribed to agentgym.train.completed.v1")
 
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to connect to NATS")
 
     yield

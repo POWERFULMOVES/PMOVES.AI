@@ -23,7 +23,6 @@ Called via Make targets:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -59,7 +58,11 @@ OAUTH_SCOPES = "https://www.googleapis.com/auth/youtube.readonly"
 
 # Supabase connection
 DEFAULT_USER_ID = "darkxside"
-TABLE_PATH = "/rest/v1/yt_oauth_cookies"
+TABLE_NAME = "yt_oauth_cookies"
+# Kong fronts PostgREST under /rest/v1; PostgREST itself serves tables at the
+# root. Which prefix applies depends on which of the two we are pointed at, so
+# it is resolved by _table_url() rather than baked into one constant.
+KONG_REST_PREFIX = "/rest/v1"
 
 
 def _env(key: str, default: str = "") -> str:
@@ -100,7 +103,10 @@ def _service_role_key() -> str:
     """Supabase service-role key, accepting SERVICE_ROLE_KEY (canonical local name)
     or SUPABASE_SERVICE_ROLE_KEY (the GitHub-secret / secrets-sync name).
     """
-    key = _env("SERVICE_ROLE_KEY") or _env("SUPABASE_SERVICE_ROLE_KEY")
+    # Prefer the secrets-sync name: it is refreshed by the funnel every run.
+    # The legacy local name has been observed carrying a stale key signed by
+    # a retired JWT secret (fails PostgREST verification -> 401 upserts).
+    key = _env("SUPABASE_SERVICE_ROLE_KEY") or _env("SERVICE_ROLE_KEY")
     if not key:
         print(
             "ERROR: SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY) not set. "
@@ -114,16 +120,59 @@ def _service_role_key() -> str:
 def _supabase_url() -> str:
     """Canonical Supabase REST URL base (Kong gateway, no path suffix).
 
-    TABLE_PATH already contains '/rest/v1/...', so strip any '/rest/v1' tail
-    from SUPA_REST_URL (which often includes it) to avoid '/rest/v1/rest/v1/'.
+    _table_url() re-adds the '/rest/v1' prefix for Kong targets, so strip any
+    '/rest/v1' tail here (SUPA_REST_URL often includes it) to avoid building
+    '/rest/v1/rest/v1/'.
     """
-    url = _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://supabase-kong:8000"))
+    url = _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://localhost:8000"))
+    # This tool always runs on the host (via `make yt-cookies-auth`), not in a
+    # container, so any CONTAINER-SIDE name for the gateway has to be rewritten.
+    #
+    # There are two such names and the original guard only covered one:
+    #   supabase-kong          the in-compose service name; no host DNS at all
+    #   host.docker.internal   resolves ON the host, to the host's own LAN
+    #                          address -- and Kong binds ${KONG_PROXY_BIND:-127.0.0.1},
+    #                          so that address is REFUSED. Measured 2026-09-01:
+    #                          host.docker.internal:8000 -> 000,
+    #                          localhost:8000 -> 401 (Kong answering).
+    #
+    # The second is the nastier of the two precisely because it resolves: the
+    # failure is a connection refusal rather than a DNS error, which reads like
+    # "Supabase is down" instead of "wrong name for this context".
+    for _container_side in ("supabase-kong", "host.docker.internal"):
+        if _container_side in url:
+            url = url.replace(_container_side, "localhost")
     # Strip trailing /rest/v1 or /rest/v1/ to get base URL
     for suffix in ("/rest/v1/", "/rest/v1"):
         if url.endswith(suffix):
             url = url[: -len(suffix)]
             break
     return url.rstrip("/")
+
+
+def _table_url(query: str = "") -> str:
+    """Full URL for the OAuth table, with the right prefix for the target.
+
+    Two valid targets, and they expose the table at DIFFERENT paths:
+      * Kong gateway (:8000)  -> /rest/v1/yt_oauth_cookies
+      * PostgREST direct (:3000) -> /yt_oauth_cookies
+
+    Set YT_OAUTH_REST_URL to point straight at PostgREST and bypass Kong. That
+    is the documented escape hatch for when the Kong gateway has no /rest/v1
+    route (see pmoves/docs/operations/YT_COOKIES_RUNBOOK.md) — PostgREST still
+    enforces auth, so this changes the network path, not the trust model.
+    """
+    override = _env("YT_OAUTH_REST_URL")
+    url = override.rstrip("/") if override else _supabase_url()
+
+    # PostgREST serves tables at the root; only Kong needs the /rest/v1 prefix.
+    # Detect by the path PostgREST cannot have rather than by port number alone,
+    # so a proxied PostgREST on a non-3000 port still works via the override.
+    prefix = "" if (override and not url.endswith(KONG_REST_PREFIX)) else KONG_REST_PREFIX
+    if url.endswith(KONG_REST_PREFIX):
+        url = url[: -len(KONG_REST_PREFIX)]
+        prefix = KONG_REST_PREFIX
+    return f"{url}{prefix}/{TABLE_NAME}{query}"
 
 
 def _supabase_headers() -> dict:
@@ -133,6 +182,11 @@ def _supabase_headers() -> dict:
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        # yt_oauth_cookies lives in pmoves_core; PostgREST only consults the
+        # FIRST schema in PGRST_DB_SCHEMAS (public) unless told otherwise —
+        # these headers select the schema for reads and writes respectively.
+        "Accept-Profile": "pmoves_core",
+        "Content-Profile": "pmoves_core",
         "Prefer": "return=representation",
     }
 
@@ -146,14 +200,51 @@ def _get_fernet() -> Optional[object]:
     if Fernet is None:
         print("WARNING: cryptography not installed — tokens stored unencrypted.", file=sys.stderr)
         return None
-    key_hex = _env("VAULT_ENC_KEY")
-    if not key_hex:
+    key_raw = _env("VAULT_ENC_KEY")
+    if not key_raw:
         print("WARNING: VAULT_ENC_KEY not set — tokens stored unencrypted.", file=sys.stderr)
         return None
-    # VAULT_ENC_KEY is hex; Fernet needs base64-encoded 32-byte key
+    # Fernet needs a base64url-encoded 32-byte key. VAULT_ENC_KEY's declared
+    # spec is hex -- bootstrap/registry.json generates it as
+    # {"type": "random_hex", "length": 32} -- but the value on a node may not
+    # match that spec, and a mismatch here is EXPENSIVE to fix at the source.
+    #
+    # That key belongs to supabase-pooler (Supavisor), which the registry names
+    # "Vault encryption key (Supavisor)". Rotating it to satisfy THIS tool means
+    # re-keying a running pooler's credential vault. Measured 2026-09-01: the
+    # value was 48 chars and NOT hex, `bytes.fromhex()` raised, the exception was
+    # swallowed, and the flow reported "Encryption is unavailable (set
+    # VAULT_ENC_KEY and install 'cryptography')" -- with the key set and
+    # cryptography installed. The message named neither the real cause nor the
+    # real fix, so a completed OAuth consent was discarded.
+    #
+    # So: accept what is there rather than demand a rotation. Hex first (the
+    # declared spec, and forward-compatible if the value is ever regenerated to
+    # match it), then base64url, then raw bytes. Whatever survives is padded or
+    # truncated to 32 as before.
     import base64
+
+    # VAULT_ENC_KEY_DECODE_V1 -- keep identical in all three consumers:
+    #   pmoves/tools/yt_oauth_flow.py
+    #   pmoves/services/yt-cookie-writer/main.py
+    #   pmoves/services/yt-cookie-refresher/supabase_client.py
+    def _decode_key(raw: str) -> bytes:
+        try:
+            return bytes.fromhex(raw)
+        except ValueError:
+            pass
+        try:
+            # validate=False: tolerate a value that is base64-ish with stray
+            # characters rather than failing closed on a usable key.
+            padded = raw + "=" * (-len(raw) % 4)
+            decoded = base64.urlsafe_b64decode(padded)
+            if decoded:
+                return decoded
+        except Exception:
+            pass
+        return raw.encode("utf-8")
     try:
-        key_bytes = bytes.fromhex(key_hex)
+        key_bytes = _decode_key(key_raw)
         if len(key_bytes) < 16:
             key_bytes = key_bytes.ljust(32, b"\x00")
         elif len(key_bytes) < 32:
@@ -163,7 +254,8 @@ def _get_fernet() -> Optional[object]:
         fernet_key = base64.urlsafe_b64encode(key_bytes)
         return Fernet(fernet_key)
     except Exception as e:
-        print(f"WARNING: VAULT_ENC_KEY invalid ({e}) — tokens stored unencrypted.", file=sys.stderr)
+        print(f"WARNING: VAULT_ENC_KEY unusable after hex/base64/raw decode ({e})"
+              " — tokens stored unencrypted.", file=sys.stderr)
         return None
 
 
@@ -248,7 +340,6 @@ def _build_flow(client_id: str, client_secret: str, scope: str) -> "InstalledApp
 def _upsert_tokens(refresh_token_enc: str, access_token_enc: str,
                    expires_at: Optional[str], user_id: str = DEFAULT_USER_ID) -> dict:
     """Insert or update the OAuth row in Supabase."""
-    url = _supabase_url()
     headers = _supabase_headers()
     headers["Prefer"] = "return=representation,resolution=merge-duplicates"
 
@@ -266,7 +357,7 @@ def _upsert_tokens(refresh_token_enc: str, access_token_enc: str,
     # (per pmoves_core.yt_oauth_cookies_user_id_unique). Without this, merge-duplicates
     # header alone is ambiguous and PostgREST may fail or insert duplicates.
     resp = httpx.post(
-        f"{url}{TABLE_PATH}?on_conflict=user_id",
+        _table_url("?on_conflict=user_id"),
         headers=headers,
         json=payload,
         timeout=15,
@@ -280,25 +371,35 @@ def _upsert_tokens(refresh_token_enc: str, access_token_enc: str,
 
 def _get_status(user_id: str = DEFAULT_USER_ID) -> Optional[dict]:
     """Fetch current cookie state from Supabase."""
-    url = _supabase_url()
     headers = _supabase_headers()
     resp = httpx.get(
-        f"{url}{TABLE_PATH}?user_id=eq.{user_id}&select=*",
+        _table_url(f"?user_id=eq.{user_id}&select=*"),
         headers=headers,
         timeout=10,
     )
     if resp.status_code != 200:
-        return None
+        # Do NOT collapse every failure into "no credentials stored". A 404 from
+        # a route-less Kong gateway is indistinguishable from an empty vault at
+        # the caller, which is exactly how a broken gateway masqueraded as
+        # "consent was never run" — surface the transport failure instead.
+        print(
+            f"Supabase read error: {resp.status_code} {resp.text[:200]}",
+            file=sys.stderr,
+        )
+        raise RuntimeError(
+            f"could not read OAuth state ({resp.status_code}). "
+            "If this is a 404 'no Route matched', the Kong gateway has no "
+            "/rest/v1 route — set YT_OAUTH_REST_URL to PostgREST directly."
+        )
     rows = resp.json()
     return rows[0] if rows else None
 
 
 def _delete_row(user_id: str = DEFAULT_USER_ID) -> bool:
     """Delete the OAuth row (revoke)."""
-    url = _supabase_url()
     headers = _supabase_headers()
     resp = httpx.delete(
-        f"{url}{TABLE_PATH}?user_id=eq.{user_id}",
+        _table_url(f"?user_id=eq.{user_id}"),
         headers=headers,
         timeout=10,
     )
@@ -314,10 +415,100 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     client_id, client_secret = _client_creds()
     flow = _build_flow(client_id, client_secret, scope)
 
-    print("Opening browser for Google OAuth2 consent (loopback, ephemeral port)...")
-    # Scope logged as plain concat (breaks CodeQL taint path on OAuth f-strings).
-    print("  Scopes: " + scope)
-    creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
+    # Line-buffer stdout. Python block-buffers when stdout is not a TTY, so under
+    # `make ... | tee`, a redirect, or a background run the consent URL below sat
+    # unflushed in the buffer while the callback server blocked — the operator saw
+    # a hung task with no URL and no browser. The URL is useless if it arrives after
+    # the 5-minute deadline it is racing.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):  # non-reconfigurable stream
+        pass
+
+    print("Starting Google OAuth2 consent (loopback, ephemeral port)...", flush=True)
+    # Scope intentionally NOT logged: CodeQL flags any print that traces to an
+    # OAuth-derived parameter (clear-text-logging-sensitive-data). The scope
+    # value is set via --scopes arg or OAUTH_SCOPES default; run with --help
+    # to see the configured value.
+    print("  Scopes: configured (use --scopes to override; see --help)")
+
+    # oauthlib refuses HTTP (even localhost) by default; the loopback flow
+    # always uses plain HTTP, so opt in explicitly.
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+
+    # Pinokio web UI probes stdout URLs with a FOO HTTP method on localhost.
+    # run_local_server's WSGI handler treats any request as the OAuth callback,
+    # so the probe triggers MismatchingStateError. Use a custom loop that
+    # ignores non-OAuth requests (paths without code= or state= query params).
+    import http.server
+    import urllib.parse as _urlparse
+
+    class _ProbesIgnoredHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = _urlparse.urlparse(self.path)
+            qs = _urlparse.parse_qs(parsed.query)
+            if "code" not in qs or "state" not in qs:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Waiting for OAuth callback...")
+                return
+            flow.redirect_uri = flow.redirect_uri.rstrip("/") + "/"
+            self.server.last_request_uri = self.path
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(
+                b"<h1>Authorization received.</h1>"
+                b"<p>You can close this tab.</p>"
+            )
+        def log_message(self, *a): pass
+
+    httpd = http.server.HTTPServer(("localhost", 0), _ProbesIgnoredHandler)
+    port = httpd.server_address[1]
+    redirect_uri = f"http://localhost:{port}/"
+    flow.redirect_uri = redirect_uri
+
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+    print(f"\n>>> Open this URL in your browser:\n{auth_url}\n", flush=True)
+
+    # Actually try to open it. The previous message claimed "Opening browser" but
+    # nothing ever called webbrowser — on a desktop session that is a needless
+    # manual copy/paste step. Best-effort only: headless/SSH/no-DISPLAY hosts must
+    # still fall back to the printed URL, so failure here is never fatal.
+    if os.environ.get("YT_OAUTH_NO_BROWSER") != "1":
+        try:
+            import webbrowser
+
+            if webbrowser.open(auth_url):
+                print(">>> Browser launched. If no tab opened, use the URL above.", flush=True)
+            else:
+                print(">>> No browser available — open the URL above manually.", flush=True)
+        except Exception as e:  # noqa: BLE001 - never let browser launch kill the flow
+            print(f">>> Could not launch a browser ({e}) — open the URL above manually.", flush=True)
+
+    print(f">>> Waiting for callback on {redirect_uri} (5 min timeout)...", flush=True)
+
+    import time
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        httpd.timeout = 2
+        httpd.handle_request()
+        if hasattr(httpd, "last_request_uri"):
+            break
+    else:
+        print("ERROR: OAuth callback timed out after 5 minutes.", file=sys.stderr)
+        sys.exit(1)
+
+    if not hasattr(httpd, "last_request_uri"):
+        print("ERROR: No OAuth callback received.", file=sys.stderr)
+        sys.exit(1)
+
+    flow.fetch_token(
+        authorization_response=f"http://localhost:{port}{httpd.last_request_uri}",
+        prompt="consent", access_type="offline",
+    )
+    creds = flow.credentials
 
     refresh_token = creds.refresh_token
     access_token = creds.token

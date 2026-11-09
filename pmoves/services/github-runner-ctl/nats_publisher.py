@@ -13,7 +13,6 @@ import datetime
 from datetime import timezone
 from typing import Any, Dict, Optional
 
-import nats
 from nats.aio.client import Client as NATS
 
 from metrics import NATS_EVENTS_PUBLISHED, NATS_EVENTS_FAILED
@@ -59,7 +58,7 @@ class NATSPublisher:
         """Initialize NATS publisher.
 
         Args:
-            nats_url: NATS connection URL (e.g., "nats://nats:pmoves@nats:4222")
+            nats_url: NATS connection URL (e.g., "nats://nats:4222")
         """
         self.nats_url = nats_url
         self._nc: Optional[NATS] = None

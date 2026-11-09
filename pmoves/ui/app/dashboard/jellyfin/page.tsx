@@ -116,6 +116,7 @@ export default function JellyfinDashboardPage() {
           <h2 className="text-lg font-medium mb-4">Search Library</h2>
           <form onSubmit={handleSearch} className="flex gap-2">
             <input
+              data-testid="media-search-input"
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

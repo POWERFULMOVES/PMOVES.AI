@@ -63,7 +63,6 @@ PORTS[jellyfin-bridge]=8093
 PORTS[agent-zero]=8080
 PORTS[agent-zero-ui]=8081
 PORTS[archon]=8091
-PORTS[archon-ui]=8051
 PORTS[deepresearch]=8098
 PORTS[supaserch]=8099
 PORTS[pmoves-yt]=8077
@@ -215,8 +214,6 @@ done
 echo "# Multi-port services"
 echo "MINIO_CONSOLE_PORT=9001"
 echo "NATS_WS_PORT=9223"
-echo "ARCHON_PROMETHEUS_PORT=8052"
-echo "ARCHON_GRPC_PORT=8052"
 echo "NEO4J_BOLT_PORT=7687"
 
 # Tier-specific port ranges for reference

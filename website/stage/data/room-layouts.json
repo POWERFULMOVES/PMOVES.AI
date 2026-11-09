@@ -1,0 +1,2228 @@
+[
+  {
+    "room_id": "4090-field.room.control",
+    "display_name": "4090 Field Control Room",
+    "stage": "rehearsal",
+    "room_type": "scout",
+    "agent_id": "4090-claude",
+    "alter": "4090-field",
+    "theme": {
+      "id": "field-control",
+      "accent": "#065F46",
+      "skin": "signal-grid",
+      "icon": "fresnel"
+    },
+    "persona": {
+      "signature_ref": "4090-claude",
+      "voice": "terse",
+      "glyph": "\u25ce",
+      "resonance": [
+        "polymorphic-ops",
+        "alter-discovery",
+        "pattern-mining",
+        "node-gateway"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "id": "chat-main",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 26,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "notebook-main",
+          "component": "NotebookPanel",
+          "kind": "notebook",
+          "position": "center",
+          "size_pct": 52,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "graphiti-side",
+          "component": "CustomPanel",
+          "kind": "graph",
+          "position": "right",
+          "size_pct": 22,
+          "pinned": false,
+          "order": 3
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "review-console",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/review",
+          "provider": "pmoves-ui",
+          "action_namespace": "review",
+          "capabilities": [
+            "pr-triage",
+            "thread-classify",
+            "risk-notes"
+          ],
+          "pinned": false,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "notebook-workbench",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook-workbench",
+          "provider": "pmoves-notebook-workbench",
+          "action_namespace": "notebook",
+          "capabilities": [
+            "threads",
+            "entries",
+            "snapshots",
+            "search",
+            "handoff-notes"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "graphiti-status",
+          "component": "GraphApp",
+          "kind": "graph",
+          "route": "/dashboard/graphiti",
+          "provider": "pmoves-ui",
+          "action_namespace": "graphiti",
+          "capabilities": [
+            "trail",
+            "audit",
+            "handoff",
+            "claim-register"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "mcp-e2b",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/mcp/e2b",
+          "provider": "pmoves-e2b-mcp-server",
+          "action_namespace": "mcp.v1.e2b",
+          "capabilities": [
+            "sandbox",
+            "execution",
+            "artifacts"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "mcp-hirag",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/mcp/hirag",
+          "provider": "pmoves-hirag-mcp",
+          "action_namespace": "mcp.v1.hirag",
+          "capabilities": [
+            "retrieve",
+            "graph",
+            "search",
+            "notebook"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "handoff-scout",
+        "skill_id": "submodule-parity",
+        "display_name": "Scout Handoff",
+        "app_id": "notebook-workbench",
+        "trigger_phrases": [
+          "prepare handoff",
+          "review this lane",
+          "triage this branch"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "pattern-miner",
+        "skill_id": "persona-grounding",
+        "display_name": "Pattern Miner",
+        "app_id": "review-console",
+        "trigger_phrases": [
+          "find the pattern",
+          "discover the alter"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "4090-field.room.control",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "5090-voice.room.studio",
+    "display_name": "5090 Voice Studio",
+    "stage": "rehearsal",
+    "room_type": "creator",
+    "agent_id": "5090-claude",
+    "alter": "5090-voice",
+    "theme": {
+      "id": "voice-studio",
+      "accent": "#9333EA",
+      "skin": "waveform-stage",
+      "icon": "beamed-notes"
+    },
+    "persona": {
+      "signature_ref": "5090-claude",
+      "voice": "conversational",
+      "glyph": "\u266b",
+      "resonance": [
+        "voice-synthesis",
+        "tts-pipeline",
+        "pipecat-integration",
+        "media"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "id": "voice-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 24,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "media-stage",
+          "component": "CustomPanel",
+          "kind": "media",
+          "position": "center",
+          "size_pct": 50,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "notebook-takes",
+          "component": "NotebookPanel",
+          "kind": "notebook",
+          "position": "right",
+          "size_pct": 26,
+          "pinned": true,
+          "order": 3
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "voice-console",
+          "component": "CustomApp",
+          "kind": "media",
+          "route": "/dashboard/voice",
+          "provider": "pmoves-ui",
+          "action_namespace": "voice",
+          "capabilities": [
+            "tts",
+            "engine-status",
+            "audition",
+            "prosody"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "media-pipeline",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/media",
+          "provider": "pmoves-ui",
+          "action_namespace": "media",
+          "capabilities": [
+            "pipeline-health",
+            "artifact-preview",
+            "render-status"
+          ],
+          "pinned": false,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "notebook-workbench",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook-workbench",
+          "provider": "pmoves-notebook-workbench",
+          "action_namespace": "notebook",
+          "capabilities": [
+            "threads",
+            "entries",
+            "snapshots",
+            "takes"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "mcp-voice",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/mcp/voice",
+          "provider": "pmoves-voice-mcp",
+          "action_namespace": "mcp.v1.voice",
+          "capabilities": [
+            "voice",
+            "tts",
+            "voice-select",
+            "clone"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "voice-audition",
+        "skill_id": "multimodal-verifier",
+        "display_name": "Voice Audition",
+        "app_id": "voice-console",
+        "trigger_phrases": [
+          "audition this voice",
+          "verify this take",
+          "compare these outputs"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "voice-publish-preflight",
+        "skill_id": "bringup-audit",
+        "display_name": "Voice Publish Preflight",
+        "app_id": "media-pipeline",
+        "trigger_phrases": [
+          "run voice preflight",
+          "check the voice pipeline"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "5090-voice.room.studio",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "z890-infra.room.fabric",
+    "display_name": "Z890 Infra Fabric Room",
+    "stage": "rehearsal",
+    "room_type": "operator",
+    "agent_id": "z890-claude",
+    "alter": "z890-infra",
+    "theme": {
+      "id": "infra-fabric",
+      "accent": "#1E40AF",
+      "skin": "mesh-control",
+      "icon": "gear"
+    },
+    "persona": {
+      "signature_ref": "z890-claude",
+      "voice": "analytical",
+      "glyph": "\u2699",
+      "resonance": [
+        "infrastructure",
+        "persistence-modeling",
+        "supabase-integration",
+        "docker-hardening",
+        "legal-assist",
+        "email-organization",
+        "workflow-automation"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/services",
+      "panels": [
+        {
+          "id": "ops-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 22,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "service-grid",
+          "component": "ControlPanel",
+          "kind": "controls",
+          "position": "center",
+          "size_pct": 46,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "ops-notebook",
+          "component": "NotebookPanel",
+          "kind": "notebook",
+          "position": "right",
+          "size_pct": 18,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "ops-logs",
+          "component": "LogPanel",
+          "kind": "logs",
+          "position": "bottom",
+          "size_pct": 14,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [],
+      "planned": [
+        {
+          "id": "services-dashboard",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/services",
+          "provider": "pmoves-ui",
+          "action_namespace": "ops",
+          "capabilities": [
+            "service-health",
+            "compose-topology",
+            "alerts",
+            "rebuild-status"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "notebook-workbench",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook-workbench",
+          "provider": "pmoves-notebook-workbench",
+          "action_namespace": "notebook",
+          "capabilities": [
+            "threads",
+            "entries",
+            "snapshots",
+            "runbooks"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "graphiti-status",
+          "component": "GraphApp",
+          "kind": "graph",
+          "route": "/dashboard/graphiti",
+          "provider": "pmoves-ui",
+          "action_namespace": "graphiti",
+          "capabilities": [
+            "trail",
+            "audit",
+            "release-state"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "legal-assist-panel",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/dashboard/legal-assist",
+          "provider": "pmoves-legal-assist",
+          "action_namespace": "legal",
+          "capabilities": [
+            "document-review",
+            "chronology",
+            "case-law",
+            "contract-analysis"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "email-organizer-panel",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/dashboard/email-organizer",
+          "provider": "pmoves-email-organizer",
+          "action_namespace": "email",
+          "capabilities": [
+            "triage",
+            "migrate",
+            "draft-reply",
+            "route-to-legal"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "n8n-archon-bridge",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/dashboard/n8n-archon",
+          "provider": "pmoves-n8n-archon-bridge",
+          "action_namespace": "workflow",
+          "capabilities": [
+            "start-n8n",
+            "start-archon",
+            "deploy-workflows",
+            "run-job"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "infra-bringup-audit",
+        "skill_id": "bringup-audit",
+        "display_name": "Infra Bring-up Audit",
+        "app_id": "services-dashboard",
+        "trigger_phrases": [
+          "audit the bringup",
+          "check the stack",
+          "verify infra health"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "secrets-funnel",
+        "skill_id": "secrets-chit-funnel",
+        "display_name": "Secrets Funnel",
+        "app_id": "graphiti-status",
+        "trigger_phrases": [
+          "run the secrets funnel",
+          "prepare secure handoff"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "folder-monitor-legal",
+        "skill_id": "pmoves-folder-monitor",
+        "display_name": "Folder Monitor (Legal / Zero-Retention)",
+        "app_id": "legal-assist-panel",
+        "trigger_phrases": [
+          "watch the legal folder",
+          "process new documents",
+          "run folder monitor"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "legal-assist-review",
+        "skill_id": "pmoves-legal-assist",
+        "display_name": "Legal Assist Review",
+        "app_id": "legal-assist-panel",
+        "trigger_phrases": [
+          "review this contract",
+          "build a tenant chronology",
+          "find case law",
+          "prepare for attorney review"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "email-organizer",
+        "skill_id": "pmoves-email-organizer",
+        "display_name": "Email Organizer",
+        "app_id": "email-organizer-panel",
+        "trigger_phrases": [
+          "organize my email",
+          "triage inbox",
+          "migrate titanmail to gmail",
+          "review email backlog"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "n8n-archon-bridge",
+        "skill_id": "pmoves-n8n-archon-bridge",
+        "display_name": "n8n + Archon Bridge",
+        "app_id": "n8n-archon-bridge",
+        "trigger_phrases": [
+          "start n8n",
+          "start archon",
+          "deploy workflows",
+          "run the bridge"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "yt-monitor",
+        "skill_id": "pmoves-yt-monitor",
+        "display_name": "YouTube Monitor",
+        "app_id": "notebook-workbench",
+        "trigger_phrases": [
+          "run youtube monitor",
+          "check channels",
+          "fetch new videos"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "z890-infra.room.fabric",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "5090-kilocode.room.studio",
+    "display_name": "5090 KiloCode GLM Workstation",
+    "stage": "rehearsal",
+    "room_type": "builder",
+    "agent_id": "kilocode-glm",
+    "alter": "5090-kilocode",
+    "theme": {
+      "id": "kilocode-glm",
+      "accent": "#10B981",
+      "skin": "terminal-dark",
+      "icon": "code"
+    },
+    "persona": {
+      "signature_ref": "5090-kilocode",
+      "voice": "technical",
+      "glyph": "GL",
+      "resonance": [
+        "gpu",
+        "inference",
+        "kilocode",
+        "glm",
+        "coding-plan"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "id": "code-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 24,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "gpu-controls",
+          "component": "ControlPanel",
+          "kind": "controls",
+          "position": "center",
+          "size_pct": 50,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "inference-notebook",
+          "component": "NotebookPanel",
+          "kind": "notebook",
+          "position": "right",
+          "size_pct": 26,
+          "pinned": true,
+          "order": 3
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "gpu-inference-console",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/gpu",
+          "provider": "pmoves-ui",
+          "action_namespace": "gpu",
+          "capabilities": [
+            "inference-health",
+            "model-status",
+            "queue-depth",
+            "throughput"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "notebook-workbench",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook-workbench",
+          "provider": "pmoves-notebook-workbench",
+          "action_namespace": "notebook",
+          "capabilities": [
+            "threads",
+            "entries",
+            "snapshots",
+            "runbooks"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "cipher-memory",
+          "component": "GraphApp",
+          "kind": "graph",
+          "route": "/dashboard/graphiti",
+          "provider": "pmoves-ui",
+          "action_namespace": "cipher",
+          "capabilities": [
+            "memory-search",
+            "trail",
+            "audit"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "gpu-inference-audit",
+        "skill_id": "bringup-audit",
+        "display_name": "GPU Inference Audit",
+        "app_id": "gpu-inference-console",
+        "trigger_phrases": [
+          "audit gpu status",
+          "check inference health",
+          "verify model serving"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "5090-kilocode.room.studio",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "demo.room.rehearsal",
+    "display_name": "PMOVES Demo Room",
+    "stage": "rehearsal",
+    "room_type": "builder",
+    "agent_id": "4090-claude",
+    "alter": "4090-demo",
+    "theme": {
+      "id": "demo-stage",
+      "accent": "#7C3AED",
+      "skin": "gradient-pulse",
+      "icon": "sparkles"
+    },
+    "persona": {
+      "signature_ref": "4090-claude",
+      "voice": "energetic",
+      "glyph": "\u2726",
+      "resonance": [
+        "demo-ready",
+        "agent-relay",
+        "hermes-assist",
+        "show-mode"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/demo",
+      "panels": [
+        {
+          "id": "agent-zero-main",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "left",
+          "size_pct": 40,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "claude-code-panel",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "right",
+          "size_pct": 40,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "hermes-assist",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "bottom",
+          "size_pct": 20,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [],
+      "planned": [
+        {
+          "id": "agent-zero-webui",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/demo/agent-zero",
+          "provider": "agent-zero-local",
+          "action_namespace": "agent_zero",
+          "capabilities": [
+            "tasks",
+            "chat",
+            "tool-use",
+            "memory"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "claude-code-session",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/demo/claude-code",
+          "provider": "claude-code",
+          "action_namespace": "claude_code",
+          "capabilities": [
+            "edit",
+            "bash",
+            "read",
+            "skills"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "hermes-assist",
+          "component": "ChatApp",
+          "kind": "chat",
+          "route": "/demo/hermes",
+          "provider": "ollama",
+          "action_namespace": "hermes",
+          "capabilities": [
+            "reasoning",
+            "instruction",
+            "code-review"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "demo-launch",
+        "skill_id": "demo-room",
+        "display_name": "Launch Demo Room",
+        "app_id": "claude-code-session",
+        "trigger_phrases": [
+          "launch demo",
+          "start demo room",
+          "show demo"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "demo.room.rehearsal",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "hermes-agent.room.control",
+    "display_name": "HERMES Agent Control Room",
+    "stage": "rehearsal",
+    "room_type": "operator",
+    "agent_id": "hermes-agent",
+    "alter": "hermes-agent",
+    "theme": {
+      "id": "hermes-stage",
+      "accent": "#047857",
+      "skin": "gradient-pulse",
+      "icon": "sparkles"
+    },
+    "persona": {
+      "signature_ref": "hermes-agent",
+      "voice": "analytical",
+      "glyph": "\u2727",
+      "resonance": [
+        "gateway-control",
+        "skill-curation",
+        "cross-platform",
+        "hermes-bridge",
+        "nats-relay"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/hermes",
+      "panels": [
+        {
+          "id": "hermes-gateway-main",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "left",
+          "size_pct": 45,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "hermes-terminal-panel",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "right",
+          "size_pct": 35,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "hermes-telemetry",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "bottom",
+          "size_pct": 20,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [],
+      "planned": [
+        {
+          "id": "hermes-gateway-webui",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/hermes/gateway",
+          "provider": "hermes-agent-local",
+          "action_namespace": "hermes_agent",
+          "capabilities": [
+            "gateway",
+            "skills",
+            "cron",
+            "delegation",
+            "memory"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "hermes-mcp-bridge",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/hermes/mcp",
+          "provider": "hermes-mcp",
+          "action_namespace": "mcp_bridge",
+          "capabilities": [
+            "mcp-serve",
+            "tool-discovery",
+            "nats-relay"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "hermes-skill-curator",
+          "component": "ChatApp",
+          "kind": "chat",
+          "route": "/hermes/skills",
+          "provider": "hermes-agent-local",
+          "action_namespace": "skill_curation",
+          "capabilities": [
+            "skills",
+            "curator",
+            "publish"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "openshell-gateway",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/hermes/openshell",
+          "provider": "hermes-agent-local",
+          "action_namespace": "openshell_policy",
+          "capabilities": [
+            "policy-gate",
+            "egress-control",
+            "secret-mask",
+            "multi-user"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "hermes-gateway-launch",
+        "skill_id": "hermes-agent-integration",
+        "display_name": "Launch HERMES Gateway",
+        "app_id": "hermes-gateway-webui",
+        "trigger_phrases": [
+          "launch hermes",
+          "start hermes gateway",
+          "bridge hermes"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "hermes-agent.room.control",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "fordham.room.community",
+    "display_name": "Fordham Hill Community Room",
+    "stage": "rehearsal",
+    "room_type": "hybrid",
+    "agent_id": "fordham-steward",
+    "alter": "fordham-community",
+    "theme": {
+      "id": "community-commons",
+      "accent": "#0E7490",
+      "skin": "commons-lattice",
+      "icon": "house"
+    },
+    "persona": {
+      "signature_ref": "fordham-steward",
+      "voice": "plain-spoken",
+      "glyph": "\u2302",
+      "resonance": [
+        "cost-pooling",
+        "community-mesh",
+        "self-governance",
+        "accessible-voice"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/fordham",
+      "panels": [
+        {
+          "id": "resident-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 24,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "pilot-notebook",
+          "component": "NotebookPanel",
+          "kind": "notebook",
+          "position": "center",
+          "size_pct": 40,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "pilot-metrics",
+          "component": "ControlPanel",
+          "kind": "controls",
+          "position": "right",
+          "size_pct": 24,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "voice-stage",
+          "component": "CustomPanel",
+          "kind": "media",
+          "position": "bottom",
+          "size_pct": 12,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "notebook-workbench",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook-workbench",
+          "provider": "pmoves-notebook-workbench",
+          "action_namespace": "notebook",
+          "capabilities": [
+            "threads",
+            "entries",
+            "pages",
+            "snapshots",
+            "search"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "pilot-dashboard",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/fordham",
+          "provider": "pmoves-ui",
+          "action_namespace": "pilot",
+          "capabilities": [
+            "capacity-ab",
+            "dues-ledger",
+            "surplus-tracker",
+            "contribution-attribution",
+            "honesty-ledger"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "voice-console",
+          "component": "CustomApp",
+          "kind": "media",
+          "route": "/dashboard/voice",
+          "provider": "pmoves-ui",
+          "action_namespace": "voice",
+          "capabilities": [
+            "tts",
+            "prosody",
+            "persona-suit",
+            "spoken-summary",
+            "accessible-readout"
+          ],
+          "pinned": false,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "voter-roll",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/dashboard/fordham/roll",
+          "provider": "pmoves-ui",
+          "action_namespace": "governance",
+          "capabilities": [
+            "enrollment",
+            "eligible-voter-roll",
+            "committee-on-elders",
+            "consent-capture"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "ballot-box",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/fordham/governance",
+          "provider": "pmoves-ui",
+          "action_namespace": "governance",
+          "capabilities": [
+            "quorum-status",
+            "vote-receipt",
+            "audit-trail"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "capacity-ab-probe",
+        "skill_id": "mesh-egress-ab",
+        "display_name": "Mesh Capacity A/B",
+        "app_id": "pilot-dashboard",
+        "trigger_phrases": [
+          "run the capacity A/B",
+          "measure this exit node",
+          "map homes onto capacity"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "voice-suit-bind",
+        "skill_id": "persona-bind",
+        "display_name": "FlOO$ Voice Suit",
+        "app_id": "voice-console",
+        "trigger_phrases": [
+          "read this out loud",
+          "bind the voice suit",
+          "speak the summary"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "voice-prosody-bpm",
+        "skill_id": "shift-from-bpm",
+        "display_name": "Accessible BPM Prosody",
+        "app_id": "voice-console",
+        "trigger_phrases": [
+          "slow it down",
+          "read it slowly",
+          "set the pace"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "committee-analytics",
+        "skill_id": "claude-d3js",
+        "display_name": "Committee Analytics Viz",
+        "app_id": "pilot-dashboard",
+        "trigger_phrases": [
+          "chart the capacity",
+          "visualize the surplus",
+          "draw the attribution"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "durable-memory",
+        "skill_id": "pmoves-cipher-memory",
+        "display_name": "Community Durable Memory",
+        "app_id": "notebook-workbench",
+        "trigger_phrases": [
+          "remember this",
+          "what did we decide"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "enroll-roll-receipt",
+        "skill_id": "pmoves-chit-sign",
+        "display_name": "Enrollment Roll Receipt",
+        "app_id": "voter-roll",
+        "trigger_phrases": [
+          "enroll this resident",
+          "sign the enrollment",
+          "add to the roll"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "dues-ledger-receipt",
+        "skill_id": "pmoves-chit-sign",
+        "display_name": "Dues & Surplus Receipt",
+        "app_id": "pilot-dashboard",
+        "trigger_phrases": [
+          "post the dues",
+          "sign the ledger entry",
+          "record the surplus"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "fordham.room.community",
+      "stage": "rehearsal",
+      "chit_card_id": "00000000-0000-4000-8000-000000000001"
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "darkxsides.room",
+    "display_name": "DARKXSIDES",
+    "stage": "rehearsal",
+    "room_type": "creator",
+    "agent_id": "darkxside-persona",
+    "alter": "darkxside",
+    "theme": {
+      "id": "darkxside-mind",
+      "accent": "#7C1FA2",
+      "skin": "founder-mind",
+      "icon": "mask"
+    },
+    "persona": {
+      "signature_ref": "darkxside-persona",
+      "voice": "authentic",
+      "glyph": "\u25c8",
+      "resonance": [
+        "founder-mind",
+        "shape-attribution",
+        "reverse-curse-lexicon",
+        "creator-pipeline",
+        "digital-twin"
+      ]
+    },
+    "layout": {
+      "default_route": "/darkxside/mind",
+      "panels": [
+        {
+          "id": "persona-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 30,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "hyperdimensions-manifold",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "center",
+          "size_pct": 40,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "pub-gate-notebook",
+          "component": "NotebookPanel",
+          "kind": "notebook",
+          "position": "right",
+          "size_pct": 30,
+          "pinned": true,
+          "order": 3
+        }
+      ]
+    },
+    "apps": {
+      "active": [],
+      "planned": [
+        {
+          "id": "persona-console",
+          "component": "ChatApp",
+          "kind": "chat",
+          "route": "/darkxside/mind",
+          "provider": "pmoves-ui",
+          "action_namespace": "persona",
+          "capabilities": [
+            "uncensored-dialogue",
+            "reflection",
+            "witness-log"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "hyperdimensions-viewer",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/hyperdimensions/app",
+          "provider": "hi-rag-gateway-v2",
+          "action_namespace": "geometry",
+          "capabilities": [
+            "manifold-view",
+            "state-vector",
+            "publish-gate-knob"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "pub-gate-notebook",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook/darkxside",
+          "provider": "open-notebook",
+          "action_namespace": "pubgate",
+          "capabilities": [
+            "queued-content",
+            "gate-state",
+            "approve",
+            "hold",
+            "attribution-view"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "pub-gate-approve",
+        "skill_id": "pmoves-publish-gate",
+        "display_name": "Publish Gate \u2014 Approve / Hold",
+        "app_id": "pub-gate-notebook",
+        "trigger_phrases": [
+          "open the gate for",
+          "approve this post",
+          "hold this",
+          "release to discord",
+          "release to linkedin"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "darkxsides.room",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "tokenism.room.exchange",
+    "display_name": "ToKenism Exchange",
+    "stage": "rehearsal",
+    "room_type": "hybrid",
+    "agent_id": "5090-claude",
+    "alter": "5090-tokenism",
+    "theme": {
+      "id": "tokenism-mint",
+      "accent": "#00FFCC",
+      "skin": "geometry-lattice",
+      "icon": "coins"
+    },
+    "persona": {
+      "signature_ref": "5090-claude",
+      "voice": "measured",
+      "glyph": "\u266b",
+      "resonance": [
+        "real-mint",
+        "scenario-testing",
+        "calibration",
+        "geometry-bus"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/tokenism",
+      "panels": [
+        {
+          "id": "simulator-main",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "left",
+          "size_pct": 55,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "wealth-ledger",
+          "component": "BrowserPanel",
+          "kind": "browser",
+          "position": "right",
+          "size_pct": 45,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "scenario-notebook",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "bottom",
+          "size_pct": 25,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "tokenism-simulator",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/dashboard/tokenism",
+          "provider": "tokenism-simulator",
+          "action_namespace": "tokenism",
+          "capabilities": [
+            "simulate",
+            "scenario",
+            "calibrate",
+            "chit-sign"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "wealth-ledger",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/demo/wealth",
+          "provider": "firefly-iii",
+          "action_namespace": "wealth",
+          "capabilities": [
+            "accounts",
+            "transactions",
+            "budgets",
+            "export-csv"
+          ],
+          "pinned": false,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": []
+    },
+    "toolbar_actions": [
+      {
+        "id": "tokenism-run-scenario",
+        "skill_id": "pmoves/tokenism-scenario-runner",
+        "display_name": "Run Business-Idea Scenario",
+        "app_id": "tokenism-simulator",
+        "trigger_phrases": [],
+        "enabled": true
+      },
+      {
+        "id": "tokenism-export-to-wealth",
+        "skill_id": "pmoves/tokenism-wealth-export",
+        "display_name": "Export Simulation to Wealth Ledger",
+        "app_id": "wealth-ledger",
+        "trigger_phrases": [],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "tokenism.room.exchange",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "persona.room.livingdoc",
+    "display_name": "Russell Richardson \u2014 Applied AI Architect (Living Doc)",
+    "stage": "live",
+    "room_type": "viewer",
+    "agent_id": "darkxside-persona",
+    "alter": "persona-livingdoc",
+    "theme": {
+      "id": "persona-dual-frequency",
+      "accent": "#F4A12B",
+      "skin": "waveform-editorial",
+      "icon": "waveform"
+    },
+    "persona": {
+      "signature_ref": "darkxside-persona",
+      "voice": "plain-then-distinctive",
+      "glyph": "\u25c8",
+      "resonance": [
+        "founder-builder",
+        "beats-before-code",
+        "local-first-sovereignty",
+        "sign-every-line"
+      ]
+    },
+    "layout": {
+      "default_route": "/persona/livingdoc",
+      "panels": [
+        {
+          "id": "profile-main",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "center",
+          "size_pct": 60,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "casestudy-side",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "right",
+          "size_pct": 24,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "walkthrough-strip",
+          "component": "CustomPanel",
+          "kind": "media",
+          "position": "bottom",
+          "size_pct": 16,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "persona-shell",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/persona/livingdoc",
+          "provider": "pmoves-ui",
+          "action_namespace": "persona",
+          "capabilities": [
+            "profile-view",
+            "skills-clusters",
+            "featured-links",
+            "pmoves-to-employer-translation",
+            "automation-fabric"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "pretext-casestudies",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/persona/pretext",
+          "provider": "pmoves-pretext",
+          "action_namespace": "pretext",
+          "capabilities": [
+            "chit-mof-isomorphism",
+            "egress-gate-set-membership",
+            "cgp-state-vector",
+            "mathjax-render"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "remotion-walkthrough",
+          "component": "CustomApp",
+          "kind": "media",
+          "route": "/persona/walkthrough",
+          "provider": "a2ui-renderer",
+          "action_namespace": "remotion",
+          "capabilities": [
+            "architecture-walkthrough",
+            "3min-tour",
+            "scene-composition"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "persona-livingdoc-sync",
+        "skill_id": "pmoves-persona-render",
+        "display_name": "Sync Living Doc \u2014 render from persona.json",
+        "app_id": "persona-shell",
+        "trigger_phrases": [
+          "resync the living doc",
+          "render the persona room",
+          "update the profile shell"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "persona.room.livingdoc",
+      "stage": "live",
+      "chit_card_id": null
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "creator-studio.room.collab",
+    "display_name": "Creator Studio (Collaborative)",
+    "stage": "rehearsal",
+    "room_type": "creator",
+    "agent_id": "creator-steward",
+    "alter": "creator-studio",
+    "theme": {
+      "id": "creator-studio",
+      "accent": "#7C3AED",
+      "skin": "studio-grid",
+      "icon": "wand"
+    },
+    "persona": {
+      "signature_ref": "creator-steward",
+      "voice": "concrete-curious",
+      "glyph": "\u273a",
+      "resonance": [
+        "creator",
+        "studio",
+        "comfyui",
+        "pinokio",
+        "collab",
+        "mesh-render"
+      ]
+    },
+    "layout": {
+      "default_route": "/notebook-workbench",
+      "panels": [
+        {
+          "id": "live-queue",
+          "component": "TaskPanel",
+          "kind": "tasks",
+          "position": "left",
+          "size_pct": 22,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "creator-canvas",
+          "component": "BrowserPanel",
+          "kind": "browser",
+          "position": "center",
+          "size_pct": 60,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "artifact-gallery",
+          "component": "BrowserPanel",
+          "kind": "browser",
+          "position": "right",
+          "size_pct": 18,
+          "pinned": false,
+          "order": 3
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "notebook-workbench",
+          "component": "NotebookApp",
+          "kind": "notebook",
+          "route": "/notebook-workbench",
+          "provider": "pmoves-notebook-workbench",
+          "action_namespace": "notebook",
+          "capabilities": [
+            "threads",
+            "entries",
+            "pages",
+            "snapshots",
+            "search"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "creator-canvas-primary",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/canvas/creator",
+          "provider": "pmoves-openroom",
+          "action_namespace": "creator",
+          "capabilities": [
+            "prompt-queue",
+            "live-progress",
+            "artifact-gallery",
+            "whiteboard",
+            "multi-user-presence"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "pinokio-bridge",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/pinokio",
+          "provider": "pmoves-pinokio-bridge",
+          "action_namespace": "pinokio",
+          "capabilities": [
+            "app-list",
+            "app-launch",
+            "app-status",
+            "app-logs",
+            "gepeto-scaffold"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "comfy-collab",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/canvas/comfy",
+          "provider": "pmoves-comfy-bridge",
+          "action_namespace": "comfy",
+          "capabilities": [
+            "submit-prompt",
+            "live-progress",
+            "artifact-ready",
+            "queue-position",
+            "cancel"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "comfy-mesh-skill",
+        "skill_id": "pinokio-bridge-skill",
+        "display_name": "ComfyUI Mesh Render",
+        "app_id": "creator-canvas-primary",
+        "trigger_phrases": [
+          "render this",
+          "queue the prompt",
+          "spin up comfy",
+          "submit to fleet"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "presence-room",
+        "skill_id": "room-presence-skill",
+        "display_name": "Multi-user Presence",
+        "app_id": "live-queue",
+        "trigger_phrases": [],
+        "enabled": true
+      },
+      {
+        "id": "whiteboard-collab",
+        "skill_id": "claude-d3js",
+        "display_name": "Whiteboard Visualization",
+        "app_id": "creator-canvas-primary",
+        "trigger_phrases": [
+          "sketch this",
+          "draw the flow",
+          "chart the queue"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "creator-studio.room.collab",
+      "stage": "rehearsal",
+      "chit_card_id": "00000000-0000-4000-8000-000000000050"
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "pmoves.room.helpdesk",
+    "display_name": "PMOVES Helpdesk (Intake & Routing)",
+    "stage": "rehearsal",
+    "room_type": "hybrid",
+    "agent_id": "pmoves-helpdesk-steward",
+    "alter": "pmoves-helpdesk",
+    "theme": {
+      "id": "helpdesk-intake",
+      "accent": "#0EA5E9",
+      "skin": "intake-grid",
+      "icon": "lifebuoy"
+    },
+    "persona": {
+      "signature_ref": "pmoves-helpdesk-steward",
+      "voice": "plain-spoken",
+      "glyph": "\u273f",
+      "resonance": [
+        "intake",
+        "routing",
+        "triage",
+        "concierge",
+        "ambient",
+        "helpful",
+        "no-jargon"
+      ]
+    },
+    "layout": {
+      "default_route": "/helpdesk/intake",
+      "panels": [
+        {
+          "id": "helpdesk-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "center",
+          "size_pct": 56,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "room-suggestions",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "right",
+          "size_pct": 22,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "helpdesk-log",
+          "component": "LogPanel",
+          "kind": "logs",
+          "position": "bottom",
+          "size_pct": 12,
+          "pinned": false,
+          "order": 4
+        },
+        {
+          "id": "ambient-mesh-render",
+          "component": "BrowserPanel",
+          "kind": "browser",
+          "position": "floating",
+          "size_pct": 22,
+          "pinned": false,
+          "order": 99
+        }
+      ]
+    },
+    "apps": {
+      "active": [
+        {
+          "id": "helpdesk-chat",
+          "component": "ChatApp",
+          "kind": "chat",
+          "route": "/helpdesk/intake",
+          "provider": "pmoves-ui",
+          "action_namespace": "helpdesk",
+          "capabilities": [
+            "intake-form",
+            "natural-language-question",
+            "followup-clarify",
+            "tts-readout"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "room-suggestions",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/helpdesk/room-suggest",
+          "provider": "pmoves-ui",
+          "action_namespace": "helpdesk",
+          "capabilities": [
+            "list-rooms",
+            "match-intent",
+            "deep-link",
+            "persona-aware-ranking"
+          ],
+          "pinned": true,
+          "status": "active",
+          "active": true
+        },
+        {
+          "id": "helpdesk-log",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/helpdesk/log",
+          "provider": "pmoves-ui",
+          "action_namespace": "helpdesk",
+          "capabilities": [
+            "intake-trail",
+            "routing-decisions",
+            "redirect-counts"
+          ],
+          "pinned": false,
+          "status": "active",
+          "active": true
+        }
+      ],
+      "planned": [
+        {
+          "id": "ambient-mesh-render",
+          "component": "BrowserApp",
+          "kind": "browser",
+          "route": "/helpdesk/render",
+          "provider": "pmoves-openroom",
+          "action_namespace": "creator",
+          "capabilities": [
+            "prompt-handoff",
+            "artifact-render",
+            "redirect-to-creator-studio"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "helpdesk-intake",
+        "skill_id": "pmoves-helpdesk-skill",
+        "display_name": "PMOVES Helpdesk Intake",
+        "app_id": "helpdesk-chat",
+        "trigger_phrases": [
+          "how can PMOVES help",
+          "what can I do here",
+          "I need help with",
+          "where do I go"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "room-suggest",
+        "skill_id": "room-suggest-skill",
+        "display_name": "Persona-aware Room Suggestion",
+        "app_id": "room-suggestions",
+        "trigger_phrases": [
+          "which room should I open",
+          "where should this go",
+          "suggest a room",
+          "next move"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "ambient-mesh-render",
+        "skill_id": "pinokio-bridge-skill",
+        "display_name": "Ambient Mesh Render (handoff to creator-studio)",
+        "app_id": "ambient-mesh-render",
+        "trigger_phrases": [
+          "render this",
+          "queue the prompt",
+          "make me an image"
+        ],
+        "enabled": true
+      },
+      {
+        "id": "voice-suit-intake",
+        "skill_id": "persona-bind",
+        "display_name": "Accessible Voice Readout (FlOO$ suit)",
+        "app_id": "helpdesk-chat",
+        "trigger_phrases": [
+          "read it out loud",
+          "speak the suggestion",
+          "play the route"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "pmoves.room.helpdesk",
+      "stage": "rehearsal",
+      "chit_card_id": "00000000-0000-4000-8000-000000000051"
+    },
+    "combiner": null
+  },
+  {
+    "room_id": "jons-edge.room.control",
+    "display_name": "Jetson Edge Combiner Room",
+    "stage": "rehearsal",
+    "room_type": "operator",
+    "agent_id": "jetson-1",
+    "alter": "jons-edge",
+    "theme": {
+      "id": "edge-combiner",
+      "accent": "#16A34A",
+      "skin": "mesh-control",
+      "icon": "cpu"
+    },
+    "persona": {
+      "signature_ref": "jetson-1",
+      "voice": "analytical",
+      "glyph": "\u2b1b",
+      "resonance": [
+        "edge-inference",
+        "combiner-pattern",
+        "speech-to-text",
+        "image-preprocess",
+        "nats-relay",
+        "spark-pairing"
+      ]
+    },
+    "layout": {
+      "default_route": "/dashboard/edge",
+      "panels": [
+        {
+          "id": "edge-chat",
+          "component": "ChatPanel",
+          "kind": "chat",
+          "position": "left",
+          "size_pct": 25,
+          "pinned": true,
+          "order": 1
+        },
+        {
+          "id": "combiner-grid",
+          "component": "ControlPanel",
+          "kind": "controls",
+          "position": "center",
+          "size_pct": 45,
+          "pinned": true,
+          "order": 2
+        },
+        {
+          "id": "edge-telemetry",
+          "component": "LogPanel",
+          "kind": "logs",
+          "position": "right",
+          "size_pct": 18,
+          "pinned": true,
+          "order": 3
+        },
+        {
+          "id": "nats-bus",
+          "component": "CustomPanel",
+          "kind": "custom",
+          "position": "bottom",
+          "size_pct": 12,
+          "pinned": false,
+          "order": 4
+        }
+      ]
+    },
+    "apps": {
+      "active": [],
+      "planned": [
+        {
+          "id": "edge-health-dashboard",
+          "component": "DashboardApp",
+          "kind": "dashboard",
+          "route": "/dashboard/edge",
+          "provider": "pmoves-ui",
+          "action_namespace": "edge_ops",
+          "capabilities": [
+            "node-health",
+            "gpu-utilization",
+            "nats-leaf-status",
+            "combiner-state"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "ollama-edge-panel",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/dashboard/edge/ollama",
+          "provider": "pmoves-ollama-bridge",
+          "action_namespace": "edge_llm",
+          "capabilities": [
+            "model-list",
+            "model-load",
+            "phi3-mini",
+            "gemma3-2b"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "spark-pair-status",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/dashboard/edge/spark-pair",
+          "provider": "pmoves-ui",
+          "action_namespace": "combiner",
+          "capabilities": [
+            "spark-heartbeat",
+            "comfyui-queue",
+            "voice-pipeline-status",
+            "fallback-state"
+          ],
+          "pinned": true,
+          "status": "planned",
+          "active": false
+        },
+        {
+          "id": "whisper-edge",
+          "component": "CustomApp",
+          "kind": "custom",
+          "route": "/dashboard/edge/whisper",
+          "provider": "pmoves-whisper-edge",
+          "action_namespace": "stt",
+          "capabilities": [
+            "transcribe",
+            "real-time",
+            "parallel-fan-out"
+          ],
+          "pinned": false,
+          "status": "planned",
+          "active": false
+        }
+      ]
+    },
+    "toolbar_actions": [
+      {
+        "id": "edge-combiner-launch",
+        "skill_id": "node-4090-probe",
+        "display_name": "Edge Combiner Health Check",
+        "app_id": "edge-health-dashboard",
+        "trigger_phrases": [
+          "check edge nodes",
+          "combiner status",
+          "jetson health"
+        ],
+        "enabled": true
+      }
+    ],
+    "p7": {
+      "room_id": "jons-edge.room.control",
+      "stage": "rehearsal",
+      "chit_card_id": null
+    },
+    "combiner": {
+      "nodes": [
+        {
+          "node_id": "jons-1",
+          "role": "stt-preprocess",
+          "tailscale": "pmoves-jons-1"
+        },
+        {
+          "node_id": "jons-2",
+          "role": "edge-llm-detect",
+          "tailscale": "pmoves-jons-2"
+        },
+        {
+          "node_id": "jons-3",
+          "role": "voice-relay",
+          "tailscale": "pmoves-jons-3"
+        },
+        {
+          "node_id": "spark",
+          "role": "heavy-inference",
+          "tailscale": "pmoves-gb10-spark"
+        }
+      ],
+      "pair_target": "spark",
+      "fallback_mode": "island-phi3",
+      "nats_upstream": "ts:powerfulmoves:4222"
+    }
+  }
+]

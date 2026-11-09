@@ -8,7 +8,7 @@ Overview
 
 Compose
 - Service: `flute-gateway`
-- Ports: `8055:8055` (HTTP), `8056:8056` (WebSocket)
+- Ports: `8055:8055` (HTTP + WebSocket). Compose also publishes `8056:8056`, but the app binds 8055 only (`Dockerfile` CMD `uvicorn --port 8055`) — nothing listens on 8056.
 - Profiles: `orchestration`, `media`
 - Depends on: NATS, Supabase, voice providers such as VibeVoice and/or Ultimate TTS
 
@@ -16,7 +16,7 @@ Environment
 - `NATS_URL` — event bus connection
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` — persona/config lookups
 - `TENSORZERO_URL` — LLM handoff for voice-agent flows
-- `DEFAULT_VOICE_PROVIDER` — default voice backend (`vibevoice` by default)
+- `DEFAULT_VOICE_PROVIDER` — default voice backend (`omnivoice` by default)
 - `FLUTE_API_KEY` — optional API key gate for HTTP routes
 - `VIBEVOICE_URL` — VibeVoice endpoint
 - `ULTIMATE_TTS_URL` — Ultimate TTS Studio endpoint

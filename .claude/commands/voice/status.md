@@ -37,14 +37,16 @@ Execute the following steps:
 
 4. **Check WebSocket streaming (Flute-Gateway):**
    ```bash
-   curl -sf -o /dev/null -w "%{http_code}" http://localhost:8056/
+   WSKEY='Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='
+   curl -s -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H "$WSKEY" http://localhost:8055/v1/voice/stream/tts
    ```
 
-   Should return `101` (upgrade to WebSocket) or `200`.
+   Should return `101` (upgrade to WebSocket). The WebSocket routes are on
+   **8055**, the same port as HTTP — nothing listens on 8056.
 
 5. **Report results to user:**
    - Flute-Gateway status (port 8055)
-   - Ultimate-TTS-Studio status (port 7861)
+   - Ultimate-TTS-Studio status (Gradio UI port 7861)
    - Available engines and voices
    - WebSocket streaming availability
    - Any errors or missing engines
@@ -54,5 +56,5 @@ Execute the following steps:
 - Flute-Gateway requires Ultimate-TTS-Studio as TTS backend
 - GPU required for most engines (CUDA 12.4)
 - Part of the voice pipeline alongside VibeVoice (port 3000)
-- WebSocket on port 8056 for real-time audio streaming
+- WebSocket on port **8055** for real-time audio streaming: `/v1/voice/stream/tts` (TTS) and `/v1/voice/agent` (duplex, requires `PIPECAT_ENABLED=true`)
 - See `.claude/context/flute-gateway.md` for detailed API reference

@@ -156,7 +156,7 @@ async def run_inbox(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Persist node-bound PMOVES NATS messages to a JSONL inbox.")
     parser.add_argument("--agent-id", default=os.environ.get("PMOVES_AGENT_ID", "5090-CODEX"))
-    parser.add_argument("--nats-url", default=os.environ.get("NATS_URL", "nats://nats:pmoves@127.0.0.1:4222"))
+    parser.add_argument("--nats-url", default=os.environ.get("NATS_URL", "nats://127.0.0.1:4222"))
     parser.add_argument(
         "--subjects",
         default=os.environ.get("PMOVES_AGENT_INBOX_SUBJECTS"),

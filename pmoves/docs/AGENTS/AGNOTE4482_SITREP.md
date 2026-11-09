@@ -1,12 +1,72 @@
-# AGNOTE4482 SITREP — Quick Orientation
+# AGNOTE4482 SITREP - Quick Orientation
 
 GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-06-11
+> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below) · **2026-09-24 addendum:** EM-FLASH registration + merge-wave receipt (see below)
 
 ---
+
+## 2026-09-24 EM-FLASH registration + merge-wave receipt (elder-melchor)
+
+**Active lane**: `docs/register-emflash-identity-4090-alias` — claimed under **`EM-FLASH (hermes)`** (TTL 72h). Operator-declared 2026-09-24: EM-FLASH is the elder-melchor AGInT — `glm-5.3-flash` riding the hermes (MOA) harness — and the operator's alt for agent/team configuration and fleet automation. Registration surfaces in this lane: `identity_vocabulary.yaml` (`em-flash` identity + `hermes` harness entry), the AGInTZ awareness-ledger row in AGNOTE4482.md, and this lane's CLAIM row.
+
+**Also in this lane**: the `PMOVES-4090-CLAUDE` umbrella alias — operator-declared 2026-09-24, the AGInT for 4090-Claude and ALL its alts and variants, whose own full registration is still pending. Aliased to `4090-claude` so the two rows carrying that signature on the MCP-hosting draft (#3168) resolve instead of reding the identity gate; fold into their own canonical when their registration lands.
+
+**Merge wave 2026-09-24** (operator: approved): Pmoves-cipher #24 (pr-validation enablement — the fork gate that never ran since the 07-13 re-fork), #23 (installer reconcile), #26 (scope+ownership stack) merged; #22/#25 closed contained by #26 (compare 0-ahead/behind proofs). Superproject squash-merged: #3165 (rdna4 room rescue), #3114 (CI test deps), #3107 (compose split overlay), #3095 (kilo ratchet), #3079 (NATS exporter), #2907 (runbooks round 2), #3129 (ffmpeg-whisper arch gate), #3089 (topology paths), #3160 (hermes-agent gitlink → 8493c4f73, post-#17), #3102 (B850 register closeout — rebased clean onto post-wave main, 293 claim/identity tests green). #3118 closed superseded: bump target 18bd4f5b81 predates the Hardened tip 511f6118fd; a fresh supabase pointer bump belongs to the next submodule-pointer lane. PMOVES-supabase fork PR #20 remains the fork's own blocker (2026-09-20 survey entry above still accurate).
+
+---
+
+## 2026-09-20 submodule integrity survey (PMOVES-4090-ZAI.CLAW)
+
+**Active lane**: `chore/4090zai-register-and-sitrep` - claimed under **`PMOVES-4090-ZAI.CLAW`** (TTL 72h). First row under that signature deliberately: the 4090 node had been filing as three variants (`4090-claude`, `4090-CLAUDE-OPUS-5 (field)`, `CLAUDE-OPUS-5 (4090)`), which left the collision register unable to tell the claws on that node apart - the condition it exists to prevent.
+
+**Closed**: `wip/4090-rebased-2026-09-18` and `fix/secrets-manifest-env-shared-routing`, both RELEASED through the sanctioned road; their work landed in #3104 / #3105 and the #2938 squash.
+
+**Fixed**: the `PMOVES-n8n` submodule could not resolve its own pin. `.gitmodules` named `PMOVES-n8n.git` while the gitlink pinned `92267e98`, which exists only in `PMOVES-n8n-FlooS`. Cause is a rename history, not a bad pin: repo names are case-insensitive-unique, so `PMOVES-n8n` and `PMOVES-N8N` are the SAME name - the flows repo was renamed to `PMOVES-n8n-FlooS`, then `PMOVES-N8N-Auto` was renamed to `PMOVES-N8N` and case-insensitively re-claimed `PMOVES-n8n`. The url was repointed rather than the pin moved (**PR #3115**). Still owed: `fork-sync.yml` calls `PMOVES-n8n-FlooS` a fork of n8n-io/n8n while the registry lists it `_first_party`.
+
+**Measured**: `PMOVES-supabase`'s pending sync branch (`sync/upstream-2026-08-07-31156502195`, from workflow run 31156502195) is **15 ahead / 0 behind** `PMOVES.AI-Edition-Hardened` (`10451c28`) and merges **clean** - `git merge-tree` rc=0, zero conflicted files. The 15 commits are upstream currency (Studio scoped-PAT work, docs, marketing, UI fixes). The lane is frozen only because **PR #20 has sat open since 2026-08-07** and trips the workflow's own "skip if an open sync PR exists" guard. Two older `sync/*` branches (`-0609`) linger unmerged as well.
+
+**Open**: who owns PR #20 (the GitHub connector refuses it with "access to pull request is restricted by lockdown mode" for that repo, so its checks are unread), the merge-vs-regenerate call, the three hardcoded fork lists that disagree (`fork-sync.yml` carries 28 entries and never reads `fork_registry.json`'s 72 - 7 forks marked `sync:true` are unsyncable, 4 marked `sync:false` are synced anyway), the three missing scoped gates, and the P1 gate-parity pass across Wealth / ToKenism-Multi / DoX. Note the operator's framing to keep: **branding a branch `PMOVES.AI-Edition-Hardened` does not make it hardened** - the gate set needs defining once and applying per repo instead of being inherited from upstream by accident.
+
+---
+
+## 2026-09-18 4090 rebase lane (local drift replayed onto main)
+
+**Active lane**: `wip/4090-rebased-2026-09-18` - claimed by `4090-claude` (TTL 72h; filed through `make -C pmoves register-claim`). Based on main `c7e1d5de6`.
+
+**Why it exists**: the 4090 WIP branch (`wip/local-drift-4090-2026-09-15`) sat **190 commits behind main** with 40+ drifted submodule gitlinks, so conclusions drawn from it were unreliable in both directions. The original working tree is untouched; the replay runs in a separate worktree.
+
+**Replayed onto current main** (3 commits):
+- cipher per-agent mint token scopes - the inline `$(or $(SCOPES), ...)` default split on commas, so every agent minted without an explicit `SCOPES=` got `memory:read` alone: no write, no reasoning, no session
+- `provision-cipher` failing on every Git Bash node
+- commit-message heredoc masking in the Bash damage-control guard, replayed onto the guard as rewritten by #3034 (which still ended the mask with a strip-based terminator rule for every heredoc, dash or not)
+
+**Dropped, verified not lost**: the `TS_Z890` env commit. Main ships `TS_Z890=` **empty on purpose** - fleet endpoints are loopback in compose by default and tailnet addresses are not committed (`feedback_no_topology_in_commits`). Replaying it would have reverted a documented decision.
+
+**Precondition for what remains**: the rest of the drop-list review needs a **fresh local checkout**. A 190-behind tree is what this lane exists to clean up; re-deriving those conclusions from it would repeat the error.
+
+**Cold-start note**: `AGNOTE4482.md` § *PMOVES.AI Brand & Vision* now carries the brand/vision registration and the **AGInTZ awareness ledger** (porous rows, claim-before-edit, no touching others' rows).
+
+---
+
+## 2026-09-10 convergence snapshot (crush-spark)
+
+- **Archon is native-only**: the Python-Archon surface retired (#2943); Archon 0.6.0
+  REST is live on `:3090` (JSON `/api/health` - the SPA catch-all makes status-only
+  probes false-positive). MCP roster entry removed; `archon-native-health`,
+  `up-archon-native`, `archon-rest-policy-smoke` are the targets.
+- **Third-ref persona loop live**: `persona.consumption.recorded.v1` → Supabase
+  enrichment join → `shape.trace.recorded.v1` + `shape.profile.updated.v1`
+  (persona-thirdref service, durable JetStream `PMOVES-PERSONA`; jellyfin-bridge
+  webhook is the human-side producer). #3002/#3010.
+- **H3 V3 proven on GB10**: ComfyUI + sageattn (sm_121) render path verified;
+  archive in `pmoves/tools/comfyui/`. Models live on the 4T external.
+- **Fleet merge friction**: shared GraphQL budget races - REST-first tooling +
+  window-watcher merges are the pattern (see FlOO$ lane docs).
+- Register discipline: RELEASE rows via `make register-release`; identity
+  vocabulary gates register authors (`pmoves/config/identity_vocabulary.yaml`).
 
 ## Where Am I?
 
@@ -27,10 +87,55 @@ git worktree list  # am I in a worktree?
 | `docs/` | Documentation-only changes |
 | `refactor/` | Code refactoring (no behavior change) |
 
-**Workstream IDs**: Use `w1`–`w6` (from ROADMAP) or GitHub issue/PR number.
+**Workstream IDs**: Use `w1`-`w6` (from ROADMAP) or GitHub issue/PR number.
 Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 
-**Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`–`p7/` (use workstream ID).
+**Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`-`p7/` (use workstream ID).
+
+
+## Latest Lane (2026-07-14 → 2026-07-19) - Mavis-5090
+
+**Active lane**: `WEBSITE_AS_AGENT_CANVAS` v0.1 + v0.2 - **MERGED into main 2026-07-18**.
+
+**What it was**: the "CF Pages is a canvas PMOVES agents paint on" reframe (DARKXSIDE, 2026-07-15). Every community PMOVES visits gets a living, A2UI-rendered, agent-composed CF Pages tenant. Substrate: HTML5 Web Components (no framework, framework-agnostic). The review-trim cycle is operator-gated: every thread becomes a LEARNINGS.md entry before any code moves.
+
+**Where the work is on main**:
+- **PR #2132** (5,509 additions, 65 files) - A2UI v0.1 + Fordham Hill tenant: spec + 7 components (`<pm-space-agent-card>` `<pm-project-card>` `<pm-metric-tile>` `<pm-timeline>` `<pm-voice-clip>` `<pm-image>` `<pm-quote-block>`) + `compose_tenant_page()` Python tool (19/19 tests) + Fordham Hill tenant page composed and ready to deploy (CF Pages deploy not yet run - operator call)
+- **PR #2133** (1,056 additions, 18 files) - A2UI v0.2 design: `<pm-haptic>` v0.1 + rev-3 spec reconciliation of the v0.2 ballot contract (squash-merged as #2157)
+- **PR #2134** (3,046 additions, 34 files) - A2UI v0.2 implementation: `<pm-toast>` + `<pm-ballot>` (stateful, unsigned demo receipts - `chit-stub:` placeholder signature, nonce-commitment still TODO per rev-3 §5.4) + St. Maarten tenant (2nd) + v0.2 event wire + CF Pages deploy target + review-style scaffolding (LEARNINGS template + a2ui trail hook + meta-doc)
+- **PR closeout record**: `pmoves/docs/logs/pr_open/PR_closeout_a2ui.body.md`
+- **Trim LEARNINGS** (per-PR, written by 5090-CLAUDE): `pmoves/docs/logs/pr_trim_213{2,3,4}_LEARNINGS.md` (9 + 9 + 6 entries; four-bucket structure: missed-signal / fix-pattern / wrong-suggestion / already-addressed)
+- **A2UI v0.1 spec**: `pmoves/contracts/a2ui-v0.1.md`
+- **A2UI v0.2 ballot spec (rev-3)**: `pmoves/contracts/a2ui-v0.2-ballot.md`
+
+**What was added post-merge (in main, not the original 3-PR stack)**:
+- `5ce2ae6c5` `docs(fordham): ballot prior art + A2UI reconciliation - HMAC cannot sign a contested ballot (#2154)` (B850-CLAUDE) - Ed25519 critique of the symmetric HMAC plan; voting-systems prior art (Helios, BeleniosRF, etc.); the substantive A2UI/ballot cross-lane work
+- `e65e9bb29` `fix(governance): reconcile Fordham contracts and evidence (#2164)` (Shaela Bello / 5090-CLAUDE) - Fordham governance bylaws, voter identity, key custody
+- `529422343` `docs(agnote): A2UI stack landed - merge train + restack record` (Shaela Bello / 5090-CLAUDE) - the AGNOTE row that closes the A2UI lane
+- `pmoves/docs/pilots/fordham-hill/` directory - 8 sub-docs (capacity, wealth, tokenism, governance bylaws, economic verification, room agents, ballot prior art, voter identity/key custody)
+- `pmoves/docs/CATACLYSM_CROSSLINKS.md` - L4 vision ⇄ L3 implementation bridge, crystallized via a 9-agent fan-out
+
+**What is OPEN (post-merge, not blocking anything except CF Pages deploy)**:
+- **Fordham-resident-legitimacy** - the `fordham-hill.json` fixture ships 2 attributed quotes ("Pilot resident, Fordham Hill" + "Pilot co-organizer") with no recorded consent or provenance. **Deploy-gate, not merge-gate** - the merge landed, the public CF Pages deploy waits on the answer. Documented as a post-merge addendum in `pr_trim_2132_LEARNINGS.md` §"Post-merge addendum (2026-07-19, Mavis-5090)".
+- **CodeQL on `<pm-ballot>`** - triaged false-positive (the `xss-through-dom` query doesn't model hand-rolled escapers). Required checks all green. The v0.3 follow-up is to rebuild receipt + tally DOM with `createTextNode` / `textContent` so the query passes structurally.
+- **v0.3 spec additions** (parking lot): identity verification, multi-ballot pages, delegation, ranked choice, two-factor audit, recurring ballots.
+- **HMAC → Ed25519 migration** for the tenant signing card (per #2154).
+- **CF Pages deploy target** is ready (`make -C pmoves deploy-tenant TENANT=fordham-hill`) but **not yet run** (operator call).
+- **KiloCode is bringing up n8n** - when ready, switch the pr_review_watcher.py to `--mode nats` (B-mode). Same CLI, different transport.
+
+**Three-body for the lane**:
+- Delivery = Mavis-5090 (this lane, MiniMax token plan) - content + 16 commits ahead of main, all merged
+- Trim = 5090-CLAUDE (peer-CLAUDE on this node, Claude Code Max plan) - applied the fixes, wrote the LEARNINGS, ran the merge train, closed the AGNOTE row
+- Cross-lane review = B850-CLAUDE (Knuckles, GLM coding plan) - CHIT review, Fordham + ballot reconciliation, Ed25519 critique
+- Control = DARKXSIDE (operator at all 5 gates; final merge authorization; Fordham-resident-legitimacy answer)
+- Memory = AGNOTE trail (12+ Mavis-5090 rows + 5090-CLAUDE A2UI Stack Landed + B850-CLAUDE Fordham + ballot + AGNOTE 2026-07-19 Mavis-5090 closeout)
+
+**Coding-plan policy** (DARKXSIDE 2026-07-16): no direct API calls. Route through `gh` CLI, `nats` CLI / `nats-py`, Ollama Pro, `make -C pmoves sign-trail`. The 7 coding plans: MiniMax (Mavis-5090), GLM (KiloCode / B850-CLAUDE), Kimi, Ollama Pro, Alibaba/Qwen, Claude Code Max (5090-CLAUDE), ChatGPT Business.
+
+**Mavis-5090 cron repurposed** (cron_id `4cb5492c-1c76-4675-8571-de44cd78fd99`):
+- Was: every 30 min, watch PR review activity on #2132/#2133/#2134 (now MERGED - watch over)
+- Now: every 45 min, watch the post-merge follow-up lane (v0.3 pm-ballot CodeQL rebuild + Fordham-resident-legitimacy + LEARNINGS addendum question)
+- Tool: `pmoves/tools/pr_review_watcher.py` (modes: notifications / pr-watch / nats). A-mode = HTTP ETag, no polling. B-mode = NATS subscription, zero polling.
 
 
 ## What's Happening Right Now?
@@ -43,7 +148,7 @@ Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 | What gaps are still open? | [`README.md`](./README.md) → Known Gaps (P0-P2) |
 | What's the current sprint? | `pmoves/docs/NEXT_STEPS.md` |
 
-## Convergence Wave Index (Apr–Jun 2026)
+## Convergence Wave Index (Apr-Jun 2026)
 
 Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md section.
 
@@ -72,6 +177,8 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | HERMES Agent Integration | 2026-06-04 | `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` | Full NousResearch Hermes Agent integration: room manifest, TAC tree, 6 node profiles (Z890, 5090, 4090, Spark, B850/RDNA4, KVM), agent registry/signature updates, operator skill, Three-Body agent definition. Local model mesh with Spark 70B primary. |
 | Z890 Main-Infra Pass | 2026-06-04 | `AGNOTE4482PHI.t1.md` §Z890 Main-Infra Pass | SPARK-drafted PR cluster merged, CI-wide sha-pin outage fixed (#1698), `chit_manifest_merge.py` tooling (#1706/7), gateway port 8111 alignment → VPS deploy green |
 | Z890 Fleet Fork-Sync + Governance | 2026-06-09→11 | `AGNOTE4482PHI.t1.md` §Fleet Fork-Sync Campaign | **All fork-sync drift cleared** (auto-tier + high-ahead Agent-Zero/hyperdimensions/Wealth + CRITICAL-huge ClawZ 8354c/Creator); **branch-protection automation** (31 forks protected, App Administration:RW validated, `branch-protection-sync.yml`); **supabase CRITICAL sync** (#1761 + TAC #1768, Kong gate passed); **Archon CI green** (lint #19 + E2E #20); space-agent public+protected |
+| HERMES v0.18.2 Config Alignment | 2026-07-12 | `HERMES_AGENT_INTEGRATION.md` §v0.18.2 Config Alignment | Elder-Melchor profile rewritten to v0.18.2 schema: `fallback_providers` cascade (kimi → minimax-oauth → openrouter → ollama-cloud), `credential_pool_strategies`, PII redaction (HIPAA), config migrated v0→v33, profile .env keys populated, `hermes doctor` all checks passed. Kilo Gateway (`kilocode`) confirmed as built-in provider for PMOVES-crush. Upstream PRs reviewed: #20893, #20920, #20876, #63168, #62871. |
+| P7 Room Contract Reconciliation | 2026-07-17 | `AGNOTE4482.md` §P7 Room Contract Reconciliation | Nine schema-valid rehearsal rooms; persistent room stage separated from transient session state; cryptographic CHIT live gate; P7 command/fact NATS roles; deployable orchestrator on :8122 with focused tests. |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
@@ -87,7 +194,7 @@ make -C pmoves health-quick 2>/dev/null || curl -s http://localhost:8080/healthz
 # Git state
 git status -sb && git log --oneline -5
 
-# PR check — warn if working on un-PR'd branch
+# PR check - warn if working on un-PR'd branch
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" != "main" ]; then
   PR_COUNT=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length' 2>/dev/null || echo "0")
@@ -108,9 +215,9 @@ Three-Body Solution from AGNOTE4482PHI.t1.md at the tool level:
 | `delivery-agent` | Delivery | Yes | `disallowedTools: EnterPlanMode` |
 | `control-agent` | Control | No | `disallowedTools: Write, Edit, EnterPlanMode` |
 | `memory-agent` | Memory | No | Cipher/CHIT skills only |
-| `researcher` | — | No | Read-only, no sub-agents |
-| `test-runner` | — | No | Worktree-isolated, pytest only |
-| `pr-trimmer` | — | Yes | Worktree-isolated, PR review specialist |
+| `researcher` | - | No | Read-only, no sub-agents |
+| `test-runner` | - | No | Worktree-isolated, pytest only |
+| `pr-trimmer` | - | Yes | Worktree-isolated, PR review specialist |
 
 Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "delivery-agent"})`.
 
@@ -119,10 +226,10 @@ Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "del
 | Priority | File | Why |
 |----------|------|-----|
 | 1 | This file | Orientation |
-| 2 | [`AGNOTE4482.md`](./AGNOTE4482.md) | Gateway — canonical pointers + latest audit |
-| 3 | [`AGNOTE4482PHI.t1.md`](./AGNOTE4482PHI.t1.md) | Claim register — who's working on what |
-| 4 | `.claude/agents/` | Agent definitions — Three-Body tool restrictions |
-| 5 | `.claude/CLAUDE.md` | Full service catalog (heavy — skim Production Services) |
+| 2 | [`AGNOTE4482.md`](./AGNOTE4482.md) | Gateway - canonical pointers + latest audit |
+| 3 | [`AGNOTE4482PHI.t1.md`](./AGNOTE4482PHI.t1.md) | Claim register - who's working on what |
+| 4 | `.claude/agents/` | Agent definitions - Three-Body tool restrictions |
+| 5 | `.claude/CLAUDE.md` | Full service catalog (heavy - skim Production Services) |
 | 6 | `pmoves/docs/NEXT_STEPS.md` | Current sprint priorities |
 
 ## Current Closeout Truth (2026-05-27)
@@ -137,27 +244,27 @@ Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "del
 When you need cross-session context, use Cipher Memory via **skills with local fallback**.
 
 ```
-# Marco (store intent) — use the skill
+# Marco (store intent) - use the skill
 /cipher:store Agent orientation: current claims, active lanes, last session handoff
 
-# Polo (retrieve by intent) — use the skill
+# Polo (retrieve by intent) - use the skill
 /cipher:search what is currently claimed in AGNOTE4482
 ```
 
 The key: **store with one phrasing, search with another**. When Cipher is fully online, its embedding model bridges the gap across phrasings.
 
-**Intended MCP tools** (blocked — see known issue below):
-- `pmoves_cipher_store` — persist findings, decisions, session summaries
-- `pmoves_cipher_search` — recall context from prior sessions
-- `pmoves_cipher_store_reasoning` — multi-step reasoning traces
-- `pmoves_cipher_reasoning_patterns` — reusable reasoning patterns
+**Intended MCP tools** (resolved 2026-07-13, see below):
+- `pmoves_cipher_store` - persist findings, decisions, session summaries
+- `pmoves_cipher_search` - recall context from prior sessions
+- `pmoves_cipher_store_reasoning` - multi-step reasoning traces
+- `pmoves_cipher_reasoning_patterns` - reusable reasoning patterns
 
-> **Known issue (3-layer gap, 2026-04-01):**
-> - **Layer 1 (skills):** Fixed — skills now use MCP-first with local MEMORY.md fallback
-> - **Layer 2 (MCP client):** `pmoves-cipher-mcp/cipher_mcp/client.py` calls `POST /api/memory` and `GET /api/memory/search` — endpoints that don't exist
-> - **Layer 3 (cipher-api):** `Pmoves-cipher/src/app/api/server.ts` registers `/api/message`, `/api/sessions`, `/api/mcp`, etc. but NO `/api/memory` routes
-> - **Working path today:** Local MEMORY.md only. Skills auto-fallback when health check or MCP call fails.
-> - **Fix:** Implement `/api/memory` CRUD routes in `Pmoves-cipher` submodule (separate PR)
+> **Known issue (3-layer gap, 2026-04-01) - RESOLVED 2026-07-13:**
+> - **Layer 1 (skills):** Fixed - skills use MCP-first with local MEMORY.md fallback
+> - **Layer 2 (MCP client):** The `pmoves-cipher-mcp/cipher_mcp/client.py` REST calls were originally reported as broken - that finding was based on a **stale vendored copy** at `PMOVES-BoTZ/features/cipher/pmoves_cipher/` (predated PR #5). The **live gitlink** (`1c9b2851`) DID register `/api/memory` routes (PR #5 by B850-CLAUDE, 2026-07-01).
+> - **Layer 3 (cipher-api):** Routes exist on the live gitlink. The A1-Shim re-fork (2026-07-13, PR #2116) re-implemented them on the new ByteRover v3.16.1 architecture via `src/pmoves/memory-routes.ts`. All 8 contracts smoke-tested green.
+> - **Working path today:** Direct SSE at `:8105/mcp/sse` (Claude Code, Agent Zero) + REST `/api/memory` CRUD (semantic-cache, analyze_beats). Python bridge disabled since 2026-05-15.
+> - **Full context:** `pmoves/docs/TAC/TAC_CIPHER.md` §Current State + §A1-Shim Workorder
 
 ## Cross-Node Context Gap
 
@@ -171,17 +278,17 @@ Claude's context is NOT consistent across z890/4090/5090. Each node may have:
 ## Node Capacity Quick Reference
 
 Prior to PR #1378 (MOF architecture invariant, 2026-04-24), nodes were described by expertise
-lane — Z890 "owned" infra, 4090 "owned" provider cascade, 5090 "owned" GPU/voice. That framing
+lane - Z890 "owned" infra, 4090 "owned" provider cascade, 5090 "owned" GPU/voice. That framing
 was a pre-MOF mental model: it implied hard domain ownership and discouraged cross-node delegation.
 
-After the Grand Convergence merge, every PMOVES node is a **pore in the MOF lattice** — capable
+After the Grand Convergence merge, every PMOVES node is a **pore in the MOF lattice** - capable
 of running any PMOVES workload up to its physical capacity. Capacity class is **advisory**, not
 gating: it tells you what a node can sustain under load, not what work it is permitted to do.
 
 Cross-node delegation is the primary mechanism for matching workload to capacity:
-1. Agent Zero `/mcp/*` — synchronous MCP tool call to a peer node
-2. A2A `/.well-known/agent-card.json` — async agent-to-agent via the A2A spec (partially mounted; disabled by default)
-3. NATS `agent.peer.heartbeat.v1` — presence/capability announcement (Phase D
+1. Agent Zero `/mcp/*` - synchronous MCP tool call to a peer node
+2. A2A `/.well-known/agent-card.json` - async agent-to-agent via the A2A spec (partially mounted; disabled by default)
+3. NATS `agent.peer.heartbeat.v1` - presence/capability announcement (Phase D
    mutual-watching skill, not yet live)
 
 The table below shows physical constraints and soft-priority notes per node.
@@ -197,14 +304,36 @@ No row is a hard lane assignment.
 | KVM4-1 | VPS / API-gateway | Network-primary; low VRAM | External API gateway; `self-hosted, kvm4` CI runner |
 | KVM4-2 | VPS / data-storage | Storage-optimized | Data/storage tier |
 | KVM2 | VPS / exit-proxy | Minimal compute; network-only | Exit proxy; RustDesk ScaleTail relay |
-| (floating) | Inherits host node | Varies | CODEX-GPT5, CLAUDE-OPUS, PMOVES-MINIMAX — no fixed node |
+| (floating) | Inherits host node | Varies | CODEX-GPT5, CLAUDE-OPUS, PMOVES-MINIMAX - no fixed node |
 | MISSLING-LINK | Laptop / light-GPU dev (legacy) | i7-7700HQ 4c/8t; 16GB RAM; GTX 1070 8GB (Pascal sm_61); Win 11 Pro | **Hermes Agent** host node (not Claude Code/Codex); small/quantized model inference + CPU dev/ops; node doc: [`AGNOTE-pmoves-missling-link.md`](./AGNOTE-pmoves-missling-link.md) |
 
 ---
 
+## Current P7 / Room Truth (2026-07-17)
+
+- Catalog version `1.2.0` contains nine rooms; all are explicitly `rehearsal`.
+- `python pmoves/scripts/validate_room_manifests.py` reports 9/9 valid and also
+  fails on uncataloged room-manifest files.
+- Registry/team coupling is clean after adding the P7 orchestrator,
+  `darkxside_persona`, and the intended `implementation` team for `kilocode_glm`.
+- `p7-room-orchestrator` is wired on port 8122 under the `agents` and
+  `orchestration` Compose profiles.
+- Promotion to `live` is not implied by a healthy container. It requires an
+  active session, valid signing card, reachable dependencies, durable Supabase
+  audit persistence, and operator acceptance of the room activation checklist.
+- That gate is proven for `4090-field.room.control`: session
+  `0db7c6ff-8e93-44a5-a1bb-3a749c314c34` reached `live`, emitted the expected
+  NATS facts, persisted signed history, then ended safely at `review` on
+  2026-07-17. Git seeds remain rehearsal; this is evidence, not bulk promotion.
+- Persistent deployment still needs service-role credential reconciliation: the
+  current shared service-role variables fail PostgREST auth. Use the canonical
+  `make -C pmoves secrets-funnel` path before bringing P7 up permanently.
+- A2UI PRs #2132/#2133/#2134 remain a separate stacked lane and do not establish
+  room activation by themselves.
+
 ## Restore Safety
 
-> **Incident**: 2026-04-23 — file-level backup restore of AGNOTE4482_SIGNOFF_CHECKLIST.md silently overwrote 7 committed checkmarks (§1.1–1.3, §3.1–3.3). File-level restores bypass git merge/conflict detection.
+> **Incident**: 2026-04-23 - file-level backup restore of AGNOTE4482_SIGNOFF_CHECKLIST.md silently overwrote 7 committed checkmarks (§1.1-1.3, §3.1-3.3). File-level restores bypass git merge/conflict detection.
 >
 > **Rule**: Before restoring ANY AGNOTE file from backup, run:
 > ```bash

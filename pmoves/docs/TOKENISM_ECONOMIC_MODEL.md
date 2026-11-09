@@ -41,7 +41,7 @@ Content/Action → Embedding → Constellation → CGP Packet → Attribution �
 ### Implementation Reality Check (2026-05-22)
 
 Working now:
-- Dirichlet attribution, temporal decay, deterministic CGP generation, and real SHA-256 / keccak256 Merkle proof verification in `PMOVES-ToKenism-Multi`.
+- Dirichlet attribution, temporal decay, deterministic CGP generation, and Merkle proof-path generation/verification in `PMOVES-ToKenism-Multi` (order-preserving proof paths work).
 - CGP schema compatibility for `chit.cgp.v0.2` and `chit.cgp.v1.0`.
 - Validated NATS publisher payloads for `tokenism.attribution.recorded.v1`, `tokenism.cgp.weekly.v1`, `tokenism.cgp.ready.v1`, and `tokenism.swarm.population.v1`.
 - Firefly integration modules for calibration and export.
@@ -52,11 +52,12 @@ Bounded or planned:
 - Zeta behavior is heuristic and must stay labeled that way until a method design is reviewed.
 - ToKenism swarm records fitness and population metadata. Real PSO/evolutionary operators are handled by the PMOVES model-fitness/EvoSwarm workstream, not hidden in ToKenism.
 - Live production settlement still needs Firefly executor dry-runs, chain transaction execution, and deployment validation.
+- **Merkle hashing is not yet cryptographic.** The production `shape-attribution.ts` `hash()` uses a fast non-cryptographic 32-bit integer hash (self-labeled "simulation"), so proofs are structurally valid but not cryptographically tamper-evident. A real `crypto.createHash('sha256')` implementation exists in `PMOVES-ToKenism-Multi/.claude/skills/chit-geometry/tools/merkle-verify.ts` (the ToKenism submodule) but is not wired into the production path; `keccak256` is not implemented. Wiring real SHA-256 is a tracked follow-up (note: `crypto.createHash` is Node-only — the current hash was chosen for browser/Node parity, so the swap must preserve browser support).
 
 ### Key Principles
 
 1. **Geometric fairness**: Dirichlet smoothing preserves non-zero modeled attribution for participants represented in the attribution set
-2. **Cryptographic accountability**: Merkle proofs make every attribution tamper-evident
+2. **Attribution accountability**: Merkle proofs give every attribution an auditable proof structure (full cryptographic tamper-evidence lands once the real SHA-256 hash is wired in — see Reality Check above)
 3. **Fitness tracking first**: ToKenism records bounded fitness and population metadata; validated PSO/evolution happens in the PMOVES optimizer layer
 4. **Holographic transparency**: CGP spectra are publicly auditable without revealing raw data
 

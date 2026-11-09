@@ -12,6 +12,21 @@
 
 .PHONY: yt-cookies-auth yt-cookies-refresh yt-cookies-status yt-cookies-revoke yt-cookies-check yt-cookies-bootstrap yt-ingest-bootstrap yt-ingest-bootstrap-noegress up-yt-cookies build-yt-image
 
+# SERVICE-ROLE KEY PRECEDENCE MUST MATCH THE TOOL.
+# tools/yt_oauth_flow.py:109 reads
+#     _env("SUPABASE_SERVICE_ROLE_KEY") or _env("SERVICE_ROLE_KEY")
+# This preflight used the REVERSE order, so it validated one key while the
+# tool authenticated with a different one -- a green preflight followed by a
+# 401. Measured 2026-09-01: SERVICE_ROLE_KEY (len 180) is rejected by
+# PostgREST (401, identical to sending no key); SUPABASE_SERVICE_ROLE_KEY
+# (len 211) authenticates -- the PostgREST access log records the request as
+# user `service_role`. The gate was blessing the stale key. A gate that
+# resolves a name differently from its consumer is not checking that consumer.
+#
+# These comments live ABOVE the target on purpose. The recipe below is one
+# backslash-continued shell command; a `@#` line placed inside it is handed
+# to bash as a command and fails with "@#: command not found" (exit 127),
+# which breaks yt-cookies-check and everything depending on it.
 yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	@echo "=== YT Cookies: preflight check ==="
 	@hard=0; \
@@ -23,8 +38,8 @@ yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
 	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ client id (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_CLIENT_ID / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
 	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ client secret (GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_CLIENT_SECRET / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
-	srk=$$(bash scripts/with-env.sh printenv SERVICE_ROLE_KEY 2>/dev/null || true); \
-	[ -z "$$srk" ] && srk=$$(bash scripts/with-env.sh printenv SUPABASE_SERVICE_ROLE_KEY 2>/dev/null || true); \
+	srk=$$(bash scripts/with-env.sh printenv SUPABASE_SERVICE_ROLE_KEY 2>/dev/null || true); \
+	[ -z "$$srk" ] && srk=$$(bash scripts/with-env.sh printenv SERVICE_ROLE_KEY 2>/dev/null || true); \
 	if [ -z "$$srk" ]; then echo "✗ SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY): not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ service role key: set (length=$${#srk})"; fi; \
 	surl=$$(bash scripts/with-env.sh printenv SUPABASE_URL 2>/dev/null || true); \
 	[ -z "$$surl" ] && surl=$$(bash scripts/with-env.sh printenv SUPA_REST_URL 2>/dev/null || true); \
@@ -48,9 +63,12 @@ yt-cookies-auth: yt-cookies-check ## One-time OAuth2 consent flow (opens browser
 	@echo "✓ Refresh token stored in Supabase Vault."
 	@echo "Next: make yt-cookies-refresh  (to harvest initial cookie set)"
 
-yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store)
-	@echo "=== YT Cookies: manual refresh ==="
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py refresh
+yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store + NATS notify)
+	@echo "=== YT Cookies: manual refresh (via refresher service) ==="
+	@curl -sf -X POST -m 10 http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/refresh \
+		|| { echo "refresher API unreachable - is the service up? (make up-yt-cookies)"; exit 1; }
+	@echo ""
+	@echo "Triggered. Status after ~60s: make yt-cookies-status"
 
 yt-cookies-status: ## Show cookie refresh state (last refresh, expiry, vault entry)
 	@echo "=== YT Cookies: status ==="
@@ -84,8 +102,8 @@ yt-cookies-bootstrap: yt-cookies-check ## ONE-CLICK: OAuth consent + first cooki
 	@echo "Step 2/2: triggering first cookie harvest (Playwright + Supabase)..."
 	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py refresh || \
 	  (echo "Note: refresh CLI is a placeholder; production refresh runs via the yt-cookie-refresher service. Pinging it now..." && \
-	   curl -fsS -X POST http://localhost:8115/refresh 2>/dev/null || \
-	   echo "Refresher service not yet up. Run 'make up-yt-cookies' then 'curl -X POST http://localhost:8115/refresh'.")
+	   curl -fsS -X POST http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/refresh 2>/dev/null || \
+	   echo "Refresher service not yet up. Run 'make up-yt-cookies' then 'curl -X POST http://localhost:8126/refresh'.")
 	@echo ""
 	@echo "✓ Cookie pipeline initialised. Verify with 'make yt-cookies-status'."
 
@@ -134,12 +152,17 @@ COOKIES_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPO
 up-yt-cookies: ## Start yt-cookie-refresher + yt-cookie-writer (Phase 9Q.2 services)
 	@echo "🍪 Starting yt-cookie services (refresher + writer)..."
 	@$(COOKIES_DC) --profile yt-cookies up -d yt-cookie-refresher yt-cookie-writer
-	@echo "✅ Cookie services up. Refresher API: http://localhost:8115/healthz"
+	@echo "✅ Cookie services up. Refresher API: http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/healthz"
 
 up-yt-cookies-recreate: ## Force-recreate cookie services to pick up env.shared changes
 	@echo "🍪 Force-recreating yt-cookie services (env refresh)..."
 	@$(COOKIES_DC) --profile yt-cookies up -d --force-recreate yt-cookie-refresher yt-cookie-writer
-	@echo "✅ Cookie services recreated. Refresher API: http://localhost:8115/healthz"
+	@echo "✅ Cookie services recreated. Refresher API: http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/healthz"
+
+up-yt-cookies-rebuild: ## Rebuild images + force-recreate cookie services (code changes)
+	@echo "🍪 Rebuilding + force-recreating yt-cookie services (code refresh)..."
+	@$(COOKIES_DC) --profile yt-cookies up -d --build --force-recreate yt-cookie-refresher yt-cookie-writer
+	@echo "✅ Cookie services rebuilt + recreated. Refresher API: http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/healthz"
 
 # Skip-egress variant — runs cookies + multi-client only. Use when the
 # Tailscale exit node is offline/unapproved, to test whether cookies +

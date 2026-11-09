@@ -103,10 +103,10 @@ URL ──► PMOVES.YT ──► MinIO ──► FFmpeg-Whisper ──► Extra
 Voice ──► Flute-Gateway ──► Pipecat Pipeline ──► Ultimate-TTS ──► Audio
                │                    │                   │
            WebSocket            Frames              Synthesis
-           (port 8056)        Processing           (port 7861)
+           (port 8055)        Processing           (port 7861)
 ```
 
-1. Voice input arrives at **Flute-Gateway** via WebSocket (port 8056)
+1. Voice input arrives at **Flute-Gateway** via WebSocket (port 8055, `/v1/voice/agent`)
 2. **Pipecat** frame pipeline processes the audio stream
 3. STT produces text, which routes through the agent pipeline
 4. Agent response text goes to **Ultimate-TTS-Studio** (port 7861)

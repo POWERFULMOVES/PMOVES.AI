@@ -13,10 +13,10 @@ default_yolo = false
 default_plan_mode = false
 show_thinking_stream = true
 
-# Merge skills from .kimi/skills/, .claude/skills/, .codex/skills/ and the
-# generic ~/.config/agents/skills/ tree. This lets PMOVES Claude skills
-# cross-load automatically into Kimi sessions.
-merge_all_available_skills = true
+# Merge skills from .kimi/skills/ only (explicit allowlist).
+# Do NOT auto-import from ~/.config/agents/skills/ or .claude/skills/ —
+# those may contain stale or unvetted skills for other agent runtimes.
+merge_all_available_skills = false
 
 # PMOVES tasks (compose-split, image builds, long tests) can run for a while.
 [loop_control]

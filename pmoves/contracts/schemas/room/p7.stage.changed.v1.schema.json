@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/room/p7.stage.changed.v1.schema.json",
+  "title": "P7 Stage Changed v1",
+  "type": "object",
+  "required": ["room_id", "session_id", "stage", "session_state", "started_at", "ended_at", "checkpoint_count", "manifest", "previous_stage", "signing_card_id", "ts"],
+  "properties": {
+    "room_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "format": "uuid"},
+    "stage": {"type": "string", "enum": ["rehearsal", "live", "review", "archive"]},
+    "session_state": {"type": "string", "enum": ["planned", "active", "paused", "ended", "archived"]},
+    "started_at": {"type": ["number", "null"]},
+    "ended_at": {"type": ["number", "null"]},
+    "checkpoint_count": {"type": "integer", "minimum": 0},
+    "manifest": {"type": "object"},
+    "previous_stage": {"type": "string", "enum": ["rehearsal", "live", "review", "archive"]},
+    "signing_card_id": {"type": ["string", "null"], "format": "uuid"},
+    "ts": {"type": "number"}
+  },
+  "additionalProperties": false
+}

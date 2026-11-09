@@ -45,12 +45,21 @@ def _redact_url(url: str) -> str:
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SERVER_PORT = int(os.environ.get("HF_RESEARCH_PORT", "8202"))
 
 # Evaluation criteria (env-configurable)
 MIN_DOWNLOADS = int(os.environ.get("HF_MIN_DOWNLOADS", "100"))
 MIN_LIKES = int(os.environ.get("HF_MIN_LIKES", "10"))
+MIN_SCORE = int(os.environ.get("HF_MIN_SCORE", "50"))
+
+# Scoring scale. Criteria 1-4 award up to BASE_MAX_SCORE (40 + 25 + 20 + 15);
+# Criterion 5 adds a further COMPAT_BONUS_POINTS on top, so the attainable
+# maximum is 110, not 100. MIN_SCORE is an absolute threshold, not a
+# percentage of MAX_SCORE.
+BASE_MAX_SCORE = 100
+COMPAT_BONUS_POINTS = 10
+MAX_SCORE = BASE_MAX_SCORE + COMPAT_BONUS_POINTS
 PREFERRED_TAGS_RAW = os.environ.get("HF_PREFERRED_TAGS", "")
 PREFERRED_TAGS = {t.strip().lower() for t in PREFERRED_TAGS_RAW.split(",") if t.strip()}
 AVOID_TAGS_RAW = os.environ.get("HF_AVOID_TAGS", "")
@@ -102,7 +111,6 @@ class HFResearchAgent:
         model_id = model.get("model_id", "unknown")
 
         score = 0
-        max_score = 100
         reasons: list[str] = []
 
         # Criterion 1: Downloads (0-40 points)
@@ -140,6 +148,21 @@ class HFResearchAgent:
             score += 15
             reasons.append(f"pipeline_tag: {pipeline_tag}")
 
+        # Criterion 5: Local-model compatibility (0-10 bonus)
+        # Rewards GGUF/ARM64/quantized variants that can run on fleet nodes
+        # without conversion. On SPARK (sm_121, ARM64, 128GB UMA) this is
+        # the difference between a model that works immediately vs one that
+        # needs a full recompile.
+        compat_keywords = {"gguf", "arm64", "aarch64", "q4_k_m", "q4_k_s", "q5_k_m",
+                           "q8_0", "q4_0", "exl2", "awq", "gptq", "mxfp4", "nvfp4"}
+        model_id_lower = model_id.lower()
+        matched_compat = {kw for kw in compat_keywords if kw in model_id_lower or kw in tags}
+        if matched_compat:
+            score += COMPAT_BONUS_POINTS
+            reasons.append(
+                f"local-compat (+{COMPAT_BONUS_POINTS}): {sorted(matched_compat)}"
+            )
+
         # Penalty: Avoid tags (-10 points each)
         matched_avoid = tags & AVOID_TAGS
         if matched_avoid:
@@ -147,11 +170,11 @@ class HFResearchAgent:
             score = max(0, score - penalty)
             reasons.append(f"avoid tags match (-{penalty}): {sorted(matched_avoid)}")
 
-        passed = score >= 50
+        passed = score >= MIN_SCORE
         return {
             "model_id": model_id,
             "score": score,
-            "max_score": max_score,
+            "max_score": MAX_SCORE,
             "passed": passed,
             "reasons": reasons,
             "tags": model.get("tags", []),
@@ -174,7 +197,7 @@ class HFResearchAgent:
             return
 
         if not isinstance(model, dict):
-            print(f"[hf-research] dropping non-object message", file=sys.stderr)
+            print("[hf-research] dropping non-object message", file=sys.stderr)
             return
 
         evaluation = self._evaluate_model(model)

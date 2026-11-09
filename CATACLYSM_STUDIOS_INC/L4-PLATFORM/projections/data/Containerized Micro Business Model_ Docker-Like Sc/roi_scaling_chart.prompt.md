@@ -9,7 +9,7 @@ Describe how to recreate the multi-line chart comparing ROI across deployment sc
 
 ## Regeneration Options
 1. **Plotly reproduction**  
-   `python "CATACLYSM_STUDIOS_INC/ABOUT/notes/Containerized Micro Business Model_ Docker-Like Sc/chart_script.py"`  
+   `python "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Containerized Micro Business Model_ Docker-Like Sc/chart_script.py"`  
    Outputs `roi_scaling_chart.png`
 2. **Creator pipeline prompt**  
    ```

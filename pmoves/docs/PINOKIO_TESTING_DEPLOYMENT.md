@@ -27,7 +27,7 @@ This document covers the complete workflow for testing, validating, and deployin
 │                    Package Creation Flow                         │
 ├─────────────────────────────────────────────────────────────────┤
 │  1. Create folder structure                                     │
-│     └── pbnj/pinokio/api/pmoves-agent-name/                     │
+│     └── PMOVES-pinokio/api/pmoves-agent-name/                   │
 │                                                                 │
 │  2. Create pinokio.json (metadata)                              │
 │     └── Define title, description, requirements                 │
@@ -53,7 +53,7 @@ This document covers the complete workflow for testing, validating, and deployin
 
 ```bash
 # 1. Create symlink to Pinokio apps directory
-ln -s $(pwd)/pbnj/pinokio/api/pmoves-agent-name ~/pinokio/api/pmoves-agent-name
+ln -s $(pwd)/PMOVES-pinokio/api/pmoves-agent-name ~/pinokio/api/pmoves-agent-name
 
 # 2. Restart Pinokio or refresh apps
 # Pinokio will auto-detect the new app
@@ -70,7 +70,7 @@ Run through the complete validation checklist (see below) before publishing.
 
 ```bash
 # 1. Commit to repository
-git add pbnj/pinokio/api/pmoves-agent-name/
+git add PMOVES-pinokio/api/pmoves-agent-name/
 git commit -m "feat(pinokio): add PMOVES Agent Name launcher"
 
 # 2. Tag release
@@ -93,7 +93,7 @@ Best for active development with hot-reload:
 
 ```bash
 # macOS/Linux
-ln -s /path/to/PMOVES.AI/pbnj/pinokio/api/pmoves-agent-name \
+ln -s /path/to/PMOVES.AI/PMOVES-pinokio/api/pmoves-agent-name \
   ~/pinokio/api/pmoves-agent-name
 
 # Windows (PowerShell - Admin)
@@ -131,7 +131,7 @@ For debugging script logic, test JavaScript directly:
 
 ```bash
 # Navigate to pinokio folder
-cd pbnj/pinokio/api/pmoves-agent-name/pinokio
+cd PMOVES-pinokio/api/pmoves-agent-name/pinokio
 
 # Test script with Node.js (limited - no Pinokio APIs)
 node -e "const script = require('./install.js'); console.log(JSON.stringify(script, null, 2))"
@@ -328,10 +328,10 @@ name: Validate Pinokio Package
 on:
   push:
     paths:
-      - 'pbnj/pinokio/api/**'
+      - 'PMOVES-pinokio/api/**'
   pull_request:
     paths:
-      - 'pbnj/pinokio/api/**'
+      - 'PMOVES-pinokio/api/**'
 
 jobs:
   validate:
@@ -341,21 +341,21 @@ jobs:
       
       - name: Validate JSON files
         run: |
-          for file in pbnj/pinokio/api/*/pinokio.json; do
+          for file in PMOVES-pinokio/api/*/pinokio.json; do
             echo "Validating $file"
             python -m json.tool "$file" > /dev/null || exit 1
           done
       
       - name: Validate JavaScript files
         run: |
-          for file in pbnj/pinokio/api/*/pinokio/*.js; do
+          for file in PMOVES-pinokio/api/*/pinokio/*.js; do
             echo "Checking syntax: $file"
             node --check "$file" || exit 1
           done
       
       - name: Check required files
         run: |
-          for dir in pbnj/pinokio/api/*/; do
+          for dir in PMOVES-pinokio/api/*/; do
             name=$(basename "$dir")
             echo "Checking $name..."
             
@@ -380,7 +380,7 @@ jobs:
           
           errors = []
           
-          for root, dirs, files in os.walk('pbnj/pinokio/api'):
+          for root, dirs, files in os.walk('PMOVES-pinokio/api'):
               if 'pinokio.json' in files:
                   path = os.path.join(root, 'pinokio.json')
                   with open(path) as f:
@@ -428,7 +428,7 @@ Create `.git/hooks/pre-commit`:
 #!/bin/bash
 
 # Validate Pinokio packages before commit
-changed=$(git diff --cached --name-only | grep 'pbnj/pinokio/api')
+changed=$(git diff --cached --name-only | grep 'PMOVES-pinokio/api')
 
 if [ -n "$changed" ]; then
     echo "Validating Pinokio packages..."
@@ -467,14 +467,13 @@ PMOVES packages are distributed internally via the monorepo:
 
 ```
 PMOVES.AI/
-└── pbnj/
-    └── pinokio/
-        └── api/
-            ├── pmoves-agent-zero/
-            ├── pmoves-archon/
-            ├── pmoves-hirag/
-            ├── pmoves-services/
-            └── pmoves-pbnj/
+└── PMOVES-pinokio/
+    └── api/
+        ├── pmoves-agent-zero/
+        ├── pmoves-archon/
+        ├── pmoves-hirag/
+        ├── pmoves-services/
+        └── pmoves-pbnj/
 ```
 
 **Installation Methods:**
@@ -482,19 +481,19 @@ PMOVES.AI/
 1. **Symlink (Recommended for Development)**
    ```bash
    # One-time setup
-   ln -s /path/to/PMOVES.AI/pbnj/pinokio/api/* ~/pinokio/api/
+   ln -s /path/to/PMOVES.AI/PMOVES-pinokio/api/* ~/pinokio/api/
    ```
 
 2. **Copy (For Production)**
    ```bash
    # Copy specific package
-   cp -r pbnj/pinokio/api/pmoves-agent-zero ~/pinokio/api/
+   cp -r PMOVES-pinokio/api/pmoves-agent-zero ~/pinokio/api/
    ```
 
 3. **Install Script**
    ```bash
    # Run PMOVES installer
-   ./pbnj/scripts/install-pinokio-apps.sh
+   ./PMOVES-pinokio/scripts/install-pinokio-apps.sh
    ```
 
 ### Public Distribution (Pinokio Registry)
@@ -509,7 +508,7 @@ To publish to the public Pinokio registry:
    git init
    
    # Copy launcher files
-   cp -r /path/to/PMOVES.AI/pbnj/pinokio/api/pmoves-agent-zero/* .
+   cp -r /path/to/PMOVES.AI/PMOVES-pinokio/api/pmoves-agent-zero/* .
    
    # Create README
    echo "# PMOVES Agent Zero - Pinokio Launcher" > README.md
@@ -552,27 +551,27 @@ When updating a PMOVES Pinokio package:
 
 ```bash
 # 1. Make changes to launcher files
-vim pbnj/pinokio/api/pmoves-agent-name/pinokio/start.js
+vim PMOVES-pinokio/api/pmoves-agent-name/pinokio/start.js
 
 # 2. Test locally
-pterm start pbnj/pinokio/api/pmoves-agent-name/start.js
+pterm start PMOVES-pinokio/api/pmoves-agent-name/start.js
 
 # 3. Update version in pinokio.json (if needed)
 # Note: "version" field is schema version, NOT app version
 
 # 4. Commit changes
-git add pbnj/pinokio/api/pmoves-agent-name/
+git add PMOVES-pinokio/api/pmoves-agent-name/
 git commit -m "fix(pinokio): update start script for Agent Name"
 
 # 5. Update changelog
-echo "- Fixed start script timeout issue" >> pbnj/pinokio/api/pmoves-agent-name/CHANGELOG.md
+echo "- Fixed start script timeout issue" >> PMOVES-pinokio/api/pmoves-agent-name/CHANGELOG.md
 ```
 
 ### Monitoring Deployed Packages
 
 #### Health Check Script
 
-Create `pbnj/pinokio/api/pmoves-agent-name/pinokio/health.js`:
+Create `PMOVES-pinokio/api/pmoves-agent-name/pinokio/health.js`:
 
 ```javascript
 // pinokio/health.js
@@ -663,7 +662,7 @@ Error: Script not found: install.js
 
 **Solution:** Check file path and ensure you're in the correct directory:
 ```bash
-ls -la pbnj/pinokio/api/pmoves-agent-name/pinokio/
+ls -la PMOVES-pinokio/api/pmoves-agent-name/pinokio/
 ```
 
 #### Regex Not Matching
@@ -779,4 +778,4 @@ pterm status /path/to/app
 **Related Documentation:**
 - [PINOKIO_PACKAGING_GUIDE.md](./PINOKIO_PACKAGING_GUIDE.md) - Complete API reference
 - [PINOKIO_EXAMPLE_MANIFESTS.md](./PINOKIO_EXAMPLE_MANIFESTS.md) - Copy-paste examples
-- [pbnj/pinokio/api/](../../../pbnj/pinokio/api/) - Existing implementations
+- [PMOVES-pinokio/api/](../../../PMOVES-pinokio/api/) - Existing implementations

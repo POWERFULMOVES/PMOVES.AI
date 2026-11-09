@@ -63,18 +63,28 @@ SERVICE_GROUPS = {
         "nats-echo-req",
         "nats-echo-res",
         "consciousness-service",
+        "p7-room-orchestrator",
         "evo-controller",
+        "mai-ui-agent",
+        "hf-agent",
+        "hf-research-agent",
+        "hf-mcp-server",
+        "notebook-mcp",
+        "wealth-mcp",
+        "fleet-sentinel",
     ],
     "media": [
         "media-video",
         "media-audio",
         "ffmpeg-whisper",
         "transcribe-backend",
+        "transcribe-frontend",
         "jellyfin-bridge",
         "ultimate-tts-studio",
         "flute-gateway",
         "cast-tts-gateway",
         "voice-relay",
+        "voice-sampler",
         "bgutil-pot-provider",
         "pmoves-ollama",
         "nvidia-nim",
@@ -91,10 +101,13 @@ SERVICE_GROUPS = {
         "invidious-companion-proxy",
         "grayjay-plugin-host",
         "grayjay-server",
+        "openroom",
     ],
     "workers": [
         "extract-worker",
+        "watch-folder-router",
         "spark-shape-worker",
+        "persona-thirdref",
         "pdf-ingest",
         "langextract",
         "notebook-sync",
@@ -120,9 +133,10 @@ SERVICE_GROUPS = {
         "wger-nats-bridge",
         "botz-gateway",
         "pmoves-yt",
+        "nats_event_bus",
+        "pinokio_bridge",
     ],
     "juicefs": [
-        "juicefs-redis",
         "juicefs-format",
         "juicefs-gateway",
         "juicefs-smoke",
@@ -224,8 +238,7 @@ def main():
     with open(base_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(base_header)
         yaml.dump(base, f)
-    svc_count = sum(len(v) for v in SERVICE_GROUPS.values())
-    print(f"✓ docker-compose.base.yml (anchors + volumes + networks)")
+    print("✓ docker-compose.base.yml (anchors + volumes + networks)")
 
     # ── Build overlay files ──
     total = 0

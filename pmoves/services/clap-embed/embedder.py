@@ -74,7 +74,6 @@ class ClapHFModel:
         self.model.eval().to(device)
 
     def embed_windows(self, windows):
-        import numpy as np
         torch = self._torch
         with torch.no_grad():
             inputs = self.processor(audios=[w for w in windows], sampling_rate=self.sr, return_tensors="pt")
@@ -83,7 +82,6 @@ class ClapHFModel:
             return feats.detach().cpu().float().numpy()
 
     def embed_text(self, texts):
-        import numpy as np
         torch = self._torch
         with torch.no_grad():
             inputs = self.processor(text=list(texts), return_tensors="pt", padding=True)

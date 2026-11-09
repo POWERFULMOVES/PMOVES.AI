@@ -6,7 +6,7 @@ import hashlib
 import math
 import re
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from pmoves.chit import CGP_SPEC_VERSION

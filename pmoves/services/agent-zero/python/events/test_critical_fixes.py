@@ -16,7 +16,6 @@ import asyncio
 import gc
 import logging
 import sys
-import uuid
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -102,7 +101,7 @@ class CriticalFixesTester:
                 logger.info("✓ Metrics are thread-safe (no lost updates)")
                 self.test_passed += 1
             else:
-                logger.error(f"✗ Metrics discrepancy: race condition detected")
+                logger.error("✗ Metrics discrepancy: race condition detected")
                 self.test_failed += 1
 
         except Exception as e:
@@ -120,10 +119,10 @@ class CriticalFixesTester:
             async def handler(event):
                 pass
 
-            handler_ref = type(bus)._subscription_handlers.__class__()
+            type(bus)._subscription_handlers.__class__()
 
             # Store weak reference
-            weak_handler_ref = type(bus)._subscription_handlers.get if hasattr(bus, '_subscription_handlers') else lambda k: None
+            type(bus)._subscription_handlers.get if hasattr(bus, '_subscription_handlers') else lambda k: None
 
             # Test that weak references work
             import weakref
@@ -211,7 +210,7 @@ class CriticalFixesTester:
             # Verify JetStream attributes
             assert hasattr(bus, 'use_jetstream'), "Missing use_jetstream flag"
             assert hasattr(bus, 'js'), "Missing js (JetStream context)"
-            assert bus.use_jetstream == True, "use_jetstream should be True"
+            assert bus.use_jetstream, "use_jetstream should be True"
 
             logger.info("✓ JetStream support structure initialized correctly")
             self.test_passed += 1

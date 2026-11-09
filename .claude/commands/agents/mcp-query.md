@@ -1,105 +1,91 @@
-Query or execute commands via Agent Zero's MCP API.
+Query or execute commands via Agent Zero's MCP command API.
 
-Agent Zero exposes a Model Context Protocol (MCP) server that allows external services and agents to delegate tasks, create subordinate agents, and query agent status. This command provides access to Agent Zero's MCP endpoints.
+The Agent Zero supervisor exposes a small REST surface for listing and dispatching
+named MCP commands. This command provides access to that surface.
+
+> The supervisor on 8080 is a REST facade, not an MCP protocol server. The real
+> MCP protocol server runs in the A0 runtime — see "MCP protocol server" below.
 
 ## Usage
 
 Run this command to:
-- Execute tasks via Agent Zero's agent runtime
-- Query status of active agents and subordinates
-- List available MCP commands and capabilities
-- Check task execution status
-- Create specialized subordinate agents
+- List the MCP commands the supervisor can dispatch
+- Execute a named MCP command with arguments
+- Check supervisor and runtime health
 
 ## Implementation
 
 Execute the following steps:
 
-1. **Check MCP API health:**
+1. **Check supervisor health:**
    ```bash
-   curl http://localhost:8080/mcp/health
+   curl -sf http://localhost:8080/healthz | jq '{status, nats: .nats.connected, runtime: .runtime.status}'
    ```
-
-   Should return MCP version, agent runtime status, and NATS connectivity.
 
 2. **List available MCP commands:**
    ```bash
-   curl http://localhost:8080/mcp/commands \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET"
+   curl -sf http://localhost:8080/mcp/commands | jq '.commands[] | {name, description}'
    ```
 
-   Shows all available MCP endpoints and their parameters.
+   Also returns the active form and the runtime/knowledge-base directories.
 
-3. **List active agents:**
+3. **Execute an MCP command** — the body is `{cmd, arguments}`:
    ```bash
-   curl http://localhost:8080/mcp/agents \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET"
-   ```
-
-   Returns supervisor and subordinate agent details, status, and task counts.
-
-4. **Execute a task (example):**
-   ```bash
-   curl -X POST http://localhost:8080/mcp/execute \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+   curl -sf -X POST http://localhost:8080/mcp/execute \
      -H "Content-Type: application/json" \
-     -d '{
-       "task": "<task_description>",
-       "context": {},
-       "priority": "normal",
-       "timeout_seconds": 300
-     }'
+     -d '{"cmd": "notebook.search", "arguments": {"query": "<search terms>", "limit": 5}}' | jq .
    ```
 
-   Returns task ID and status. Task executes asynchronously via agent runtime.
+   Returns `{cmd, result}`. An unknown `cmd` returns 404; bad arguments return 400.
 
-5. **Query task status (if task submitted):**
-   ```bash
-   curl http://localhost:8080/mcp/task/<task_id> \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET"
-   ```
-
-   Shows task completion status, results, and execution time.
-
-6. **Report results to user:**
-   - MCP API health and connectivity status
-   - List of active agents (supervisor + subordinates)
-   - Available commands and capabilities
-   - Task execution results (if task was submitted)
+4. **Report results to user:**
+   - Supervisor health and NATS connectivity
+   - Command inventory
+   - Command output
 
 ## Authentication
 
-MCP endpoints require authentication via `MCP_CLIENT_SECRET`:
+None on these routes. The supervisor declares no inbound auth dependency. It
+forwards `X-API-KEY` (`AGENT_ZERO_API_KEY`) to the A0 runtime on your behalf.
+A 401 here means an ingress in front of 8080 added auth — not this service.
 
-```bash
-export MCP_CLIENT_SECRET="your-secret-key"
-```
+Two other surfaces on this service **do** authenticate:
 
-If `MCP_CLIENT_SECRET` is not set, only the health endpoint will work.
+- **A0 runtime** on 8081 — `X-API-KEY` (or `api_key` in the JSON body), checked
+  against `mcp_server_token`.
+- **A2A routes** (`/a2a/v1/*`, `/.well-known/agent-card.json`) — a Supabase JWT
+  as `Authorization: Bearer <jwt>`, validated with `SUPABASE_JWT_SECRET` and
+  gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC` (both default `false`,
+  so auth is required unless explicitly opened).
 
-## Example: Create Subordinate Agent
+## Available commands
 
-```bash
-curl -X POST http://localhost:8080/mcp/subordinate/create \
-  -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "config": {
-      "name": "log-analyzer",
-      "specialization": "log analysis and pattern detection",
-      "tools": ["grep", "awk", "analysis"]
-    }
-  }'
-```
+`geometry.publish_cgp`, `geometry.jump`, `geometry.decode_text`,
+`geometry.calibration.report`, `ingest.youtube`, `media.transcribe`,
+`comfy.render`, `notebook.search`, `form.get`, `form.switch`,
+`a2a.strategic_handoff`, `e2b.sandbox.create`, `e2b.sandbox.execute`,
+`e2b.sandbox.terminate`, `e2b.desktop.create`, `e2b.spell.execute`,
+`e2b.surf.scrape`
 
-Returns subordinate agent ID and capabilities.
+Source of truth: `pmoves/services/agent-zero/mcp_server.py` `COMMAND_REGISTRY`.
+Re-read it rather than trusting this list — `GET /mcp/commands` is authoritative
+at runtime.
 
-## MCP Integration
+## MCP protocol server
 
-Agent Zero's MCP API is used by:
-- **Archon** - Supabase-backed agent form management
-- **SupaSerch** - Holographic research orchestration
-- **Custom services** - Your integrations
+The real MCP protocol server runs inside the A0 runtime and is token-pathed:
+
+- `http://localhost:8081/t-$AGENT_ZERO_MCP_TOKEN/sse`
+- `http://localhost:8081/t-$AGENT_ZERO_MCP_TOKEN/http`
+- `http://localhost:8081/t-$AGENT_ZERO_MCP_TOKEN/messages/`
+
+The token comes from `MCP_SERVER_TOKEN` (`AGENT_ZERO_MCP_TOKEN` in compose);
+when unset, A0 derives one per instance and the path changes.
+
+## Submitting work
+
+To submit a free-form task rather than a named command, use `/agents:execute`
+(`POST /tasks`) and poll with `/agents:task-status` (`GET /jobs/{context_id}`).
 
 ## UI Access
 
@@ -107,10 +93,6 @@ Agent Zero UI is available at: `http://localhost:8081`
 
 ## Notes
 
-- MCP API is the primary interface for agent-to-agent communication
-- Tasks submitted via MCP are queued in NATS JetStream for reliability
-- Subordinate agents can be created for specialized tasks with limited context
-- All MCP calls require `MCP_CLIENT_SECRET` except health endpoint
-- Monitor MCP usage: `curl http://localhost:8080/metrics | grep mcp`
-- Reference: `.claude/context/mcp-api.md` for complete API documentation
-- Agent Zero health: `curl http://localhost:8080/healthz`
+- Monitor MCP usage: `curl -s http://localhost:8080/metrics | grep mcp`
+- Agent Zero health: `curl -s http://localhost:8080/healthz`
+- Canonical API surface: `pmoves/docs/operations/AGENT_ZERO_API.md`

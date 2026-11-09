@@ -63,7 +63,7 @@ Environment variables
 | Variable                | Description                               |
 +=========================+===========================================+
 | ``NATS_URL``            | NATS server URL (default:                |
-|                         | ``nats://nats:pmoves@nats:4222``)         |
+|                         | ``nats://nats:4222``)         |
 +-------------------------+-------------------------------------------+
 | ``NATS_INVALIDATE_SUB`` | Inbound subject (default:                |
 |                         | ``cache.invalidate.*``)                   |
@@ -103,8 +103,6 @@ PMOVES Semantic Cache Team (issue #1427)
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -112,7 +110,26 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Awaitable, Callable, Optional, Protocol
+from typing import Any, Awaitable, Callable, Optional, Protocol, TypeVar
+
+# The result type of a circuit-breaker-protected call.
+#
+# WHY A `TypeVar` AND NOT PEP 695 (`async def call[T](...)`): PEP 695 type
+# parameter lists are a Python 3.12+ syntax. `pmoves/pyproject.toml` declares
+# `requires-python = ">=3.11"`, so a 3.12-only construct in this module makes
+# the declared floor a lie -- on 3.11 the module raises SyntaxError at import.
+#
+# MEASURED 2026-11-01: this file was the ONLY PEP 695 site in the whole tree.
+# A scan of all 1400 `pmoves/**/*.py` files (AST `type_params` on
+# FunctionDef/AsyncFunctionDef/ClassDef/TypeAlias) found exactly one, here at
+# the `call` method below. It surfaced as a hard failure of the
+# `windows-encoding-ratchet` CI gate, which runs on Python 3.11 and therefore
+# could not even parse the file to measure it -- a fail-closed gate that could
+# not do its job.
+#
+# The `TypeVar` spelling is the 3.11-compatible form of the same annotation.
+# It is a runtime no-op: the annotation is erased either way.
+T = TypeVar("T")
 
 # ---------------------------------------------------------------------------
 # Optional dependencies -- fail gracefully if absent
@@ -204,7 +221,7 @@ def _iso_now() -> str:
 class _Settings:
     """Runtime configuration loaded from environment."""
 
-    NATS_URL: str = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+    NATS_URL: str = os.getenv("NATS_URL", "nats://nats:4222")
     NATS_INVALIDATE_SUB: str = os.getenv(
         "NATS_INVALIDATE_SUB", "cache.invalidate.*"
     )
@@ -341,9 +358,7 @@ class CircuitBreaker:
 
             return False
 
-    async def call[
-        T
-    ](
+    async def call(
         self,
         fn: Callable[..., Awaitable[T]],
         *args: Any,
@@ -361,7 +376,7 @@ class CircuitBreaker:
             result = await fn(*args, **kwargs)
             await self.record_success()
             return result
-        except Exception as exc:
+        except Exception:
             await self.record_failure()
             raise
 

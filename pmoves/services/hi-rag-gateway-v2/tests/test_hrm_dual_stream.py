@@ -1,12 +1,8 @@
 """Tests for the enhanced HRM dual-stream sidecar package."""
 
 import importlib
-import math
-import os
 import sys
-import types
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 

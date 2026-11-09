@@ -1,0 +1,52 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Per-container disk write-rate (bytes/s) — the faucet gauge",
+      "description": "Sustained high write-rate = a runaway (unbounded logs, merge churn, ingest loop). The ClickHouse incident (2026-08-02) ran at ~40 MB/s. Alerts fire at 20 MB/s (warn) / 50 MB/s (crit).",
+      "datasource": {"type": "prometheus", "uid": "__DS_PROM__"},
+      "targets": [
+        {"expr": "topk(10, sum by (name) (rate(container_fs_writes_bytes_total{name!=\"\"}[5m])))", "legendFormat": "{{name}}", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Docker host filesystem usage (%)",
+      "description": "Per-node Docker host filesystem fullness (from cAdvisor). Alerts at 85% (warn) / 95% (crit).",
+      "datasource": {"type": "prometheus", "uid": "__DS_PROM__"},
+      "targets": [
+        {"expr": "container_fs_usage_bytes{id=\"/\"} / container_fs_limit_bytes{id=\"/\"}", "legendFormat": "{{instance}}", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 9}
+    },
+    {
+      "type": "stat",
+      "title": "Top container write-rate (now)",
+      "datasource": {"type": "prometheus", "uid": "__DS_PROM__"},
+      "targets": [
+        {"expr": "max(sum by (name) (rate(container_fs_writes_bytes_total{name!=\"\"}[5m])))", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "Bps", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 20000000}, {"color": "red", "value": 50000000}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 9}
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["pmoves", "resource-pressure", "faucet-gauge"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Resource Pressure — Faucet Gauge",
+  "uid": "resource-pressure",
+  "version": 1
+}

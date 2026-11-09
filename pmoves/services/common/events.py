@@ -1,5 +1,7 @@
-import json, os, uuid, datetime
-from datetime import timezone
+import json
+import os
+import uuid
+import datetime
 from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker, RefResolver, validate
 

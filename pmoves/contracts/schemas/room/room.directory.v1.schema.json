@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/room/room.directory.v1.schema.json",
+  "title": "Room Directory v1",
+  "description": "Snapshot of the room directory — every known room with its current stage, hardware summary, and the number of apps + skills it exposes. Published by the P7 room-orchestrator on catalog reload (or when a room transitions to a new stage). The cached projection is consumed by the dashboard, room-suggest-skill, and pmoves-helpdesk-skill to answer 'which room should I open?' questions without re-reading the on-disk catalog each time.",
+  "type": "object",
+  "required": [
+    "snapshot_id",
+    "rooms",
+    "snapshot_at"
+  ],
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id for this directory snapshot. Useful for cache invalidation."
+    },
+    "rooms": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "required": [
+          "room_id",
+          "title",
+          "stage",
+          "apps_count",
+          "skills_count"
+        ],
+        "properties": {
+          "room_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "room_purpose": {
+            "type": ["string", "null"],
+            "description": "Slice-1 manifest field — the room's purpose (studio, classroom, etc.). Null when not declared."
+          },
+          "creator_surface": {
+            "type": ["string", "null"],
+            "description": "Slice-1 manifest field — the creator surface the room targets (primary, secondary, none). Null when not a creator room."
+          },
+          "stage": {
+            "type": "string",
+            "enum": ["rehearsal", "live", "review", "archive", "unknown"],
+            "description": "Current P7 stage for the room. unknown when the room is loaded but not yet staged."
+          },
+          "active_session_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "P7 session id currently active in the room. Null when no active session."
+          },
+          "hardware_summary": {
+            "type": ["object", "null"],
+            "description": "Optional compact hardware summary derived from hardware_requirements (gpu, min_vram_mb, node_roles, cpu_arch). Free-form; mirrors the manifest's hardware_requirements block.",
+            "additionalProperties": {
+              "type": ["string", "number", "boolean", "array", "null"]
+            }
+          },
+          "apps_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skills_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "snapshot_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp the snapshot was taken."
+    }
+  },
+  "additionalProperties": false
+}

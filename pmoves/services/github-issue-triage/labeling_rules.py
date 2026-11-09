@@ -14,7 +14,7 @@ Categories:
 """
 
 import re
-from typing import Dict, List, Optional
+from typing import List
 from dataclasses import dataclass
 
 
@@ -113,7 +113,7 @@ class LabelingRules:
                 matched_patterns=[]
             )
 
-        text_lower = issue_text.lower()
+        issue_text.lower()
 
         # Score each category
         scores = {}

@@ -1,0 +1,130 @@
+# TAC Tree: Pinokio 8 — L2 (PMOVES container, same host) reachability
+# ===================================================================
+# Audits whether a PMOVES Docker container on the SAME HOST as the
+# Pinokio venv can reach the Pinokio app. The reachability path is:
+#   container <-> host.docker.internal:<port> <-> Pinokio venv's <port>
+# Per the slice-4 network_exposure.l2_container_same_host contract.
+#
+# Companion to:
+#   pinokio-venv.tac.yaml   (L1, same-process)
+#   tailnet-mesh.tac.yaml   (L3, headscale)
+#   public-tunnel.tac.yaml  (L4, kvm2 + Cloudflare/Hostinger)
+#   pinokio-p8.tac.yaml     (P8 surface + bridge health, slice 2)
+#
+# Pre-flight: Pinokio 8.x on host; PMOVES compose stack running on host;
+# pinokio_bridge :8130 reachable from the container (via host.docker.internal
+# on Docker for Windows, or docker0 bridge IP on Linux).
+
+name: "Pinokio 8 L2 PMOVES-container reachability"
+version: "1.0.0"
+description: "Audit whether each curated Pinokio app is reachable from a PMOVES Docker container on the same host via host.docker.internal."
+
+root:
+  id: pmoves-container
+  task: "Pinokio 8 L2 PMOVES-container reachability audit"
+  context: "Same host as Pinokio 8; PMOVES compose stack + pinokio_bridge :8130 + the curated registry entries with network_exposure.l2_container_same_host.reachable=true"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: host.docker.internal resolves inside the container
+    # =========================================================================
+    - id: l2.hostname_resolve
+      task: "host.docker.internal resolves to the host's IP from inside the container"
+      context: "Docker for Windows auto-injects host.docker.internal. On Linux it requires --add-host=host.docker.internal:host-gateway (compose v2.17+ does this automatically)"
+      agent_hint: codex
+      children:
+        - id: l2.hostname_resolve.from_compose
+          task: "A PMOVES container can resolve host.docker.internal"
+          action:
+            type: shell
+            command: "docker exec <pmoves_container> nslookup host.docker.internal"
+            expect: "Resolves to the host's bridge IP (Linux) or host.docker.internal (Docker for Windows)"
+          context: "Pinokio 8 + PMOVES compose on the same host; the container must reach the host's localhost via the standard Docker escape hatch"
+          agent_hint: codex
+
+        - id: l2.hostname_resolve.compatibility
+          task: "Docker compose v2.17+ is the runtime (host.docker.internal auto-injected)"
+          action:
+            type: shell
+            command: "docker compose version"
+            expect: "Output reports Compose specification version >= 1.5.0 (v2.17+)"
+          context: "Older compose versions on Linux require explicit extra_hosts entries; this audit catches the version skew"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Each curated app's primary port is reachable
+    # =========================================================================
+    - id: l2.port_reachability
+      task: "Each app with port > 0 is reachable from inside a PMOVES container"
+      context: "Static-port apps (comfyui-desktop 8188, ultimate-tts-studio 7860) are easy targets. Dynamic-port apps (port=0 in the registry) require a pinokio_bridge lookup at runtime."
+      agent_hint: codex
+      children:
+        - id: l2.port_reachability.static
+          task: "Static-port apps respond on host.docker.internal:<port>"
+          action:
+            type: shell
+            command: "docker exec <pmoves_container> curl -sf http://host.docker.internal:{{entry.endpoints.primary.port}}{{entry.endpoints.primary.health or '/'}}"
+            expect: "HTTP 200 (or app's expected health-check response)"
+          context: "A static-port app is a 2-curl check. 2 of 12 curated entries have static ports (comfyui-desktop :8188, ultimate-tts-studio :7860)."
+          agent_hint: codex
+          # Conditional: only run this check for entries where port > 0
+
+        - id: l2.port_reachability.dynamic_lookup
+          task: "Dynamic-port apps (port=0) resolve via pinokio_bridge at runtime"
+          action:
+            type: manual
+            expect: "From the container: GET http://host.docker.internal:8130/v1/apps/<slug>/status returns {state: 'running', pid: N, ...} for each app with port=0"
+          context: "10 of 12 curated entries have port=0 (dynamic). The consumer must call pinokio_bridge first, then use the resolved port to dial the app. PMOVES's mesh_exposure service (slice 4) provides a helper for this."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: bridge is reachable from inside the container
+    # =========================================================================
+    - id: l2.bridge_reachable
+      task: "pinokio_bridge is reachable on host.docker.internal:8130"
+      context: "The bridge is the discovery layer for dynamic ports. Without it, PMOVES-side consumers can't resolve the actual port for any app."
+      agent_hint: codex
+      children:
+        - id: l2.bridge_reachable.healthz
+          task: "GET /v1/gpu/detect on the bridge from inside the container"
+          action:
+            type: shell
+            command: "docker exec <pmoves_container> curl -sf http://host.docker.internal:8130/v1/gpu/detect"
+            expect: "HTTP 200 with JSON body {host, vram, gpus, ...}"
+          context: "Healthcheck that proves the bridge is reachable. If the host's PMOVES_BRIDGE_TOKEN is set, /v1/gpu/detect is read-only and needs no token."
+          agent_hint: codex
+
+        - id: l2.bridge_reachable.auth
+          task: "Bridge X-PMOVES-Bridge-Token (if set) is available to the container"
+          action:
+            type: manual
+            expect: "If PMOVES_BRIDGE_TOKEN is set on the host, the same token (read from /run/secrets or a CHIT-managed mount) is available to the container. Without the token, the consumer falls back to read-only endpoints (the bridge is fail-closed for writes)."
+          context: "Bridge auth model: writes need the token; reads (status, gpu/detect, autolaunch list) do not. PMOVES containers can read freely; write actions (launch) need the operator's deliberate setup."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Caddy / cgroup / network namespace don't block the path
+    # =========================================================================
+    - id: l2.network_policing
+      task: "No container cgroup or network policy blocks the host.docker.internal path"
+      context: "Linux cgroup v2 + iptables can interfere; Docker for Windows + WSL2 has its own quirks. This audit catches misconfigurations."
+      agent_hint: codex
+      children:
+        - id: l2.network_policing.iptables
+          task: "Docker iptables rules are in place (DOCKER + DOCKER-USER chains)"
+          action:
+            type: shell
+            command: "iptables -L DOCKER -n -t nat 2>&1 | head -20"
+            expect: "Chain shows DNAT rules for published ports. If empty, Docker networking is broken and host.docker.internal won't work."
+          context: "Standard Docker install registers iptables chains. A custom firewall or kube-managed node can strip them."
+          agent_hint: codex
+
+        - id: l2.network_policing.cgroup
+          task: "Container cgroup allows outbound to the host bridge IP"
+          action:
+            type: shell
+            command: "docker exec <pmoves_container> ip route"
+            expect: "Default route via the docker bridge (typically 172.17.0.1) OR via host.docker.internal's special name resolution"
+          context: "A container that can't reach its own host's bridge IP is misconfigured. This is a known failure mode on custom CNI plugins."
+          agent_hint: codex

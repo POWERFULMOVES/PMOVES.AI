@@ -115,7 +115,8 @@ _Last updated: 2025-12-23_
 - **Secrets fence** - only service with external API keys
 - Ports: 3030 (gateway), 4000 (UI), 8123 (ClickHouse)
 
-### [PMOVES-n8n](https://github.com/POWERFULMOVES/PMOVES-n8n.git)
+### [PMOVES-n8n](https://github.com/POWERFULMOVES/PMOVES-n8n-FlooS.git)
+_Submodule path `PMOVES-n8n`, repo `PMOVES-n8n-FlooS`: PMOVES workflows, first-party. The n8n source fork of n8n-io/n8n is `PMOVES-N8N` (path `PMOVES-N8N-Auto`)._
 **Workflow Automation** - n8n integration for process automation
 - Visual workflow builder
 - PMOVES service integrations

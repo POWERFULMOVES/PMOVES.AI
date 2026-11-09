@@ -1,0 +1,23 @@
+# Operator-facing tool deps (pmoves/tools/*.py), installed into the venv by
+# scripts/install_all_requirements.sh (roots=(services tools)).
+#
+# Kept separate from services/*/requirements.txt because these are CLI-only:
+# the yt-cookie-refresher CONTAINER never runs the consent flow (it refreshes
+# an already-stored token), so google-auth-oauthlib is not a service dep.
+# tools/yt_oauth_flow.py needs it for the one-time `make yt-cookies-auth`.
+google-auth-oauthlib>=1.2,<2.0
+
+# Shared by tools/yt_oauth_flow.py (HTTP + Fernet vault encryption). Also
+# declared by services/yt-cookie-refresher; repeated here so the tool's deps
+# resolve even when only tools/ is installed.
+httpx>=0.27,<1.0
+cryptography>=46.0.6
+
+# 23 tools under pmoves/tools/ import nats — including sign_trail.py and gate_emit.py,
+# which sit in the CHIT signing path — but nothing declared it here. It was present in
+# .venv-pmoves by accident of an earlier install, so `make venv-bringup` rebuilding from
+# this file would have dropped it and broken all 23 at once on a fresh checkout.
+# Declared by seven services/*/requirements.txt (the per-service container pattern);
+# repeated here for the same reason httpx is, so tools resolve when only tools/ is
+# installed. Floor matches the highest service pin in the tree (voice-relay 2.12.0).
+nats-py>=2.12.0

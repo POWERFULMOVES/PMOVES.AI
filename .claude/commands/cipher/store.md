@@ -35,11 +35,12 @@ Arguments:
 - `architecture` — System patterns and design
 - `reasoning` — Chain-of-thought reasoning traces
 
-> **Known issue (2026-04-01):** MCP tools are currently blocked by the same gap as REST.
-> The MCP client (`pmoves-cipher-mcp/cipher_mcp/client.py`) calls `POST /api/memory`
-> which does not exist in `Pmoves-cipher` (no `/api/memory` routes registered in `server.ts`).
-> Until the cipher-api submodule implements these routes, MCP tools will return 404.
-> **Use the fallback below.**
+> **Status (2026-07-24):** the `/api/memory` CRUD routes LANDED in Pmoves-cipher
+> (fork PR #5, 2026-07-14 wave — same wave added the Qdrant embedding sidecar,
+> hybrid search with BM25 sparse + dense RRF fusion, and Ollama fallback). The
+> live API now returns **401 (auth required)**, not 404 — callers need the
+> Cipher API key from the env tier. If the MCP tool is absent from the session
+> or returns 401/connection errors, use the fallback below; do not retry.
 
 ### Step 2b: Fallback — store in local auto-memory (if CIPHER_DOWN or MCP fails)
 

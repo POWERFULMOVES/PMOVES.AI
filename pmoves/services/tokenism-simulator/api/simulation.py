@@ -72,7 +72,6 @@ from prometheus_client import Counter, Histogram, generate_latest
 
 from models.simulation import (
     SimulationParameters,
-    SimulationResult,
     SimulationScenario,
 )
 from services.simulation_engine import get_simulation_engine

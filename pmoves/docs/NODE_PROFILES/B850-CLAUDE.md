@@ -86,6 +86,31 @@ Tracked in this session's task list; on-disk evidence in AGNOTE register entries
 | **CO-8** | **YouTube playlist research** | 🟡 **Owner: Agent Zero** (per user 2026-05-16 "has permissions") — awaits playlist URL or channel-monitor bringup |
 | **CO-9** | **AZ → Archon mint orchestration** | 🟡 **Owner: Agent Zero** — downstream of CO-8 |
 
+## Provisioning (`b850-*` make targets)
+
+Run on B850 itself (the targets refuse to run on other hosts; override with `IS_B850_LOCAL=1`). Each one asks for sudo. Run them from your own account, not from a root login.
+
+| Step | Target | Script |
+|------|--------|--------|
+| 1 | `make -C pmoves b850-bootstrap` | `deploy/provision/b850-bootstrap.sh`: Docker, uv (sha256-verified), gh, bringup venv, `/opt/pmoves` checkout + `profile.yaml` |
+| 2 | `make -C pmoves b850-gpu-install` | `deploy/provision/rdna4-gpu-install.sh --dual-gpu` (ROCm, amdgpu-dkms, llama.cpp HIP at `LLAMA_CPP_PIN`) |
+| 3 | reboot | |
+| 4 | `make -C pmoves b850-postinstall` | `deploy/provision/rdna4-postinstall.sh --model-pull`. Exit 0 = pass. Exit 1 = a finding. Exit 3 = could not measure: rocm-smi or jq unusable. Without a model the output reads "CONFIGURED, NOT STARTED", and the step still passes (exit 0). |
+| any | `make -C pmoves b850-health` | GPU + llama-server + ROCm metrics |
+
+**`/opt/pmoves` layout.** `/opt/pmoves` is a PMOVES.AI git checkout owned by the operator, which is the layout `hostinger-kvm-setup.sh` and `rdna4-gpu-install.sh` expect. `profile.yaml` and `.node-config` live at the checkout root, and `.gitignore` ignores both.
+
+**Migrating the legacy layout.** Older bootstraps created `/opt/pmoves/{bin,data,etc,lib,logs}` + `profile.yaml`, owned by the `pmoves` user, with no `.git`. B850 still has this layout. The bootstrap now detects it before installing anything. It stops with exit 1 and prints the exact commands. It never moves the directory itself. The migration moves the directory and deletes nothing:
+
+```bash
+sudo mv /opt/pmoves /opt/pmoves.legacy-$(date -u +%Y%m%dT%H%M%SZ)
+make -C pmoves b850-bootstrap          # clones the checkout, writes a fresh profile.yaml
+# optional: keep the OLD profile instead of the regenerated one
+sudo install -m 0644 -o "$USER" -g "$(id -gn)" /opt/pmoves.legacy-<ts>/profile.yaml /opt/pmoves/profile.yaml
+```
+
+Check `/opt/pmoves.legacy-<ts>/data` before removing the legacy tree.
+
 ## Common tasks from B850 CLI
 
 - **Probe AZ**: `curl -s http://pmoves-powerfulmoves:8080/healthz | jq '.nats'`

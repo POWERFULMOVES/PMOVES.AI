@@ -1,6 +1,6 @@
 """MeiliSearch lexical search and persona extraction helpers."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import requests
 

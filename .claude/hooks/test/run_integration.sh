@@ -20,7 +20,7 @@ if [[ -z "$LIVE_FILE" || ! -f "$LIVE_FILE" ]]; then
     LIVE_FILE=$(mktemp)
     echo "Probing services for integration gate..."
     for entry in \
-        "NATS-monitor:8222:/jsz" \
+        "NATS-monitor:${NATS_MONITORING_PORT:-9223}:/jsz" \
         "Cipher:8105:/health" \
         "Archon-MCP:8091:/healthz" \
         "Agent-Zero:8080:/healthz" \
@@ -103,7 +103,7 @@ if is_up "NATS-monitor"; then
         bad "audit.py rc=$rc, out=$(echo "$out" | head -3)"
     fi
 else
-    skip "subject-audit (NATS :8222 DOWN)"
+    skip "subject-audit (NATS monitor :${NATS_MONITORING_PORT:-9223} DOWN)"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -1,0 +1,21 @@
+# arm64 (aarch64) hard pins for the media-video lock compile.
+# Rationale: same float defect as media-audio (plain requirements.txt resolved
+# torch 2.13.0 + transformers 5.15.1 on arm64; torch._dynamo dies at import and
+# the DETR pipeline never loads). Pins encode the SPARK-proven CUDA stack:
+#   torch 2.9.0+cu128 + transformers 4.57.6 = the healthy
+#   hi-rag-gateway-v2-gpu set on PMOVES-SPARK (GB10), and matches this
+#   Dockerfile's TORCH_VERSION=2.9.0 arg.
+# torchvision 0.24.0 is the 2.9.0-paired release (untagged on the cu128 index).
+# transformers is pinned to the 4.x DETR-era line: the default
+# DETECTION_ENGINE=detr path was authored against the 4.x pipeline surface and
+# 4.57.6 is proven on this node; the x86 lock (5.13.1) is a separate lane.
+# numpy 1.26.4 + opencv 4.11.0.86 mirror the ultralytics-8.2.103-era resolution already encoded
+# in the x86 lock (avoids numpy-2 API drift inside the pinned YOLO stack).
+# Install-time wheel SOURCE is made deterministic by the Dockerfile preinstall
+# step (--index-url the cu128 index) before the lock install.
+torch==2.9.0+cu128
+torchvision==0.24.0
+transformers==4.57.6
+numpy==1.26.4
+opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86

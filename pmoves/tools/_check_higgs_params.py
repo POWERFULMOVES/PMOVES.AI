@@ -1,7 +1,6 @@
 """Diagnostic: check Gradio API param spec for Higgs Audio fields."""
 import json
 import urllib.request
-import sys
 
 resp = urllib.request.urlopen("http://127.0.0.1:7860/gradio_api/info")
 info = json.loads(resp.read())

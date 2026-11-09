@@ -1,0 +1,51 @@
+# Adjudicated TIGHTENINGS for sweep_differential.py.
+#
+# The sweep has always had two outcomes for a verdict change: a sanctioned
+# relaxation (classes A and B), or "unsanctioned". That conflated two changes
+# pointing in OPPOSITE directions:
+#
+#   a RELAXATION lets through something the base guard refused  -- a security hole
+#   a TIGHTENING refuses something the base guard allowed       -- a hole CLOSED
+#
+# A guard getting stricter is the outcome we want, but it still changes verdicts,
+# so the sweep flags it and a human has to look. With no way to record "yes, we
+# looked, that one is intended", the gate is red forever on a correct change --
+# and a permanently red gate is an ignored gate, which is the same failure as
+# having no gate. This file is that record.
+#
+# THE ASYMMETRY IS THE POINT, and it is enforced in code, not by convention:
+#
+#   * consulted ONLY for NEWLY BLOCKED findings;
+#   * a RELAXATION can never be waived here -- listing one has no effect, the
+#     sweep does not look, and relaxations always exit 1;
+#   * a tightening NOT listed here exits 1, so new ones must be adjudicated.
+#
+# The count can only go down, and nothing here can ever make the guard permit
+# something. Match is on the exact generated command string, so an entry cannot
+# broaden to cover cases it was not reviewed for.
+
+tightenings:
+  # Found by sweeping this branch against origin/main on 2026-09-12.
+  #
+  # patterns.yaml readOnlyPaths contains all three of `Dockerfile`, `**/Dockerfile` and
+  # `Dockerfile.*`, so a Dockerfile VARIANT is meant to be read-only. main nonetheless
+  # permits writing one at the repo root: its `**` component had to match exactly
+  # one path component, so the two-component entry was rejected on length against
+  # a token that normalises to one -- before any name comparison ran.
+  # `_window_match` in path_scope.py makes `**` zero-or-more, which is what the
+  # glob means, and the variant is protected again.
+  #
+  # Verified both directions: the suffix-less basename was blocked before and is
+  # still blocked, so this closes a gap without moving anything already correct.
+  - command: 'echo x > ./Dockerfile.z'
+    entry: 'Dockerfile.*'
+    reason: 'closes a hole: main permits writing a Dockerfile variant that readOnlyPaths protects'
+  - command: 'echo x >> ./Dockerfile.z'
+    entry: 'Dockerfile.*'
+    reason: 'closes a hole: main permits appending to a Dockerfile variant that readOnlyPaths protects'
+  - command: 'mv /tmp/a ./Dockerfile.z'
+    entry: 'Dockerfile.*'
+    reason: 'closes a hole: main permits moving onto a Dockerfile variant that readOnlyPaths protects'
+  - command: 'cp /tmp/a ./Dockerfile.z'
+    entry: 'Dockerfile.*'
+    reason: 'closes a hole: main permits copying onto a Dockerfile variant that readOnlyPaths protects'

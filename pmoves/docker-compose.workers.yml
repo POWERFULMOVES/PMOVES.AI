@@ -45,6 +45,7 @@ services:
     - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     ports:
     - ${EXTRACT_WORKER_BIND:-0.0.0.0}:${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
@@ -76,6 +77,42 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  watch-folder-router:  # SEAP ingestion Bud 1: routes ingest.file.added.v1 by MIME to the right analyzer (SEAP_WATCHFOLDER_NATS_CONSTELLATION)
+    <<:
+      env_file:
+      - env.shared
+      - env.tier-media
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: ..
+      dockerfile: pmoves/services/watch-folder-router/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   spark-shape-worker:
     <<: *tier-worker-hardened
     build: ./services/spark-shape-worker
@@ -93,6 +130,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     profiles:
     - workers
     - orchestration
@@ -106,6 +144,48 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import os; exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  persona-thirdref:
+    <<: *tier-worker-hardened
+    build:
+      context: .
+      dockerfile: services/persona-thirdref/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - SUPABASE_URL=${SUPABASE_URL}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    - PERSONA_THIRDREF_TOKEN=${PERSONA_THIRDREF_TOKEN:-}
+    - PERSONA_THIRDREF_PROFILE_THRESHOLD=${PERSONA_THIRDREF_PROFILE_THRESHOLD:-10}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -130,6 +210,7 @@ services:
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
     - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
     depends_on:
       extract-worker:
         condition: service_started
@@ -179,6 +260,8 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+    environment:
+    - PMOVES_NETWORKS=pmoves_app
   notebook-sync:
     <<: *tier-worker-hardened
     build: ./services/notebook-sync
@@ -191,6 +274,7 @@ services:
     - NOTEBOOK_SYNC_DB_PATH=${NOTEBOOK_SYNC_DB_PATH:-/data/notebook_sync.db}
     - LANGEXTRACT_URL=${LANGEXTRACT_URL:-http://langextract:8084}
     - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     depends_on:
       langextract:
         condition: service_started
@@ -229,16 +313,18 @@ services:
     environment:
     - PORT=8100
     - NATS_URL=${NATS_URL}
-    - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
-    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
+    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:${SESSION_CONTEXT_WORKER_PORT:-8102}:8100
     profiles:
     - workers
     networks:
     - pmoves_app
     - pmoves_bus
-    depends_on:
-    - hi-rag-gateway-v2
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
+    # sibling overlay, and a depends_on referencing an undefined service
+    # invalidates the WHOLE workers project (overlay-up-workers fails
+    # fleet-wide). The dependency is runtime HTTP, not startup ordering.
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -288,6 +374,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -331,11 +418,17 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL}
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
     networks:
@@ -380,13 +473,16 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     volumes:
     - ./config:/app/config
     depends_on:
-      pmoves-yt:
-        condition: service_started
+      # No cross-overlay depends_on: pmoves-yt is defined in a sibling overlay,
+      # and a depends_on referencing an undefined service invalidates the
+      # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+      # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
     ports:
@@ -414,10 +510,14 @@ services:
     environment:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
-    depends_on:
-    - hi-rag-gateway-v2
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
+    # sibling overlay, and a depends_on referencing an undefined service
+    # invalidates the WHOLE workers project (overlay-up-workers fails
+    # fleet-wide). The dependency is runtime HTTP (HIRAG_URL), not
+    # startup ordering.
     ports:
-    - ${RETRIEVAL_EVAL_BIND:-0.0.0.0}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    - ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
@@ -447,14 +547,21 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
-    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+    # Credentials come from NATS_USER/NATS_PASSWORD, which the funnel writes into
+    # env.shared / env.tier-agent.
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
     ports:
-    - ${PUBLISHER_DISCORD_BIND:-0.0.0.0}:8094:8092
+    - ${PUBLISHER_DISCORD_BIND:-0.0.0.0}:${PUBLISHER_DISCORD_PORT:-8094}:8092
     profiles:
     - orchestration
     - agents
@@ -499,6 +606,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - ${MODEL_REGISTRY_BIND:-0.0.0.0}:${MODEL_REGISTRY_PORT:-8110}:8110
     depends_on:
@@ -539,6 +647,7 @@ services:
     - MINIO_SECURE=false
     - AWS_DEFAULT_REGION=us-east-1
     - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - ${PRESIGN_BIND:-0.0.0.0}:${PRESIGN_PORT:-8088}:8080
     profiles:
@@ -572,6 +681,7 @@ services:
     - SUPABASE_ANON_KEY=${RENDER_WEBHOOK_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-${ANON_KEY:-}}}
     - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external,pmoves_bus
     ports:
     - ${RENDER_WEBHOOK_BIND:-0.0.0.0}:${RENDER_WEBHOOK_PORT:-8085}:8085
     profiles:
@@ -614,16 +724,19 @@ services:
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
-    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:${GITHUB_BRANCH_CLEANUP_8100_PORT:-8100}:8100
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:${GITHUB_BRANCH_CLEANUP_9096_PORT:-9096}:9096
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      agent-zero:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -654,18 +767,23 @@ services:
     - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
     - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
-    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:${GITHUB_ISSUE_TRIAGE_8101_PORT:-8101}:8101
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:${GITHUB_ISSUE_TRIAGE_9097_PORT:-9097}:9097
     depends_on:
+    # No cross-overlay depends_on: botz-gateway is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      hi-rag-gateway-v2:
-        condition: service_healthy
-      botz-gateway:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -675,26 +793,23 @@ services:
       retries: 3
       start_period: 10s
 
-  # Tier: agent (A2UI NATS bridge - geometry bus integration)
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
   github-branch-naming:
-    build:
-      context: ./services/github-branch-naming
-      dockerfile: Dockerfile
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-branch-naming` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-branch-naming/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_BRANCH_NAMING_IMAGE` overrides as needed.
     image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8102
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8112:8102
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:${GITHUB_BRANCH_NAMING_PORT:-8112}:8102
     profiles:
     - github-automation
     networks:
@@ -704,9 +819,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
@@ -721,21 +838,24 @@ services:
           cpus: '0.5'
           memory: 256M
   github-crossrepo-sync:
-    build:
-      context: ./services/github-crossrepo-sync
-      dockerfile: Dockerfile
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-crossrepo-sync` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-crossrepo-sync/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_CROSSREPO_SYNC_IMAGE` overrides as needed.
     image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8103
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
     - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8113:8103
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:${GITHUB_CROSSREPO_SYNC_PORT:-8113}:8103
     profiles:
     - github-automation
     networks:
@@ -745,9 +865,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API + git clone
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
@@ -770,12 +892,13 @@ services:
     environment:
     - SERVICE_PORT=8104
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8114:8104
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:${GITHUB_CROSSREPO_PR_PORT:-8114}:8104
     profiles:
     - github-automation
     networks:
@@ -785,9 +908,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API for PR management
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
@@ -816,8 +941,11 @@ services:
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
-    depends_on: [nats]
-    ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:${GITHUB_RUNNER_CTL_PORT:-8104}:8104"]
     volumes:
     - ./services/github-runner-ctl/config:/app/config:ro
     - ./secrets/github_pat:/run/secrets/github_pat:ro

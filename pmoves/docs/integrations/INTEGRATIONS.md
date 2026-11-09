@@ -250,12 +250,12 @@ The following submodules have been through security audit and integration review
 - **Note:** Library, not standalone service — Flute-Gateway wraps it as a service
 - **See:** `PMOVES-Pipecat/PMOVES.AI_INTEGRATION.md`
 
-### Flute-Gateway [Port 8055 HTTP, 8056 WebSocket]
+### Flute-Gateway [Port 8055 — HTTP + WebSocket]
 
 **Status:** NATS auth FIXED (2026-02-23)
 
 - **Connection Pattern:** Voice gateway wrapping Pipecat + Ultimate-TTS-Studio
-- **Auth:** JWT Bearer token or `FLUTE_API_KEY` for service-to-service
+- **Auth:** `X-API-Key: $FLUTE_API_KEY` header only. There is no JWT/Bearer support (`verify_api_key` reads the `X-API-Key` header, `services/flute-gateway/main.py:218`). Auth is skipped entirely when `FLUTE_API_KEY` is unset — dev mode, `main.py:221`.
 - **NATS:** Publishes CHIT voice geometry events (optional, best-effort)
 - **See:** `.claude/context/flute-gateway.md` for full API reference
 
@@ -365,27 +365,48 @@ curl -X POST http://localhost:8091/api/forms/research-agent/execute \
 
 ---
 
-### Flute Gateway [Port 8055]
+### Flute Gateway [Port 8055 — HTTP + WebSocket]
 
 **Purpose:** Multimodal voice communication layer with TTS/STT
 
-**Authentication:** JWT Bearer token OR API key
+**Authentication:** `X-API-Key: $FLUTE_API_KEY` header only. There is no
+JWT/Bearer support (`main.py:218`) — an `Authorization` header is ignored. When
+`FLUTE_API_KEY` is unset the service skips auth entirely (`main.py:221`).
 
 **Health Check:** `GET /healthz`
 
 **API Endpoints:**
 
+Verified against `pmoves/services/flute-gateway/main.py` + `mcp_bridge.py`.
+
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/healthz` | GET | None | Health check |
-| `/v1/voice/config` | GET | None | Service configuration |
-| `/v1/voice/synthesize` | POST | JWT/API Key | TTS synthesis |
-| `/v1/voice/synthesize/audio` | POST | JWT/API Key | TTS with audio response |
-| `/v1/voice/synthesize/prosodic` | POST | JWT/API Key | Prosodic TTS (low latency) |
-| `/v1/voice/analyze/prosodic` | POST | JWT/API Key | Prosodic text analysis |
-| `/v1/voice/recognize` | POST | JWT/API Key | STT transcription |
-| `/v1/voice/personas` | GET | JWT/API Key | List voice personas |
-| `/v1/voice/clone/*` | POST | JWT/API Key | Voice cloning endpoints |
+| `/metrics` | GET | None | Prometheus metrics |
+| `/v1/voice/config` | GET | None | Service configuration + feature matrix |
+| `/v1/voice/validate` | GET | None | Validation surface (probe) |
+| `/v1/voice/validate` | POST | X-API-Key | Validate a synthesis request |
+| `/v1/voice/binding` | GET | X-API-Key | Resolve agent to voice binding |
+| `/v1/voice/synthesize` | POST | X-API-Key | TTS synthesis (JSON response) |
+| `/v1/voice/synthesize/audio` | POST | X-API-Key | TTS with audio response |
+| `/v1/voice/synthesize/prosodic` | POST | X-API-Key | Prosodic TTS — returns `audio/wav` plus `X-Prosodic-*` headers; requires `ultimate_tts` |
+| `/v1/voice/recognize` | POST | X-API-Key | STT transcription |
+| `/v1/voice/personas` | GET | X-API-Key | List voice personas (read-only) |
+| `/v1/voice/personas/{persona_id}` | GET | X-API-Key | Get one persona (single path segment) |
+| `/v1/voice/profiles` | GET | X-API-Key | List voice profiles |
+| `/v1/voice/profiles` | POST | X-API-Key | Create a voice profile (201) |
+| `/v1/voice/profiles/{name}` | GET | X-API-Key | Resolve a profile by slug |
+| `/sse` | GET | X-API-Key | MCP bridge (SSE transport) |
+| `/messages` | POST | X-API-Key | MCP bridge (message channel) |
+| `/v1/voice/stream/tts` | **WebSocket** | None | Text in, streamed TTS audio out |
+| `/v1/voice/agent` | **WebSocket** | None | Duplex voice agent (`PIPECAT_ENABLED=true`) |
+
+> [!NOTE]
+> Both WebSocket routes are served on port 8055 alongside HTTP; nothing binds 8056.
+> There is no `/v1/voice/analyze/prosodic` — the prosodic parser has no
+> analysis-only route — and no `/v1/voice/clone/*`: `providers/cloning.py`
+> exists but is never mounted, and `/v1/voice/config` reports
+> `"voice_cloning": false`.
 
 **Setup Script:**
 ```bash
@@ -395,26 +416,21 @@ make setup-flute-gateway
 ```
 
 **Dependencies:**
-- VibeVoice at `http://host.docker.internal:3000` (optional)
-- Ultimate-TTS at `http://ultimate-tts-studio:7861` (optional)
+- OmniVoice at `http://127.0.0.1:8002` (`OMNIVOICE_URL`; compose default TTS)
+- Ultimate-TTS at `http://host.docker.internal:7860` (`ULTIMATE_TTS_URL`)
+- VibeVoice at `http://host.docker.internal:7860` (`VIBEVOICE_URL`, optional)
 - Whisper at `http://ffmpeg-whisper:8078`
 - Supabase for persona storage
 
 **Example Usage:**
 ```bash
-# Synthesize speech (with JWT)
-curl -X POST http://localhost:8055/v1/voice/synthesize/audio \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello world", "output_format": "wav"}' \
-  --output speech.wav
+# Synthesize speech
+curl -X POST http://localhost:8055/v1/voice/synthesize/audio -H "X-API-Key: <flute-api-key>" -H "Content-Type: application/json" -d '{"text": "Hello world", "output_format": "wav"}' --output speech.wav
 
-# Synthesize with prosodic chunking (low latency)
-curl -X POST http://localhost:8055/v1/voice/synthesize/prosodic/audio \
-  -H "X-API-Key: <flute-api-key>" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "The quick brown fox jumps over the lazy dog", "output_format": "wav"}' \
-  --output prosodic_speech.wav
+# Prosodic chunking (low latency). The base route already returns WAV --
+# there is no /prosodic/audio variant. provider must resolve to ultimate_tts
+# or the route returns 400.
+curl -X POST http://localhost:8055/v1/voice/synthesize/prosodic -H "X-API-Key: <flute-api-key>" -H "Content-Type: application/json" -d '{"text": "The quick brown fox jumps over the lazy dog", "provider": "ultimate_tts"}' --output prosodic_speech.wav
 ```
 
 ---

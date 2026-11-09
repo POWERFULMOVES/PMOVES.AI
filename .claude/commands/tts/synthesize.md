@@ -15,7 +15,7 @@ curl -f http://localhost:7861/gradio_api/info
 ```bash
 curl -X POST http://localhost:8055/v1/voice/synthesize/prosodic \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $FLUTE_API_KEY" \
+  -H "X-API-Key: $FLUTE_API_KEY" \
   -d '{
     "text": "Hello, this is a test.",
     "voice": "default",

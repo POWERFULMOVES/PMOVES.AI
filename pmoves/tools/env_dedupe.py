@@ -21,7 +21,6 @@ DEFAULT_OUT = DEFAULT_IN
 def dedupe_env(path: Path, output: Path) -> int:
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
-    seen = set()
     ordered = []
     # Iterate forward collecting lines; mark duplicates to be overridden
     for idx, ln in enumerate(lines):

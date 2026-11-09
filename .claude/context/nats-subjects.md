@@ -10,6 +10,26 @@ Comprehensive reference of all NATS message subjects used for event-driven commu
 - **JetStream:** Enabled for persistence
 - **Version:** 2.10-alpine
 
+## P7 Room and Session Control
+
+P7 separates command subjects from emitted facts:
+
+| Subject | Role | Direction |
+|---|---|---|
+| `p7.nats.launch` | Start a room session (`room_id` or legacy `room`) | client -> P7 |
+| `p7.nats.session` | Session or stage command (`pause`, `resume`, `end`, `archive`, `stage`) | client -> P7 |
+| `p7.nats.launch.v1`, `p7.nats.session.v1` | Compatibility aliases for existing PBnJ hooks; payload contract is unchanged | client -> P7 |
+| `p7.room.session.started.v1` | Session-start fact | P7 -> consumers |
+| `p7.room.checkpoint.v1` | Session checkpoint fact | P7 -> consumers |
+| `p7.room.session.ended.v1` | Session-ended fact | P7 -> consumers |
+| `p7.room.stage.changed.v1` | Persistent room-stage transition fact | P7 -> consumers |
+| `p7.room.command.failed.v1` | Rejected or malformed command fact | P7 -> operators |
+
+`room.stage` is `rehearsal | live | review | archive`. `session_state` is
+`planned | active | paused | ended | archived`. A transition to `live` is
+CHIT signing-card gated. Every stage transition requires durable Supabase audit
+persistence and confirmed NATS stage-fact delivery.
+
 ## Subject Naming Convention
 
 PMOVES uses versioned subject names following the pattern:
@@ -111,7 +131,7 @@ Example: `ingest.transcript.ready.v1`
 ## Cipher Memory Subjects
 
 **`cipher.memory.stored.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring, observability
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring, observability
 - **Purpose:** Notify that a memory was stored in Cipher
 - **Payload:**
   ```json
@@ -125,7 +145,7 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Observability dashboards, Discord Publisher (optional)
 
 **`cipher.memory.searched.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring
 - **Purpose:** Notify that a memory search was performed
 - **Payload:**
   ```json
@@ -140,7 +160,7 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Observability dashboards
 
 **`cipher.reasoning.stored.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring
 - **Purpose:** Notify that a reasoning trace was stored
 - **Payload:**
   ```json
@@ -795,6 +815,43 @@ Example: `ingest.transcript.ready.v1`
 - **Schema:** `pmoves/contracts/schemas/voice/agent.response.v1.schema.json`
 - **Filter:** Only tasks with `meta.voice_mode: true` in the input payload are relayed
 - **Profiles:** `cast`, `media`
+
+## Voice Sampler Subjects
+
+Media-sourced voice references (VOICE_SAMPLER_SPEC.md; voice-sampler service, port 8124).
+Voice references are personal data: payloads carry JuiceFS keys only, never audio.
+
+**`voice.sample.candidates.v1`**
+- **Publisher:** voice-sampler (after diarize + segment cut + JuiceFS stage)
+- **Subscribers:** Voice Vault room app (audition lanes)
+- **Payload:** `{batch_id, bucket, prefix, speakers: [{speaker, clips: [{key, start, end, duration}]}], room, persona_id, source: {bucket, key}, diarization_model, timestamp}`
+
+**`voice.reference.approved.v1`**
+- **Publisher:** Voice Vault room app (owner-only pub-gate decision)
+- **Subscribers:** voice-sampler (executes PUBLISH: JuiceFS refs path + OmniVoice catalog + optional flute clone register)
+- **Payload:** `{batch_id, room, persona_id, owner_id, catalog_id?, clips: [candidate keys], chit_sig}`
+- **Gate:** sampler refuses unless `owner_id` matches `VOICE_SAMPLER_OWNER_ID` and `chit_sig` present (fail closed; full CHIT verification is the follow-up)
+
+**`voice.reference.published.v1`**
+- **Publisher:** voice-sampler (ANNOUNCE after successful publish)
+- **Subscribers:** room surfaces, H3/Maestro reference pickers
+- **Payload:** `{persona_id, catalog_id, room, refs: [keys], source_batch, chit_sig, timestamp}`
+- **Profiles:** `workers`, `voice`
+
+## Persona Third-Ref Subjects
+
+Third-reference persona grounding (persona-thirdref service, port 8099; schema
+`pmoves/contracts/schemas/persona/consumption.recorded.v1.schema.json`). Consumption
+is gravitational signal: what a human or agent actually consumes of the shared
+library is the third reference for persona grounding, after authored config and
+observed interaction telemetry.
+
+**`persona.consumption.recorded.v1`**
+- **Publishers:** `pmoves/tools/persona_consumption.py` (agent side), jellyfin-bridge playback lane (human side, `source: jellyfin`)
+- **Subscribers:** persona-thirdref (joins Supabase `youtube_videos` enrichment: resonance_domain/resonance_secondary/persona_signal/curriculum_track)
+- **Payload:** `{consumer_kind: human|agent, user_id?, agent_id?, item_kind: youtube_video|beat|generic, item_id, session_id?, source, duration_seconds?, resonance_domains?, timestamp}`
+- **Emits:** `shape.trace.recorded.v1` (`interaction_type: media`) per event; `shape.profile.updated.v1` (normalized resonance-domain histogram) every `PERSONA_THIRDREF_PROFILE_THRESHOLD` events per identity
+- **Profiles:** `workers`, `orchestration`
 
 ## Cast TTS Subjects
 
@@ -1652,6 +1709,32 @@ nats server report connections
   persistent audit subscriber, `make -C pmoves nats-agent-inbox`, or an equivalent
   MCP/NATS bridge before it can be treated as online.
 
+**`branch.<branch>.a2ui.trail.v1`**
+- **Direction:** Published by the local PostToolUse hook `.claude/hooks/a2ui-crew-trail.sh`
+  (dev-time, best-effort) → Consumed by monitoring / audit lane
+- **Purpose:** Dev-time A2UI lane branch trail — emits an advisory event when an A2UI lane
+  file is edited (web components, `a2ui-*` contracts, compose tools, tenant templates).
+  Subject uses dot-separated branch path segments (e.g. `branch.feat.a2ui-v02.a2ui.trail.v1`).
+  Sibling of the shift-crew lane hook `.claude/hooks/shift-crew-trail.sh`
+  (`branch.<branch>.trail.v1`); different lane, different subject.
+- **Payload:**
+  ```json
+  {
+    "event": "a2ui_edit",
+    "file": "pm-ballot.js",
+    "path": "pmoves/web-components/pm-ballot/pm-ballot.js",
+    "pattern": "pmoves/web-components/",
+    "branch": "feat/a2ui-v02-impl-review-style",
+    "node": "<hostname>",
+    "ts": "2026-07-16T00:00:00Z"
+  }
+  ```
+- **Notes:** ADVISORY / UNSIGNED — unlike the CI `branch.<path-segments>.trail.v1` §9.4
+  trail, this payload carries NO `spec`, NO `signing_card_id`, and NO HMAC. Audit-lane
+  consumers of `branch.>` MUST skip it for signature verification. Best-effort: publish
+  failure is silent and the hook always exits 0; a durable local record is appended to
+  the gitignored `pmoves/docs/logs/a2ui_branch_trail.jsonl` regardless.
+
 **`village.gate.result.v1`**
 - **Direction:** Staged by `pmoves/tools/village_gate.py` (CI + local `make village-gate`) → Consumed by monitoring / signoff audit lane
 - **Purpose:** P0 Evaluation Gates — verdict of the automated evaluator gate that runs
@@ -1727,8 +1810,18 @@ nats server report connections
 
 ## Service Coordination Subjects
 
-**`archon.crawl.request.v1`** — Web crawl request (Agent/UI → Archon)
-**`archon.crawl.result.v1`** — Crawl result (Archon → requesting agent)
+**`archon.crawl.request.v1`** — ⚠️ **STUB — does not crawl.** Web crawl request (Agent/UI → Archon)
+**`archon.crawl.result.v1`** — ⚠️ **STUB — echoes the request.** Crawl result (Archon → requesting agent)
+
+> **No live subscriber — the stub was retired, not fixed.** The handler this
+> entry used to document (`ArchonOrchestrator`, `pmoves/services/archon/`)
+> echoed request `metadata` back as a "completed" crawl result — no fetch, no
+> crawler, tests that round-tripped the defect. It was removed with the old
+> Python-Archon surface (2026-09-04, PR #2943): publishing
+> `archon.crawl.request.v1` now reaches nobody. The retire-vs-implement
+> decision parked in `AGNOTE4482PHI.t1.md` resolved to retire; if a crawler is
+> ever wanted, build it against native Archon 0.6.0 (REST,
+> `/api/workflows*`), not by reviving the echo stub.
 **`persona.publish.v1`** — Persona definition publish (Archon → Agent Zero)
 **`persona.update.v1`** — Persona update (Archon → Agent Zero)
 **`mesh.node.announce.v2`** — Node announcement v2 format (Mesh Agent → Agent Zero)
@@ -1736,12 +1829,175 @@ nats server report connections
 **`kb.upsert.result.v1`** — Upsert confirmation (Hi-RAG → requesting agent)
 **`compute.vllm.load.v1`** — Model load command (GPU orchestrator → vLLM worker)
 **`compute.vllm.status.v1`** — vLLM instance status (vLLM worker → GPU orchestrator)
+**`hf.model.discovered.v1`** — HuggingFace model discovery (hf-agent → hf-research-agent; live 2026-08-31, 2275+ models seen)
+**`hf.model.evaluated.v1`** — Discovery scored against benchmark criteria (hf-research-agent → model-registry G4 auto-register; threshold 110)
 **`hf.model.download.v1`** — HuggingFace model download (any agent → HF downloader)
 **`hf.model.ready.v1`** — Model download complete (HF downloader → requesting agent)
 **`botz.skill.register.v1`** — Skill registration (BoTZ gateway → Agent Zero)
 **`botz.skill.health.v1`** — Skill health status (BoTZ gateway → monitoring)
-**`a2ui.event.v1`** — UI event for real-time display (any agent → A2UI NATS bridge)
-**`a2ui.command.v1`** — User command from UI (UI → A2UI NATS bridge)
+**`a2ui.event.v1`** — ⛔ **NEVER IMPLEMENTED.** UI event for real-time display (any agent → A2UI NATS bridge)
+**`a2ui.command.v1`** — ⛔ **NEVER IMPLEMENTED.** User command from UI (UI → A2UI NATS bridge)
+
+> **These two have never existed in code — not now, not in any commit.** A history-wide
+> pickaxe search (`git log -S` across `*.py *.ts *.tsx *.js *.yml *.yaml *.json`) returns
+> nothing for either name. The catalog lists the A2UI NATS bridge as their endpoint;
+> `bridge.py` has never referenced them.
+>
+> Both entered on **2026-03-15** via `pmoves/docs/reviews/nats-subject-catalog-gaps.md`, a
+> security-audit handoff whose premise was that *"30+ NATS subjects were found
+> **undocumented**"* and whose action was to register them. For these two the premise did
+> not hold — they were intent written up as discovery, then registered as fact. Full
+> trace: `pmoves/docs/audit/A2UI_INTEGRATION_AUDIT_2026-08-14.md` § F5.
+>
+> The subjects the A2UI renderer **actually** publishes are `a2ui.render.completed.v1`,
+> `ingest.file.added.v1`, and `agent.graphiti.signed.v1`.
+
+## Archon Mint Subjects
+
+> The PMOVES agent-factory contract. Ritual: `.claude/commands/archon/{mint-agent,mint-skill,creator-onboard}.md`.
+> QA gate: `.claude/agents/archon-qa-agent.md` — `archon.qa.result.v1` **blocks** `archon.mint.confirmed.v1`.
+> Design review + landing plan: `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md`.
+>
+> **Status: contract registered, publishers not yet implemented.** Archon 0.6.0 (TS) carries no NATS
+> client; these subjects go live with the planned `archon-nats-bridge`. Registered here ahead of
+> implementation because `archon-qa-agent` check 3 rejects any manifest referencing an unregistered
+> subject — including the mint contract's own.
+
+**`archon.mint.agent.v1`** — Proposed agent mint spec (mint ritual → Archon factory)
+- **Direction:** Published by `/archon:mint-agent` → Consumed by Archon factory + `archon-qa-agent`
+- **Purpose:** Submit an `AgentMintSpec` for scaffolding. Full manifest schema (metadata + spec with
+  role, team_ref, node_affinity, model routing, capabilities, skills, nats, guardrails) in
+  `pmoves/docs/pilots/fordham-hill/05-room-agents-mint-specs.md`.
+- **Payload:**
+  ```json
+  {"agent_id": "<uuid>", "agent_name": "geometry-curator", "room_id": "4090-field.room.control", "owning_persona": "delivery-agent", "manifest_url": "https://archon.pmoves.ai/<id>", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.qa.result.v1`** — Blocking QA verdict (archon-qa-agent → Archon factory)
+- **Direction:** Published by `archon-qa-agent` → Consumed by Archon factory
+- **Purpose:** Gate between `mint.agent` and `mint.confirmed`. Seven checks: schema, NATS subject
+  registration + branded namespace, CHIT tier, name collision, branded defaults/no-SaaS, OAuth identity,
+  env tier. **Archon must never publish `mint.confirmed` without an explicit `pass`.**
+- **Payload (pass):**
+  ```json
+  {"status": "pass", "agent": "geometry-curator", "checks": ["schema", "nats", "chit", "collision", "branded", "auth", "tier"]}
+  ```
+- **Payload (fail):** `{"status": "fail", "agent": "<name>", "reasons": ["<reason with path:line>"]}`
+
+**`archon.mint.confirmed.v1`** — Mint confirmation (Archon → fleet)
+- **Direction:** Published by Archon factory → Consumed by registry consumers / monitoring
+- **Purpose:** Agent is live and registered. Emitted only after `archon.qa.result.v1` = pass.
+- **Payload:**
+  ```json
+  {"agent_id": "<uuid>", "confirmed_at": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.mint.skill.v1`** — Skill mint (mint ritual → Archon)
+- **Direction:** Published by `/archon:mint-skill` → Consumed by Archon factory
+- **Payload:**
+  ```json
+  {"skill_id": "<uuid|null>", "skill_name": "pmoves-chit-sign", "path": ".claude/skills/pmoves-chit-sign/SKILL.md", "user_invocable": true, "owning_persona": "delivery-agent", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.mint.creator.v1`** — Human creator onboarding (mint ritual → Archon)
+- **Direction:** Published by `/archon:creator-onboard` → Consumed by Archon factory
+- **Purpose:** Provision a human creator identity. `creator_id` is the Supabase `auth.users.id`; email is
+  carried as a SHA-256 hash, never in clear.
+- **Payload:**
+  ```json
+  {"creator_id": "<supabase auth.users.id>", "handle": "darkxside", "role": "operator", "email_hash": "<sha256>", "provider": "google", "default_room": "4090-field.room.control", "github_username": "<optional>", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+## Token Work Attestation Subjects
+
+> The input side of the economy: cryptographic proof that a contributor performed a unit of work.
+> Schema: `pmoves/contracts/schemas/token/work.attested.v1.schema.json`. Chain analysis:
+> `pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md` §6a.
+>
+> **Status: contract + recorder service + ledger migration all exist; NONE of it is deployed.**
+> `pmoves/services/token-stub/app.py` (dry-run recorder) is in no compose file, and
+> `pmoves/supabase/migrations/20260425000300_work_attestations.sql` has never been applied — the relation
+> `pmoves_core.work_attestations` does not exist on the live Supabase.
+
+**`token.work.attested.v1`** — Signed work attestation (contributor/agent → attestation recorder)
+
+- **Direction:** Published on completion of a unit of work → Consumed by `token-stub` (and, once wired, the
+  attribution stage)
+- **Purpose:** Establish *who did what*, verifiably, as the input to attribution and eventually settlement.
+- **Crypto note:** this contract specifies **Ed25519** (asymmetric, 128-hex signature) — deliberately
+  different from the live CHIT trail's **symmetric HMAC** with a single operator-held passphrase.
+  Asymmetric is the right model for attribution a contributor should be able to prove independently. The
+  divergence is unresolved and needs an explicit decision, not a silent merge.
+- **Identity note:** `contributor` is a UUID that lands in `work_attestations.contributor_id`, which the
+  migration's RLS policy binds to Supabase `auth.uid()`. **This is the only payable human anchor in the
+  repo** — the Archon mint contract's `creator_id`/`owning_persona` is a separate, unimplemented model.
+- **Payload:**
+  ```json
+  {
+    "work_id": "<uuid>",
+    "contributor": "<uuid — Supabase auth.users.id>",
+    "attestation_sig": "<128 hex chars, Ed25519>",
+    "merkle_root": "0x<64 hex>",
+    "attested_at": "2026-08-01T00:00:00Z",
+    "metadata": {}
+  }
+  ```
+
+## CHIT Economics Subjects
+
+> Cost/usage metering for the tokenomics layer. Design rationale and the full value-chain analysis:
+> `pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md` §2, §8.
+>
+> **Status: contract registered, publisher not yet implemented.** Registered ahead of code deliberately —
+> `archon-qa-agent` check 3 rejects manifests referencing unregistered subjects, and this is the subject an
+> economically-accountable agent will declare.
+
+**`chit.economics.usage.v1`** — Content-free LLM usage/cost record (any metered service → economics consumers)
+
+- **Direction:** Published per inference by the metering shim → Consumed by settlement / audit / dashboards
+- **Purpose:** Make agent cost measurable **without recording what was said.** This exists because
+  TensorZero's own observability is disabled by policy (`pmoves/tensorzero/config/tensorzero.toml:8-30`,
+  Cyber Defence Initiative 2026-04-25): enabling it auto-creates ClickHouse tables holding full prompt and
+  response text with no TTL, which violates Data Retention Policy T0 and creates a warrantable store of
+  user content. Tokenomics needs **counts, not content** — so this subject carries counts only and trips
+  none of the six documented re-enable conditions.
+
+- **HARD INVARIANT — this payload MUST NOT carry prompt text, response text, message content, tool
+  arguments, or any user-supplied string.** Only identifiers, counts, and money. A publisher that adds a
+  content field re-creates exactly the retention hazard the policy was written to prevent. Treat any such
+  field as a blocking review failure.
+  > ⚠️ **Currently prose-only — NOT yet machine-enforced.** The envelope path validates a payload only when
+  > the subject is registered in `pmoves/contracts/topics.json` with a schema. Until
+  > `pmoves/contracts/schemas/chit/economics.usage.v1.schema.json` exists with
+  > `"additionalProperties": false` and a matching `topics.json` entry, this invariant can be violated
+  > without any failure. **Land the schema before the first publisher.** (Blocked on an operator-set
+  > `KNOWN_ROAD=schema:...` — `pmoves/contracts/schemas/` is a damage-control read-only path.)
+
+- **Payload:**
+  ```json
+  {
+    "agent_name": "fordham-transaction",
+    "tensorzero_function": "pmoves_worker_glm",
+    "model_name": "glm-5.2",
+    "provider_name": "zai",
+    "node": "z890",
+    "prompt_tokens": 1840,
+    "completion_tokens": 412,
+    "estimated_cost_usd": 0.0031,
+    "ts": "2026-08-01T00:00:00Z"
+  }
+  ```
+
+- **Field notes:**
+  - `tensorzero_function` — the `[functions.X]` block the call routed through (29 exist; see
+    `tensorzero.toml:763-1734`). This is the **join key** that lets cost roll up per lane. It is
+    function-granular, not per-agent-instance: agents sharing a function are indistinguishable in the
+    rollup. True per-instance attribution needs TensorZero-side request tagging — a follow-up, not this
+    subject's job.
+  - `node` — which fleet node served the call. Present so node-operator hosting cost can eventually be
+    accounted; no compensation mechanism exists today.
+  - `estimated_cost_usd` — explicitly an *estimate*. Rates are not authoritative
+    (`llm_observability_specialist.py:154-161` currently hardcodes placeholder rates).
 
 ## CGP Version Naming Clarification
 
@@ -1858,3 +2114,148 @@ This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versionin
 - Runtime dependencies: `nats` CLI, `hbbs` / `hbbr` systemd journals, `/var/log/pmoves`, and a NATS broker reachable from KVM2
 - Auth split: `TAILSCALE_AUTHKEY` joins nodes; `TAILSCALE_API_KEY` is for admin API operations and is not used to publish watcher events
 - Reachability caveat: the repo-default NATS broker is localhost-only on port `4222`, so remote watcher publishes stay blocked until one broker is exposed on a Tailscale-reachable interface
+
+
+## Validation Subjects (MiSSinGLinC external peer review)
+
+> Namespace `validation.*` introduced by the MiSSinGLinC mint
+> (`pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md`, 2026-08-09). The branded
+> namespace table addition in `.claude/context/self-hosted-defaults.md` is
+> staged in the mint PR body — that file is damage-control protected, so the
+> table row lands via operator apply.
+
+**`validation.run.requested.v1`**
+- **Direction:** Published by rooms/agents requesting validation -> Consumed by missinglinc-validator
+- **Purpose:** Request an external peer-review validation run: `{claim_set, evidence_corpus_refs, validation_depth}`
+- **Status:** REGISTERED-AHEAD — publisher lands with the MiSSinGLinC service (mint spec Wave-0; no consumer live yet)
+
+**`validation.verdict.ready.v1`**
+- **Direction:** Published by missinglinc-validator -> Consumed by rooms, Makeda voice readout (persona.makeda.missinglinc), Hi-RAG ingest
+- **Purpose:** Structured validation verdict with per-claim evidence chains and CHIT CGP proof packet
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+**`validation.evidence.chain.v1`**
+- **Direction:** Published by missinglinc-validator -> Consumed by graph persistence (Neo4j lane), audit surfaces
+- **Purpose:** Claim -> evidence -> source graph (JSON-LD) for a completed validation run
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+**`validation.counter.evidence.v1`**
+- **Direction:** Published by missinglinc-validator (adversarial depth only) -> Consumed by rooms, alerting
+- **Purpose:** Counter-evidence report: contradictions found while red-teaming a claim set
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+## Mavis Harness v0 Subjects
+
+> Namespace `pmoves.agent.*` + `pmoves.bpm.*` introduced by the Mavis multi-agent
+> harness v0 (`pmoves/tools/orchestrator.py` + `pmoves/tools/bpm_cron.py`).
+> Locked in PR #2477; registered here in PR follow-up slice. The `pmoves-nats-mcp`
+> slice (z890 PR #2492 spec) is the consumer that will produce these messages
+> in production; the MockPublisher in `pmoves/tools/orchestrator.py` is the
+> test-surface that runs without a live NATS broker.
+
+**`pmoves.agent.task.v1`**
+- **Direction:** Published by `pmoves/tools/orchestrator.py::Orchestrator.dispatch` → Consumed by worker agents (Hermes, KiloClaw, Mavis-self)
+- **Purpose:** A multi-agent task envelope. The orchestrator publishes one task with a `task_id`; the worker replies on `pmoves.agent.result.v1` keyed by the same `task_id`.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task": "render cyber.png as the Pillar 4 encoding skin",
+    "agents": ["mavis", "kiloclaw"],
+    "context": { "identity": "critic", "tools_bridge": [...] }
+  }
+  ```
+- **Subscribers:** Agent Zero (for routing), worker agents, audit/observability sinks
+- **Status:** REGISTERED — orchestrator + bpm_cron use these subjects; consumer-fork wire-up (Hermes, KiloClaw) is the harness v0 consumer slice
+
+**`pmoves.agent.result.v1`**
+- **Direction:** Published by worker agents → Consumed by `pmoves/tools/orchestrator.py::Orchestrator` (correlates by `task_id`)
+- **Purpose:** The worker's reply to a task. Multiple workers may reply for the same `task_id`; the orchestrator merges per-phase.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "target": "kiloclaw",
+    "status": "success | error | pending | timeout",
+    "output": "rendered PNG at /tmp/.../cyber.png",
+    "elapsed_s": 12.4,
+    "error": ""
+  }
+  ```
+- **Subscribers:** Orchestrator, audit/observability, A2UI live trail
+- **Status:** REGISTERED — same as `pmoves.agent.task.v1`
+
+**`pmoves.bpm.phase.v1`**
+- **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron.advance` → Consumed by the orchestrator, A2UI, observability
+- **Purpose:** A BPM phase transition event. The 5 phases are `define → assign → execute → review → close`; each transition is a published event so the orchestrator can dispatch the next phase's work and A2UI can render the live trail.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task_name": "react-to-video-123",
+    "phase": "execute",
+    "previous_phase": "assign",
+    "agent": "mavis",
+    "timestamp": "2026-08-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Orchestrator, A2UI live trail, observability
+- **Status:** REGISTERED — bpm_cron publishes per-phase
+
+**`pmoves.kvm.focus.v1`**
+- **Direction:** Published by `pmoves/tools/orchestrator.py::Orchestrator.publish_kvm_focus` → Consumed by the external KVM controller (RustDesk + Tailscale)
+- **Purpose:** Ask the operator's KVM to switch focus to the node a dispatch just landed on. Emitted only when the target's routing `node` is a real remote machine — local targets (`self`, `host`) and placeholders (`TBD`, `none`, `n/a`, `-`, empty) are no-ops.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "target": "glm-5.1",
+    "target_node": "5090",
+    "issued_at": 1755700000.0
+  }
+  ```
+- **Note:** This began life as a `phase: kvm-focus` event on `pmoves.bpm.phase.v1`, reusing that subscriber. It was split out because that subject is contracted as the five lifecycle phases carrying `task_name`/`previous_phase`, so a focus request read as an invalid lifecycle transition to any A2UI or observability consumer. A discriminator field does not make an incompatible payload compatible.
+
+**`pmoves.bpm.pomodoro.v1`**
+- **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron` (focus-block boundaries) → Consumed by A2UI, observability, the operator's check-in dispatcher
+- **Purpose:** A pomodoro focus-block event: 25-min work + 5-min check-in (configurable via env). Each block boundary is a published event so the operator check-in surface knows when to interrupt.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task_name": "react-to-video-123",
+    "block_index": 1,
+    "event": "start | completed | skipped",
+    "work_minutes": 25,
+    "checkin_minutes": 5,
+    "timestamp": "2026-08-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** A2UI, observability, operator check-in surfaces
+- **Status:** REGISTERED — bpm_cron publishes per-block
+
+**`pmoves.branch_protection.drift.v1`**
+- **Direction:** Published by `pmoves/tools/branch_protection_publisher.py::publish_drift_report` → Consumed by the orchestrator (remediation dispatch), A2UI (live ruleset trail), observability
+- **Purpose:** A per-repo branch-protection drift report. One message per non-compliant repo (compliant repos are silent to avoid flooding the subject). The envelope wraps the `AuditResult.to_dict()` shape and adds a `source` + `published_at` for filtering.
+- **Payload:**
+  ```json
+  {
+    "envelope": "drift.v1",
+    "source": "pmoves.branch_protection",
+    "published_at": "2026-08-15T12:00:00Z",
+    "audit": {
+      "repo": "POWERFULMOVES/PMOVES.AI",
+      "profile": "monorepo",
+      "branch": "main",
+      "compliant": false,
+      "drift": [
+        { "field": "rulesets[[ main ]].rules[type=required_signatures]", "expected": "present", "actual": "missing", "severity": "block" }
+      ],
+      "checked_at": "2026-08-15T12:00:00Z",
+      "source_url": "https://github.com/POWERFULMOVES/PMOVES.AI/settings/branches"
+    }
+  }
+  ```
+- **Publisher cadence:** Daily 06:00 UTC (the `branch-protection-drift.yml` workflow schedule) + manual `workflow_dispatch`
+- **Subscribers:** Orchestrator (remediation session), A2UI live ruleset trail, observability
+- **Status:** REGISTERED — `branch_protection_publisher.py` publishes via the `FilePublisher` (JSONL stdout, the default sink) or `NatsPublisher` (when `pmoves-nats-mcp` is wired)

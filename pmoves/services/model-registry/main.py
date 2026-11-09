@@ -19,7 +19,6 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -30,7 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, Query
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 import uvicorn
@@ -73,7 +72,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://host.docker.internal:54321")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 PORT = int(os.environ.get("PORT", "8110"))
 MODEL_REGISTRY_API_KEY = os.environ.get("MODEL_REGISTRY_API_KEY", "")
 
@@ -369,9 +368,11 @@ supabase = SupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 class RegistryNatsClient:
     """NATS client for model registry — subscribes to GPU events, publishes catalog changes."""
 
-    # Subjects we subscribe to (from gpu-orchestrator)
+    # Subjects we subscribe to (from gpu-orchestrator + pipeline sources)
     SUB_MODEL_LOADED = "mesh.gpu.model.loaded.v1"
     SUB_MODEL_UNLOADED = "mesh.gpu.model.unloaded.v1"
+    SUB_HF_EVALUATED = "hf.model.evaluated.v1"          # G4: from hf-research-agent
+    SUB_AGENTGYM_PUBLISHED = "agentgym.model.published.v1"  # G5: from agentgym-rl-coordinator
 
     # Subject we publish on catalog mutations
     PUB_REGISTRY_UPDATED = "model.registry.updated.v1"
@@ -402,6 +403,14 @@ class RegistryNatsClient:
             await self._nc.subscribe(self.SUB_MODEL_LOADED, cb=self._on_model_loaded)
             await self._nc.subscribe(self.SUB_MODEL_UNLOADED, cb=self._on_model_unloaded)
             logger.info("Subscribed to mesh.gpu.model.{loaded,unloaded}.v1")
+
+            # G4: Subscribe to HF research evaluations (auto-register high-scoring candidates)
+            await self._nc.subscribe(self.SUB_HF_EVALUATED, cb=self._on_hf_evaluated)
+            logger.info("Subscribed to hf.model.evaluated.v1 (G4 pipeline link)")
+
+            # G5: Subscribe to AgentGym model publications (register RL-trained models)
+            await self._nc.subscribe(self.SUB_AGENTGYM_PUBLISHED, cb=self._on_agentgym_published)
+            logger.info("Subscribed to agentgym.model.published.v1 (G5 pipeline link)")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to NATS: {e}")
@@ -509,6 +518,95 @@ class RegistryNatsClient:
             logger.error(f"Malformed NATS message on {self.SUB_MODEL_UNLOADED}: {e}")
         except Exception as e:
             logger.error(f"Error handling model unloaded event: {e}", exc_info=True)
+
+    async def _on_hf_evaluated(self, msg) -> None:
+        """Handle hf.model.evaluated.v1 — G4: auto-register high-scoring candidates.
+
+        The hf-research-agent scores models by downloads/likes/tags.
+        If score exceeds threshold, register as a candidate.
+        """
+        try:
+            data = json.loads(msg.data.decode())
+            model_id = data.get("model_id") or data.get("id") or ""
+            score = float(data.get("score") or 0)
+
+            if not model_id or score < 50:
+                return
+
+            lane = data.get("lane", "chat")
+            logger.info(f"G4: registering candidate {model_id} (score={score})")
+
+            await self.supabase.create_model_candidate(ModelCandidateRecord(
+                hf_id=model_id,
+                model_id=model_id,
+                source="hf-autoresearch",
+                lane=lane,
+                intended_lane=lane,
+                pipeline_tag="text-generation",
+                validation_status="candidate",
+                metadata={
+                    "hf_score": score,
+                    "downloads": data.get("downloads"),
+                    "likes": data.get("likes"),
+                    "tags": data.get("tags"),
+                    "reasons": data.get("reasons"),
+                },
+            ))
+            await self.publish_catalog_change("create", "model_candidate", model_id)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed NATS message on {self.SUB_HF_EVALUATED}: {e}")
+        except Exception as e:
+            logger.error(f"Error handling hf.model.evaluated event: {e}", exc_info=True)
+
+    async def _on_agentgym_published(self, msg) -> None:
+        """Handle agentgym.model.published.v1 — G5: register RL-trained models.
+
+        The agentgym-rl-coordinator publishes models to HF Hub after RL training.
+        Register them as candidates and record initial training fitness.
+        """
+        try:
+            data = json.loads(msg.data.decode())
+            # Codex P1: AgentGym publishes model_id, dataset_id, repo_url
+            # (not hf_id or model_repo)
+            hf_id = data.get("hf_id") or data.get("repo_url") or ""
+            model_id = data.get("model_id") or ""
+            if not hf_id and model_id:
+                hf_id = model_id
+            if not hf_id:
+                return
+
+            logger.info(f"G5: registering RL-trained candidate {hf_id}")
+
+            await self.supabase.upsert_model_candidate(
+                hf_id=hf_id,
+                lane="agentgym",
+                source="evoswarm",
+                status="candidate",
+                metadata={
+                    "training_id": data.get("training_id") or data.get("run_id"),
+                    "mean_reward": data.get("mean_reward"),
+                    "mean_reward_normalized": data.get("mean_reward_normalized"),
+                    "episodes": data.get("episodes"),
+                    "training_metrics": data.get("training_metrics"),
+                },
+            )
+            await self.publish_catalog_change("create", "model_candidate", hf_id)
+
+            # Record initial fitness from training if present
+            if data.get("mean_reward_normalized"):
+                score = max(0.0, min(1.0, float(data["mean_reward_normalized"])))
+                await self.supabase.create_model_fitness_record({
+                    "model_id": hf_id,
+                    "source": "evoswarm",
+                    "lane": "agentgym",
+                    "score": score,
+                    "run_id": data.get("training_id") or data.get("run_id"),
+                })
+                logger.info(f"G5: initial fitness for {hf_id}: score={score:.3f}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed NATS message on {self.SUB_AGENTGYM_PUBLISHED}: {e}")
+        except Exception as e:
+            logger.error(f"Error handling agentgym.model.published event: {e}", exc_info=True)
 
 
 # Global NATS client
@@ -665,7 +763,7 @@ class TensorZeroConfigBuilder:
                 lines.extend([
                     f"[functions.{function_name}.variants.{variant}]",
                     f'type = "chat:{variant_key}"',
-                    f'weight = 1.0',
+                    'weight = 1.0',
                     ""
                 ])
 
@@ -936,7 +1034,7 @@ async def enrich_all_from_huggingface(
             results["enriched"].append({"id": model_id, "hf_id": hf_id, "dimensions": enrichment.get("dimensions")})
             logger.info(f"Enriched {model.get('name')} from HF ({hf_id})")
         except Exception as e:
-            results["failed"].append({"id": model_id, "hf_id": hf_id, "error": str(e)})
+            results["failed"].append({"id": model_id, "hf_id": hf_id, "error": type(e).__name__})
             logger.warning(f"Failed to enrich {model.get('name')}: {e}")
 
     if nats_client and results["enriched"]:

@@ -1,6 +1,11 @@
 // PMOVES Consciousness Mind Map - Neo4j Schema
 // Kuhn's Landscape of Consciousness (325 theories)
 // Generated: 2025-12-09
+//
+// cypher-shell runs this file statement by statement and does not carry variables
+// across ';'. Every statement therefore re-MATCHes what it links to by its unique
+// key, and only MERGEs, so a re-run is a no-op. tests/test_neo4j_cypher_static.py
+// parses every statement and fails on a variable bound only in an earlier one.
 
 // =============================================================================
 // CONSTRAINTS AND INDEXES
@@ -55,15 +60,19 @@ SET mat.id = "materialism",
     mat.description = "Theories holding that consciousness arises from or is identical to physical brain processes",
     mat.order = 1;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
 MERGE (root)-[:HAS_CATEGORY]->(mat);
 
 // 1.1 Philosophical Materialism
 MERGE (phil:ConsciousnessSubcategory {id: "materialism-philosophical"})
 SET phil.name = "Philosophical Materialism",
     phil.description = "Philosophical arguments for consciousness as purely physical";
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
+MATCH (phil:ConsciousnessSubcategory {id: "materialism-philosophical"})
 MERGE (mat)-[:HAS_SUBCATEGORY]->(phil);
 
-WITH phil
+MATCH (phil:ConsciousnessSubcategory {id: "materialism-philosophical"})
 UNWIND [
   {name: "Eliminative Materialism", proponents: ["Paul Churchland", "Patricia Churchland"], desc: "Folk psychology concepts will be eliminated by neuroscience"},
   {name: "Reductive Materialism", proponents: ["J.J.C. Smart", "U.T. Place"], desc: "Mental states are identical to brain states"},
@@ -90,9 +99,11 @@ MERGE (t)-[:PROPOSED_BY]->(p);
 MERGE (neuro:ConsciousnessSubcategory {id: "materialism-neurobiological"})
 SET neuro.name = "Neurobiological",
     neuro.description = "Consciousness explained through neural mechanisms";
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
+MATCH (neuro:ConsciousnessSubcategory {id: "materialism-neurobiological"})
 MERGE (mat)-[:HAS_SUBCATEGORY]->(neuro);
 
-WITH neuro
+MATCH (neuro:ConsciousnessSubcategory {id: "materialism-neurobiological"})
 UNWIND [
   {name: "Global Workspace Theory", proponents: ["Bernard Baars", "Stanislas Dehaene"], desc: "Consciousness as global information broadcast"},
   {name: "Global Neuronal Workspace", proponents: ["Stanislas Dehaene", "Jean-Pierre Changeux"], desc: "Cortical workspace for conscious access"},
@@ -126,9 +137,11 @@ MERGE (t)-[:PROPOSED_BY]->(p);
 MERGE (em:ConsciousnessSubcategory {id: "materialism-electromagnetic"})
 SET em.name = "Electromagnetic Field",
     em.description = "Consciousness as electromagnetic field phenomenon";
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
+MATCH (em:ConsciousnessSubcategory {id: "materialism-electromagnetic"})
 MERGE (mat)-[:HAS_SUBCATEGORY]->(em);
 
-WITH em
+MATCH (em:ConsciousnessSubcategory {id: "materialism-electromagnetic"})
 UNWIND [
   {name: "CEMI Field Theory", proponents: ["Johnjoe McFadden"], desc: "Consciousness is the brain's EM field"},
   {name: "EM Field Theory", proponents: ["Susan Pockett"], desc: "Experience identical to EM patterns"},
@@ -148,9 +161,11 @@ MERGE (t)-[:PROPOSED_BY]->(p);
 MERGE (comp:ConsciousnessSubcategory {id: "materialism-computational"})
 SET comp.name = "Computational Informational",
     comp.description = "Consciousness as information processing";
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
+MATCH (comp:ConsciousnessSubcategory {id: "materialism-computational"})
 MERGE (mat)-[:HAS_SUBCATEGORY]->(comp);
 
-WITH comp
+MATCH (comp:ConsciousnessSubcategory {id: "materialism-computational"})
 UNWIND [
   {name: "Computational Theory of Mind", proponents: ["Jerry Fodor", "Zenon Pylyshyn"], desc: "Mind as computational system"},
   {name: "Attention Schema Theory", proponents: ["Michael Graziano"], desc: "Brain models attention as consciousness"},
@@ -175,9 +190,11 @@ MERGE (t)-[:PROPOSED_BY]->(p);
 MERGE (home:ConsciousnessSubcategory {id: "materialism-homeostatic"})
 SET home.name = "Homeostatic Affective",
     home.description = "Consciousness rooted in bodily regulation and affect";
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
+MATCH (home:ConsciousnessSubcategory {id: "materialism-homeostatic"})
 MERGE (mat)-[:HAS_SUBCATEGORY]->(home);
 
-WITH home
+MATCH (home:ConsciousnessSubcategory {id: "materialism-homeostatic"})
 UNWIND [
   {name: "Somatic Marker Hypothesis", proponents: ["Antonio Damasio"], desc: "Emotions guide conscious decisions"},
   {name: "Affective Neuroscience", proponents: ["Jaak Panksepp"], desc: "Subcortical affective systems"},
@@ -199,9 +216,11 @@ MERGE (t)-[:PROPOSED_BY]->(p);
 MERGE (emb:ConsciousnessSubcategory {id: "materialism-embodied"})
 SET emb.name = "Embodied Enactive",
     emb.description = "Consciousness from embodied interaction";
+MATCH (mat:ConsciousnessCategory {name: "Materialism Theories"})
+MATCH (emb:ConsciousnessSubcategory {id: "materialism-embodied"})
 MERGE (mat)-[:HAS_SUBCATEGORY]->(emb);
 
-WITH emb
+MATCH (emb:ConsciousnessSubcategory {id: "materialism-embodied"})
 UNWIND [
   {name: "Enactivism", proponents: ["Francisco Varela", "Evan Thompson", "Eleanor Rosch"], desc: "Sensorimotor coupling with world"},
   {name: "Autopoiesis", proponents: ["Humberto Maturana", "Francisco Varela"], desc: "Self-creating living systems"},
@@ -231,9 +250,11 @@ SET nrp.id = "non-reductive-physicalism",
     nrp.description = "Mental properties are physical but not reducible to lower-level descriptions",
     nrp.order = 2;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (nrp:ConsciousnessCategory {name: "Non-Reductive Physicalism"})
 MERGE (root)-[:HAS_CATEGORY]->(nrp);
 
-WITH nrp
+MATCH (nrp:ConsciousnessCategory {name: "Non-Reductive Physicalism"})
 UNWIND [
   {name: "Nonreductive Physicalism", proponents: ["Donald Davidson"], desc: "Mental properties not reducible to physical"},
   {name: "Emergentism", proponents: ["C.D. Broad", "Samuel Alexander"], desc: "Consciousness as emergent property"},
@@ -260,9 +281,11 @@ SET qt.id = "quantum",
     qt.description = "Consciousness involves quantum mechanical processes",
     qt.order = 3;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (qt:ConsciousnessCategory {name: "Quantum Theories"})
 MERGE (root)-[:HAS_CATEGORY]->(qt);
 
-WITH qt
+MATCH (qt:ConsciousnessCategory {name: "Quantum Theories"})
 UNWIND [
   {name: "Orchestrated Objective Reduction", proponents: ["Roger Penrose", "Stuart Hameroff"], desc: "Quantum computations in microtubules"},
   {name: "Quantum Mind", proponents: ["Henry Stapp"], desc: "QM essential for consciousness"},
@@ -292,9 +315,11 @@ SET iit.id = "iit",
     iit.description = "Consciousness is integrated information (Phi)",
     iit.order = 4;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (iit:ConsciousnessCategory {name: "Integrated Information Theory"})
 MERGE (root)-[:HAS_CATEGORY]->(iit);
 
-WITH iit
+MATCH (iit:ConsciousnessCategory {name: "Integrated Information Theory"})
 UNWIND [
   {name: "IIT 3.0", proponents: ["Giulio Tononi", "Masafumi Oizumi"], desc: "Causal structure analysis"},
   {name: "IIT 4.0", proponents: ["Giulio Tononi"], desc: "Latest formulation with intrinsicality"},
@@ -321,9 +346,11 @@ SET pan.id = "panpsychism",
     pan.description = "Consciousness is fundamental feature of reality",
     pan.order = 5;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (pan:ConsciousnessCategory {name: "Panpsychisms"})
 MERGE (root)-[:HAS_CATEGORY]->(pan);
 
-WITH pan
+MATCH (pan:ConsciousnessCategory {name: "Panpsychisms"})
 UNWIND [
   {name: "Constitutive Panpsychism", proponents: ["Philip Goff"], desc: "Macro-consciousness from micro"},
   {name: "Cosmopsychism", proponents: ["Itay Shani", "Philip Goff"], desc: "Universe itself is conscious"},
@@ -354,9 +381,11 @@ SET mon.id = "monism",
     mon.description = "Reality is fundamentally one kind of substance",
     mon.order = 6;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (mon:ConsciousnessCategory {name: "Monisms"})
 MERGE (root)-[:HAS_CATEGORY]->(mon);
 
-WITH mon
+MATCH (mon:ConsciousnessCategory {name: "Monisms"})
 UNWIND [
   {name: "Neutral Monism", proponents: ["William James", "Bertrand Russell"], desc: "Reality neither mental nor physical"},
   {name: "Double-Aspect Monism", proponents: ["Baruch Spinoza"], desc: "Mind and matter two aspects"},
@@ -384,9 +413,11 @@ SET dual.id = "dualism",
     dual.description = "Mind and matter are fundamentally distinct",
     dual.order = 7;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (dual:ConsciousnessCategory {name: "Dualisms"})
 MERGE (root)-[:HAS_CATEGORY]->(dual);
 
-WITH dual
+MATCH (dual:ConsciousnessCategory {name: "Dualisms"})
 UNWIND [
   {name: "Substance Dualism", proponents: ["Rene Descartes", "Richard Swinburne"], desc: "Mind and body distinct substances"},
   {name: "Property Dualism", proponents: ["David Chalmers"], desc: "Mental properties non-physical"},
@@ -415,9 +446,11 @@ SET ideal.id = "idealism",
     ideal.description = "Reality is fundamentally mental",
     ideal.order = 8;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (ideal:ConsciousnessCategory {name: "Idealisms"})
 MERGE (root)-[:HAS_CATEGORY]->(ideal);
 
-WITH ideal
+MATCH (ideal:ConsciousnessCategory {name: "Idealisms"})
 UNWIND [
   {name: "Analytic Idealism", proponents: ["Bernardo Kastrup"], desc: "Reality is mental, matter appearance"},
   {name: "Conscious Realism", proponents: ["Donald Hoffman"], desc: "Consciousness fundamental, spacetime interface"},
@@ -446,9 +479,11 @@ SET anom.id = "anomalous",
     anom.description = "Studies informed by altered states and anomalous experiences",
     anom.order = 9;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (anom:ConsciousnessCategory {name: "Anomalous Altered States"})
 MERGE (root)-[:HAS_CATEGORY]->(anom);
 
-WITH anom
+MATCH (anom:ConsciousnessCategory {name: "Anomalous Altered States"})
 UNWIND [
   {name: "NDE Research", proponents: ["Pim van Lommel", "Sam Parnia"], desc: "Near-death experiences suggest non-local consciousness"},
   {name: "AWARE Study", proponents: ["Sam Parnia"], desc: "Awareness during resuscitation"},
@@ -480,9 +515,11 @@ SET chal.id = "challenge",
     chal.description = "Theories challenging standard assumptions",
     chal.order = 10;
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (chal:ConsciousnessCategory {name: "Challenge Theories"})
 MERGE (root)-[:HAS_CATEGORY]->(chal);
 
-WITH chal
+MATCH (chal:ConsciousnessCategory {name: "Challenge Theories"})
 UNWIND [
   {name: "Illusionism", proponents: ["Keith Frankish", "Daniel Dennett"], desc: "Consciousness as illusion"},
   {name: "Mysterianism", proponents: ["Colin McGinn"], desc: "Mind constitutionally limited"},
@@ -522,9 +559,17 @@ SET imp3.description = "Mind uploading and digital continuation";
 MERGE (imp4:Implication {name: "Survival Beyond Death"})
 SET imp4.description = "Whether consciousness survives bodily death";
 
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (imp1:Implication {name: "Meaning Purpose Value"})
 MERGE (root)-[:HAS_IMPLICATION]->(imp1);
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (imp2:Implication {name: "AI Consciousness"})
 MERGE (root)-[:HAS_IMPLICATION]->(imp2);
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (imp3:Implication {name: "Virtual Immortality"})
 MERGE (root)-[:HAS_IMPLICATION]->(imp3);
+MATCH (root:ConsciousnessRoot {name: "Landscape of Consciousness"})
+MATCH (imp4:Implication {name: "Survival Beyond Death"})
 MERGE (root)-[:HAS_IMPLICATION]->(imp4);
 
 // =============================================================================
@@ -550,6 +595,8 @@ MATCH (hp:ConsciousnessTheory {name: "The Hard Problem"})
 MATCH (pd:ConsciousnessTheory {name: "Property Dualism"})
 MATCH (pp:ConsciousnessTheory {name: "Panprotopsychism"})
 MERGE (hp)-[:MOTIVATES]->(pd);
+MATCH (hp:ConsciousnessTheory {name: "The Hard Problem"})
+MATCH (pp:ConsciousnessTheory {name: "Panprotopsychism"})
 MERGE (hp)-[:MOTIVATES]->(pp);
 
 // Dennett vs Chalmers

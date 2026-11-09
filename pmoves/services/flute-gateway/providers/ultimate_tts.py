@@ -94,6 +94,7 @@ class UltimateTTSProvider(VoiceProvider):
         Args:
             base_url: Gradio server URL (e.g., 'http://localhost:7860')
         """
+        self._schema_params = None  # lazy /gradio_api/info cache
         super().__init__(base_url)
         # Gradio 4.x+ uses event-based API at /gradio_api/call/.
         # The old /api/ synchronous predict endpoint is removed (404).
@@ -238,151 +239,142 @@ class UltimateTTSProvider(VoiceProvider):
             logger.warning("Failed to load %s model: %s", engine, exc)
             return False
 
+    async def _get_schema_params(self, client: "httpx.AsyncClient") -> list:
+        """Fetch the LIVE parameter schema for /generate_unified_tts.
+
+        Discovery over hardcoding: the positional layout has drifted twice
+        (121 -> "101" -> 121) and every drift null-crashed synthesis. The
+        studio publishes its own schema at /gradio_api/info — consume it.
+        Cached per provider instance; a studio restart with a changed schema
+        needs a flute recreate (or TTL, future). Raises loudly on failure:
+        guessing positions is exactly the bug class this replaces.
+        """
+        if self._schema_params is not None:
+            return self._schema_params
+        resp = await client.get(f"{self.base_url}/gradio_api/info", timeout=15.0)
+        resp.raise_for_status()
+        info = resp.json()
+        ep = (info.get("named_endpoints") or {}).get("/generate_unified_tts")
+        if not ep or not ep.get("parameters"):
+            raise UltimateTTSError(
+                "/generate_unified_tts not present in /gradio_api/info — "
+                "studio version incompatible or endpoint renamed"
+            )
+        self._schema_params = ep["parameters"]
+        logger.info(
+            "Ultimate-TTS schema discovered: %d params for generate_unified_tts",
+            len(self._schema_params),
+        )
+        return self._schema_params
+
+    # Per-engine opinionated overrides, resolved BY PARAMETER NAME against the
+    # live schema (never by position). Values may be callables taking `voice`.
+    ENGINE_NAME_OVERRIDES = {
+        "kokoro": {"kokoro_voice": (lambda v: v or "af_heart"), "kokoro_speed": 1.0},
+        "kitten_tts": {"kitten_voice": (lambda v: v or "expr-voice-2-f")},
+        # IndexTTS2 emotion vectors — 8 emotions [0,1].
+        # Caller passes emotion as voice="indextts2:{happy}:{angry}:{sad}:{afraid}:{disgusted}:{melancholic}:{surprised}:{calm}"
+        # or use presets: voice="happy", voice="angry", voice="excited", voice="calm"
+    }
+
+    # IndexTTS2 emotion presets — 8-vector [happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]
+    INDEXTTS2_EMOTION_PRESETS = {
+        "neutral":  [0, 0, 0, 0, 0, 0, 0, 1.0],
+        "happy":    [0.8, 0, 0, 0, 0, 0, 0.3, 0.5],
+        "excited":  [1.0, 0, 0, 0, 0, 0, 0.6, 0.3],
+        "angry":    [0, 1.0, 0, 0, 0, 0, 0, 0],
+        "sad":      [0, 0, 1.0, 0, 0, 0, 0, 0],
+        "afraid":   [0, 0, 0, 1.0, 0, 0, 0, 0],
+        "disgusted":[0, 0, 0, 0, 1.0, 0, 0, 0],
+        "melancholic":[0, 0, 0.3, 0, 0, 1.0, 0, 0.3],
+        "surprised":[0.3, 0, 0, 0, 0, 0, 1.0, 0.3],
+        "calm":     [0, 0, 0, 0, 0, 0, 0, 1.0],
+    }
+
     def _build_params(
         self,
+        schema_params: list,
         text: str,
         engine: str,
-        voice: Optional[str] = None
+        voice: Optional[str] = None,
     ) -> list:
-        """Build the full 121-parameter list for generate_unified_tts.
+        """Build the generate_unified_tts arg list FROM THE LIVE SCHEMA.
 
-        Parameter positions are derived from the Gradio API info endpoint.
+        Every slot takes the studio's own parameter_default; we override only
+        by name: the three core params plus the selected engine's named
+        opinions (ENGINE_NAME_OVERRIDES). Unknown-to-us engines run entirely
+        on studio defaults — the engine author's defaults beat our guesses.
+        Positional drift (121 vs "101") can no longer break the call; a
+        RENAMED core param fails loudly below instead of null-crashing.
         """
         api_engine = self.ENGINE_NAMES.get(engine, engine)
+        if engine == "vibevoice":
+            raise UltimateTTSError(
+                "vibevoice is not supported via the unified /generate_unified_tts "
+                "endpoint. Use the dedicated VibeVoice panel "
+                "(handle_vibevoice_generation) via gradio_client, or pick a "
+                "different engine."
+            )
+        if engine not in self.ENGINE_NAMES:
+            raise UltimateTTSError(
+                f"Unknown engine '{engine}'. Supported: {list(self.ENGINE_NAMES)}."
+            )
 
-        # Total 121 parameters (Gradio 4.x API)
-        data: list = [None] * 121
+        data = []
+        for p in schema_params:
+            val = p.get("parameter_default")
+            if val is None and p.get("python_type", {}).get("type") == "str":
+                val = ""
+            data.append(val)
+        name_to_idx = {
+            p.get("parameter_name"): i for i, p in enumerate(schema_params)
+        }
 
-        # [0-2] Core params
-        data[0] = text          # text_input
-        data[1] = api_engine    # tts_engine
-        data[2] = "wav"         # audio_format
+        def set_by_name(name: str, value, required: bool = False) -> None:
+            idx = name_to_idx.get(name)
+            if idx is None:
+                if required:
+                    raise UltimateTTSError(
+                        f"Core param '{name}' missing from live schema — "
+                        f"studio API changed shape; refusing to guess"
+                    )
+                logger.warning(
+                    "Ultimate-TTS schema drift: param '%s' not in live schema; "
+                    "using studio default", name,
+                )
+                return
+            data[idx] = value
 
-        # [3-8] Chatterbox
-        data[4] = 0.5    # exaggeration
-        data[5] = 0.8    # temperature
-        data[6] = 0.5    # cfg_weight
-        data[7] = 300    # chunk_size
-        data[8] = 0      # seed
+        set_by_name("text_input", text, required=True)
+        set_by_name("tts_engine", api_engine, required=True)
+        set_by_name("audio_format", "wav")
 
-        # [9-18] Chatterbox MTL
-        data[10] = "en"
-        data[11] = 0.5
-        data[12] = 0.8
-        data[13] = 0.5
-        data[14] = 2.0
-        data[15] = 0.05
-        data[16] = 1.0
-        data[17] = 300
-        data[18] = 0
+        for name, value in self.ENGINE_NAME_OVERRIDES.get(engine, {}).items():
+            set_by_name(name, value(voice) if callable(value) else value)
 
-        # [19-27] Chatterbox Turbo
-        data[20] = 0.5   # turbo_exaggeration
-        data[21] = 0.8   # turbo_temperature
-        data[22] = 0.5   # turbo_cfg_weight
-        data[23] = 1.2   # turbo_repetition_penalty
-        data[24] = 0.05  # turbo_min_p
-        data[25] = 0.95  # turbo_top_p
-        data[26] = 300   # turbo_chunk_size
-        data[27] = 0     # turbo_seed
-
-        # [28-29] Kokoro
-        data[28] = voice if engine == "kokoro" else "af_heart"
-        data[29] = 1.0   # speed
-
-        # [30-36] Fish Speech S1
-        data[31] = ""     # ref_text
-        data[32] = 0.8   # temperature
-        data[33] = 0.8   # top_p
-        data[34] = 1.1   # repetition_penalty
-        data[35] = 1024  # max_tokens
-        data[36] = 0     # seed
-
-        # [37-43] Fish Speech S2 Pro
-        data[38] = ""     # ref_text
-        data[39] = 0.8   # temperature
-        data[40] = 0.8   # top_p
-        data[41] = 1.1   # repetition_penalty
-        data[42] = 2048  # max_tokens
-        data[43] = 0     # seed
-
-        # [44-46] IndexTTS
-        data[45] = 0.8   # temperature
-        data[46] = 0     # seed
-
-        # [47-66] IndexTTS2
-        data[48] = "audio_reference"  # emotion_mode
-        data[50] = ""     # emotion_description (REQUIRED)
-        data[51] = 1.0   # emo_alpha
-        data[59] = 1.0   # calm
-        data[60] = 0.8   # temperature
-        data[61] = 0.9   # top_p
-        data[62] = 50    # top_k
-        data[63] = 1.1   # repetition_penalty
-        data[64] = 1500  # max_mel_tokens
-        data[65] = 0     # seed
-        data[66] = False  # use_random
-
-        # [67-72] F5-TTS
-        data[68] = ""     # ref_text
-        data[69] = 1.0   # speed
-        data[70] = 0.15  # cross_fade
-        data[71] = False  # remove_silence
-        data[72] = 0     # seed
-
-        # [73-82] Higgs Audio
-        data[74] = ""     # ref_text
-        data[75] = "EMPTY"  # voice_preset
-        data[76] = ""     # system_prompt (REQUIRED)
-        data[77] = 1.0   # temperature
-        data[78] = 0.95  # top_p
-        data[79] = 50    # top_k
-        data[80] = 1024  # max_tokens
-        data[81] = 7     # ras_win_len
-        data[82] = 2     # ras_win_max_num_repeat
-
-        # [83] KittenTTS voice
-        data[83] = voice if engine == "kitten_tts" else "expr-voice-2-f"
-
-        # [84-93] VoxCPM
-        data[85] = ""     # ref_text
-        data[86] = 2.0   # cfg_value
-        data[87] = 10    # inference_timesteps
-        data[88] = True   # normalize
-        data[89] = True   # denoise
-        data[90] = True   # retry_badcase
-        data[91] = 3     # retry_badcase_max_times
-        data[92] = 6.0   # retry_badcase_ratio_threshold
-        data[93] = -1    # seed
-
-        # [94-106] Qwen TTS
-        data[94] = "voice_design"  # mode
-        data[95] = "A warm, clear, professional English-speaking voice"  # voice_description (REQUIRED)
-        data[97] = ""     # ref_text (REQUIRED)
-        data[99] = "1.7B"  # clone_model_size
-        data[100] = 200   # chunk_size
-        data[101] = 10    # chunk_gap
-        data[102] = "Ryan"  # speaker
-        data[103] = "1.7B"  # custom_model_size
-        data[104] = ""     # style_instruct (REQUIRED)
-        data[105] = "Auto"  # language
-        data[106] = 0     # seed
-
-        # [107-120] Audio effects
-        data[107] = 0      # gain_db
-        data[108] = False  # enable_eq
-        data[109] = 0      # eq_bass
-        data[110] = 0      # eq_mid
-        data[111] = 0      # eq_treble
-        data[112] = False  # enable_reverb
-        data[113] = 0.3   # reverb_room
-        data[114] = 0.5   # reverb_damping
-        data[115] = 0.3   # reverb_wet
-        data[116] = False  # enable_echo
-        data[117] = 0.3   # echo_delay
-        data[118] = 0.5   # echo_decay
-        data[119] = False  # enable_pitch
-        data[120] = 0     # pitch_semitones
+        # IndexTTS2 emotion vector support
+        if engine == "indextts2" and voice:
+            preset = self.INDEXTTS2_EMOTION_PRESETS.get(voice)
+            if preset:
+                emotion_names = ["indextts2_happy", "indextts2_angry", "indextts2_sad",
+                                 "indextts2_afraid", "indextts2_disgusted", "indextts2_melancholic",
+                                 "indextts2_surprised", "indextts2_calm"]
+                for ename, eval in zip(emotion_names, preset):
+                    set_by_name(ename, eval)
+                set_by_name("indextts2_emotion_mode", "vector_control")
+            elif voice.startswith("indextts2:"):
+                # Custom 8-vector: "indextts2:0.8:0:0:0:0:0:0.3:0.5"
+                parts = voice.split(":")
+                if len(parts) == 9:
+                    emotion_names = ["indextts2_happy", "indextts2_angry", "indextts2_sad",
+                                     "indextts2_afraid", "indextts2_disgusted", "indextts2_melancholic",
+                                     "indextts2_surprised", "indextts2_calm"]
+                    for ename, eval in zip(emotion_names, parts[1:]):
+                        try:
+                            set_by_name(ename, float(eval))
+                        except ValueError:
+                            pass
+                    set_by_name("indextts2_emotion_mode", "vector_control")
 
         return data
 
@@ -411,8 +403,10 @@ class UltimateTTSProvider(VoiceProvider):
             # Ensure model is loaded
             await self._load_model(client, engine)
 
-            # Build full parameter list
-            data = self._build_params(text, engine, voice)
+            # Build full parameter list from the LIVE schema (discovery
+            # over hardcoding — see _get_schema_params).
+            schema_params = await self._get_schema_params(client)
+            data = self._build_params(schema_params, text, engine, voice)
 
             try:
                 # Use Gradio's event-based API (/gradio_api/call/).

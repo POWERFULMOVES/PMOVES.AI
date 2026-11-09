@@ -6,7 +6,7 @@
 
 ## Overview
 
-The CHIT Gateway is the HTTP interface for the Cymatic-Holographic Information Transfer (CHIT) system within PMOVES.AI. It provides endpoints to:
+The CHIT Gateway is the HTTP interface for the Cymatic Holographic Information Theory (CHIT) system within PMOVES.AI. It provides endpoints to:
 
 - **Publish** CGP (Constellation Geometry Packet) events into the ShapeStore and Supabase
 - **Decode** constellation spectra against a codebook to recover text

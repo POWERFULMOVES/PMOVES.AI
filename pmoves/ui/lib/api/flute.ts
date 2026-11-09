@@ -20,7 +20,9 @@ const FLUTE_SERVICE_CONFIG = {
   slug: 'flute-gateway',
   defaultPort: 8055,
   envVar: 'NEXT_PUBLIC_FLUTE_GATEWAY_URL',
-  wsPort: 8056,
+  // WebSocket is served by the SAME uvicorn process on 8055. Port 8056 is
+  // EXPOSEd in the Dockerfile and published by compose, but nothing binds it.
+  wsPort: 8055,
   wsEnvVar: 'NEXT_PUBLIC_FLUTE_WS_URL',
 } as const;
 
@@ -49,7 +51,12 @@ function getFluteWsUrl(): string {
 
   // Derive WS URL from HTTP URL
   const httpUrl = getFluteUrl();
-  return httpUrl.replace(/^http/, 'ws').replace(':8055', ':8056');
+  // Protocol swap ONLY -- never the port. This used to rewrite
+  // ':8055' -> ':8056', converting a correct URL into a dead one:
+  // flute-gateway runs a single uvicorn on 8055 (Dockerfile CMD) and both
+  // @app.websocket routes (/v1/voice/stream/tts, /v1/voice/agent) are on
+  // that same app. Nothing has ever listened on 8056.
+  return httpUrl.replace(/^http/, 'ws');
 }
 
 /**

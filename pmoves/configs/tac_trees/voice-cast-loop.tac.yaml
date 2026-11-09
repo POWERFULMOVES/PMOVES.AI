@@ -1,0 +1,194 @@
+# TAC Tree: Voice-Cast CHIT-Sign Loop (go-time)
+# Audits the merged go-time voice work that had ZERO TAC coverage:
+#   - PR #2063  voice-cast-up/down/smoke Known Roads + the CHIT-sign->voice subscriber
+#   - PR #2059  vibevoice-realtime dockerization (entrypoint + patch + GHCR image)
+#   - PR #2060  flute-gateway services.common import fix (health covered in voice-agents)
+#   - omnivoice provider (live :8002) — the default expressive engine
+#
+# The loop: an agent's normal sign_trail (CHIT_SIGN_PUBLISH=1) publishes
+# agent.graphiti.signed.v1 -> voice_cast_on_sign subscriber -> flute-gateway
+# -> expressive WAV, with NO speak tool call. Self-heals to the kokoro CPU floor
+# when the expressive tier is down.
+
+name: "Voice-Cast CHIT-Sign Loop"
+version: "1.0.0"
+description: "Verify the CHIT-sign -> expressive voice loop (voice-cast Known Roads, subscriber wiring, vibevoice-realtime image, omnivoice provider) merged for go-time"
+
+root:
+  id: voice-cast-loop
+  task: "CHIT-sign -> expressive voice loop readiness"
+  context: "pmoves/tools/voice_cast_on_sign.py + pmoves/mk/voice.mk + pmoves/services/vibevoice-realtime + omnivoice"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: The CHIT-sign -> voice subscriber + Known Roads (PR #2063)
+    # =========================================================================
+    - id: vcl.loop
+      task: "voice-cast subscriber + Known Roads"
+      context: "The 'nothing outside make' path for the Phase 0 loop"
+      agent_hint: codex
+      children:
+        - id: vcl.loop.subscriber
+          task: "voice_cast_on_sign.py subscriber exists"
+          action:
+            type: file_exists
+            target: "pmoves/tools/voice_cast_on_sign.py"
+            expect: "Phase 0 subscriber: NATS agent.graphiti.signed.v1 -> flute-gateway synth"
+          context: "No speak tool call anywhere in the pipeline"
+          agent_hint: codex
+
+        - id: vcl.loop.persona-bridge
+          task: "voice_persona_bridge.py maps alter -> intent/persona"
+          action:
+            type: file_exists
+            target: "pmoves/tools/voice_persona_bridge.py"
+            expect: "FlOO$ suit mapping (mr-clean -> dramatic, etc.)"
+          context: "resolve(payload) never raises"
+          agent_hint: codex
+
+        - id: vcl.loop.subject
+          task: "Subscriber listens on agent.graphiti.signed.v1"
+          action:
+            type: grep
+            target: "pmoves/tools/voice_cast_on_sign.py"
+            pattern: 'agent\.graphiti\.signed\.v1'
+            expect: "Raw signature.v1 subject, NOT the multi-consumer chit.signed.v1"
+          context: "glyph+agent_id discriminator gates non-signature envelopes"
+          agent_hint: codex
+
+        - id: vcl.loop.flute-wiring
+          task: "Subscriber POSTs to Flute-Gateway synth"
+          action:
+            type: grep
+            target: "pmoves/tools/voice_cast_on_sign.py"
+            pattern: 'FLUTE_GATEWAY_URL'
+            expect: "Expressive path: POST /v1/voice/synthesize/audio with X-API-Key"
+          context: "Default http://localhost:8055"
+          agent_hint: codex
+
+        - id: vcl.loop.selfheal
+          task: "Self-heals to standalone kokoro CPU floor"
+          action:
+            type: grep
+            target: "pmoves/tools/voice_cast_on_sign.py"
+            pattern: '_synthesize_kokoro_fallback'
+            expect: "Genuinely independent CPU floor when the expressive tier is down (PR #2048 finding #4)"
+          context: "Not a route back through the same flute/ultimate_tts that just failed"
+          agent_hint: codex
+
+        - id: vcl.loop.known-road-up
+          task: "voice-cast-up Known Road defined"
+          action:
+            type: grep
+            target: "pmoves/mk/voice.mk"
+            pattern: 'voice-cast-up:'
+            expect: "make voice-cast-up starts the subscriber (host, deps ensured)"
+          context: "No ad-hoc script invocation — Known Road only"
+          agent_hint: codex
+
+        - id: vcl.loop.known-road-smoke
+          task: "voice-cast-smoke Known Road defined"
+          action:
+            type: grep
+            target: "pmoves/mk/voice.mk"
+            pattern: 'voice-cast-smoke:'
+            expect: "make voice-cast-smoke fires a CHIT sign and confirms a cast WAV"
+          context: "End-to-end loop proof via make"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: vibevoice-realtime dockerization (PR #2059)
+    # =========================================================================
+    - id: vcl.vibevoice
+      task: "vibevoice-realtime image builds (dropped-file restore)"
+      context: "entrypoint.sh + patch were dropped from main; restored + GHCR image convention"
+      agent_hint: codex
+      children:
+        - id: vcl.vibevoice.entrypoint
+          task: "entrypoint.sh present (was dropped from main)"
+          action:
+            type: file_exists
+            target: "pmoves/services/vibevoice-realtime/entrypoint.sh"
+            expect: "CUDA-probe -> CPU fallback -> HF snapshot -> demo server"
+          context: "Dockerfile COPYs it; absence broke the up-voice build"
+          agent_hint: codex
+
+        - id: vcl.vibevoice.patch
+          task: "limit_max_new_tokens.patch present"
+          action:
+            type: file_exists
+            target: "pmoves/services/vibevoice-realtime/patches/limit_max_new_tokens.patch"
+            expect: "Honors VIBEVOICE_MAX_NEW_TOKENS so short prompts don't run unbounded"
+          context: "Applied at build time against upstream microsoft/VibeVoice"
+          agent_hint: codex
+
+        - id: vcl.vibevoice.image-convention
+          task: "vibevoice uses GHCR pmoves-latest image (fleet fan-out)"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.voice.yml"
+            pattern: 'ghcr\.io/powerfulmoves/pmoves-vibevoice-realtime'
+            expect: "Env-overridable GHCR tag (not a local :dev tag) so it fans out across nodes"
+          context: "Matches every other voice service's image convention"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: omnivoice provider (live :8002, default expressive engine)
+    # =========================================================================
+    - id: vcl.omnivoice
+      task: "omnivoice provider Known Road + wiring"
+      context: "k2-fsa/OmniVoice Apache-2.0; the up expressive provider (creator-operator :8002)"
+      agent_hint: codex
+      children:
+        - id: vcl.omnivoice.known-road
+          task: "omnivoice-smoke Known Road defined"
+          action:
+            type: grep
+            target: "pmoves/mk/voice.mk"
+            pattern: 'omnivoice-smoke:'
+            expect: "make omnivoice-smoke builds+runs+synthesizes a sample WAV"
+          context: "Reuses omnivoice-build/omnivoice-up from the main Makefile"
+          agent_hint: codex
+
+        - id: vcl.omnivoice.compose
+          task: "omnivoice wired in the media overlay"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.media.yml"
+            pattern: 'omnivoice'
+            expect: "Flute-Gateway DEFAULT_VOICE_PROVIDER=omnivoice provider path"
+          context: "Compose-split: media overlay, not the base docker-compose.yml"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Live loop (runtime — needs the stack up, verify by hand/CI node)
+    # =========================================================================
+    - id: vcl.live
+      task: "Live CHIT-sign -> voice loop (runtime)"
+      context: "Requires: make up-voice (nats-1 + flute-gateway) + make voice-cast-up"
+      agent_hint: codex
+      children:
+        - id: vcl.live.flute-health
+          task: "Flute-Gateway healthy + nats connected + an expressive provider up"
+          action:
+            type: manual
+            expect: "GET :8055/healthz -> status healthy, nats connected, omnivoice|ultimate_tts true"
+          context: "Verified live 2026-07-11 on 4090"
+          agent_hint: codex
+
+        - id: vcl.live.loop-smoke
+          task: "make voice-cast-smoke casts a WAV"
+          action:
+            type: manual
+            expect: "sign_trail publishes agent.graphiti.signed.v1 -> pmoves/out/voice_cast_*.wav (RIFF/WAVE), no speak tool call"
+          context: "Expressive tier via ultimate_tts; self-heals to kokoro floor if that engine is down"
+          agent_hint: codex
+
+    # =========================================================================
+    # Cross-References
+    # =========================================================================
+    # - voice-agents.tac.yaml: Phase 1 (TTS Studio native), Phase 3 (Flute integration)
+    # - pinokio-p7.tac.yaml: Ultimate-TTS-Studio discovery (expressive dramatic tier host)
+    # - Known Roads: voice-cast-up/down/smoke, omnivoice-smoke, kokoro-smoke (pmoves/mk/voice.mk)
+    # - Deployment doctrine: pmoves/docs/voice/VOICE_FABRIC_DEPLOYMENT.md (per-node runtime x host_affinity routing)

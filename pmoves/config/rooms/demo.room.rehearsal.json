@@ -1,0 +1,222 @@
+{
+  "room_id": "demo.room.rehearsal",
+  "version": "1.0.0",
+  "stage": "rehearsal",
+  "display_name": "PMOVES Demo Room",
+  "description": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal.",
+  "agent_id": "4090-claude",
+  "alter": "4090-demo",
+  "room_type": "builder",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "public"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "demo-stage",
+      "accent_color": "#7C3AED",
+      "skin": "gradient-pulse",
+      "icon": "sparkles"
+    },
+    "layout": {
+      "default_route": "/dashboard/demo",
+      "panels": [
+        {
+          "panel_id": "agent-zero-main",
+          "kind": "custom",
+          "position": "left",
+          "size": 40,
+          "pinned": true
+        },
+        {
+          "panel_id": "claude-code-panel",
+          "kind": "custom",
+          "position": "right",
+          "size": 40,
+          "pinned": true
+        },
+        {
+          "panel_id": "hermes-assist",
+          "kind": "chat",
+          "position": "bottom",
+          "size": 20,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "agent-zero-webui",
+      "kind": "browser",
+      "route": "/demo/agent-zero",
+      "provider": "agent-zero-local",
+      "action_namespace": "agent_zero",
+      "capabilities": [
+        "tasks",
+        "chat",
+        "tool-use",
+        "memory"
+      ],
+      "pinned": true
+    },
+    {
+      "app_id": "claude-code-session",
+      "kind": "custom",
+      "route": "/demo/claude-code",
+      "provider": "claude-code",
+      "action_namespace": "claude_code",
+      "capabilities": [
+        "edit",
+        "bash",
+        "read",
+        "skills"
+      ],
+      "pinned": true
+    },
+    {
+      "app_id": "hermes-assist",
+      "kind": "chat",
+      "route": "/demo/hermes",
+      "provider": "ollama",
+      "action_namespace": "hermes",
+      "capabilities": [
+        "reasoning",
+        "instruction",
+        "code-review"
+      ],
+      "pinned": false
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "demo-session",
+    "thread_ref": "demo-log",
+    "default_page": "demo-status",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": [
+        "entries"
+      ],
+      "artifact_prefix": "rooms/demo"
+    }
+  },
+  "persona": {
+    "signature_ref": "4090-claude",
+    "voice": "energetic",
+    "glyph": "\u2726",
+    "resonance": [
+      "demo-ready",
+      "agent-relay",
+      "hermes-assist",
+      "show-mode"
+    ]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "demo-launch",
+      "skill_id": "demo-room",
+      "room_id": "demo.room.rehearsal",
+      "display_name": "Launch Demo Room",
+      "intent": [
+        "demo",
+        "launch",
+        "showcase"
+      ],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": [
+          "launch demo",
+          "start demo room",
+          "show demo"
+        ],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "claude-code-session",
+        "target": "toolbar",
+        "route": "/demo/claude-code"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 5
+      },
+      "context": {
+        "sources": [
+          "room-state",
+          "persona"
+        ],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": [
+          "text"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 120,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": [
+        "demo",
+        "launch"
+      ]
+    }
+  ],
+  "team_refs": [
+    "orchestration",
+    "demo"
+  ],
+  "service_refs": [
+    "agent-zero",
+    "ollama",
+    "nats",
+    "cipher-memory"
+  ],
+  "launcher_refs": [
+    "demo"
+  ],
+  "policies": {
+    "model_routing": "native",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "p7.nats.launch",
+        "p7.nats.session",
+        "room.session.updated.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": false,
+      "notebook_writeback": true,
+      "chit_handoff": false
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Demo Room",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-05-18T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "PMOVES-pinokio/api/pmoves-pbnj/demo.js",
+      ".claude/skills/demo-room/SKILL.md",
+      "pmoves/config/rooms/demo.room.extras.json"
+    ]
+  }
+}

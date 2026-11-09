@@ -79,6 +79,12 @@ COPY omnivoice_server.py ./omnivoice_server.py
 # ~several-GB k2-fsa/OmniVoice download persists across restarts.
 RUN mkdir -p /cache/huggingface
 
+# Non-root runtime user (village-gate policy — the intent of the #2285 change
+# that accidentally truncated this file to 4 lines; restored + done properly:
+# useradd BEFORE USER, with cache ownership so the HF download can write).
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true &&     chown -R pmoves:pmoves /cache /app
+USER pmoves
+
 EXPOSE 8002
 
 # Bind 0.0.0.0 so the service is reachable in-compose / over the tailnet. The

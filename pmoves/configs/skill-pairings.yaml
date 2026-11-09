@@ -38,7 +38,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["hf-benchmark"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.step.a2ui-chart.done.v1"
           on_error: "skills.error.v1"
@@ -86,7 +86,7 @@ pairings:
         depends:
           services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
           skills: ["chit-encode"]
-          health: "http://localhost:8086/healthz"
+          health: "http://localhost:8086/"  # Hi-RAG v2 health is / ({"ok":true}); /healthz 404s
         hooks:
           on_complete: "skills.pipeline.ingest-chit-index.done.v1"
           on_error: "skills.error.v1"
@@ -113,7 +113,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["deepresearch"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.step.a2ui-chart.done.v1"
           on_error: "skills.error.v1"
@@ -214,7 +214,7 @@ pairings:
         agent: archon
         depends:
           services: ["nats:4222"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.step.theme-lookup.done.v1"
           on_error: "skills.error.v1"
@@ -235,7 +235,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["comfyui-generate"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.pipeline.agent-card-gen.done.v1"
           on_error: "skills.error.v1"
@@ -281,7 +281,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["pr-learnings-encode"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "agent.graphiti.signed.v1"
           on_error: "ops.pr.monitor.failed.v1"
@@ -388,7 +388,7 @@ pairings:
         depends:
           services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
           skills: ["consciousness-chr"]
-          health: "http://localhost:8086/healthz"
+          health: "http://localhost:8086/"  # Hi-RAG v2 health is / ({"ok":true}); /healthz 404s
         hooks:
           on_complete: "skills.step.hirag-index.done.v1"
           on_error: "skills.error.v1"
@@ -420,8 +420,13 @@ pairings:
 handoff:
   # How agents pass work between each other
   protocol: "mcp"
-  # Agent Zero MCP endpoint for orchestration
-  mcp_endpoint: "http://localhost:8080/mcp/command"
+  # Agent Zero MCP endpoint for orchestration.
+  # /mcp/execute, not /mcp/command: the supervisor on 8080 serves POST /mcp/execute
+  # and GET /mcp/commands. /mcp/command (singular) was never implemented -- it is
+  # documented only in .claude/context/mcp-api.md, which is marked SUPERSEDED for
+  # exactly that reason. floos_resolver already POSTs {cmd, arguments}, which is
+  # /mcp/execute's contract, so only the path was wrong.
+  mcp_endpoint: "http://localhost:8080/mcp/execute"
   # NATS for async handoffs
   nats_url: "nats://nats:pmoves@nats:4222"
   # Timeout for each skill step (seconds)
@@ -451,6 +456,21 @@ skill_sources:
   n8n-finance-sync: "pmoves/integrations/firefly-iii/n8n/flows/"
   health-weekly-cgp: "pmoves/integrations/health-wger/n8n/flows/health_weekly_to_cgp.json"
   finance-monthly-cgp: "pmoves/integrations/firefly-iii/n8n/flows/finance_monthly_to_cgp.json"
+
+  # Fleet CLI wrappers + host CLIs (canonical inventory: pmoves/configs/cli_tools.yaml)
+  cli-tools-manifest: "pmoves/configs/cli_tools.yaml"
+  cli-wrapper-pmoves-mini: "pmoves/scripts/pmoves-mini"
+  cli-wrapper-claude-pmoves: "pmoves/scripts/claude-pmoves.sh"
+  cli-wrapper-codex-pmoves: "pmoves/scripts/codex-pmoves.sh"
+  cli-wrapper-kilo-pmoves: "pmoves/scripts/kilo-pmoves.sh"
+  cli-wrapper-kimi-pmoves: "pmoves/scripts/kimi-pmoves.sh"
+  cli-wrapper-crush-pmoves: "pmoves/scripts/crush-pmoves"
+  cli-wrapper-hermes-pmoves: "pmoves/scripts/hermes-pmoves"
+  cli-host-nats: "nats (host binary - CHIT bundle ops, subject checks)"
+  cli-host-supabase: "supabase (host binary - stack bring-up, migrations)"
+  cli-host-ollama: "ollama (host binary - local model runtime)"
+  cli-host-skills: "skills (host binary - open skills ecosystem CLI, backs find-skills)"
+  find-skills: "skills/PMOVES-skills/skills/find-skills/SKILL.md"
 
   # Fleet Secrets Sync → Bootstrap → Deploy
   fleet-secrets-bootstrap:

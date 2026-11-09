@@ -1,0 +1,18 @@
+{
+  "room_id": "fixture.room.emptyaccess",
+  "version": "1.0.0",
+  "display_name": "Fixture Empty Access",
+  "description": "access block without visibility: must NOT be public",
+  "agent_id": "fixture-agent",
+  "access": {},
+  "shell": {
+    "theme": {
+      "theme_id": "fixture"
+    },
+    "layout": {
+      "default_route": "/",
+      "panels": []
+    }
+  },
+  "apps": []
+}

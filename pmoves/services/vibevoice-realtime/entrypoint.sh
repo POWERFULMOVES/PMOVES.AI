@@ -36,7 +36,7 @@ PY
   then
     resolved_device="cuda"
   else
-    echo "↷ CUDA not usable; falling back to --device cpu (RTX 5090 often needs a newer PyTorch build)."
+    echo "↷ CUDA not usable; falling back to --device cpu (no usable CUDA GPU detected, or the installed PyTorch build lacks kernels for it)."
     resolved_device="cpu"
   fi
 fi

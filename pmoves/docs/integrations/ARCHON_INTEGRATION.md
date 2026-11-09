@@ -1,3 +1,14 @@
+> [!CAUTION]
+> **SUPERSEDED — describes the pre-0.6.0 Archon (marked 2026-08-06).**
+>
+> Archon 0.6.0 (#2217) replaced the Python service with a **TypeScript/Bun** app serving
+> HTTP + UI on a **single port 3090**, health at **`/api/health`**, backed by a dedicated
+> Postgres. This document's split-port / Supabase-backed / nested-`external/`-submodule
+> model no longer matches anything that runs.
+>
+> **Canonical:** `.claude/CATALOG.md` (ports/health) and
+> `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md` (mint pipeline current state).
+
 # Archon External Integration Architecture
 
 > **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture

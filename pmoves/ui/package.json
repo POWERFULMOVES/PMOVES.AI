@@ -11,29 +11,32 @@
     "typecheck": "node scripts/with-env.mjs tsc --noEmit",
     "test": "node scripts/with-env.mjs jest",
     "smoke:upload-events": "node scripts/with-env.mjs jest upload-events-table.test.tsx",
-    "test:e2e": "node scripts/with-env.mjs playwright test"
+    "test:e2e": "node scripts/with-env.mjs playwright test --grep-invert @backend",
+    "test:e2e:backend": "node scripts/with-env.mjs playwright test --grep @backend",
+    "test:e2e:launcher": "node scripts/run-launcher-e2e.mjs",
+    "check:agent-rules": "node scripts/check-agent-rules.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/react-query": "^5.90.12",
-    "axios": "^1.17.0",
+    "axios": "^1.18.0",
     "diff2html": "^3.4.56",
     "dotenv": "^16.4.5",
     "jose": "^5.9.3",
-    "next": "^16.2.7",
+    "next": "^16.3.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-dropzone": "14.2.3",
     "react-markdown": "^9.1.0",
     "remark-gfm": "^4.0.0",
     "toml": "3.0.0",
-    "uuid": "^14.0.0",
+    "uuid": "^14.0.2",
     "yaml": "^2.8.3"
   },
   "overrides": {
-    "dompurify": ">=3.4.11"
+    "dompurify": ">=3.4.13"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
@@ -50,7 +53,7 @@
     "eslint-config-next": "^16.2.3",
     "jest": "29.7.0",
     "jest-environment-jsdom": "^30.2.0",
-    "postcss": "8.5.16",
+    "postcss": "8.5.25",
     "tailwindcss": "3.4.3",
     "typescript": "5.4.5"
   }

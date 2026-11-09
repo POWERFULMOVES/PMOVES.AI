@@ -8,12 +8,10 @@ Provides HTTP endpoints for:
 4. Health monitoring
 """
 
-import asyncio
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
@@ -25,7 +23,6 @@ from pydantic import BaseModel, Field
 from cgp_mapper import CGPMapper
 from chr_algorithm import (
     CHRConfig,
-    CHRResult,
     chit_signature_required,
     chr_result_to_cgp,
     get_chit_signing_key,
@@ -43,7 +40,7 @@ logger = logging.getLogger(__name__)
 # Environment configuration
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "consciousness-service")
 SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8106"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 # Canonical key chain (CHIT_SIGNING_KEY > CHIT_PASSPHRASE) with the legacy
 # CHIT_PROD_PASSPHRASE name still honored — see chr_algorithm.get_chit_signing_key.
 CHIT_PASSPHRASE = get_chit_signing_key()

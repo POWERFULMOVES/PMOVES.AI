@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -21,27 +22,71 @@ class Finding:
     path: str | None = None
 
 
+# Files the walk could not read (e.g. root-owned container caches under
+# pmoves/data). Skipped -- a file this user cannot read is not one the repo
+# ships -- but counted and named in the summary so the gap stays visible.
+UNREADABLE: list[Path] = []
+
+
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore")
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        UNREADABLE.append(path)
+        return ""
+
+
+def _is_pruned_dir(root: Path, name: str) -> bool:
+    """True for directories whose entire subtree must not be audited.
+
+    Linked worktrees are full repo copies; auditing them double-counts every finding
+    against files this checkout owns. The top-level `.worktrees` layout is the one
+    actually in use and was previously not excluded at all: with 190 repo copies
+    under it, the audit reported 147 errors of which 147 came from `.worktrees` and
+    ZERO from files this checkout owns. A gate that is permanently red reports
+    nothing -- the 12 real warnings were buried under duplicate noise.
+
+    `.worktrees` is matched as a plain directory name; the dotted form is
+    distinctive enough that an accidental skip is implausible. `.claude/worktrees`
+    is matched only as that exact adjacent pair, so an unrelated directory merely
+    named `worktrees` is still audited (no blind spot).
+    """
+    if name in {".git", ".worktrees"}:
+        return True
+    return name == "worktrees" and root.name == ".claude"
 
 
 def candidate_files() -> Iterable[Path]:
     allowed = {".md", ".py", ".sh", ".yaml", ".yml", ".json", ".txt"}
-    for path in REPO_ROOT.rglob("*"):
-        if not path.is_file():
-            continue
-        if ".git" in path.parts:
-            continue
-        # Linked worktrees under .claude/worktrees are full repo copies; auditing
-        # them double-counts every finding against files this checkout owns.
-        # Match the ordered adjacent subtree so unrelated paths that merely
-        # contain both components elsewhere are still audited (no blind spot).
-        parts = path.parts
-        if any(parts[i : i + 2] == (".claude", "worktrees") for i in range(len(parts) - 1)):
-            continue
-        if path.suffix.lower() not in allowed:
-            continue
-        yield path
+    # os.walk with in-place `dirnames` pruning, not rglob("*") + filter. rglob
+    # TRAVERSES every excluded subtree and only then discards the results, so
+    # filtering afterwards removes the false findings but not their cost. Both were
+    # measured against the real repo, same 75329 files in scope and identical
+    # findings either way:
+    #
+    #   rglob + filter   walk 265.2s   total 904.4s
+    #   os.walk + prune  walk  12.9s   total 359.2s
+    #
+    # That is ~20x off the walk, but the audit is still NOT fast: ~6 minutes,
+    # dominated by reading the files that remain in scope rather than by the walk.
+    # Pruning fixes the wrong-results problem, not the slow-audit problem.
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+        here = Path(dirpath)
+        dirnames[:] = [d for d in dirnames if not _is_pruned_dir(here, d)]
+        for filename in filenames:
+            path = here / filename
+            if path.suffix.lower() not in allowed:
+                continue
+            # os.walk lists broken symlinks and other non-regular entries among
+            # `filenames`; read_text() would then raise FileNotFoundError and abort
+            # the whole audit over one dangling link left by local tooling. The
+            # rglob version got this from its `path.is_file()` guard, which the
+            # rewrite dropped. Ordered AFTER the suffix test on purpose: is_file()
+            # is a stat syscall, and this way it only runs for the files that are
+            # actually in scope rather than for all 75329 walked.
+            if not path.is_file():
+                continue
+            yield path
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -220,7 +265,6 @@ def main() -> int:
         REPO_ROOT / "pmoves/services/evo-controller",
         REPO_ROOT / "pmoves/services/evoswarm",
         REPO_ROOT / "pmoves/services/agent-zero",
-        REPO_ROOT / "pmoves/services/archon",
     )
     for root in focus_roots:
         if not root.exists():
@@ -290,6 +334,76 @@ def main() -> int:
                     )
                 )
 
+    # 8c) An alias and its canonical label both set in the shared env, with
+    #     DIFFERENT values. Reported by SPARK on PR #2605: that node carries both
+    #     CHIT names with different key material, so compose interpolation (which
+    #     reads the shared env directly) hands containers one value while the
+    #     host signing chain resolves the other — and signatures produced on the
+    #     two sides cannot cross-verify. Nothing detected it, because every
+    #     individual check sees a populated key and passes.
+    #
+    #     The manifest alias mechanism only governs GENERATED outputs. A
+    #     hand-set divergent value in the shared env wins for every compose
+    #     interpolation regardless, so this is not something the funnel can fix
+    #     on its own — it needs a human to decide which value is authoritative.
+    #
+    #     WARN rather than ERROR: erroring would exit non-zero at funnel step 6
+    #     and strand the very nodes that have the problem. Lengths are reported
+    #     because they are enough to tell the two apart (SPARK saw 43 vs 64)
+    #     without disclosing key material.
+    shared_env = REPO_ROOT / "pmoves" / "env.shared"
+    manifest_v2 = REPO_ROOT / "pmoves" / "chit" / "secrets_manifest_v2.yaml"
+    if shared_env.exists() and manifest_v2.exists():
+        shared_values = parse_env_file(shared_env)
+        try:
+            import yaml  # type: ignore[import-untyped]
+
+            entries = (yaml.safe_load(manifest_v2.read_text(encoding="utf-8")) or {}).get(
+                "entries", []
+            )
+        except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+            entries = []
+            findings.append(
+                Finding(
+                    "WARN",
+                    f"alias-divergence check skipped: cannot read the v2 manifest ({type(exc).__name__}: {exc})",
+                    "pmoves/chit/secrets_manifest_v2.yaml",
+                )
+            )
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            source = entry.get("source") or {}
+            names = [source.get("label")] + list(source.get("aliases") or [])
+            present = {
+                n: shared_values[n]
+                for n in names
+                if n and shared_values.get(n, "").strip()
+            }
+            if len(set(present.values())) > 1:
+                shape = ", ".join(
+                    f"{n} (len {len(v)})" for n, v in sorted(present.items())
+                )
+                findings.append(
+                    Finding(
+                        "WARN",
+                        f"alias divergence in env.shared: {shape} are the same manifest "
+                        f"entry '{entry.get('id')}' but hold DIFFERENT values. Compose reads "
+                        f"env.shared directly, so containers and host tooling can end up on "
+                        f"different key material and signatures will not cross-verify. "
+                        f"Fix: decide which value your existing receipts were signed "
+                        f"with, then clear the other with "
+                        f"'python pmoves/scripts/bootstrap_env.py --clear <KEY>' and run "
+                        f"'make -C pmoves secrets-funnel'. Deleting the line by hand is "
+                        f"NOT enough: secrets-local-hydrate treats an absent or empty "
+                        f"value as a placeholder and writes the stale local.env value "
+                        f"straight back on the next funnel run. --clear also records the "
+                        f"key in pmoves/configs/secrets_cleared.yaml, which is what stops "
+                        f"that re-population.",
+                        "pmoves/env.shared",
+                    )
+                )
+
     # 9) Secret env files must NEVER be git-tracked. They are generated locally by
     #    secrets_sync and are gitignored — but git keeps tracking files added before
     #    an ignore rule was introduced, which is exactly how pmoves/env.tier-media
@@ -332,6 +446,11 @@ def main() -> int:
                 rel,
             )
         )
+
+    if UNREADABLE:
+        shown = ", ".join(str(p.relative_to(REPO_ROOT)) if p.is_relative_to(REPO_ROOT) else str(p) for p in UNREADABLE[:5])
+        more = f" (+{len(UNREADABLE) - 5} more)" if len(UNREADABLE) > 5 else ""
+        print(f"Secrets hardening audit: skipped {len(UNREADABLE)} unreadable file(s): {shown}{more}")
 
     if findings:
         errors = [f for f in findings if f.level == "ERROR"]

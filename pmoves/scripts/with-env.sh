@@ -117,11 +117,31 @@ fi
 if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${SERVICE_ROLE_KEY:-}" ]; then
   export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
 fi
-if [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-  export SUPABASE_PUBLISHABLE_KEY="$SUPABASE_ANON_KEY"
-fi
-if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-  export SUPABASE_SECRET_KEY="$SUPABASE_SERVICE_ROLE_KEY"
+# Do NOT back-fill SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY from the
+# legacy JWT keys. They are the NEW opaque API-key model (sb_publishable_*/
+# sb_secret_*): Kong's declarative config registers all four as distinct
+# keyauth credentials, so aliasing them to the legacy values is a uniqueness
+# violation that crash-loops Kong at init. Empty = legacy-only mode (the
+# kong-entrypoint strips the empty credential lines).
+
+# Host TLS: env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / ... EMPTY as a
+# container leak guard, and load_env_file just exported them. Set-but-empty
+# breaks python ssl and the HF Xet backend on the host. Clear the empties and
+# point SSL_CERT_FILE at the system bundle (operator values are kept). Silent
+# here except for its WARN — this runs under every make target. Containers are
+# unaffected: compose reads env.shared literally via env_file and no compose
+# file interpolates these vars from the shell.
+if [ -f "$SCRIPT_DIR/pm-ca-bundle.sh" ]; then
+  # shellcheck source=./pm-ca-bundle.sh
+  . "$SCRIPT_DIR/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
 fi
 
 export PMOVES_ENV_LOADER=1
+
+# Execute any remaining arguments as a command with the loaded environment.
+# This enables the pattern: bash scripts/with-env.sh <command> <args>
+# When sourced (no arguments), the env is simply exported and control returns.
+if [ $# -gt 0 ]; then
+  exec "$@"
+fi

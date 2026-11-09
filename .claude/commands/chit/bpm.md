@@ -70,7 +70,11 @@ CGP v0.2 packet with `bpm_timeline` field:
 ## Dependencies
 
 - `musicMapping.ts` from `PMOVES-ToKenism-Multi/integrations/contracts/chit/`
-- Flute Gateway prosodic parser (`/v1/voice/analyze/prosodic`)
+- Flute Gateway prosodic parser — `pmoves/services/flute-gateway/prosodic/prosodic_parser.py`
+  (`parse_prosodic`). **Not exposed over HTTP**: the only way to obtain a BPM
+  timeline is `POST /v1/voice/synthesize/prosodic`, which returns it in the
+  `X-Prosodic-BPM` / `X-Prosodic-Timeline` response headers (and also synthesizes
+  audio). An analysis-only route is specified in `PROSODIC_EAR_SPEC.md` but unbuilt.
 - NATS client for publishing
 
 ## Environment Variables

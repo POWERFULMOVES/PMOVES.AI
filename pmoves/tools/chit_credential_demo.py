@@ -41,7 +41,10 @@ def load_env_file(path: Path, keys: set[str] | None = None) -> Dict[str, str]:
         key, value = stripped.split("=", 1)
         if keys and key not in keys:
             continue
-        secrets[key] = value
+        # Same comment-only-value guard as chit_encode_secrets.load_env_file;
+        # see the rationale there. Kept in sync deliberately -- these two copies
+        # of the loader had drifted into the identical defect.
+        secrets[key] = "" if value.strip().startswith("#") else value
     return secrets
 
 
@@ -117,7 +120,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     print(f"Points: {len(cgp.get('points', []))}")
     print(f"\nDecoded {len(secrets)} key(s).")
     for key in sorted(secrets):
-        val = secrets[key]
+        secrets[key]
         # Mask secret values — show only key names, never partial values
         print(f"  {key} = ****")
 
@@ -190,7 +193,6 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     findings: List[tuple[str, int, str, str]] = []
     redacted_count = 0
-    clean_count = 0
 
     for fpath in sorted(files_to_scan):
         try:
@@ -237,7 +239,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             print(f"  {rel_path}:{line_no} [{desc}] {snippet}")  # CodeQL clear-text-logging: intentional — diagnostic tool for credential audit
         return 1
     else:
-        print(f"\nNo plaintext credentials found.")
+        print("\nNo plaintext credentials found.")
         return 0
 
 

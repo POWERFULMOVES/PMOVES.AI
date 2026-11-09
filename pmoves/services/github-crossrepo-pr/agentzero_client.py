@@ -370,7 +370,7 @@ class AgentZeroMCPClient:
         """
         try:
             # Mint token first
-            token_response = await self.mint_github_token(repo)
+            await self.mint_github_token(repo)
 
             # Call GitHub MCP tool to list PRs
             result = await self._call_mcp_tool(

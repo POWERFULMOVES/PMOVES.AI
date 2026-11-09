@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archon QA Result",
+  "description": "Blocking QA verdict from archon-qa-agent. Archon MUST NOT publish archon.mint.confirmed.v1 without an explicit pass.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "agent"],
+  "properties": {
+    "status": { "enum": ["pass", "fail"] },
+    "agent": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "checks": { "type": "array", "items": { "type": "string" } },
+    "reasons": { "type": "array", "items": { "type": "string" } }
+  }
+}

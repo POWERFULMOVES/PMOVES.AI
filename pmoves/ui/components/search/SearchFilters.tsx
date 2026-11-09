@@ -69,13 +69,14 @@ export function SearchFilters({
   }
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-4 space-y-4">
+    <div data-testid="search-filters" className="rounded border border-neutral-200 bg-white p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-neutral-800">Filters</h3>
         <div className="flex items-center gap-2">
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
+              data-testid="clear-filters"
               className="text-xs text-blue-600 hover:text-blue-800"
             >
               Clear All
@@ -102,6 +103,7 @@ export function SearchFilters({
         </label>
         <select
           id="source-type"
+          data-testid="source-filter"
           value={filters.sourceType ?? ""}
           onChange={(e) =>
             updateFilter(
@@ -129,6 +131,7 @@ export function SearchFilters({
             </label>
             <input
               id="start-date"
+              data-testid="filter-start-date"
               type="date"
               value={filters.startDate ?? ""}
               onChange={(e) => updateFilter("startDate", e.target.value || undefined)}
@@ -141,6 +144,7 @@ export function SearchFilters({
             </label>
             <input
               id="end-date"
+              data-testid="filter-end-date"
               type="date"
               value={filters.endDate ?? ""}
               onChange={(e) => updateFilter("endDate", e.target.value || undefined)}
@@ -157,6 +161,7 @@ export function SearchFilters({
         </label>
         <select
           id="min-score"
+          data-testid="filter-min-score"
           value={filters.minScore?.toString() ?? ""}
           onChange={(e) =>
             updateFilter(
@@ -198,29 +203,29 @@ export function SearchFilters({
       {hasActiveFilters && (
         <div className="pt-3 border-t border-neutral-200">
           <div className="text-xs text-neutral-500 mb-2">Active Filters:</div>
-          <div className="flex flex-wrap gap-2">
+          <div data-testid="active-filters" className="flex flex-wrap gap-2">
             {filters.sourceType && (
-              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+              <span data-testid="active-filter-chip" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
                 Source: {filters.sourceType}
               </span>
             )}
             {filters.startDate && (
-              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+              <span data-testid="active-filter-chip" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
                 From: {filters.startDate}
               </span>
             )}
             {filters.endDate && (
-              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+              <span data-testid="active-filter-chip" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
                 To: {filters.endDate}
               </span>
             )}
             {filters.minScore !== undefined && (
-              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+              <span data-testid="active-filter-chip" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
                 Score: {Math.round(filters.minScore * 100)}%+
               </span>
             )}
             {filters.channelId && (
-              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+              <span data-testid="active-filter-chip" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
                 Channel: {filters.channelId.slice(0, 8)}...
               </span>
             )}

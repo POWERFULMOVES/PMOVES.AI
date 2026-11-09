@@ -1,9 +1,12 @@
 
-import os, asyncio, json, re
+import os
+import asyncio
+import json
+import re
 from nats.aio.client import Client as NATS
 from services.common.events import envelope
 
-NATS_URL = os.environ.get("NATS_URL","nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL","nats://nats:4222")
 
 def extract_topics(text, top_k=5):
     words = re.findall(r"[a-zA-Z]{3,}", text.lower())
@@ -31,11 +34,10 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 
-import os, asyncio, json, re
-from nats.aio.client import Client as NATS
-from services.common.events import envelope
+import os
+import asyncio
 
-NATS_URL = os.environ.get("NATS_URL","nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL","nats://nats:4222")
 
 def extract_topics(text, top_k=5):
     words = re.findall(r"[a-zA-Z]{3,}", text.lower())

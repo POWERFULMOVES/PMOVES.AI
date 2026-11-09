@@ -1,0 +1,168 @@
+# TAC Tree: Pinokio 8 — L4 (public website via kvm2 + Cloudflare/Hostinger)
+# ======================================================================
+# Audits the public-website reachability: a Pinokio app running on the
+# PMOVES fleet, exposed through kvm2's Cloudflare-Tunnel + Tailscale-Funnel
+# + Hostinger-managed DNS, reachable as <app>.pmoves.ai (or any other
+# hostinger.cloudflare.com-managed domain). Per the slice-4
+# network_exposure.l4_public contract.
+#
+# Companion to:
+#   pinokio-venv.tac.yaml       (L1, same-process)
+#   pmoves-container.tac.yaml   (L2, same-host Docker)
+#   tailnet-mesh.tac.yaml       (L3, headscale)
+#   pinokio-p8.tac.yaml         (P8 surface + bridge health, slice 2)
+#   networking-defense-in-depth.tac.yaml  (security posture)
+#
+# Pre-flight: kvm2 is the exit-proxy with tag:exit; pmoves-edge Cloudflare
+# Tunnel is configured on kvm2; the mesh_exposure service (slice 4) is
+# the writer that keeps the tunnel + DNS + L3 routing in sync with the
+# registry. Operator opt-in is per-app (network_exposure.l4_public.reachable
+# = true). Only 2 of 12 curated entries default to L4 (comfyui-desktop
+# + ultimate-tts-studio); the rest are mesh-only.
+
+name: "Pinokio 8 L4 public-website reachability"
+version: "1.0.0"
+description: "Audit whether each curated Pinokio app is reachable as a public website via kvm2's Cloudflare-Tunnel + Hostinger-managed DNS."
+
+root:
+  id: public-tunnel
+  task: "Pinokio 8 L4 public-website reachability audit"
+  context: "kvm2 (tag:exit) + pmoves-edge Cloudflare Tunnel + Hostinger DNS + the curated registry entries with network_exposure.l4_public.reachable=true + pmoves/config/mcp/{cloudflare,hostinger}.yaml credentials"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: kvm2 exit-proxy is up + Cloudflare-Tunnel is running
+    # =========================================================================
+    - id: l4.kvm2_up
+      task: "kvm2 exit-proxy is up + Cloudflare-Tunnel is connected"
+      context: "kvm2 is the only public-ingress node (tag:exit). If it's down, the entire L4 tier is down."
+      agent_hint: codex
+      children:
+        - id: l4.kvm2_up.cloudflared
+          task: "cloudflared is running on kvm2 with the pmoves-edge tunnel"
+          action:
+            type: shell
+            command: "ssh kvm2 'systemctl status cloudflared'"
+            expect: "Active: active (running). The pmoves-edge tunnel is in the loaded config."
+          context: "pmoves/config/mcp/cloudflare.yaml declares the operator's Cloudflare account + token. cloudflared reads its config from /etc/cloudflared/config.yml on kvm2 (not in this repo)."
+          agent_hint: codex
+
+        - id: l4.kvm2_up.tailscale_funnel
+          task: "tailscale-funnel is running on kvm2 (alternate public ingress)"
+          action:
+            type: shell
+            command: "ssh kvm2 'tailscale funnel status'"
+            expect: "Lists active Funnel listeners. Public 443 path is reachable for any host that's enabled it."
+          context: "Cloudflare-Tunnel is the primary public ingress; Tailscale-Funnel is the alternate (used when the operator wants the tailnet-managed cert chain)."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: pmoves-edge Cloudflare Tunnel is the writer
+    # =========================================================================
+    - id: l4.tunnel_config
+      task: "The pmoves-edge Cloudflare Tunnel has an ingress rule for each L4-public app"
+      context: "Each L4-public app in the registry has a tunnel ingress entry on kvm2. mesh_exposure (slice 4) is the writer that keeps the tunnel ingress in sync with the registry."
+      agent_hint: codex
+      children:
+        - id: l4.tunnel_config.ingress_for_app
+          task: "For each L4-public entry: cloudflared's config has an ingress rule for <app>.pmoves.ai -> http://<L3-mesh-address>:<port>"
+          action:
+            type: shell
+            command: "ssh kvm2 'sudo cat /etc/cloudflared/config.yml | grep -A2 <app>.pmoves.ai'"
+            expect: "Each L4-public app has a hostname + service entry. The service is the L3 mesh FQDN + port (e.g. http://comfyui-desktop.powerfulmoves-1.ts.pmoves.net:8188)."
+          context: "If the L3 address in the tunnel config is stale (e.g. port=0 dynamic not yet resolved), the public URL returns 502. mesh_exposure runs the resolve."
+          agent_hint: codex
+
+        - id: l4.tunnel_config.fallback
+          task: "A catch-all 404 ingress rule exists at the end of the tunnel config"
+          action:
+            type: manual
+            expect: "Tunnel configs end with a catch-all rule (hostname: '', service: http_status:404) to prevent unintended hostnames from being routed to a real service"
+          context: "Per Cloudflare tunnel best practice; without the catch-all, typos in public hostnames route to the wrong service"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Hostinger / Cloudflare DNS records are in sync
+    # =========================================================================
+    - id: l4.dns_records
+      task: "Each L4-public app's DNS record exists + points at the tunnel"
+      context: "Hostinger + Cloudflare DNS. The mesh_exposure service writes both; this phase verifies the reads."
+      agent_hint: codex
+      children:
+        - id: l4.dns_records.dig_cname
+          task: "dig CNAME <app>.pmoves.ai returns <tunnel-id>.cfargotunnel.com"
+          action:
+            type: shell
+            command: "dig +short CNAME {{entry.network_exposure.l4_public.dns_record}}"
+            expect: "Returns a *.cfargotunnel.com CNAME pointing at the pmoves-edge tunnel"
+          context: "If the CNAME is missing or points elsewhere (e.g. an A record to a stale IP), the public URL breaks"
+          agent_hint: codex
+
+        - id: l4.dns_records.cloudflare_api
+          task: "Cloudflare API confirms the DNS record exists in the PMOVES zone"
+          action:
+            type: http
+            target: "https://api.cloudflare.com/client/v4/zones/{{CLOUDFLARE_ZONE_ID}}/dns_records?type=CNAME&name={{entry.network_exposure.l4_public.dns_record}}"
+            method: "GET"
+            headers:
+              Authorization: "Bearer {{CLOUDFLARE_API_TOKEN}}"
+            expect: "JSON result has at least 1 record matching the app's dns_record, content points at the tunnel"
+          context: "Credentials live in pmoves/config/mcp/cloudflare.yaml + the CHIT secrets manifest"
+          agent_hint: codex
+
+        - id: l4.dns_records.hostinger_api
+          task: "Hostinger API confirms the DNS record exists in the PMOVES zone (for non-cloudflare-managed domains)"
+          action:
+            type: http
+            target: "https://developers.hostinger.com/api/dns/v1/zones/{{HOSTINGER_ZONE_ID}}/records?type=CNAME&hostname={{entry.network_exposure.l4_public.dns_record}}"
+            method: "GET"
+            headers:
+              Authorization: "Bearer {{HOSTINGER_API_TOKEN}}"
+            expect: "At least 1 record match for the app's dns_record"
+          context: "Custom domains (anything not on cloudflare.com) live in Hostinger's DNS. pmoves/config/mcp/hostinger.yaml declares the operator's Hostinger token + SSH key."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: public URL is reachable end-to-end
+    # =========================================================================
+    - id: l4.public_url
+      task: "The public URL returns the app's health-check response (or the app's expected boot screen)"
+      context: "End-to-end check from outside the tailnet. This is the user-facing test."
+      agent_hint: codex
+      children:
+        - id: l4.public_url.healthz
+          task: "curl https://<dns_record>/<health> returns the expected response"
+          action:
+            type: shell
+            command: "curl -sfL --max-time 10 {{entry.network_exposure.l4_public.public_url}}{{entry.endpoints.primary.health or '/'}}"
+            expect: "HTTP 200 with the app's expected body (e.g. Gradio API info JSON, a 200 OK from /healthz, etc.)"
+          context: "Follows redirects (Cloudflare may issue a 301 to the canonical host). Times out at 10s to fail fast on stuck tunnels."
+          agent_hint: codex
+
+        - id: l4.public_url.tls
+          task: "TLS cert is valid (Cloudflare provisions automatically, but verify it's not expired)"
+          action:
+            type: shell
+            command: "echo | openssl s_client -servername {{entry.network_exposure.l4_public.dns_record}} -connect {{entry.network_exposure.l4_public.dns_record}}:443 2>/dev/null | openssl x509 -noout -dates"
+            expect: "notBefore < now < notAfter. Cloudflare provisions certs; expiry > 30d means the cert is healthy."
+          context: "Cloudflare-issued certs are auto-renewed. A short expiry means the renewal webhook is broken."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: L4 mesh_exposure service is the writer (loop-close)
+    # =========================================================================
+    - id: l4.mesh_exposure_writer
+      task: "mesh_exposure service (slice 4) reconciles tunnel + DNS in sync with the registry"
+      context: "Same loop-close check as L3 Phase 5. mesh_exposure runs on the infra-coordinator (z890); the L4 writes are Cloudflare + Hostinger API calls."
+      agent_hint: codex
+      children:
+        - id: l4.mesh_exposure_writer.last_l4_reconcile
+          task: "The last L4 reconcile completed within 24h"
+          action:
+            type: http
+            target: "http://mesh-exposure.infra-coordinator.ts.pmoves.net:8132/v1/reconcile/l4/status"
+            method: "GET"
+            expect: "JSON has last_l4_run_at < 24h ago, or last_l4_change_at == null (no changes since last run)"
+          context: "If mesh_exposure isn't running, the tunnel + DNS drift from the registry silently. This is the loop-close check for L4."
+          agent_hint: codex

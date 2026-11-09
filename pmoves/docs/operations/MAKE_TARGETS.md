@@ -256,6 +256,20 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Runs `pr-monitor` and CHIT-encodes the learnings markdown into:
     - `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
   - Use when review learnings need machine-parseable CHIT artifact handoff.
+- `make pr-closeout-audit PR=<number> EXPECTED_HEAD=<full-sha>`
+  - Runs the fail-closed final audit against live GitHub state.
+  - Blocks stale/behind/conflicting heads, drafts, unchecked PR-body tasks,
+    unresolved review threads, missing or non-green required checks, and
+    pending/failing Actions checks.
+  - Set `ADMIN_REVIEW_BYPASS=1` only for the documented self-authored CODEOWNER
+    deadlock. The PR author must match `PR_ADMIN_AUTHOR` (default:
+    `POWERFULMOVES`). Explicit advisory exceptions use
+    `ALLOW_ADVISORY_FAILURE=<check-name>`.
+- `make pr-closeout-merge PR=<number> EXPECTED_HEAD=<full-sha> CONFIRM="MERGE #<number> @ <full-sha>"`
+  - Repeats the closeout audit and performs a SHA-pinned admin merge only after
+    every non-review gate passes.
+  - Defaults to squash; override with `MERGE_METHOD=rebase|merge`.
+  - Runbook: `pmoves/docs/operations/PR_CLOSEOUT.md`.
 - `make floos-status`
   - Shows FlOO$ pairing inventory/status from `pmoves/configs/skill-pairings.yaml`.
 - `make floos-pr-monitor-validate`
@@ -342,6 +356,12 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Same as `showtime-links` and opens the generated HTML file in your default browser.
 - `make showtime-links-strict`
   - Same artifacts, but fails if required core endpoints are down (`SHOWTIME_REQUIRED_NAMES` override available).
+- `make glances-check`
+  - Glances host-probe preflight: Glances >= 4.4 (`GLANCES_MIN_VERSION`) and `from glances import api` / `GlancesAPI()` works; reports the Docker watcher (reachable / UNREACHABLE / extra missing) and visible GPUs.
+  - Resolves `GLANCES_BIN` (pin) > `pmoves/.venv-pmoves` > `PATH`; exits 2 with the uv install line when missing. See `docs/operations/GLANCES_RUNBOOK.md`.
+- `make glances-fetch`
+  - One-shot host sitrep: `glances -C config/glances/pmoves-glances.conf --fetch --fetch-template config/glances/pmoves-sitrep.jinja` with `PYTHONIOENCODING=utf-8`. The conf disables the `ip`/`cloud`/`connections` plugins and the update check; the template prints no addresses, lists non-running containers, says "DOCKER unreachable" instead of 0, and shows the vmmemWSL VM on Windows.
+  - No stock-template mode: upstream's default fetch template prints the host address. There is deliberately no server target.
 - `make smoke-showtime`
   - Runs core smoke + production monitoring smoke with the live watcher active.
   - Includes `showtime-links-strict` so endpoint click-through verification doubles as part of smoke.

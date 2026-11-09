@@ -1,6 +1,6 @@
 [
   {
-    "name": "PMOVES • Content Published → Discord v1",
+    "name": "PMOVES • Content Published → Discord v1 (TEST/FALLBACK — canonical lane is publisher-discord NATS subscriber)",
     "nodes": [
       {
         "parameters": {

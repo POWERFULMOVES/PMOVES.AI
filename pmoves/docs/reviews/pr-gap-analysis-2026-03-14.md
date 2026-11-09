@@ -61,7 +61,7 @@
 ### Security Gaps
 
 - **P1: Hardcoded Postgres password** in `load_supabase_chunks.py` lines 1377/1393: `PGPASSWORD=zode0dl7/JgAaNoVqjzHQ0S5Iq1vi7Tt`. Must replace with `${DB_PASSWORD}`.
-- **P1: Hardcoded Neo4j password** in `load_neo4j_consciousness.sh` line 1149: `NEO4J_PASSWORD="${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}"`. Must use `:?` fail-hard.
+- **P1: Hardcoded Neo4j password** in `load_neo4j_consciousness.sh` line 1149: `NEO4J_PASSWORD="${NEO4J_PASSWORD:-<committed literal, redacted 2026-10>}"`. Must use `:?` fail-hard.
 - **P2: Hardcoded CHIT passphrase in Dockerfile**: `ENV CHIT_PROD_PASSPHRASE=pmoves-chit-default` provides deterministic bypass even though compose uses `:?` fail-hard.
 - **P2: Exception details leaked** in 3 `HTTPException(detail=f"...{str(e)}")` patterns — same issue this PR fixes in `github-crossrepo-pr/app.py`.
 - **P2: No RLS policies** on new `consciousness_theories` Supabase table.

@@ -33,6 +33,7 @@ The theoretical foundations that motivate CHIT's design.
 | File | Audience | Description |
 |------|----------|-------------|
 | [THREE_BODY_DOCTRINE.md](THREE_BODY_DOCTRINE.md) | Everyone / Architect | Human/AI/System three-body problem — why stabilization requires geometric encoding |
+| [THIRD_ANCHOR_DOCTRINE.md](THIRD_ANCHOR_DOCTRINE.md) | Everyone / Architect | Why agreement needs a third, externally-authored referent — names the "same sky" the star-chart metaphor assumes |
 | [PMOVESSHIFTEST.md](PMOVESSHIFTEST.md) | Everyone | Shape Harmonic Intelligence — accessible, shareable introduction to CHIT |
 | [Integrating Math into PMOVES.AI.md](Integrating%20Math%20into%20PMOVES.AI.md) | Architect / Researcher | Deep mathematical foundations: hyperbolic geometry, zeta dynamics, holographic principle |
 
@@ -104,7 +105,7 @@ Pick the path that matches your goal:
 - **TypeScript modules:** `PMOVES-ToKenism-Multi/integrations/contracts/chit/`
 - **Python tools:** `pmoves/tools/chit/` --- see [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for full documentation
 - **CLI commands:** `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus`
-- **Codex MCP parity checks:** `make -C pmoves a0-mcp-seed`, `make -C pmoves archon-mcp-smoke`, `make -C pmoves codex-health-quick`
+- **Codex MCP parity checks:** `make -C pmoves a0-mcp-seed`, `make -C pmoves archon-ui-smoke`, `make -C pmoves codex-health-quick`
 - **Integration Layer:** [PMOVES.AI Integration Overview](../INTEGRATIONS_OVERVIEW.md) --- master entry point for all integration docs
 
 ## Documentation Infrastructure

@@ -1,13 +1,33 @@
 # YT Egress Routing Runbook
 
 **Phase:** 9Q
-**Last updated:** 2026-04-16
-**Exit node:** `pmoves-kvm4-1` (Hostinger datacenter — resolve via Tailscale MagicDNS)
+**Last updated:** 2026-07-28
+**Exit node:** `pmoves-kvm4-1` (datacenter — optional fallback only)
 
-## When to Activate
+## Direct vs Egress (2026-07-28 discovery)
 
-Turn the egress sidecar on when PMOVES.YT starts returning HTTP 403s on
-public YouTube videos that should be accessible. Symptoms:
+YouTube's bot detection flags **datacenter IPs** more aggressively than
+residential IPs. On the Knuckles B850 node, yt-dlp extraction succeeds
+through the residential IP and fails through the Tailscale exit node.
+
+**Default: use host-direct (residential) for YouTube downloads.**
+
+```bash
+make -C pmoves yt-direct      # Clear exit node, use residential IP
+make -C pmoves yt-egress-check # Verify current mode
+```
+
+The Data API v3 metadata path (`/yt/info`) works from any IP — it is
+unaffected by egress mode. Only yt-dlp's direct YouTube extraction
+(`/yt/download`, `/yt/ingest`) is sensitive to IP reputation.
+
+Use `make -C pmoves up-yt-egress` only as a fallback when the residential
+IP itself gets flagged (rare) or for non-YouTube egress needs.
+
+## When to Activate Egress (fallback)
+
+Turn the egress sidecar on when the residential IP starts returning
+HTTP 403s on public YouTube videos. Symptoms:
 
 - `curl -X POST http://localhost:8077/yt/ingest ...` returns
   `Failed to download via Invidious companion: 403 Client Error`
@@ -18,12 +38,10 @@ public YouTube videos that should be accessible. Symptoms:
 - Downstream pipeline (Hi-RAG v2 knowledge freshness, Publisher-Discord
   notifications, conch-consciousness-analysis skill) goes quiet
 
-YouTube rotates anti-bot rules periodically. The residential IP
-fingerprint blocks are "set and forget" — once the home IP enters a
-blocklist, every request from it gets 403'd regardless of yt-dlp client
-strategy, PO tokens, or cookie freshness. Egress routing moves the
-outbound surface to Hostinger's datacenter range, which YouTube treats
-differently.
+YouTube rotates anti-bot rules periodically. If the residential IP enters a
+blocklist, switching to a datacenter exit node may help (or may not —
+datacenter ranges are also aggressively flagged). The egress sidecar is
+kept as an available tool, not the default.
 
 ## Preflight
 

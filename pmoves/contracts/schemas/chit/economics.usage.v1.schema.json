@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CHIT Economics Usage",
+  "description": "Content-free LLM usage/cost record for the tokenomics layer. Carries counts and identifiers ONLY. TensorZero's own observability is disabled by policy (Cyber Defence Initiative 2026-04-25) because enabling it auto-creates ClickHouse inference tables holding full prompt and response text with no TTL, violating Data Retention Policy T0. This contract exists so agent cost is measurable without recording what was said. additionalProperties is false so a publisher CANNOT add a prompt/response/content field without failing validation — the privacy invariant is enforced here, not merely documented in the subject catalog.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_name",
+    "tensorzero_function",
+    "prompt_tokens",
+    "completion_tokens",
+    "ts"
+  ],
+  "properties": {
+    "agent_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Kebab-case agent identifier, matching the agent's id in agent_registry.yaml"
+    },
+    "tensorzero_function": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "The [functions.X] block this call routed through (snake_case, per pmoves/tensorzero/config/tensorzero.toml). Cost join key. Function-granular, not per-agent-instance: agents sharing a function are indistinguishable in the rollup. True per-instance attribution requires TensorZero-side request tagging."
+    },
+    "model_name": {
+      "type": "string",
+      "description": "Resolved model variant, if known"
+    },
+    "provider_name": {
+      "type": "string",
+      "description": "Resolved provider, if known"
+    },
+    "node": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Fleet node that served the call, so node-operator hosting cost can eventually be accounted. No compensation mechanism exists today."
+    },
+    "prompt_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "completion_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "estimated_cost_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Explicitly an ESTIMATE. Rate tables in this repo are placeholders and are not authoritative for settlement."
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

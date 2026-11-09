@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-toast&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack {
+      display: grid;
+      gap: 12px;
+      max-width: 480px;
+    }
+    button {
+      background: var(--pm-bg-elevated);
+      color: var(--pm-fg);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    button:hover { background: var(--pm-accent); }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-toast&gt; — v0.2 demo</h1>
+
+  <pm-toast id="t" position="bottom-right" timeout="4000"></pm-toast>
+
+  <div class="stack">
+    <button id="b-success">✓ Success toast</button>
+    <button id="b-error">✗ Error toast</button>
+    <button id="b-warning">⚠ Warning toast</button>
+    <button id="b-info">ⓘ Info toast</button>
+    <button id="b-hide">Hide</button>
+  </div>
+
+  <script type="module" src="./pm-toast.js"></script>
+  <script type="module">
+    const t = document.getElementById('t');
+    document.getElementById('b-success').addEventListener('click', () => t.show('Vote cast! Your receipt has been signed.', 'success'));
+    document.getElementById('b-error').addEventListener('click', () => t.show('Tally read failed. Try again.', 'error'));
+    document.getElementById('b-warning').addEventListener('click', () => t.show('Quorum at 36% — 14 more votes needed.', 'warning'));
+    document.getElementById('b-info').addEventListener('click', () => t.show('Ballot opens at 09:00 EDT.', 'info'));
+    document.getElementById('b-hide').addEventListener('click', () => t.hide());
+  </script>
+</body>
+</html>

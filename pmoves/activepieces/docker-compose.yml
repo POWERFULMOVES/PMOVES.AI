@@ -1,0 +1,126 @@
+# PMOVES.AI — ActivePieces self-host (standalone, opt-in)
+#
+# Low-code automation companion to the n8n fabric (pmoves/n8n/flows). Runs on its
+# own stack (app + worker + postgres + redis) so it can be brought up on demand,
+# not baked into the main fleet compose (Phase 1). Main-compose integration is a
+# tracked follow-up (Phase 2).
+#
+# Connection to the hosted account (cataclysmstudios@gmail.com): Git Sync points
+# BOTH the cloud project and this self-host at pmoves/activepieces/flows/ in this
+# repo, so flows become versioned flows-as-code (mirrors the n8n convention).
+# Git Sync is an Enterprise feature — set AP_EDITION=ee + AP_LICENSE_KEY. On the
+# Community edition (AP_EDITION=ce, default) fall back to export→commit→import.
+#
+# Bring up:   docker compose --env-file env.activepieces -p pmoves-activepieces up -d
+#   (seed env.activepieces from env.activepieces.example first; generate the
+#    secret values via the PMOVES secrets pipeline, never by hand.)
+# App UI:     http://localhost:${AP_APP_PORT:-8087}
+
+name: pmoves-activepieces
+
+x-ap-image: &ap-image ghcr.io/activepieces/activepieces:0.86.3
+
+services:
+  activepieces-app:
+    image: *ap-image
+    restart: unless-stopped
+    ports:
+      - "${AP_BIND:-127.0.0.1}:${AP_APP_PORT:-8087}:80"
+    environment:
+      AP_CONTAINER_TYPE: APP
+      AP_ENGINE_EXECUTABLE_PATH: dist/packages/engine/main.js
+      AP_ENVIRONMENT: prod
+      AP_EDITION: ${AP_EDITION:-ce}
+      AP_LICENSE_KEY: ${AP_LICENSE_KEY:-}
+      AP_FRONTEND_URL: ${AP_FRONTEND_URL:-http://localhost:8087}
+      AP_EXECUTION_MODE: ${AP_EXECUTION_MODE:-UNSANDBOXED}
+      AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:?set via secrets pipeline}
+      AP_JWT_SECRET: ${AP_JWT_SECRET:?set via secrets pipeline}
+      AP_QUEUE_MODE: REDIS
+      AP_REDIS_HOST: activepieces-redis
+      AP_REDIS_PORT: 6379
+      AP_POSTGRES_HOST: activepieces-postgres
+      AP_POSTGRES_PORT: 5432
+      AP_POSTGRES_DATABASE: ${AP_POSTGRES_DATABASE:-activepieces}
+      AP_POSTGRES_USERNAME: ${AP_POSTGRES_USERNAME:-activepieces}
+      AP_POSTGRES_PASSWORD: ${AP_POSTGRES_PASSWORD:?set via secrets pipeline}
+      AP_TELEMETRY_ENABLED: ${AP_TELEMETRY_ENABLED:-false}
+    depends_on:
+      activepieces-postgres:
+        condition: service_healthy
+      activepieces-redis:
+        condition: service_healthy
+    networks: [activepieces]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:80/api/v1/flags',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    security_opt: ["no-new-privileges:true"]
+
+  activepieces-worker:
+    image: *ap-image
+    restart: unless-stopped
+    environment:
+      AP_CONTAINER_TYPE: WORKER
+      AP_ENGINE_EXECUTABLE_PATH: dist/packages/engine/main.js
+      AP_ENVIRONMENT: prod
+      AP_EDITION: ${AP_EDITION:-ce}
+      AP_LICENSE_KEY: ${AP_LICENSE_KEY:-}
+      AP_FRONTEND_URL: ${AP_FRONTEND_URL:-http://localhost:8087}
+      AP_EXECUTION_MODE: ${AP_EXECUTION_MODE:-UNSANDBOXED}
+      AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:?set via secrets pipeline}
+      AP_JWT_SECRET: ${AP_JWT_SECRET:?set via secrets pipeline}
+      AP_QUEUE_MODE: REDIS
+      AP_REDIS_HOST: activepieces-redis
+      AP_REDIS_PORT: 6379
+      AP_POSTGRES_HOST: activepieces-postgres
+      AP_POSTGRES_PORT: 5432
+      AP_POSTGRES_DATABASE: ${AP_POSTGRES_DATABASE:-activepieces}
+      AP_POSTGRES_USERNAME: ${AP_POSTGRES_USERNAME:-activepieces}
+      AP_POSTGRES_PASSWORD: ${AP_POSTGRES_PASSWORD:?set via secrets pipeline}
+    depends_on:
+      activepieces-app:
+        condition: service_started
+    networks: [activepieces]
+    security_opt: ["no-new-privileges:true"]
+
+  activepieces-postgres:
+    image: pgvector/pgvector:0.8.0-pg14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${AP_POSTGRES_DATABASE:-activepieces}
+      POSTGRES_USER: ${AP_POSTGRES_USERNAME:-activepieces}
+      POSTGRES_PASSWORD: ${AP_POSTGRES_PASSWORD:?set via secrets pipeline}
+    volumes:
+      - activepieces-postgres-data:/var/lib/postgresql/data
+    networks: [activepieces]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AP_POSTGRES_USERNAME:-activepieces} -d ${AP_POSTGRES_DATABASE:-activepieces}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt: ["no-new-privileges:true"]
+
+  activepieces-redis:
+    image: redis:7.0.7
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - activepieces-redis-data:/data
+    networks: [activepieces]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  activepieces:
+    name: pmoves_activepieces
+
+volumes:
+  activepieces-postgres-data:
+  activepieces-redis-data:

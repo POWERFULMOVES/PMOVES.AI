@@ -1,0 +1,15 @@
+# Opt-in overlay: host JuiceFS media mount for pmoves-yt.
+#
+# Split out of docker-compose.yt-cookies.yml because the rshared bind is
+# host-topology-specific: it requires a host-side JuiceFS FUSE mount with
+# shared propagation (Linux). It fails hard on Docker Desktop Windows and
+# on any node whose JuiceFS runs volume-backed instead of host-mounted.
+#
+# Usage: set JUICEFS_HOST_MOUNT to the host JuiceFS path; `make up-yt`
+# includes this file automatically when the variable is set.
+services:
+  pmoves-yt:
+    volumes:
+      - ${JUICEFS_HOST_MOUNT:?Set JUICEFS_HOST_MOUNT to use the yt-media overlay}:/mnt/pmoves/media:rshared
+    environment:
+      - JUICEFS_MEDIA_ROOT=/mnt/pmoves/media

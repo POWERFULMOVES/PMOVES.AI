@@ -101,9 +101,9 @@ KiloCode modes map to PMOVES service tiers and agent types. See `.kilocodemodes`
 | `pmoves-frontend` | UI | 7 |
 | `pmoves-portal` | Agent + Geometry | 6 + L2.5 |
 | `pmoves-crush` | UI + Agent | 7 + 6 |
-| `pmoves-glm` | Worker + LLM | 3-4 |
-| `pmoves-cocreate` | Agent + Creative | 6 + L2.5 |
-| `pmoves-minimax` | Agent + Fast Inference | 6 + 3 |
+| `pmoves-glm` | Worker + LLM (GLM) | 3-4 |
+| `pmoves-cocreate` | Agent (DARKXSIDE) | 6 |
+| `pmoves-minimax` | Worker (MiniMax) | 3-4 |
 
 ## Integration Plan
 

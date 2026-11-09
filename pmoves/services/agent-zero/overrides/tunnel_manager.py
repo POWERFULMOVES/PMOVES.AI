@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
-from python.helpers.print_style import PrintStyle
+from helpers.print_style import PrintStyle
 
 try:
     from flaredantic import FlareConfig, FlareTunnel, ServeoConfig, ServeoTunnel

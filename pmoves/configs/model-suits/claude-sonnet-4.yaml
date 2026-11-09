@@ -75,6 +75,17 @@ cross_agent:
   pinokio: full
   a2ui: full
 
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher.
+fit:
+  clawz:
+    "*":
+      - verdict: full
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+
 metadata:
   source: pmoves/meta-agent/anthropic
   last_verified: 2026-04-21

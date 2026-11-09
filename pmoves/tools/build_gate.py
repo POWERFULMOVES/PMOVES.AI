@@ -24,12 +24,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
-import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -674,7 +672,6 @@ def run_gate(targets: list[BuildTarget], *, lint: bool = False,
     print_header(f"Build Gate [{mode_str}] — {len(targets)} targets")
 
     results: list[tuple[str, bool, str]] = []
-    has_failures = False
 
     for i, target in enumerate(targets, 1):
         print(f"\n[{i}/{len(targets)}] {target.name}")
@@ -684,14 +681,12 @@ def run_gate(targets: list[BuildTarget], *, lint: bool = False,
             msg = f"Dockerfile not found: {target.dockerfile}"
             print(f"  FAIL  {msg}")
             results.append((target.name, False, msg))
-            has_failures = True
             continue
 
         if not target.context.exists():
             msg = f"Build context not found: {target.context}"
             print(f"  FAIL  {msg}")
             results.append((target.name, False, msg))
-            has_failures = True
             continue
 
         # Submodule status warning
@@ -723,7 +718,7 @@ def run_gate(targets: list[BuildTarget], *, lint: bool = False,
                 print(f"  LINT FAIL\n{lint_out}")
                 target_ok = False
             elif "skipped" not in lint_out:
-                print(f"  LINT  OK")
+                print("  LINT  OK")
 
         # BuildKit --check phase
         if check:
@@ -732,7 +727,7 @@ def run_gate(targets: list[BuildTarget], *, lint: bool = False,
                 print(f"  CHECK FAIL\n  {check_out}")
                 target_ok = False
             else:
-                print(f"  CHECK OK")
+                print("  CHECK OK")
 
         # Build phase (only if no validation-only flags)
         if not validation_only:
@@ -745,7 +740,7 @@ def run_gate(targets: list[BuildTarget], *, lint: bool = False,
                 target_ok = False
 
         if not target_ok:
-            has_failures = True
+            pass
         status_msg = "PASS" if target_ok else "FAIL"
         results.append((target.name, target_ok, status_msg))
 

@@ -1,3 +1,21 @@
+> [!CAUTION]
+> **SUPERSEDED — DO NOT USE AS AN API REFERENCE (marked 2026-08-06).**
+>
+> This document describes an Agent Zero MCP API that **was never implemented**. Verified
+> against `pmoves/services/agent-zero/main.py`:
+>
+> | Documented here | Reality |
+> |---|---|
+> | `GET /mcp/health` | does not exist — real: `GET /healthz` |
+> | `GET /mcp/agents` | does not exist |
+> | `POST /mcp/subordinate/create` | does not exist |
+> | `POST /mcp/execute` `{task, context, priority}` | real shape is `{cmd, arguments}` |
+> | `agent.zero.*` / `agent.task.*` NATS subjects | real: `agentzero.task.v1`, `agentzero.memory.update` |
+>
+> The `curl` and `nats sub` examples below **cannot work**. Retained for historical intent only.
+>
+> **Canonical:** `pmoves/docs/operations/AGENT_ZERO_API.md` (probed from live `/openapi.json`).
+
 # Agent Zero Orchestration Patterns
 
 Detailed reference for Agent Zero's MCP API, task coordination, and subordinate agent model.

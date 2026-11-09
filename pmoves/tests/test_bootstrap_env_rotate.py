@@ -92,3 +92,111 @@ def test_rejects_non_identifier_keys(tmp_path):
         with pytest.raises(ValueError):
             be.rotate_secret(bad, value="v", env_path=env)
     assert env.read_text(encoding="utf-8") == "A=1\n"  # untouched
+
+
+# --- generator-axis resolution -------------------------------------------
+#
+# The two axes of a generated rotation — type and length — are resolved
+# independently. An operator naming one axis on the command line must not
+# silently discard the registry's declaration of the other.
+#
+# `--rotate VAULT_ENC_KEY --gen-type random_hex` used to emit 48 hex chars
+# because the whole registry lookup sat under `if gen_type is None`. The
+# registry declares 32, and the yt OAuth flow does bytes.fromhex() on it, so
+# the 48-char value is the corruption this file already documents — reachable
+# through the very flag an operator would reach for to avoid it.
+
+
+@pytest.fixture()
+def registry(tmp_path):
+    import json
+
+    p = tmp_path / "registry.json"
+    p.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "services": [
+                    {
+                        "id": "supabase",
+                        "variables": [
+                            {
+                                "key": "VAULT_ENC_KEY",
+                                "generate": {"type": "random_hex", "length": 32},
+                            },
+                            {
+                                "key": "TYPE_ONLY",
+                                "generate": {"type": "random_hex"},
+                            },
+                            {"key": "NO_GENERATOR"},
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return str(p)
+
+
+def test_registry_supplies_both_axes_when_neither_flag_is_given(registry):
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "VAULT_ENC_KEY", registry, None, None
+    )
+    assert (gen_type, length) == ("random_hex", 32)
+    assert t_src == l_src == "bootstrap registry"
+
+
+def test_explicit_gen_type_does_not_suppress_the_declared_length(registry):
+    """The regression: naming the type stole the length."""
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "VAULT_ENC_KEY", registry, "random_hex", None
+    )
+    assert gen_type == "random_hex"
+    assert length == 32, "registry-declared length must survive an explicit --gen-type"
+    assert t_src == "--gen-type"
+    assert l_src == "bootstrap registry"
+
+
+def test_explicit_length_does_not_suppress_the_declared_type(registry):
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "VAULT_ENC_KEY", registry, None, 64
+    )
+    assert gen_type == "random_hex", "registry-declared type must survive --length"
+    assert length == 64
+    assert t_src == "bootstrap registry"
+    assert l_src == "--length"
+
+
+def test_explicit_flags_win_over_the_registry(registry):
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "VAULT_ENC_KEY", registry, "passphrase", 12
+    )
+    assert (gen_type, length, t_src, l_src) == ("passphrase", 12, "--gen-type", "--length")
+
+
+def test_partial_declaration_falls_back_per_axis(registry):
+    """A registry entry declaring only a type still gets the built-in length."""
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "TYPE_ONLY", registry, None, None
+    )
+    assert (gen_type, length) == ("random_hex", be.DEFAULT_GEN_LENGTH)
+    assert t_src == "bootstrap registry"
+    assert l_src == "built-in default"
+
+
+def test_unknown_key_falls_back_to_built_in_defaults(registry):
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "NOT_IN_REGISTRY", registry, None, None
+    )
+    assert (gen_type, length) == (be.DEFAULT_GEN_TYPE, be.DEFAULT_GEN_LENGTH)
+    assert t_src == l_src == "built-in default"
+
+
+def test_unreadable_registry_does_not_block_a_rotation(tmp_path):
+    """_registry_generator swallows read errors; resolution must still return."""
+    gen_type, length, t_src, l_src = be._resolve_generator_axes(
+        "VAULT_ENC_KEY", str(tmp_path / "nope.json"), None, None
+    )
+    assert (gen_type, length) == (be.DEFAULT_GEN_TYPE, be.DEFAULT_GEN_LENGTH)
+    assert t_src == l_src == "built-in default"

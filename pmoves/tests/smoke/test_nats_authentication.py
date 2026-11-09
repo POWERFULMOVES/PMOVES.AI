@@ -14,6 +14,15 @@ import httpx
 
 from _smoke_helpers import PMOVES_DIR, grep_context, grep_file
 
+# env.tier-* / env.shared are funnel-generated operator-checkout artifacts
+# (gitignored); CI runners and smoke hosts never carry them. These tests
+# measure the operator's environment, not the code — skip loudly when absent.
+requires_env_files = pytest.mark.skipif(
+    not (PMOVES_DIR / "env.shared").exists(),
+    reason="env.shared not present (funnel-generated operator artifact; "
+           "not on CI runners or smoke hosts) — run on a node checkout",
+)
+
 
 @pytest.mark.smoke
 @pytest.mark.asyncio
@@ -63,6 +72,7 @@ async def test_agent_zero_nats_not_using_unauthenticated_url() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_agent_zero_env_file_has_nats_credentials() -> None:
     """Verify env.tier-agent defines NATS_URL with credentials."""
     tier_file = PMOVES_DIR / "env.tier-agent"
@@ -82,6 +92,7 @@ def test_agent_zero_env_file_has_nats_credentials() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_comfy_watcher_env_file_has_nats_credentials() -> None:
     """Verify env.tier-worker defines NATS_URL with credentials for comfy-watcher."""
     tier_file = PMOVES_DIR / "env.tier-worker"
@@ -101,6 +112,7 @@ def test_comfy_watcher_env_file_has_nats_credentials() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_nats_url_in_env_shared_is_authenticated() -> None:
     """Verify NATS_URL in env.shared uses authenticated credentials."""
     matches = grep_file(PMOVES_DIR / "env.shared", r"^NATS_URL=")
@@ -120,6 +132,7 @@ def test_nats_url_in_env_shared_is_authenticated() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_env_shared_still_has_nats_user_and_password() -> None:
     """Verify env.shared still has NATS_USER and NATS_PASSWORD for reference."""
     matches = grep_file(PMOVES_DIR / "env.shared", r"^NATS_(USER|PASSWORD)=")

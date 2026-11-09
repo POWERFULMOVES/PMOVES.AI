@@ -5,7 +5,6 @@ Launches headless Chromium, injects OAuth session, extracts cookies + PO token.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional

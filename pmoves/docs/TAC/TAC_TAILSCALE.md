@@ -2,11 +2,11 @@
 
 > Technology-Architecture-Context tree for the Tailscale mesh VPN layer — node registration, auth key management, exit node routing, DNS, and the Headscale self-hosted migration path.
 
-## Current State (2026-06-15) — supersedes stale tables below
+## Current State (verified live 2026-07-10) — supersedes stale tables below
 
 Tailnet `tailcad9b4.ts.net`. Authoritative runbook: [`../operations/TAILSCALE_EXIT_NODE_RUNBOOK.md`](../operations/TAILSCALE_EXIT_NODE_RUNBOOK.md).
 
-- **Exit nodes: ALL 3 KVMs live + approved** — `pmoves-kvm2` (167.88.38.57), `pmoves-kvm4-1` (31.97.42.207, designated egress), `pmoves-kvm4-2` (167.88.39.80). Each has IP forwarding (sysctl) + `--advertise-exit-node`; kvm4-1/kvm4-2 enabled over Tailscale SSH on 2026-06-15, routes approved in console. `pmoves-4090` egresses via kvm4-1 (clients can also auto-select via `tailscale exit-node suggest`).
+- **Exit nodes: ALL 3 KVMs live + approved** — `pmoves-kvm2`, `pmoves-kvm4-1` (designated egress), `pmoves-kvm4-2` (pilot exit). Reference by MagicDNS hostname, never public IP (repo no-IPs policy). Each has IP forwarding (sysctl) + `--advertise-exit-node` and carries `tag:exit`, so all three **self-approve** via the `autoApprovers.exitNode` rule. Verified from `pmoves-4090` on 2026-07-10: all three appear in `tailscale exit-node list`, and a live egress `curl` confirmed the 4090's traffic exits through `pmoves-kvm4-1` (egress IP == the KVM's DC address, direct WireGuard path, not DERP). Clients can auto-select via `tailscale exit-node suggest`.
 - **Tailscale SSH server enabled on all KVMs** (`RunSSH=true`) — ACL `ssh: autogroup:admin → * (root)` + a member self-SSH `check` rule. This is the out-of-band fleet management plane and **retires the kvm2 blocked-port-22 P0** (manage hbbs/hbbr over the tailnet).
 - **MCP control (two complementary)**: npm `tailscale-mcp` (admin API — ACL/routes/devices, needs `TAILSCALE_API_KEY`, wiring pending) + **custom `pmoves-tailscale-mcp/`** (local CLI wrapper — exit-node/serve/funnel/ssh/metrics/netcheck/ping, no creds; PR #1821).
 - **Serve/Funnel** sanctioned: `tailscale serve` (tailnet HTTPS — Jellyfin/Pinokio) + `tailscale funnel` (public 443/8443/10000). ACL `nodeAttrs: tag:exit → funnel`.
@@ -185,4 +185,4 @@ Target: **Headscale** (self-hosted on KVM2)
 - ACL policy definition for node-level access control
 - Automated auth key rotation
 
-<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TAILSCALE::2026-03-15 -->
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TAILSCALE::2026-07-10 -->

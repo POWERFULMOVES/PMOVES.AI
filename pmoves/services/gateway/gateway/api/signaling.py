@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Dict, Set
-import json, secrets
+import json
+import secrets
 
 router = APIRouter(tags=["Signaling"])
 

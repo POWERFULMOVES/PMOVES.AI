@@ -138,3 +138,13 @@ voice-cast-smoke: voice-cast-deps ## Fire a CHIT sign (mr-clean) and confirm an 
 	 echo "[warn] no new cast WAV after 25s -- check pmoves/$(VOICE_CAST_LOG)"; tail -8 $(VOICE_CAST_LOG) 2>/dev/null; exit 1
 
 .PHONY: voice-cast-deps voice-cast-up voice-cast-down voice-cast-smoke
+
+voice-host-affinity-smoke: ## Assert host-affinity routing: cast a synth, check the response 'node' (agent-runnable; see docs/operations/PERSONA_AND_VOICE_GOLIVE_RUNBOOK.md). Override GATEWAY_URL/ENGINE/EXPECT_NODE/REQUIRE_NODE.
+	@key="$$(docker exec pmoves-flute-gateway-1 printenv FLUTE_API_KEY 2>/dev/null || true)"; \
+	 GATEWAY_URL="$${GATEWAY_URL:-http://127.0.0.1:8055}" \
+	 PROVIDER="$${PROVIDER:-ultimate_tts}" ENGINE="$${ENGINE:-kokoro}" \
+	 EXPECT_NODE="$${EXPECT_NODE:-}" REQUIRE_NODE="$${REQUIRE_NODE:-1}" \
+	 FLUTE_API_KEY="$$key" \
+	 bash scripts/voice/host_affinity_smoke.sh
+
+.PHONY: voice-host-affinity-smoke

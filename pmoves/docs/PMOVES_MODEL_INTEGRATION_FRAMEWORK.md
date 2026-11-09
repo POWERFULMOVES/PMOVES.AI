@@ -219,7 +219,7 @@ Reference: [AGNOTE_P7_PLAYGROUND.md](pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md)
 
 The `pinokio_p7.pbnj_launch` field indicates whether the PBNJ Pinokio app manages the model's lifecycle. Currently all models are `false` — PBNJ manages service stacks (Agent Zero, NATS, Supabase) but not individual model pull/load cycles. This may change as PBNJ evolves to include GPU mesh management.
 
-Reference: `pbnj/pinokio/api/pmoves-services/pinokio.json`
+Reference: `PMOVES-pinokio/api/pmoves-services/pinokio.json`
 
 ### 4.3 TAC Node Tracking
 
@@ -264,7 +264,7 @@ A0_SET_chat_model=https://integrate.api.nvidia.com/v1/glm-5-turbo
 subordinate_profile=sidecar
 
 # Spark mode (local-first, DGX Spark)
-A0_SET_chat_model=http://pmoves-dgx-spark:11434/v1/gemma4:31b-q4
+A0_SET_chat_model=http://pmoves-dgx-spark:11434/v1/gemma4:31b
 subordinate_profile=spark_claw
 ```
 

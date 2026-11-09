@@ -2,7 +2,7 @@
 
 *From ideas-have-shapes to working code in 10 minutes.*
 
-> **CHIT (Cymatic-Holographic Information Transfer)** encodes meaning as geometry instead of long token streams. A small "shape packet" can reliably reconstruct the same meaning on the other side. If it works, humans and AIs communicate more directly — fewer tokens, less ambiguity, richer meaning per message.
+> **CHIT** carries two meanings by design. As a *concept* it is **Cymatic Holographic Information Theory** — meaning encoded as geometry instead of long token streams: a small "shape packet" reliably reconstructs the same meaning on the other side, a "neural esperanto" for high-dimensional AI communication. As a *mechanism* it is **Compressed Hierarchical Information Transfer** — the signing + transport layer that moves those packets over the GEOMETRY BUS (NATS) and Hi-RAG retrieval. If it works, humans and AIs communicate more directly — fewer tokens, less ambiguity, richer meaning per message. (See [00_GLOSSARY.md](00_GLOSSARY.md) for the canon.)
 
 ---
 

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Dashboard Navigation — Cymatic Neo-Brutalism
@@ -128,6 +129,9 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ title, subtitle, active, actions }: DashboardHeaderProps) {
+  const { user, loading } = useSupabaseAuth();
+  const displayName = user?.email?.split('@')[0] || user?.user_metadata?.full_name || null;
+
   return (
     <header className="border-b border-border-subtle bg-void-elevated">
       {/* Top bar */}
@@ -139,6 +143,12 @@ export function DashboardHeader({ title, subtitle, active, actions }: DashboardH
 
         <div className="flex items-center gap-4">
           {actions}
+          {displayName && !loading && (
+            <span className="text-xs font-mono text-ink-secondary">
+              <span className="text-ink-muted">Welcome back, </span>
+              <span className="text-cata-cyan">{displayName}</span>
+            </span>
+          )}
           <Link href="/dashboard/services" className="btn-ghost text-xs">
             All Services
           </Link>

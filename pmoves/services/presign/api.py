@@ -2,10 +2,10 @@ import os
 import socket
 import time
 import hmac
-import hashlib
+import logging
 from contextlib import asynccontextmanager
-from typing import Optional, List, Dict
-from fastapi import FastAPI, HTTPException, Header, Query
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel, Field
 import boto3
 from botocore.config import Config
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
     if NATS_ANNOUNCE_AVAILABLE:
         try:
             await announce_service(
-                nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
                 slug=slug,
                 name=name,
                 url=url,

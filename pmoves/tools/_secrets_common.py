@@ -16,6 +16,22 @@ from typing import Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+
+def force_utf8_stdio() -> None:
+    """Make stdout/stderr UTF-8 so status glyphs don't crash a cp1252 Windows console.
+
+    Windows Python defaults stdout to the locale encoding (cp1252), which raises
+    ``UnicodeEncodeError`` on ``✔``/``ℹ``/``→`` etc. The funnel sets no
+    ``PYTHONUTF8``/``PYTHONIOENCODING``, so tools that print glyphs must self-defend.
+    A no-op when the stream can't be reconfigured (e.g. under pytest capture).
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Placeholder Detection
 # ---------------------------------------------------------------------------
@@ -43,10 +59,16 @@ PLACEHOLDER_VALUES: frozenset[str] = frozenset({
 
 
 def normalize_env_value(value: str) -> str:
-    """Strip whitespace and unquote matching outer single/double quotes."""
+    """Strip whitespace and unquote matching outer single/double quotes.
+
+    Also unescapes \\" → " so repeated _set_kv calls are idempotent
+    (Codex P2: quote escaping must not accumulate on re-runs).
+    """
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1].strip()
+        value = value[1:-1].strip()
+    # Unescape any backslash-escaped quotes from prior _set_kv runs
+    value = value.replace('\\"', '"').replace("\\'", "'")
     return value
 
 
@@ -69,6 +91,12 @@ def is_placeholder(value: str | None) -> bool:
     if "your_" in lowered:
         return True
     if lowered.startswith("placeholder_"):
+        return True
+    # Pattern: <name>_here template text (CLICKHOUSE_PASSWORD_HERE). The exact
+    # list only knew surreal_*_here, so other templates rode the CI bundle into
+    # env.shared. Suffix + identifier-only: real secrets that contain "here"
+    # elsewhere, or base64 with "_here" in it, are not templates.
+    if lowered.endswith("_here") and re.fullmatch(r"[a-z0-9_]+", lowered):
         return True
     # Example domain checks (URLs and emails)
     if lowered.endswith("@example.com") or lowered.endswith(".example.com"):

@@ -1,0 +1,21 @@
+{
+  "room_id": "fixture.room.owneronly",
+  "version": "1.0.0",
+  "display_name": "Fixture Owner Only",
+  "description": "public but owner_only: must NOT be public",
+  "agent_id": "fixture-agent",
+  "access": {
+    "visibility": "public",
+    "owner_only": true
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "fixture"
+    },
+    "layout": {
+      "default_route": "/",
+      "panels": []
+    }
+  },
+  "apps": []
+}

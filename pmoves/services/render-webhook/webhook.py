@@ -1,7 +1,10 @@
-import os, time, hmac, hashlib, json
+import os
+import time
+import hmac
+import json
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from starlette.responses import Response
 import requests
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST

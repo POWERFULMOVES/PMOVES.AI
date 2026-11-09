@@ -7,7 +7,6 @@ Tests cover:
 """
 import sys
 import os
-import pytest
 
 # Add service to path and pmoves package parent for canonical imports.
 # The monorepo also has pmoves/services, so make this test's local services

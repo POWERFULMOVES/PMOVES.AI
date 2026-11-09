@@ -129,10 +129,11 @@
               "clipboard",
               "open-apps",
               "search-results",
-              "user-intent"
+              "user-intent",
+              "nats-bus"
             ]
           },
-          "description": "Context lanes injected before skill execution"
+          "description": "Context lanes injected before skill execution. `nats-bus` was added 2026-09-08: jons-edge.room.control already declared it as a source AND as a panel, and it had been failing validation invisibly because nothing invoked validate_room_manifests.py. NATS is the fleet's transport (GEOMETRY BUS, Grand Convergence L3), so a room agent reading bus events is a legitimate lane rather than a typo. Additive -- no existing manifest changes meaning."
         },
         "include_last_turns": {
           "type": "integer",
@@ -258,6 +259,14 @@
         },
         "one_active_run": {
           "type": "boolean"
+        },
+        "provenance_table": {
+          "type": "string",
+          "description": "Table consulted before the skill may run, e.g. pmoves_core.voice_cloning_provenance. Used for rights-basis gates where execution requires a recorded consent artifact."
+        },
+        "provenance_check": {
+          "type": "string",
+          "description": "Predicate that must hold in provenance_table for the run to proceed, e.g. is_active=true AND rights_basis IN ('CONSENTED','LICENSED') AND consent_artifact_uri IS NOT NULL. Pair with fail_open:false so an unverifiable provenance lookup denies rather than allows."
         }
       },
       "additionalProperties": false

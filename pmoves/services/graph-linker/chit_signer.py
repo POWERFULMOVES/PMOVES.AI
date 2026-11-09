@@ -11,13 +11,18 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from pmoves.tools.chit_security import sign_cgp, verify_cgp
 
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
+
 logger = logging.getLogger(__name__)
 
-_CHIT_SIGNING_KEY = os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE")
+_CHIT_SIGNING_KEY = get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE")
 CHIT_SIGN_NEO4J = os.environ.get("CHIT_SIGN_NEO4J", "false").lower() == "true"
 
 

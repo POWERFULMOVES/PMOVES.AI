@@ -30,3 +30,6 @@
 
 # --- Catch-all 404 to home (optional; uncomment when real 404 page lands) ---
 # /*                            /                      404
+
+# Tokenism Simulator: room-gated (tokenism.room.exchange); public URL pending room publish
+/tokenism-sim/* /chit-tour/ 200

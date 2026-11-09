@@ -8,11 +8,11 @@
 
 | Owns (source of truth here) | References (canonical elsewhere) |
 |-----------------------------|----------------------------------|
-| **Humans** — members, contact, tier | **Agents / teams** → [`pmoves/configs/agent-teams.yaml`](../../../pmoves/configs/agent-teams.yaml) (62 agents · 11 teams · node_affinity) |
+| **Humans** — members, contact, tier | **Agents / teams** → [`pmoves/configs/agent-teams.yaml`](../../../pmoves/configs/agent-teams.yaml) (111 registry agents · 14 teams · node_affinity — measured 2026-10-10) |
 | **Org guilds** — Core, Governance, Infra Cloud → charters | **Agent personas** → [`pmoves/docs/AGENTS/PERSONAS.md`](../../../pmoves/docs/AGENTS/PERSONAS.md) (identity/voice/behavior, AGNOTE4482-governed) |
 | **Access grants** — Tailscale groups, exit tags, RustDesk role | **Node hardware** → `pmoves/config/profiles/<node>.yaml` + agent-teams `node_affinity` |
 
-So: **do not re-list the 62 agents or node specs here.** For a non-human actor, the roster
+So: **do not re-list the 111 registry agents or node specs here.** For a non-human actor, the roster
 carries a thin record: its `ref` (into agent-teams.yaml), its `persona` (into PERSONAS.md,
 if any), its guild membership, and its **access grant** — nothing that duplicates the source.
 

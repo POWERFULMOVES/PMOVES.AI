@@ -1,72 +1,71 @@
-Create a subordinate agent via Agent Zero's MCP API.
+Dispatch a task to Agent Zero under a specialist agent profile.
 
-Subordinate agents are on-demand, specialized agents with limited scope and tools. They execute independently and report results back to the supervisor.
+Agent Zero has **no subordinate-creation API**. What exists: you can pin the
+*profile* a task runs under, and the agent itself may spawn subordinates mid-run
+via its `call_subordinate` tool. Neither gives you a subordinate handle — results
+arrive in the task's job log.
 
 ## Usage
 
-Run this command to create a specialized agent:
-- `/agents:subordinate log-analyzer` - Create log analysis agent
-- `/agents:subordinate --tools python,sql data-analyst` - Custom tools
+Run this command with a profile and a task:
+- `/agents:subordinate researcher Find prior art for X`
+- `/agents:subordinate developer Refactor the retry logic in Y`
 
 ## Implementation
 
 Execute the following steps:
 
-1. **Check Agent Zero MCP health:**
+1. **Check supervisor + runtime health:**
    ```bash
-   curl -sf http://localhost:8080/mcp/health \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" | jq .
+   curl -sf http://localhost:8080/healthz | jq '{status, runtime: .runtime.status}'
    ```
 
-   If not healthy, inform user and stop.
+   If `.status` is `stopped`, inform the user and stop.
 
-2. **Create subordinate agent:**
+2. **Submit the task with a profile:**
    ```bash
-   curl -X POST http://localhost:8080/mcp/subordinate/create \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+   curl -sf -X POST http://localhost:8080/tasks \
      -H "Content-Type: application/json" \
      -d '{
-       "config": {
-         "name": "<agent_name>",
-         "specialization": "<description_of_specialization>",
-         "tools": ["<tool1>", "<tool2>"],
-         "max_turns": 10,
-         "timeout_seconds": 120
-       }
-     }'
+       "message": "<role, goal, and the concrete task>",
+       "metadata": {"agent_profile": "researcher"}
+     }' | jq .
    ```
 
-   Returns subordinate ID, status, and capabilities.
+   `metadata` is merged into the runtime payload, so `agent_profile` reaches the
+   runtime's message handler. Returns `{"context_id": ..., "response": ...}`.
 
-3. **Verify subordinate is active:**
+   The profile can only be set on a **new** context. Passing `agent_profile`
+   together with an existing `context_id` returns 400.
+
+3. **Read the result:**
    ```bash
-   curl -sf http://localhost:8080/mcp/agents \
-     -H "Authorization: Bearer $MCP_CLIENT_SECRET" | jq '.subordinates'
+   curl -sf "http://localhost:8080/jobs/{context_id}?length=200" | jq .
    ```
 
 4. **Report results to user:**
-   - Subordinate agent ID
-   - Assigned specialization and tools
-   - Status (ready/busy)
-   - How to submit tasks to this subordinate
+   - The `context_id`
+   - The profile the task was dispatched under
+   - The log tail, including any subordinate transcript
+
+## Available profiles
+
+`agent0`, `default`, `developer`, `hacker`, `pmoves_custom`, `researcher`
+
+Defined in `PMOVES-Agent-Zero/agents/`. There is no API to create new ones — add
+a profile directory to the submodule.
 
 ## Authentication
 
-Requires `MCP_CLIENT_SECRET` environment variable.
-
-## Common Subordinate Types
-
-| Name | Specialization | Tools |
-|------|----------------|-------|
-| `log-analyzer` | Log analysis and pattern detection | grep, awk, analysis |
-| `code-reviewer` | Code review and quality checks | file_operations |
-| `data-analyst` | Data querying and analysis | python, sql |
-| `doc-writer` | Documentation generation | file_operations |
+None. The supervisor declares no inbound auth dependency on these routes. It
+forwards `X-API-KEY` (`AGENT_ZERO_API_KEY`) to the A0 runtime on your behalf.
 
 ## Notes
 
-- Subordinates are ephemeral — auto-destroyed after task completion or timeout
-- Each subordinate has its own isolated context window
-- Results published to NATS `agent.subordinate.result.v1`
-- Default max turns: 10; default timeout: 120 seconds
-- See `.claude/context/agent-zero-orchestration.md` for the full subordinate model
+- No subordinate id, no subordinate registry, no per-subordinate timeout or turn
+  cap is exposed over HTTP. Those were documented but never built.
+- True subordinates are spawned by the model via its `call_subordinate` tool
+  (`PMOVES-Agent-Zero/tools/call_subordinate.py`, contract
+  `prompts/agent.system.tool.call_sub.md`; args `message`, `profile`, `reset`).
+  Ask for delegation in the `message` and read the transcript in the job log.
+- Canonical API surface: `pmoves/docs/operations/AGENT_ZERO_API.md`

@@ -7,13 +7,10 @@ with nested dependencies like neo4j, nats, etc.).
 
 from __future__ import annotations
 
-import json
 import sys
-from pathlib import Path
 from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from pmoves.chit import CGP_SPEC_VERSION
 

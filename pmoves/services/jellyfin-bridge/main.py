@@ -10,7 +10,7 @@ from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 import httpx
 from urllib.parse import urlencode
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -577,7 +577,7 @@ def _publish_to_notebook_sync(
 
         # Run async publisher from sync context
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If we're in an async context, schedule on the existing loop
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -609,6 +609,107 @@ def jellyfin_link(body: Dict[str,Any] = Body(...)):
     JELLYFIN_LINKS.labels(result="success").inc()
     JELLYFIN_REQUESTS.labels(endpoint="link", status="success").inc()
     return {"ok": True}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Playback webhook — human-side third-reference persona grounding
+#
+# Jellyfin's Webhook plugin POSTs here on playback events. A listen is a
+# gravitational measurement: persona.consumption.recorded.v1 with
+# consumer_kind=human feeds the persona-thirdref consumer (durable
+# JetStream subscriber), enriching shape profiles from what the human
+# actually plays — Finamp on the phone included, since media.pmoves.ai is
+# the same server.
+# ─────────────────────────────────────────────────────────────────────────────
+PERSONA_CONSUMPTION_SUBJECT = "persona.consumption.recorded.v1"
+PERSONA_WEBHOOK_FAILURES = Counter(
+    "jellyfin_bridge_persona_publish_failures_total",
+    "NATS publish failures for persona consumption events",
+)
+_PLAYBACK_STARTS: Dict[str, float] = {}  # user|item -> monotonic start time
+
+
+def _persona_user_id(jellyfin_user: str) -> str:
+    """Map a Jellyfin username to a persona user_id.
+
+    PERSONA_THIRDREF_JELLYFIN_USER_MAP (JSON object) overrides; default
+    lowercases the username. Empty result drops the event (unknown user).
+    """
+    mapping = {}
+    raw = os.environ.get("PERSONA_THIRDREF_JELLYFIN_USER_MAP", "")
+    if raw:
+        try:
+            mapping = json.loads(raw)
+        except ValueError:
+            LOGGER.warning("PERSONA_THIRDREF_JELLYFIN_USER_MAP is not valid JSON")
+    return mapping.get(jellyfin_user, jellyfin_user.lower() if jellyfin_user else "")
+
+
+def _build_persona_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Jellyfin webhook payload -> persona.consumption.recorded.v1, or None."""
+    import datetime as _dt
+    import time as _time
+
+    ntype = (payload.get("NotificationType") or "").strip()
+    user = _persona_user_id(payload.get("UserName") or "")
+    item_id = str(payload.get("ItemId") or "")
+    if not user or not item_id:
+        return None
+    key = f"{user}|{item_id}"
+    item_type = (payload.get("ItemType") or "").lower()
+    item_kind = "beat" if item_type == "audio" else "generic"
+    event: Dict[str, Any] = {
+        "consumer_kind": "human",
+        "user_id": user,
+        "item_kind": item_kind,
+        "item_id": item_id,
+        "session_id": payload.get("SessionId") or "",
+        "source": "jellyfin",
+        "timestamp": _dt.datetime.now(_dt.timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+    }
+    if ntype == "PlaybackStart":
+        _PLAYBACK_STARTS[key] = _time.monotonic()
+    elif ntype == "PlaybackStop":
+        started = _PLAYBACK_STARTS.pop(key, None)
+        if started is not None:
+            event["duration_seconds"] = round(_time.monotonic() - started, 1)
+    else:
+        return None
+    return event
+
+
+async def _publish_persona_event(event: Dict[str, Any]) -> bool:
+    """Connect-per-publish, matching _publish_station_event's cadence.
+
+    Reconnect-bounded: nats-py's reconnect loop otherwise hangs the webhook
+    indefinitely on an unreachable bus (the same hazard persona-thirdref's
+    startup once had).
+    """
+    from nats.aio.client import Client as NATS
+
+    nc = NATS()
+    try:
+        await nc.connect(servers=[NATS_URL], connect_timeout=5, max_reconnect_attempts=0)
+        await nc.publish(PERSONA_CONSUMPTION_SUBJECT, json.dumps(event).encode())
+        await nc.flush()
+        return True
+    except Exception as exc:
+        PERSONA_WEBHOOK_FAILURES.inc()
+        LOGGER.error("NATS publish failed for persona consumption: %s", exc)
+        return False
+    finally:
+        await nc.close()
+
+
+@app.post("/jellyfin/webhook")
+async def jellyfin_webhook(body: Dict[str, Any] = Body(...)):
+    event = _build_persona_event(body)
+    if event is None:
+        return {"ok": True, "emitted": False}
+    emitted = await _publish_persona_event(event)
+    return {"ok": emitted, "emitted": emitted}
+
 
 @app.post("/jellyfin/refresh")
 def jellyfin_refresh(body: Dict[str,Any] = Body({})):
@@ -942,7 +1043,7 @@ def jellyfin_config():
 # ─────────────────────────────────────────────────────────────────────────────
 # YouTube Station Management
 # ─────────────────────────────────────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 
 STATION_REQUESTS = Counter(
     "jellyfin_bridge_station_requests_total",
@@ -993,7 +1094,7 @@ def yt_channels(request: Request):
         return {"ok": True, "channels": r.json()}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="list_channels", status="error").inc()
         raise HTTPException(status_code=502, detail="Failed to list channels")
 
@@ -1028,7 +1129,7 @@ async def yt_create_station(
         return {"ok": True, "station": station}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="create_station", status="error").inc()
         raise HTTPException(status_code=502, detail="Station creation failed")
 
@@ -1050,7 +1151,7 @@ async def yt_delete_station(channel_id: str, request: Request):
         return {"ok": True, "channel_id": channel_id}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="delete_station", status="error").inc()
         raise HTTPException(status_code=502, detail="Station deletion failed")
 
@@ -1068,7 +1169,7 @@ def yt_stations(request: Request):
         return {"ok": True, "stations": r.json()}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="list_stations", status="error").inc()
         raise HTTPException(status_code=502, detail="Failed to list stations")
 

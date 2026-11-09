@@ -1,0 +1,46 @@
+{
+  "title": "PMOVES.AI — Architecture Walkthrough",
+  "subtitle": "A local-first, event-driven AI platform — in standard systems terms first",
+  "summary": "A three-minute tour of what PMOVES.AI is as an engineering system: specialized agents coordinated over an event bus, hybrid retrieval, model routing, observability, and human-approval gates — moved from scattered experiments to a bounded, observable, production-shaped platform. The distinctive internal names come last, once the conventional architecture is clear.",
+  "merkle_root": "mkl_persona_walkthrough_2026",
+  "shape_id": "shape.persona.architecture-walkthrough.v1",
+  "favorite_words": ["orchestration", "retrieval", "provenance", "observability", "sovereign", "production"],
+  "weighted_terms": [
+    { "term": "Agent Orchestration", "weight": 0.97, "cluster": "coordination" },
+    { "term": "Hybrid RAG", "weight": 0.9, "cluster": "retrieval" },
+    { "term": "Model Routing", "weight": 0.84, "cluster": "gateway" },
+    { "term": "Event Bus", "weight": 0.8, "cluster": "event-plane" },
+    { "term": "Signed Audit Trails", "weight": 0.76, "cluster": "trust" },
+    { "term": "Observability", "weight": 0.7, "cluster": "operations" },
+    { "term": "Human Review", "weight": 0.66, "cluster": "governance" },
+    { "term": "Local-First", "weight": 0.62, "cluster": "sovereignty" }
+  ],
+  "sections": [
+    {
+      "heading": "1 — The system in one breath",
+      "body": "PMOVES.AI is a local-first, event-driven platform that coordinates specialized AI agents to do real work. In conventional terms: an orchestration layer routes tasks to agents; agents call retrieval, tools, and models; results pass through logging, evaluation, and human-approval gates before they count. The whole thing runs on infrastructure the operator owns — not a rented API surface."
+    },
+    {
+      "heading": "2 — How the pieces fit",
+      "body": "A runtime orchestration and routing layer selects the right workspace for a task and binds each agent to a model, persona, tool set, and policy. Agents exchange structured context over an event bus instead of ad-hoc calls. Retrieval is hybrid — vector, graph, and full-text fused — so answers are grounded. A model gateway routes across providers by cost, capability, and availability, with a local-GPU floor so the lights stay on offline."
+    },
+    {
+      "heading": "3 — Trust and provenance",
+      "body": "Every agent has a cryptographic identity, and every consequential action writes a signed, non-repudiable audit trail. State travels as compact structured packets on the event bus, so what an agent knew and did is reviewable after the fact. This is the difference between a demo and a system you can put in front of an auditor: outputs are traceable to inputs, identities, and approvals."
+    },
+    {
+      "heading": "4 — From prototype to production",
+      "body": "The platform is built to cross the gap most AI work never does. Evaluation harnesses score representative tasks; human-review gates hold anything consequential; Prometheus, Grafana, Loki, and ClickHouse make behavior observable; and a layered, sovereign egress keeps the mesh private and self-hosted. New work moves through explicit lifecycle stages — rehearsal, live, review, archive — rather than shipping straight to users."
+    },
+    {
+      "heading": "5 — Now the internal names",
+      "body": "With the conventional architecture in view, the distinctive vocabulary lands cleanly: workspaces are 'rooms on a stage'; the orchestrator is 'P7'; the model/persona/tool bindings are 'suits'; the structured-context event exchange is the 'Geometry Bus'; the cryptographic identity and signed trails are 'CHIT'; and the whole is a 'Metal-Organic Framework' — every node a pore in one lattice. Same engineering, memorable names."
+    }
+  ],
+  "provenance_refs": [
+    { "label": "06_linkedin_profile.md — employer translation", "kind": "persona" },
+    { "label": "PMOVES_GRAND_CONVERGENCE.md", "kind": "thesis" },
+    { "label": "PMOVES_MOF_ARCHITECTURE.md", "kind": "thesis" },
+    { "label": "AGNOTE4482 convergence gateway", "kind": "surface" }
+  ]
+}

@@ -220,6 +220,24 @@ def collect_services(filter_names: Optional[List[str]] = None) -> List[Path]:
     return candidates
 
 
+def extract_manual_prefix(path: Path) -> str:
+    """Return any manually-authored content above the generated H1 heading.
+
+    ``render_markdown`` rewrites the whole file, so a hand-written banner above
+    the ``# <name> — Update Notes`` heading (e.g. a SUPERSEDED caution) would be
+    silently wiped on the next rerun. Preserve it verbatim so the helper is safe
+    to re-run against legacy service docs.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except (OSError, UnicodeDecodeError):
+        return ""
+    for i, line in enumerate(lines):
+        if line.startswith("# ") and "— Update Notes" in line:
+            return "".join(lines[:i])
+    return ""
+
+
 def update_service(service_path: Path, limit: int, dry_run: bool) -> Optional[Path]:
     doc_dir = DOCS_ROOT / service_path.name
     if not doc_dir.exists():
@@ -230,6 +248,11 @@ def update_service(service_path: Path, limit: int, dry_run: bool) -> Optional[Pa
     markdown = render_markdown(service_path.name, commits, versions)
 
     update_path = doc_dir / "UPDATE_NOTES.md"
+    # Preserve a hand-authored prefix (e.g. a SUPERSEDED banner) above the
+    # generated heading so a rerun does not silently discard it.
+    if update_path.exists():
+        markdown = extract_manual_prefix(update_path) + markdown
+
     if not dry_run:
         update_path.write_text(markdown, encoding="utf-8")
     return update_path

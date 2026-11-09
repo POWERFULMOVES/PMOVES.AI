@@ -24,7 +24,6 @@ Metrics:
   - github_crossrepo_pr_duration_seconds
 """
 
-import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -32,7 +31,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
@@ -41,8 +40,7 @@ from nats.aio.client import Client as NATS
 from workflow_templates import (
     PRType,
     get_template,
-    list_templates,
-    PRWorkflowTemplate
+    list_templates
 )
 from agentzero_client import AgentZeroMCPClient
 
@@ -54,7 +52,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Environment variables
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8104"))
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 AGENTZERO_MCP_URL = os.getenv("AGENTZERO_MCP_URL", "http://agent-zero:8080/mcp/command")

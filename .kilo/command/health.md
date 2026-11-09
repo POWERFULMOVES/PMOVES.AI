@@ -15,7 +15,7 @@ declare -A SERVICES=(
   ["tensorzero"]="3030"
   ["nats"]="4222"
   ["flute-gateway"]="8055"
-  ["cipher-memory"]="8096"
+  ["cipher-memory"]="8105"
 )
 
 for name in "${!SERVICES[@]}"; do
@@ -36,7 +36,7 @@ Check Z890 services if Tailscale is up:
 
 ```bash
 if command -v tailscale &>/dev/null; then
-  for svc in agent-zero:8080 archon:8091 tensorzero:3030 cipher:8096; do
+  for svc in agent-zero:8080 archon:8091 tensorzero:3030 cipher:8105; do
     name="${svc%%:*}"; port="${svc##*:}"
     if curl -sf "http://100.64.0.1:$port/healthz" -o /dev/null -m 3 2>/dev/null; then
       echo "OK $name (remote :$port)"

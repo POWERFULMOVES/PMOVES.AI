@@ -15,20 +15,17 @@ Port: 8100
 """
 
 import asyncio
-import json
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from pydantic import BaseModel
 
 # Local imports
 from metrics import (
@@ -56,7 +53,7 @@ logger = logging.getLogger("github-runner-ctl")
 
 # Environment configuration (PMOVES pattern: env-based with defaults)
 PORT = int(os.environ.get("PORT", 8100))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 GITHUB_PAT_FILE = os.environ.get("GITHUB_PAT_FILE", "/run/secrets/github_pat")
 RUNNERS_CONFIG = os.environ.get("RUNNERS_CONFIG", "/app/config/runners.yaml")
 REFRESH_INTERVAL = int(os.environ.get("REFRESH_INTERVAL_SECONDS", "60"))
@@ -215,9 +212,9 @@ async def lifespan(app: FastAPI):
         if connected:
             logger.info(f"NATS publisher connected to {NATS_URL}")
         else:
-            logger.warning(f"NATS connection failed, will retry in background")
+            logger.warning("NATS connection failed, will retry in background")
     except asyncio.TimeoutError:
-        logger.warning(f"NATS connection timed out, will retry in background")
+        logger.warning("NATS connection timed out, will retry in background")
     except Exception as e:
         logger.warning(f"NATS connection failed: {e} (continuing without NATS)")
         nats_publisher = None

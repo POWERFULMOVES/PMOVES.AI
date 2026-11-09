@@ -14,7 +14,6 @@ Make target:
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -38,11 +37,11 @@ def main():
         from unsloth import FastLanguageModel
         from transformers import TrainingArguments
         from trl import SFTTrainer
-    except ImportError as e:
-        print(f"ERROR: Unsloth not installed. Run: uv pip install unsloth")
+    except ImportError:
+        print("ERROR: Unsloth not installed. Run: uv pip install unsloth")
         sys.exit(1)
 
-    print(f"=== PMOVES Unsloth Fine-Tuning ===")
+    print("=== PMOVES Unsloth Fine-Tuning ===")
     print(f"Model: {args.model}")
     print(f"Dataset: {args.dataset}")
     print(f"Output: {args.output}")
@@ -74,7 +73,7 @@ def main():
     )
 
     # Training arguments optimized for PMOVES agent traces
-    training_args = TrainingArguments(
+    TrainingArguments(
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=4,
         warmup_steps=5,

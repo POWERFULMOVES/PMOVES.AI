@@ -1,3 +1,14 @@
+> [!CAUTION]
+> **SUPERSEDED — last synced against the pre-0.6.0 Python Archon (marked 2026-08-06).**
+>
+> The commits listed below belong to the old Python service that Archon 0.6.0 (#2217)
+> replaced. Retained as history; do not read as current state.
+>
+> **Canonical:** `.claude/CATALOG.md` and `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md`.
+>
+> Note: `pmoves/scripts/update_service_logs.py` references this file — retained rather than
+> deleted so that tooling does not break.
+
 # archon — Update Notes
 
 _Last synced: 2025-11-07T15:48:32Z_

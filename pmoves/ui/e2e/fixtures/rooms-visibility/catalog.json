@@ -1,0 +1,41 @@
+{
+  "schema_version": "fixture",
+  "rooms": [
+    {
+      "room_id": "fixture.room.noaccess",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture No Access",
+      "manifest": "fixture.noaccess.json"
+    },
+    {
+      "room_id": "fixture.room.emptyaccess",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture Empty Access",
+      "manifest": "fixture.emptyaccess.json"
+    },
+    {
+      "room_id": "fixture.room.typo",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture Typo Visibility",
+      "manifest": "fixture.typo.json"
+    },
+    {
+      "room_id": "fixture.room.owneronly",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture Owner Only",
+      "manifest": "fixture.owneronly.json"
+    },
+    {
+      "room_id": "fixture.room.excluded",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture Excluded Public",
+      "manifest": "fixture.excluded.json"
+    },
+    {
+      "room_id": "fixture.room.public",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture Proper Public",
+      "manifest": "fixture.public.json"
+    }
+  ]
+}

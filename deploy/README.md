@@ -141,7 +141,7 @@ export PMOVES_COMPOSE_PROJECT=pmoves_local
 
 ## Pinokio Integration
 
-This deployment infrastructure integrates with the **PBnJ Pinokio application** located at `/pbnj/pinokio/api/pmoves-pbnj/`.
+This deployment infrastructure integrates with the **PBnJ Pinokio application** located at `/PMOVES-pinokio/api/pmoves-pbnj/`.
 
 The Pinokio app provides a graphical interface for:
 - Starting/stopping AI Lab cluster
@@ -149,7 +149,7 @@ The Pinokio app provides a graphical interface for:
 - Managing local Docker Compose stack
 - Checking cluster status
 
-See `/pbnj/README.md` for Pinokio installation and usage.
+See `/PMOVES-pinokio/README.md` for Pinokio installation and usage.
 
 ## Prerequisites
 
@@ -279,7 +279,7 @@ docker compose -f ../pmoves/docker-compose.yml logs --tail=50
 
 ## Related Documentation
 
-- [PBnJ Pinokio Application](/pbnj/README.md)
+- [PBnJ Pinokio Application](/PMOVES-pinokio/README.md)
 - [PMOVES Architecture](/.claude/CLAUDE.md)
 - [Security Hardening Roadmap](/docs/Security-Hardening-Roadmap.md)
 - [Deployment Notes](/docs/pmoves-deploy-notes.md)

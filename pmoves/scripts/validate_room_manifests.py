@@ -97,6 +97,15 @@ def iter_catalog_entries(catalog: dict, only_room_id: str | None) -> Iterable[di
         yield entry
 
 
+def discover_manifest_files() -> set[str]:
+    """Return canonical room manifests, excluding the catalog and extension sidecars."""
+    return {
+        path.name
+        for path in ROOM_DIR.glob("*.json")
+        if path.name != CATALOG_PATH.name and not path.name.endswith(".extras.json")
+    }
+
+
 def validate_entry(entry: dict, validator: jsonschema.Draft202012Validator) -> tuple[Path, dict]:
     manifest_name = entry.get("manifest")
     if not manifest_name:
@@ -109,7 +118,7 @@ def validate_entry(entry: dict, validator: jsonschema.Draft202012Validator) -> t
     manifest = read_json(manifest_path)
     validator.validate(manifest)
 
-    for key in ("room_id", "agent_id", "alter", "display_name"):
+    for key in ("room_id", "agent_id", "alter", "display_name", "stage"):
         catalog_value = entry.get(key)
         manifest_value = manifest.get(key)
         if catalog_value is not None and manifest_value != catalog_value:
@@ -127,6 +136,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+BASELINE_PATH = Path(__file__).resolve().parents[1] / "configs" / "room_manifest_undeclared.yaml"
+
+
+def load_undeclared() -> dict[str, dict]:
+    """Rooms whose failure is DISCOVERED structure, not a defect.
+
+    `additionalProperties: false` can only answer valid/invalid, which puts the
+    boundary BETWEEN manifests. A room that knows more than the contract has the
+    boundary running THROUGH it. This lets the validator say so, and still fail
+    on anything not written down here.
+    """
+    if not BASELINE_PATH.exists():
+        return {}
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        print("room-validate: DEGRADED - PyYAML absent, so the undeclared-structure "
+              "baseline could not be read; every entry in it will report as FAILED.")
+        return {}
+    doc = yaml.safe_load(BASELINE_PATH.read_text(encoding="utf-8")) or {}
+    return {e["room_id"]: e for e in (doc.get("undeclared") or []) if e.get("room_id")}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     catalog = read_json(CATALOG_PATH)
@@ -141,7 +173,11 @@ def main(argv: list[str] | None = None) -> int:
     # the first invalid manifest — a single bad room must not hide the health of the
     # rest. Exit non-zero if any room is invalid.
     seen_ids: set[str] = set()
+    seen_manifests: set[str] = set()
     failures: list[str] = []
+    undeclared_hits: list[str] = []
+    undeclared = load_undeclared()
+    ok = 0
     for entry in matched:
         room_ref = entry.get("room_id") or entry.get("manifest") or "<unknown>"
         try:
@@ -150,9 +186,19 @@ def main(argv: list[str] | None = None) -> int:
             room_id = manifest["room_id"]
             if room_id in seen_ids:
                 raise ValueError(f"duplicate room_id in selection: {room_id}")
+            manifest_name = manifest_path.name
+            if manifest_name in seen_manifests:
+                raise ValueError(f"manifest referenced more than once: {manifest_name}")
             seen_ids.add(room_id)
+            seen_manifests.add(manifest_name)
         except Exception as exc:  # noqa: BLE001 - surface each room's failure, keep going
             first_line = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+            entry_baseline = undeclared.get(room_ref)
+            if entry_baseline and entry_baseline.get("property", "") in first_line:
+                undeclared_hits.append(f"{room_ref}: {first_line}")
+                print(f"UNDECLARED {room_ref}: {first_line}")
+                print(f"           owner: {entry_baseline.get('owner', '?')}")
+                continue
             failures.append(f"{room_ref}: {first_line}")
             print(f"FAIL {room_ref}: {first_line}")
             continue
@@ -161,10 +207,34 @@ def main(argv: list[str] | None = None) -> int:
             apps = len(manifest.get("apps", []))
             skills = len(manifest.get("skill_bindings", []))
             route = manifest.get("shell", {}).get("layout", {}).get("default_route", "-")
-            print(f"OK {manifest_path.name} room_id={room_id} apps={apps} skills={skills} route={route}")
+            stage = manifest.get("stage", "-")
+            print(
+                f"OK {manifest_path.name} room_id={room_id} stage={stage} "
+                f"apps={apps} skills={skills} route={route}"
+            )
+        ok += 1
 
-    ok = len(matched) - len(failures)
-    print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, {len(failures)} FAILED")
+    if not args.room_id:
+        referenced = {
+            entry.get("manifest")
+            for entry in catalog.get("rooms", [])
+            if entry.get("manifest")
+        }
+        discovered = discover_manifest_files()
+        for manifest_name in sorted(discovered - referenced):
+            failures.append(f"uncataloged room manifest: {manifest_name}")
+            print(f"FAIL uncataloged room manifest: {manifest_name}")
+        for manifest_name in sorted(referenced - discovered):
+            failures.append(f"catalog references missing manifest: {manifest_name}")
+            print(f"FAIL catalog references missing manifest: {manifest_name}")
+
+    print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, "
+          f"{len(undeclared_hits)} UNDECLARED, {len(failures)} FAILED")
+    if undeclared_hits:
+        print("UNDECLARED (discovered structure the contract has not caught up to; "
+              "baselined in configs/room_manifest_undeclared.yaml):")
+        for u in undeclared_hits:
+            print(f"  - {u}")
     if failures:
         print("FAILED rooms (fix separately — one bad manifest no longer hides the rest):")
         for f in failures:

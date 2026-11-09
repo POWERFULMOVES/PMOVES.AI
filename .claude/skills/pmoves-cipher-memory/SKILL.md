@@ -1,3 +1,8 @@
+---
+name: pmoves-cipher-memory
+description: Enable persistent memory across Claude Code sessions for PMOVES.AI development.
+---
+
 # PMOVES Cipher Memory Skill
 
 **Purpose**: Enable persistent memory across Claude Code sessions for PMOVES.AI development.
@@ -10,7 +15,118 @@ This skill integrates Claude Code with Cipher Memory, providing:
 - Reasoning trace storage for complex problem-solving
 - Submodule knowledge management
 
+## Required on every call: `agentId`
+
+`pmoves_cipher_store` and `pmoves_cipher_search` both **require** `agentId`. This
+skill omitted it until 2026-08-21, so every example here was missing a required
+field and would have failed.
+
+Use your signing-card `agent_id` from `pmoves/config/signing_identity_cards.yaml`
+(`claude-opus`, `crush`, `4090-claude`, ...). The tool's own description suggests
+`claude-4090`, which matches **no card** — the card is `4090-claude`.
+
+Search is **per-agent scoped**: it returns only what the same `agentId` stored. Pass
+`agentId: "*"` for cross-agent search (advisory mode only). On a cold start, search
+the wildcard too or you will miss what other agents on this node recorded.
+
+## The 403 you will actually hit: the token is minted for another agent
+
+`agentId` must match the agent your node's token was minted for. If it does not,
+the service refuses you — correctly:
+
+```
+403  token belongs to agent 'bootstrap', but request specified 'z890-claude'
+```
+
+Measured on Z890 2026-09-09. The node holds a shared **`bootstrap`** token, while
+the signing card for this node is `z890-claude`
+(`pmoves/config/signing_identity_cards.yaml`). So an agent doing exactly what this
+skill says — pass your signing-card `agent_id` — is rejected, and the rejection
+looks like a permissions bug rather than a provisioning one.
+
+**This is not a reason to fall back to auto-memory silently, and not a reason to
+pass `bootstrap`.** Writing as `bootstrap` puts your memories under a shared
+six-scope identity that every agent on the node can read and that attributes to
+nobody. The remedy is a per-agent mint through the CHIT pipeline
+(`make -C pmoves cipher-mint-token AGENT=<card id>` — it prints a secret, so never
+run it in an agent transcript).
+
+Cross-agent `agentId: "*"` is refused under token enforcement
+(`Pmoves-cipher/src/pmoves/memory-routes.ts`), so the wildcard advice below only
+applies in advisory mode (no token configured).
+
+**Never** source `CIPHER_API_TOKEN` from `docker inspect` or a container's
+environment to get around this. It works, and it is a CHIT-pipeline bypass — it
+was done during the 2026-09-09 investigation and it was wrong. `docker inspect`
+renders every service credential in plaintext to anything holding the Docker
+socket; that is a separate reported gap, not a supported access path.
+
+## Check before you write: which agent will your memories be filed under
+
+```bash
+make -C pmoves cipher-identity            # uses your resolved node identity
+make -C pmoves cipher-identity AGENT=z890-claude
+```
+
+Reads no secret, sends nothing, prints one of three verdicts. It exists because
+the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:95`
+forks on a seven-character prefix (line numbers at submodule pin `a0ee2314`,
+re-resolved by #3189 after fork PR #28 rewrote `resolveToken()`; the gitlink on `main`):
+
+| your `CIPHER_API_TOKEN` | auth.ts path | your writes are filed under |
+|---|---|---|
+| starts with `cipher_` | `:54-91` Supabase lookup | the **minted agent** on that row |
+| anything else | `:44-52` single-token compare | `bootstrap` — *not you* |
+| absent (server token also unset) | `:106-109` | advisory; whatever `agentId` you pass |
+
+So a session can be told "you are `z890-claude`", believe it, and file every
+memory under `bootstrap` — which is also where it will read them back from,
+mixed with every other agent on the node. If `cipher-identity` reports a **carry
+gap**, treat recalled memories as possibly another agent's and say so rather than
+claiming them. `claude-pmoves.sh` now runs this at launch and puts the verdict in
+your context, so you should already know before you are asked.
+
+## Reaching cipher when the MCP server is not connected
+
+The documented rule, and it is not a failure state: **say so and use auto-memory.**
+`pmoves/tools/cipher_preflight.py` prints it verbatim — "fall back to the
+auto-memory directory and say so rather than recalling nothing silently" — and
+`/cipher:search` Step 2b says the same. There is no sanctioned third path. If you
+find yourself inventing one, that is the signal to stop.
+
+## Cold start is a requirement, not a health check
+
+Cipher should be running whenever Claude or any registered agent starts. Before
+doing work, recall prior state:
+
+```
+pmoves_cipher_session_recall  — the purpose-built primitive
+pmoves_cipher_search          — with category=agent_checkpoint (prior plan)
+                                or category=agent_completion  (what was tried)
+```
+
+Verified 2026-08-21: the store was **empty**. Re-measured **2026-09-09 on Z890**:
+the store held exactly **one** record, written 2026-08-06. Still close to empty,
+and the reason is the next section — agents have been unable to write, so they
+stopped trying. Writing matters more, not less.
+
 ## MCP Tools
+
+Ten tools exist. This skill documented three until 2026-08-21; the other seven —
+including both session primitives the cold-start rule depends on — were missing.
+
+| tool | purpose |
+|---|---|
+| `pmoves_cipher_store` | store knowledge with category + tags |
+| `pmoves_cipher_search` | search stored memories |
+| `pmoves_cipher_store_reasoning` | store a chain-of-thought trace |
+| `pmoves_cipher_reasoning_patterns` | retrieve recurring reasoning patterns |
+| `pmoves_cipher_session_save` | persist session state |
+| `pmoves_cipher_session_recall` | restore prior session state (cold start) |
+| `pmoves_cipher_hybrid_search` | combined vector + text search |
+| `pmoves_cipher_graph_expand` | expand a memory's graph neighbourhood |
+| `pmoves_cipher_mcp_list` | list registered MCP surfaces |
+| `pmoves_cipher_mcp_get` | fetch one MCP surface record |
 
 ### Store Memory
 
@@ -19,23 +135,37 @@ Store knowledge for future reference:
 ```
 Use pmoves_cipher_store to remember:
 - content: The knowledge to store
-- category: code_pattern, decision, context, submodule, architecture, or reasoning
+- agentId: REQUIRED — your signing-card agent_id (claude-opus, crush, 4090-claude)
+- category: code_pattern, decision, context, submodule, architecture, reasoning,
+            agent_plan, agent_checkpoint, or agent_completion
 - tags: Optional list of tags for retrieval
 ```
 
-**Categories:**
+**Categories (nine — the enum is shared by store and search):**
 - `code_pattern`: Reusable code patterns and conventions
 - `decision`: Architectural decisions and rationale
 - `context`: Project-specific context
 - `submodule`: PMOVES submodule knowledge
 - `architecture`: System patterns and design
 - `reasoning`: Chain-of-thought reasoning traces
+- `agent_plan`: A durable plan an agent can resume from
+- `agent_checkpoint`: Mid-work state at a phase boundary
+- `agent_completion`: What was actually finished, and what was tried
+
+The last three were missing from this skill. They are the ones the cold-start
+pattern in `.claude/context/cipher.md` tells agents to filter on, so their absence
+here made that guidance unusable.
+
+**Note:** `pmoves_cipher_store` currently returns `embedded: false`, so retrieval
+falls back to text match rather than vector similarity. Keep queries close to the
+stored wording.
 
 **Example:**
 ```
 Store this pattern: "PMOVES submodules should include pmoves_announcer,
 pmoves_health, pmoves_registry, pmoves_common in their root directory."
 
+agentId: claude-opus
 Category: code_pattern
 Tags: submodule, pmoves_framework, integration
 ```
@@ -46,7 +176,9 @@ Search stored memories:
 
 ```
 Use pmoves_cipher_search to find:
-- query: Search query (semantic search)
+- query: Search query
+- agentId: REQUIRED — scopes the search. Use "*" for cross-agent (advisory only);
+           a cold-start read that omits the wildcard misses other agents' records
 - category: Optional filter by category
 - tags: Optional filter by tags
 - limit: Maximum results (default: 10)
@@ -55,6 +187,7 @@ Use pmoves_cipher_search to find:
 **Example:**
 ```
 Search for: "submodule integration patterns"
+agentId: claude-opus      (or "*" to search across agents)
 Category: code_pattern
 ```
 

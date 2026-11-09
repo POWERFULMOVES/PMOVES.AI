@@ -56,6 +56,8 @@ export function ServiceHealthIndicator({
         ${className}
       `}
       aria-label={`Service status: ${status}`}
+      data-testid="service-health-indicator"
+      data-status={status}
     />
   );
 }

@@ -64,7 +64,7 @@ class JaegerClient:
             List of trace metadata
         """
         end = datetime.now()
-        start = end - timedelta(hours=lookback_hours)
+        end - timedelta(hours=lookback_hours)
 
         params = {
             "service": service,
@@ -299,8 +299,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             duration2 = max(s.get("duration", 0) for s in spans2) / 1000 if spans2 else 0
 
             output = [
-                f"Trace Comparison:",
-                f"\nTotal Duration:",
+                "Trace Comparison:",
+                "\nTotal Duration:",
                 f"  Trace 1: {duration1:.2f}ms",
                 f"  Trace 2: {duration2:.2f}ms",
                 f"  Difference: {duration2 - duration1:+.2f}ms"
@@ -324,7 +324,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             all_ops = set(operations1.keys()) | set(operations2.keys())
 
             if all_ops:
-                output.append(f"\nOperation Breakdown:")
+                output.append("\nOperation Breakdown:")
 
                 for op in sorted(all_ops):
                     duration_op1 = operations1.get(op, 0)

@@ -13,13 +13,13 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 # Bootstrap import paths using shared module
 from services.common.bootstrap import bootstrap_import_paths
 
 bootstrap_import_paths()
 
-from services.common.env import get_secret
 
 # NATS service announcement integration
 try:
@@ -101,6 +101,16 @@ class AgentZeroRuntimeConfig:
     health_timeout: float = field(
         default_factory=lambda: float(os.environ.get("AGENT_ZERO_HEALTH_TIMEOUT", "5"))
     )
+    message_timeout: float = field(
+        default_factory=lambda: float(
+            os.environ.get("AGENT_ZERO_MESSAGE_TIMEOUT", "600")
+        )
+    )
+    health_method: str = field(
+        default_factory=lambda: os.environ.get(
+            "AGENT_ZERO_HEALTH_METHOD", "GET"
+        ).upper()
+    )
     message_path: str = field(
         default_factory=lambda: os.environ.get(
             "AGENT_ZERO_MESSAGE_PATH", "/api_message"
@@ -171,7 +181,7 @@ class AgentZeroServiceConfig(BaseModel):
 
     port: int = Field(default=8080, description="Port the FastAPI service listens on")
     nats_url: str = Field(
-        default="nats://nats:pmoves@nats:4222", description="NATS connection string"
+        default="nats://nats:4222", description="NATS connection string"
     )
     geometry_gateway_url: str = Field(
         default="http://localhost:8086",
@@ -217,7 +227,7 @@ class AgentZeroServiceConfig(BaseModel):
 def load_service_config() -> AgentZeroServiceConfig:
     return AgentZeroServiceConfig(
         port=int(os.environ.get("PORT", 8080)),
-        nats_url=os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222"),
+        nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
         geometry_gateway_url=os.environ.get(
             "HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8086")
         ),
@@ -310,7 +320,7 @@ class AgentZeroClient:
     async def health(self) -> Dict[str, Any]:
         try:
             result = await self._request(
-                "GET",
+                self._config.health_method,
                 self._config.health_path,
                 timeout=self._config.health_timeout,
             )
@@ -356,8 +366,28 @@ class AgentZeroClient:
             raise
 
     async def send_message(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Fail fast, and say why. The inner runtime auto-generates its own
+        # mcp_server_token when AGENT_ZERO_MCP_TOKEN and MCP_SERVER_TOKEN are
+        # both unset -- a supported mode for UI/MCP discovery, but one the
+        # wrapper cannot participate in, because it never learns the generated
+        # value. `_headers` then omits X-API-KEY and every message POST is
+        # rejected. Without this guard the operator gets a bare 401 (or, with
+        # no runtime up, "All connection attempts failed") from a request that
+        # could never have succeeded, and nothing points at the cause.
+        if not self._config.api_key:
+            raise AgentZeroRequestError(
+                503,
+                "Agent Zero message endpoint requires a pinned API key, but none "
+                "is configured. The inner runtime auto-generates a token the "
+                "wrapper cannot read, so this request would be rejected. Set "
+                "AGENT_ZERO_MCP_TOKEN (or the legacy MCP_SERVER_TOKEN) to the "
+                "same value on both sides.",
+            )
         result = await self._request(
-            "POST", self._config.message_path, json_body=payload
+            "POST",
+            self._config.message_path,
+            json_body=payload,
+            timeout=self._config.message_timeout,
         )
         if not isinstance(result, dict):
             raise AgentZeroRequestError(
@@ -619,7 +649,7 @@ async def lifespan(app: FastAPI):
     if NATS_ANNOUNCE_AVAILABLE and _env_bool("AGENTZERO_JETSTREAM"):
         try:
             await announce_service(
-                nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
                 slug=slug,
                 name=name,
                 url=url,
@@ -815,7 +845,15 @@ async def healthz() -> Dict[str, Any]:
             runtime_health = await client.health()
             detail["runtime"] = runtime_health
         except AgentZeroRequestError as exc:
-            detail["runtime"] = {"status": "error", "detail": str(exc)}
+            # Expose only the exception type to clients; full detail stays in logs.
+            logger.warning("Runtime health check failed: %s", exc)
+            detail["runtime"] = {"status": "error", "detail": type(exc).__name__}
+    if not running:
+        # Inner runtime down: a 200 here kept Docker's healthcheck green while
+        # every message call failed (green-while-dead). Surface the real state;
+        # ensure_runtime_running on the next functional request lazily relaunches.
+        http_requests_total.labels(method='GET', endpoint='/healthz', status='503').inc()
+        return JSONResponse(status_code=503, content=detail)
     http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     return detail
 

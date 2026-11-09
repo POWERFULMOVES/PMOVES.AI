@@ -1,9 +1,6 @@
 """Tests for decoded_consumer — geometry.packet.decoded.v1 subscriber."""
-import json
-import asyncio
 import sys
 import os
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from decoded_consumer import _validate_decoded_packet, _redact_url, _resolve_nats_url
@@ -34,6 +31,20 @@ def test_redact_url_with_password():
 def test_redact_url_no_password():
     url = "nats://nats:4222"
     assert _redact_url(url) == url
+
+def test_redact_url_token_only():
+    # Token auth (nats://TOKEN@host) puts the secret in `username` with no
+    # password — it must still be redacted.
+    url = "nats://s3cr3t-token@nats:4222"
+    redacted = _redact_url(url)
+    assert "s3cr3t-token" not in redacted
+    assert "nats:4222" in redacted
+
+def test_redact_url_user_and_password():
+    url = "nats://user:p4ss@nats:4222"
+    redacted = _redact_url(url)
+    assert "p4ss" not in redacted
+    assert "user" not in redacted
 
 def test_resolve_nats_url_from_env(monkeypatch):
     monkeypatch.setenv("NATS_URL", "nats://test:4222")

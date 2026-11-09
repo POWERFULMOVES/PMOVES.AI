@@ -44,6 +44,8 @@ This loads `.kimi/config.toml` and `.kimi/mcp.json` explicitly so your session u
 | Browser / computer use | `make -C pmoves surf-up` (needs `E2B_API_KEY` + `OPENAI_API_KEY`) |
 | Danger Room desktop | `make -C pmoves danger-room-desktop-up` (needs `E2B_API_KEY`) |
 | Build with fanfare | `make -C pmoves danger-room-build IMAGE=<image>` |
+| Launch KiloCode GLM | `make -C pmoves kilo` (opens VS Code; needs KiloCode extension) |
+| KiloCode operator home | `pmoves/docs/AGENTS/KILOCODE_OPERATOR_HOME.md` |
 
 Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a damage-control hook converts a raw `docker` / `netsh` / `gh workflow run` command to an `ask` prompt, that means a Make target already exists — use it.
 
@@ -51,13 +53,15 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a d
 
 | Server | Transport | Purpose |
 |--------|-----------|---------|
-| `pmoves-cipher` | SSE `http://localhost:8105/mcp/sse` | Persistent agent memory lookups + writes |
+| `pmoves-cipher` | SSE, fleet entry (URL as configured in `.kimi/mcp.json`; service host and port in `.claude/CATALOG.md` § Cipher Memory) | Persistent agent memory lookups + writes on the fleet's cipher node; the launcher resolves the node address |
+| `pmoves-cipher-local` | SSE `http://localhost:8105/mcp/sse` | Same cipher memory via the node's loopback publish — no tailnet dependency (mirrors `.claude/mcp.json`) |
+| `agent-zero` | HTTP `http://localhost:8080/mcp` | Agent Zero orchestrator |
 | `docker` | stdio `mcp/docker` | Container inspection via local Docker socket |
-| `pmoves-docker-gateway` | stdio `docker mcp gateway --profile pmoves_5090_web` | Full Docker MCP Toolkit profile |
-| `pmoves-nats-fleet` | stdio | Cross-node NATS publish/subscribe |
-| `pmoves-e2b` | stdio | E2B sandbox code execution |
-| `pmoves-supabase` | stdio | Self-hosted PostgREST data-plane access |
-| `huggingface` | stdio | Hub model/dataset/space search + Gradio execution |
+| `pmoves-docker-gateway` | SSE `http://localhost:8090/sse` | Full Docker MCP Toolkit gateway (botz-gateway bridge); start with `make -C pmoves mcp-toolkit-gateway-start` |
+| `pmoves-nats-fleet` | stdio `./pmoves-nats-mcp` | Cross-node NATS publish/subscribe |
+| `pmoves-e2b` | stdio `@e2b/mcp-server` via `pmoves-e2b-mcp-server` fork | E2B sandbox code execution (E2B_API_KEY from secrets funnel) |
+| `pmoves-supabase` | stdio `@supabase/mcp-server-postgrest@0.1.1` | Self-hosted PostgREST data-plane access |
+| `huggingface` | stdio `@llmindset/hf-mcp-server` | Hub model/dataset/space search + Gradio execution |
 
 ## Botz Gateway
 

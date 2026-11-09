@@ -42,11 +42,39 @@ jobs:
     # fleet shares; the arch-agnostic "Ensure uv" step below makes any of them
     # (ARM64 or X64) viable, and kvm4-2 is itself the tailnet NATS broker.
     # The fork-PR guard above keeps untrusted code off these trusted runners.
+    # runner-labels: arch-agnostic -- this job is pure git/shell, needs no
+    # submodules (it deinits them below) and no compiled artifacts, so it is
+    # correct on either X64 or ARM64. Declared so the runner-label gate treats
+    # it as a decision rather than flagging it forever.
     runs-on: [self-hosted, Linux]
     timeout-minutes: 5
     steps:
+      # These runners keep a PERSISTENT workspace. `submodules: false` means
+      # checkout never updates the submodules, so whatever they were left at
+      # survives forever -- and actions/checkout still runs
+      # `git submodule foreach --recursive` for its sshCommand cleanup,
+      # regardless of that setting. Some runners are parked on an archon commit
+      # (1e02907a) that carries external/* gitlinks with no .gitmodules, so the
+      # foreach aborts:
+      #
+      #   fatal: No url found for submodule path
+      #     'pmoves/integrations/archon/external/PMOVES-Agent-Zero' in .gitmodules
+      #
+      # The REPO is clean -- main pins archon at 944d31da, which has zero
+      # gitlinks. #2519 fixed the repo; nothing reset the runners. Because
+      # `runs-on: [self-hosted, Linux]` matches five runners and only some are
+      # dirty, this failed 4 of the last 8 runs, alternating, which reads as
+      # flaky CI rather than one stale directory.
+      #
+      # Deinit before checkout so the state cannot persist. This job needs no
+      # submodules at all, so dropping them is free. Best-effort by design: on a
+      # clean or first-run workspace there is nothing to deinit.
+      - name: Clear stale submodule state (persistent self-hosted workspace)
+        continue-on-error: true
+        run: git submodule deinit -f --all >/dev/null 2>&1 || true
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           submodules: false
@@ -72,7 +100,17 @@ jobs:
           export HOME="${HOME:-$PWD}"
           bindir="$HOME/.local/bin"
           mkdir -p "$bindir"
-          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$bindir" sh
+          # Reuse the persistent install on self-hosted runners ($HOME survives
+          # jobs): the unconditional curl was stalling ~5min against astral.sh
+          # on the ai-lab runner and canceling the whole job (uv download died
+          # mid-transfer; PRs #3048/#3043 showed it twice). Only fetch when the
+          # binary is missing, and when we do fetch: retries + bounded time.
+          if [ -x "$bindir/uv" ]; then
+            echo "uv already installed at $bindir/uv (persistent runner home)"
+          else
+            curl --retry 4 --retry-delay 3 --retry-all-errors --max-time 120 -LsSf \
+              https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$bindir" sh
+          fi
           echo "$bindir" >> "$GITHUB_PATH"
           "$bindir/uv" --version
 

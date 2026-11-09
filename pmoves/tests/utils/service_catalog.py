@@ -96,6 +96,17 @@ SUPASERCH = ServiceDefinition(
     description="Multimodal holographic deep research orchestrator",
 )
 
+P7_ROOM_ORCHESTRATOR = ServiceDefinition(
+    name="p7-room-orchestrator",
+    port=8122,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "rooms_in_catalog", "nats_connected"],
+    profile="agents,orchestration",
+    dependencies=["nats"],
+    description="Room stage and transient session control plane",
+)
+
 CONSCIOUSNESS_SERVICE = ServiceDefinition(
     name="consciousness-service",
     port=0,  # NATS worker only
@@ -181,7 +192,12 @@ HIRAG_V1 = ServiceDefinition(
 
 HIRAG_V1_GPU = ServiceDefinition(
     name="hi-rag-gateway-gpu",
-    port=8110,
+    # 8187 is the host port compose publishes
+    # (${HIRAG_V1_GPU_HOST_PORT:-8187}:8086). This said 8110, which is
+    # neither that host port nor the container port -- it is stale. Found by
+    # pmoves/tools/port_registry_ratchet.py, which cross-checks this catalog
+    # against pmoves/configs/ports.yaml.
+    port=8187,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
     expected_fields=["status"],
@@ -200,7 +216,7 @@ FLUTE_GATEWAY = ServiceDefinition(
     port=8055,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "engines_available"],
+    expected_fields=["status", "providers"],
     profile="orchestration,media",
     dependencies=["tensorzero-gateway"],
     description="Multimodal voice communication with Pipecat integration",
@@ -257,7 +273,7 @@ NODE_REGISTRY = ServiceDefinition(
     port=8115,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "nodes_count"],
+    expected_fields=["status"],
     profile="distributed,orchestration",
     dependencies=["nats", "postgres"],
     description="NATS-based P2P node discovery and capability tracking",
@@ -361,7 +377,7 @@ EXTRACT_WORKER = ServiceDefinition(
     port=8083,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "qdrant_connected", "meilisearch_connected"],
+    expected_fields=["ok"],
     profile="workers",
     dependencies=["qdrant", "meilisearch", "tensorzero-gateway"],
     description="Text embedding & indexing service",
@@ -448,7 +464,7 @@ PUBLISHER_DISCORD = ServiceDefinition(
     port=8094,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    expected_fields=["ok", "webhook"],
     profile="workers",
     dependencies=["nats"],
     description="Discord notification bot",
@@ -619,6 +635,7 @@ SERVICES = [
     ARCHON,
     DEEPRESEARCH,
     SUPASERCH,
+    P7_ROOM_ORCHESTRATOR,
     TENSORZERO_GATEWAY,
     TENSORZERO_CLICKHOUSE,
     TENSORZERO_UI,

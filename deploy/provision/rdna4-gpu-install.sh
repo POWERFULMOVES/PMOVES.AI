@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # AMD Radeon AI Pro R9700 (RDNA4 gfx1201) GPU stack installer
 #
+# OFFICIAL SOURCES:
+#   - ROCm Installation: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/tutorial/install-overview.html
+#   - AMDGPU Driver: https://repo.radeon.com/amdgpu/
+#   - llama.cpp: https://github.com/tlee933/llama.cpp-rdna4-gfx1201 (gfx1201 HIP kernels)
+#   - AGNOTE-pmoves-rdna4: pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md
+#
 # Installs ROCm 7.1, AMD GPU drivers, and builds the gfx1201-compatible
 # llama.cpp HIP fork (Ollama bundled ROCm v6 does not support gfx1201 as of
 # 2026-04). Produces a systemd-managed llama-server at :8080 with an
@@ -26,6 +32,24 @@
 set -euo pipefail
 
 # ------------------------------------------------------------------
+# SCRIPT_DIR — where this script's sibling provisioning sources live.
+# Resolved through symlinks: a provisioner is exactly the kind of thing that
+# gets linked onto PATH, and taking dirname of the SYMLINK would point at the
+# link's directory instead of the repo, so install_rocm_smi_exporter would fail
+# to find the unit files it installs. Same walk as the launchers under
+# deploy/provision/ (guarded by tests/test-launcher-root-resolution.sh).
+# `CDPATH='' cd -P --` because cd consults CDPATH for bare relative paths and
+# echoes the destination, embedding a newline in the captured path.
+# ------------------------------------------------------------------
+_SELF="${BASH_SOURCE[0]:-$0}"
+while [ -L "$_SELF" ]; do
+  _link_dir="$(CDPATH='' cd -P -- "$(dirname -- "$_SELF")" && pwd)"
+  _SELF="$(readlink -- "$_SELF")"
+  case "$_SELF" in /*) ;; *) _SELF="$_link_dir/$_SELF" ;; esac
+done
+SCRIPT_DIR="$(CDPATH='' cd -P -- "$(dirname -- "$_SELF")" && pwd)"
+
+# ------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------
 ROCM_VERSION="${ROCM_VERSION:-7.1}"
@@ -34,8 +58,12 @@ ROCM_VERSION="${ROCM_VERSION:-7.1}"
 # https://repo.radeon.com/amdgpu/${ROCM_VERSION}/ubuntu returns 404 for any
 # value < 30 (e.g. 7.1). Default to `latest` so a fresh box tracks the
 # current driver; pin (e.g. 30.30.3) for reproducible builds.
+# Field note (B850 bring-up, Ubuntu 24.04 noble): AMDGPU_VERSION=25.35 was
+# confirmed working there; other published streams include 30.10/30.20/30.30.
 AMDGPU_VERSION="${AMDGPU_VERSION:-latest}"
-LLAMA_CPP_PIN="a6e76c64dd525a1bd7726fa1d1145954cef375a8"
+# Commit of the gfx1201 fork to build. Overridable; set to empty
+# (LLAMA_CPP_PIN=) to track the fork's tip instead -- see build_llama_cpp.
+LLAMA_CPP_PIN="${LLAMA_CPP_PIN-a6e76c64dd525a1bd7726fa1d1145954cef375a8}"
 LLAMA_CPP_REPO="${LLAMA_CPP_REPO:-https://github.com/tlee933/llama.cpp-rdna4-gfx1201}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp-rdna4}"
 LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8080}"
@@ -55,6 +83,9 @@ done
 
 log() { echo -e "\n[rdna4] $*"; }
 log_section() { log "─── $* ───"; }
+# Errors go to stderr so a caller capturing stdout still surfaces them, and so a
+# failed provision is visible in journald rather than buried in install chatter.
+log_error() { echo -e "\n[rdna4] ERROR: $*" >&2; }
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -80,7 +111,7 @@ preflight() {
   fi
 
   local gpu_count
-  gpu_count="$(lspci -nn 2>/dev/null | grep -iE 'amd.*radeon.*(navi 48|rdna 4|9070|9700)' | wc -l || echo 0)"
+  gpu_count="$(lspci -nn 2>/dev/null | grep -iE 'amd.*radeon.*(navi 48|rdna 4|9070|9700)' | wc -l)" || gpu_count=0
   if [[ "$DUAL_GPU" == "true" ]] && [[ "$gpu_count" -lt 2 ]]; then
     echo "[rdna4] WARN: --dual-gpu requested but fewer than 2 R9700-class GPUs detected" >&2
   fi
@@ -103,7 +134,7 @@ install_rocm() {
 
   install -d -m 0755 /etc/apt/keyrings
   curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key \
-    | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg
+    | gpg --batch --yes --dearmor -o /etc/apt/keyrings/rocm.gpg
 
   cat >/etc/apt/sources.list.d/rocm.list <<EOF
 deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_VERSION} noble main
@@ -145,18 +176,45 @@ EOF
 # ------------------------------------------------------------------
 # Build llama.cpp with gfx1201 kernels
 # ------------------------------------------------------------------
+# git against the llama.cpp tree. This script runs as root, but after the first
+# provision the tree is owned by the `llama` service user, and git >= 2.35.2
+# refuses to operate on a repo owned by someone else ("dubious ownership"),
+# which under set -e aborted every re-run. The exception is scoped to exactly
+# this directory via -c (command-line scope is honoured for safe.directory);
+# it never touches global/system git config.
+git_llama() {
+  git -c safe.directory="${LLAMA_CPP_DIR}" -C "${LLAMA_CPP_DIR}" "$@"
+}
+
 build_llama_cpp() {
-  if [[ -x "${LLAMA_CPP_DIR}/build/bin/llama-server" ]]; then
-    log "llama.cpp already built at ${LLAMA_CPP_DIR}; rebuilding to catch upstream fixes"
-    git -C "${LLAMA_CPP_DIR}" fetch --depth 1 origin
-    git -C "${LLAMA_CPP_DIR}" reset --hard origin/HEAD
+  if [[ -d "${LLAMA_CPP_DIR}/.git" ]]; then
+    log "llama.cpp checkout exists at ${LLAMA_CPP_DIR}; refreshing"
   else
     log "Cloning llama.cpp RDNA4 fork"
-    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}" && git -C "${LLAMA_CPP_DIR}" checkout "${LLAMA_CPP_PIN}"
+    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}"
+  fi
+
+  # Source selection. LLAMA_CPP_PIN (default: the commit above) is honoured on
+  # EVERY run: fetch that exact commit and check it out detached. Previously a
+  # re-run did `reset --hard origin/HEAD`, silently replacing the pin with the
+  # fork's moving tip, and a fresh `clone --depth 1` + `checkout <pin>` only
+  # worked while the pin happened to BE the tip. Set LLAMA_CPP_PIN= (empty) to
+  # deliberately track the fork's default-branch tip instead.
+  if [[ -n "${LLAMA_CPP_PIN}" ]]; then
+    log "Checking out pinned llama.cpp commit ${LLAMA_CPP_PIN}"
+    git_llama fetch --depth 1 origin "${LLAMA_CPP_PIN}"
+    git_llama checkout -q -f --detach "${LLAMA_CPP_PIN}"
+  else
+    log "LLAMA_CPP_PIN is empty; tracking the fork's default-branch tip"
+    git_llama fetch --depth 1 origin
+    git_llama reset -q --hard origin/HEAD
   fi
 
   log "Building llama.cpp with HIP target ${GPU_TARGETS}"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cmake build-essential ninja-build
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cmake build-essential ninja-build libcurl4-openssl-dev
+
+  # Clean up any previous incomplete build to avoid permission errors
+  rm -rf "${LLAMA_CPP_DIR}/build"
 
   cmake -S "${LLAMA_CPP_DIR}" -B "${LLAMA_CPP_DIR}/build" \
     -G Ninja \
@@ -221,7 +279,7 @@ RestartSec=5s
 WantedBy=multi-user.target
 EOF
 
-  chown -R llama:llama /opt/llama.cpp
+  chown -R llama:llama "${LLAMA_CPP_DIR}"
 
   systemctl daemon-reload
   systemctl enable llama-server.service
@@ -234,70 +292,41 @@ EOF
 install_rocm_smi_exporter() {
   log "Installing rocm-smi Prometheus exporter"
 
-  cat >/usr/local/bin/rocm-smi-exporter.sh <<'EOF'
-#!/usr/bin/env bash
-# Minimal Prometheus exporter for rocm-smi metrics. Outputs plain text on stdout.
-set -euo pipefail
+  # ONE DEFINITION. These files used to be heredoc'd inline here, which meant the
+  # exporter existed twice: once in this provisioner and once wherever it had been
+  # hand-patched. Both copies were wrong for weeks and nobody could see it —
+  #
+  #   * the HTTP responder inlined shell in ExecStart, so systemd expanded %d as
+  #     its credentials-dir specifier and ate ${#body} as an env reference. Every
+  #     scrape returned 200 with a ZERO-BYTE body while the socket unit reported
+  #     active(listening) and the metrics file on disk was perfectly valid.
+  #   * the collector read `rocm-smi --showmemuse` for "VRAM Total Used Memory (B)",
+  #     a key that flag does not return, so rocm_gpu_memory_used_bytes printed
+  #     HELP/TYPE and never a single sample.
+  #
+  # Installing from the repo copies keeps the fix in one place: patch the file,
+  # every node gets it on next provision. Do NOT reintroduce heredocs here.
+  local src="${SCRIPT_DIR:-}"
+  if [ -z "$src" ] || [ ! -f "$src/rocm-smi-exporter.sh" ]; then
+    log_error "rocm-smi exporter sources not found next to this script (looked in: ${src:-<unset>})"
+    log_error "Expected: rocm-smi-exporter.sh, rocm-smi-http-responder.sh,"
+    log_error "          rocm-smi-exporter.service, rocm-smi-http.socket, rocm-smi-http@.service"
+    return 1
+  fi
 
-while true; do
-  {
-    echo "# HELP rocm_gpu_temperature_celsius GPU temperature"
-    echo "# TYPE rocm_gpu_temperature_celsius gauge"
-    rocm-smi --showtemp --json 2>/dev/null \
-      | jq -r 'to_entries[] | select(.value["Temperature (Sensor edge) (C)"]) | "rocm_gpu_temperature_celsius{gpu=\"\(.key)\"} \(.value["Temperature (Sensor edge) (C)"])"' 2>/dev/null || true
+  for f in rocm-smi-exporter.sh rocm-smi-http-responder.sh \
+           rocm-smi-exporter.service rocm-smi-http.socket rocm-smi-http@.service; do
+    if [ ! -f "$src/$f" ]; then
+      log_error "missing provisioning source: $src/$f"
+      return 1
+    fi
+  done
 
-    echo "# HELP rocm_gpu_memory_used_bytes GPU memory used"
-    echo "# TYPE rocm_gpu_memory_used_bytes gauge"
-    rocm-smi --showmemuse --json 2>/dev/null \
-      | jq -r 'to_entries[] | select(.value["VRAM Total Used Memory (B)"]) | "rocm_gpu_memory_used_bytes{gpu=\"\(.key)\"} \(.value["VRAM Total Used Memory (B)"])"' 2>/dev/null || true
-
-    echo "# HELP rocm_gpu_utilization_ratio GPU utilization 0-1"
-    echo "# TYPE rocm_gpu_utilization_ratio gauge"
-    rocm-smi --showuse --json 2>/dev/null \
-      | jq -r 'to_entries[] | select(.value["GPU use (%)"]) | "rocm_gpu_utilization_ratio{gpu=\"\(.key)\"} \((.value["GPU use (%)"] | tonumber) / 100)"' 2>/dev/null || true
-  } > /run/rocm-smi-metrics.prom.$$
-  mv /run/rocm-smi-metrics.prom.$$ /run/rocm-smi-metrics.prom
-  sleep 10
-done
-EOF
-  chmod 0755 /usr/local/bin/rocm-smi-exporter.sh
-
-  cat >/etc/systemd/system/rocm-smi-exporter.service <<'EOF'
-[Unit]
-Description=rocm-smi Prometheus exporter (file-based)
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/rocm-smi-exporter.sh
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  cat >/etc/systemd/system/rocm-smi-http.socket <<EOF
-[Unit]
-Description=rocm-smi exporter HTTP socket
-
-[Socket]
-ListenStream=9835
-Accept=yes
-
-[Install]
-WantedBy=sockets.target
-EOF
-
-  cat >/etc/systemd/system/rocm-smi-http@.service <<'EOF'
-[Unit]
-Description=rocm-smi exporter HTTP responder
-
-[Service]
-ExecStart=/bin/sh -c 'body=$(cat /run/rocm-smi-metrics.prom 2>/dev/null || printf ""); printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" "${#body}" "$body"'
-StandardInput=socket
-StandardOutput=socket
-EOF
+  install -m 0755 "$src/rocm-smi-exporter.sh"        /usr/local/bin/rocm-smi-exporter.sh
+  install -m 0755 "$src/rocm-smi-http-responder.sh"  /usr/local/bin/rocm-smi-http-responder.sh
+  install -m 0644 "$src/rocm-smi-exporter.service"   /etc/systemd/system/rocm-smi-exporter.service
+  install -m 0644 "$src/rocm-smi-http.socket"        /etc/systemd/system/rocm-smi-http.socket
+  install -m 0644 "$src/rocm-smi-http@.service"      /etc/systemd/system/rocm-smi-http@.service
 
   systemctl daemon-reload
   systemctl enable --now rocm-smi-exporter.service rocm-smi-http.socket
@@ -347,6 +376,95 @@ emit_completion_beacon() {
 }
 
 # ------------------------------------------------------------------
+# Installation verification
+# ------------------------------------------------------------------
+verify_installation() {
+  log_section "Verifying Installation"
+
+  local failed=0
+
+  # Check ROCm tools
+  log "Checking ROCm installation:"
+  if command -v rocm-smi >/dev/null 2>&1; then
+    log "  ✓ rocm-smi installed"
+  else
+    log "  ✗ rocm-smi NOT found"
+    failed=1
+  fi
+
+  if command -v rocminfo >/dev/null 2>&1; then
+    log "  ✓ rocminfo installed"
+  else
+    log "  ⚠ rocminfo not found (optional)"
+  fi
+
+  # Check llama.cpp binaries
+  log "Checking llama.cpp binaries:"
+  if [[ -x /usr/local/bin/llama-server ]]; then
+    log "  ✓ llama-server installed"
+  else
+    log "  ✗ llama-server NOT found"
+    failed=1
+  fi
+
+  if [[ -x /usr/local/bin/llama-cli ]]; then
+    log "  ✓ llama-cli installed"
+  else
+    log "  ⚠ llama-cli not found (optional)"
+  fi
+
+  # Check systemd units
+  log "Checking systemd units:"
+  if systemctl list-unit-files llama-server.service >/dev/null 2>&1; then
+    log "  ✓ llama-server.service registered"
+  else
+    log "  ✗ llama-server.service NOT registered"
+    failed=1
+  fi
+
+  if systemctl list-unit-files rocm-smi-exporter.service >/dev/null 2>&1; then
+    log "  ✓ rocm-smi-exporter.service registered"
+  else
+    log "  ✗ rocm-smi-exporter.service NOT registered"
+    failed=1
+  fi
+
+  if systemctl list-unit-files rocm-smi-http.socket >/dev/null 2>&1; then
+    log "  ✓ rocm-smi-http.socket registered"
+  else
+    log "  ✗ rocm-smi-http.socket NOT registered"
+    failed=1
+  fi
+
+  # Check llama user
+  log "Checking llama user:"
+  if id llama &>/dev/null; then
+    log "  ✓ llama user exists"
+  else
+    log "  ✗ llama user NOT found"
+    failed=1
+  fi
+
+  # Check models directory
+  log "Checking models directory:"
+  if [[ -d "${LLAMA_MODELS_DIR}" ]]; then
+    log "  ✓ ${LLAMA_MODELS_DIR} exists"
+  else
+    log "  ⚠ ${LLAMA_MODELS_DIR} does not exist (create before starting llama-server)"
+  fi
+
+  if [[ $failed -eq 1 ]]; then
+    log ""
+    log "⚠ Some components failed verification. Check output above."
+    return 1
+  fi
+
+  log ""
+  log "✓ All critical components verified successfully"
+  return 0
+}
+
+# ------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------
 main() {
@@ -361,18 +479,22 @@ main() {
     pull_default_model
   fi
 
+  # Verify BEFORE the completion beacon: a beacon announcing "done" for a
+  # provision that then fails its own verification would be a false green.
+  verify_installation
   emit_completion_beacon
 
   log "==========================================="
   log "RDNA4 GPU stack ready"
   log "==========================================="
   log "Next steps:"
-  log "  1. Drop a GGUF model into ${LLAMA_MODELS_DIR}/default.gguf (or symlink)"
-  log "  2. systemctl start llama-server"
-  log "  3. curl http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models"
-  log "  4. Metrics: curl http://127.0.0.1:9835/"
+  log "  1. Reboot to load amdgpu-dkms kernel module"
+  log "  2. After reboot: sudo bash deploy/provision/rdna4-postinstall.sh --model-pull"
+  log "  3. Or drop a GGUF model into ${LLAMA_MODELS_DIR}/default.gguf (or symlink)"
+  log "  4. systemctl start llama-server"
+  log "  5. curl http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models"
+  log "  6. Metrics: curl http://127.0.0.1:9835/"
   log ""
-  log "Kernel reboot may be required for amdgpu-dkms to load."
 }
 
 main "$@"

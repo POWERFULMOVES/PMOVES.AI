@@ -1,0 +1,183 @@
+{
+  "room_id": "jons-edge.room.control",
+  "version": "1.0.0",
+  "stage": "rehearsal",
+  "display_name": "Jetson Edge Combiner Room",
+  "description": "Edge inference combiner room for 3 Jetson Orin Nano Super nodes paired with SPARK (GB10 128GB). Handles distributed STT, lightweight LLM inference, image preprocessing, and NATS relay for voice/image/creator pipelines. Stage: rehearsal.",
+  "agent_id": "jetson-1",
+  "alter": "jons-edge",
+  "room_type": "operator",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "edge-combiner",
+      "accent_color": "#16A34A",
+      "skin": "mesh-control",
+      "icon": "cpu"
+    },
+    "layout": {
+      "default_route": "/dashboard/edge",
+      "panels": [
+        {
+          "panel_id": "edge-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 25,
+          "pinned": true
+        },
+        {
+          "panel_id": "combiner-grid",
+          "kind": "controls",
+          "position": "center",
+          "size": 45,
+          "pinned": true
+        },
+        {
+          "panel_id": "edge-telemetry",
+          "kind": "logs",
+          "position": "right",
+          "size": 18,
+          "pinned": true
+        },
+        {
+          "panel_id": "nats-bus",
+          "kind": "custom",
+          "position": "bottom",
+          "size": 12,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "edge-health-dashboard",
+      "kind": "dashboard",
+      "route": "/dashboard/edge",
+      "provider": "pmoves-ui",
+      "action_namespace": "edge_ops",
+      "capabilities": ["node-health", "gpu-utilization", "nats-leaf-status", "combiner-state"],
+      "pinned": true
+    },
+    {
+      "app_id": "ollama-edge-panel",
+      "kind": "custom",
+      "route": "/dashboard/edge/ollama",
+      "provider": "pmoves-ollama-bridge",
+      "action_namespace": "edge_llm",
+      "capabilities": ["model-list", "model-load", "phi3-mini", "gemma3-2b"],
+      "pinned": true
+    },
+    {
+      "app_id": "spark-pair-status",
+      "kind": "custom",
+      "route": "/dashboard/edge/spark-pair",
+      "provider": "pmoves-ui",
+      "action_namespace": "combiner",
+      "capabilities": ["spark-heartbeat", "comfyui-queue", "voice-pipeline-status", "fallback-state"],
+      "pinned": true
+    },
+    {
+      "app_id": "whisper-edge",
+      "kind": "custom",
+      "route": "/dashboard/edge/whisper",
+      "provider": "pmoves-whisper-edge",
+      "action_namespace": "stt",
+      "capabilities": ["transcribe", "real-time", "parallel-fan-out"],
+      "pinned": false,
+      "status": "planned"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "edge-combiner",
+    "thread_ref": "jetson-ops",
+    "default_page": "combiner-status",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": ["entries"],
+      "artifact_prefix": "rooms/jons-edge"
+    }
+  },
+  "persona": {
+    "signature_ref": "jetson-1",
+    "voice": "analytical",
+    "glyph": "\u2b1b",
+    "resonance": ["edge-inference", "combiner-pattern", "speech-to-text", "image-preprocess", "nats-relay", "spark-pairing"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "edge-combiner-launch",
+      "skill_id": "node-4090-probe",
+      "room_id": "jons-edge.room.control",
+      "display_name": "Edge Combiner Health Check",
+      "intent": ["edge", "health", "combiner"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["check edge nodes", "combiner status", "jetson health"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "edge-health-dashboard",
+        "target": "toolbar",
+        "route": "/dashboard/edge"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 8
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "nats-bus"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "ops/edge-health",
+          "artifact_type": "json"
+        },
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "artifact_type": "json",
+          "subject": "mesh.combiner.heartbeat.v1"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 180,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["edge", "health", "combiner", "jetson"]
+    }
+  ],
+  "team_refs": ["jetson-edge-team"],
+  "service_refs": ["ollama-edge", "ffmpeg-whisper", "nats-leaf", "mesh-agent"],
+  "launcher_refs": ["pinokio-jons-1"],
+  "combiner_config": {
+    "nodes": [
+      {"node_id": "jons-1", "role": "stt-preprocess", "tailscale": "pmoves-jons-1"},
+      {"node_id": "jons-2", "role": "edge-llm-detect", "tailscale": "pmoves-jons-2"},
+      {"node_id": "jons-3", "role": "voice-relay", "tailscale": "pmoves-jons-3"},
+      {"node_id": "spark", "role": "heavy-inference", "tailscale": "pmoves-gb10-spark"}
+    ],
+    "pair_target": "spark",
+    "fallback_mode": "island-phi3",
+    "nats_upstream": "ts:powerfulmoves:4222"
+  },
+  "policies": {
+    "model_routing": "native",
+    "publish": { "allow_nats_emit": true, "allow_external_publish": false },
+    "memory": { "graphiti": false, "notebook_writeback": true, "chit_handoff": false }
+  }
+}

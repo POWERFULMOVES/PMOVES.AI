@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-image&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      max-width: 920px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-image&gt; — v0.1 demo</h1>
+
+  <div class="grid">
+    <pm-image
+      src="https://images.unsplash.com/photo-1518770660439-4636190af475?w=800"
+      alt="Mesh antenna on a rooftop"
+      caption="Fordham Hill gateway antenna, installed 2026-04"
+      credit="Photo: DARKXSIDE"
+    ></pm-image>
+
+    <pm-image
+      src="https://images.unsplash.com/photo-1551434678-e076c223a692?w=800"
+      alt="Community members at a planning session"
+      caption="Co-design session with 12 residents"
+    ></pm-image>
+
+    <pm-image
+      src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800"
+      alt="Solar panels in the field"
+      caption="Foldable solar array — 6 panels, off-grid demo"
+      credit="Photo: B850-CLAUDE"
+      aspect-ratio="4/3"
+    ></pm-image>
+
+    <pm-image
+      src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800"
+      alt="Empty placeholder"
+    ></pm-image>
+  </div>
+
+  <script type="module" src="./pm-image.js"></script>
+</body>
+</html>

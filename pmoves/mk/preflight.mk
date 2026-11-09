@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
+.PHONY: launcher-check launcher-install session-check env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -9,26 +9,173 @@ RETRO_FLAGS ?=
 RUNNER_PHASE ?= local-certification
 SUBMODULE_LAYER_MANIFEST ?= configs/submodule_layer_validation_manifest.json
 SUBMODULE_BRANCH_DEFAULT ?= PMOVES.AI-Edition-Hardened
-SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX,PMOVES-ClawZ=main
+# Submodules that legitimately track an upstream default branch instead of a
+# hardened branch. Every branch here is verified to exist on its remote.
+SUBMODULE_BRANCH_ALLOW ?= PMOVES-obico-server=release,\
+  PMOVES-moonraker-obico=master,\
+  PMOVES-OrcaSlicer=main,\
+  PMOVES-OctoPrint-Obico=master,\
+  PMOVES-fluidd=develop,\
+  skills/PMOVES-awesome-agent-skills=main,\
+  skills/pmoves-fork-repository-skill=main,\
+  skills/PMOVES-agent-sandbox-skill=main,\
+  skills/Pmoves-claude-d3js-skill=main
 AUDIT_RUNTIME_GPU ?= 0
 PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
 
+# Did the operator pin PYTHON? $(origin) can return a TWO-WORD string
+# ("command line", "environment override"), and $(filter) word-splits its
+# pattern list, so matching those as phrases does not work -- `command\ line`
+# never matches anything. Filtering OUT the unpinned origins is word-split-safe:
+# any residue means someone set it deliberately, and a pin must outrank
+# discovery.
+python_pinned := $(strip $(filter-out default file undefined,$(origin PYTHON)))
+
+# RUN the candidate; do not test for its existence.
+#
+# $(wildcard) tests existence, and `[ -x ]` is worse than useless here: MSYS
+# reports ANY file ending .exe as executable regardless of content, verified --
+# `[ -x fake.exe ]` is true for a file containing the text "not-an-exe". An
+# interrupted `venv-bringup` therefore passes both tests while being unable to
+# run, and selecting it would hard-fail every consumer that previously fell
+# back to a working system python -- the inverse of this fix.
+#
+# `-c pass` is a no-op for a real interpreter and non-zero for anything else.
+# Same conclusion PR #2809 reached for the Windows launcher: presence is not
+# runnability.
+#
+# Recursively expanded (`=`, not `:=`) so the probe runs ONLY on the branch that
+# needs it. With `:=` this executed at parse time on every make invocation,
+# including when PYTHON is pinned -- so an operator pinning an interpreter
+# precisely BECAUSE the local one is broken would still have every target
+# blocked by probing the broken one, and the higher-priority override could
+# never be reached. A hung interpreter (network path, AV scan) would hang
+# unrelated targets.
+precheck_venv_py = $(shell for p in '$(PRECHECK_VENV_WIN)' '$(PRECHECK_VENV_UNIX)'; do "$$p" -c pass >/dev/null 2>&1 && { printf '%s' "$$p"; break; }; done)
+
 ifeq ($(OS),Windows_NT)
-# Detect Python: py -3 (Windows launcher) > conda/system python > python3
+# Detect Python: operator pin > .venv-pmoves > py -3 (Windows launcher)
+# > conda/system python > python3.
 # `py` may not exist in Git Bash; `python3` may be a Windows Store stub.
-PRECHECK_PY ?= $(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3"))
+#
+# The .venv-pmoves rung is the one that was missing: sign-trail runs through
+# PRECHECK_PY (preflight.mk:sign-trail), and without the bringup env it cannot
+# import pyyaml, so it signs with a FALLBACK presentation that is explicitly
+# NOT the agent's registered identity. A provenance record attributed to a
+# fallback identity is a quiet way to get the wrong answer.
+PRECHECK_PY ?= $(if $(python_pinned),$(PYTHON),$(if $(precheck_venv_py),$(precheck_venv_py),$(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3"))))
 else
+# POSIX is deliberately UNTOUCHED. The bug is Windows-only: pmoves/Makefile
+# probes `.venv-pmoves/bin/python`, which exists on POSIX, so $(PYTHON) already
+# resolves to the bringup interpreter there and this line already inherited it.
+# Pointing it at $(PRECHECK_VENV_UNIX) instead would also swap an absolute path
+# for a relative one and break the `cd .. && $(PYTHON)` pattern used in
+# mk/provider.mk:22,32.
 PRECHECK_PY ?= $(PYTHON)
 endif
 
 env-bootstrap-lite: ensure-env-shared ## Bootstrap lightweight runtime env (uv-first) and check core host tools
 	@$(PRECHECK_PY) tools/bootstrap_light_env.py $(ARGS)
 
+env-bootstrap-check: ## Precheck ONLY (no create/install): lite venv + core deps present, else exit 3 with remediation. Gate for funnel entry points.
+	@$(PRECHECK_PY) tools/bootstrap_light_env.py --check
+
 env-setup: ensure-env-shared ## Unified env bootstrap (registry-driven + strict env drift checks + showtime quick diagnostics)
 	@$(PRECHECK_PY) tools/env_setup_unified.py $(ARGS)
 
+launcher-check: ## Verify `claude-pmoves` resolves — the MCP roster depends on it
+	@# Claude Code does NOT read .claude/mcp.json; only --mcp-config does, and
+	@# supplying that flag is the whole job of the claude-pmoves launcher. So a
+	@# missing launcher does not cost keystrokes, it silently drops every server
+	@# in the roster -- including pmoves-cipher, which BOOTSTRAP.md tells every
+	@# session to check at startup. Measured 2026-08-30: cipher healthy on 8105,
+	@# declared in the roster, and unreachable as a tool for a whole session,
+	@# because the command was never installed.
+	@# The failure mode is an ABSENCE: no error, no warning, just a tool that was
+	@# never offered. That is exactly what a preflight is for.
+	@# WHICH SHELL is the question. The launcher runs from PowerShell, and its
+	@# PATH shim lives in WindowsApps as a .cmd -- which Git Bash does not
+	@# resolve. Probing with bash's `command -v` reported MISSING on a node where
+	@# the install was correct and PowerShell's Get-Command found it fine.
+	@# "Does it resolve" is shell-relative; ask the shell that runs it.
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -Command "if (Get-Command claude-pmoves -ErrorAction SilentlyContinue) { Write-Host ('launcher-check: OK - ' + (Get-Command claude-pmoves).Source); exit 0 } else { Write-Host 'launcher-check: MISSING - claude-pmoves does not resolve in PowerShell.'; Write-Host '  Every server in .claude/mcp.json stays dark without it.'; Write-Host '  Fix: make -C pmoves launcher-install'; exit 1 }"
+else
+	@command -v claude-pmoves >/dev/null 2>&1 && echo "launcher-check: OK - $$(command -v claude-pmoves)" || { echo "launcher-check: MISSING - claude-pmoves does not resolve."; echo "  Every server in .claude/mcp.json stays dark without it."; echo "  Fix: make -C pmoves launcher-install"; exit 1; }
+endif
+
+launcher-install: ## Install the launcher shell command(s): claude-pmoves everywhere, crush-pmoves on Windows (no POSIX crush installer exists yet)
+	@# Both installers existed and NEITHER was invoked by anything: crush-pmoves
+	@# had been run by hand at some point, claude-pmoves never had. A bootstrap
+	@# step that is only ever run by memory cannot tell "installed" from "never
+	@# attempted".
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -ExecutionPolicy Bypass -File ../deploy/provision/install-claude-pmoves-command.ps1
+	@powershell -NoProfile -ExecutionPolicy Bypass -File ../deploy/provision/install-crush-pmoves-command.ps1
+else
+	@bash ../deploy/provision/install-claude-pmoves-command.sh
+	@# The target advertises BOTH commands; installing only one while reporting
+	@# success is the same "advertises coverage it lacks" defect this file is
+	@# full of. Caught in review.
+	@if [ -f ../deploy/provision/install-crush-pmoves-command.sh ]; then 	  bash ../deploy/provision/install-crush-pmoves-command.sh; 	else 	  echo "launcher-install: no POSIX crush installer present; crush-pmoves NOT installed"; 	fi
+endif
+	@echo "Open a NEW shell, then: make -C pmoves launcher-check"
+
+session-check: ## Report which MCP servers THIS session can authenticate (reads no secrets)
+	@# launcher-check and session-check answer different questions, and only the
+	@# second one is about the session you are in.
+	@#
+	@#   launcher-check   does `claude-pmoves` resolve on this host?   (installer)
+	@#   session-check    did THIS process actually get the env?       (session)
+	@#
+	@# A launcher can be installed and simply not used -- starting `claude`
+	@# directly is the habit it exists to replace. Measured on Z890 2026-08-31,
+	@# both true at the same moment: launcher-check OK, and 13 of 20 roster
+	@# entries missing their variables in the live process.
+	@#
+	@# This became load-bearing only once nodes started configuring a cipher
+	@# token. With no token the empty bearer is ACCEPTED (200 on the 4090), so a
+	@# launcher-less session degrades invisibly; with one it is REJECTED (401 on
+	@# Z890). Hardening turns a silent degradation into a hard failure.
+	@#
+	@# Advisory by default and prints NAMES only, never values -- it has to be
+	@# safe to run inside an agent transcript, which is where the fault shows up.
+	@$(PRECHECK_PY) scripts/session_check.py $(ARGS)
+
 env-check: ## Run cross-platform environment preflight checks
+	@# launcher-check is REPORTED here, never required. A first draft made it a
+	@# prerequisite, which would have failed the repo's canonical environment
+	@# validation on any fresh clone, CI runner, container, or non-Claude
+	@# operator host -- for a Claude-specific optional tool that neither
+	@# `env-setup` nor the documented bring-up sequence installs. Caught in
+	@# review. A missing launcher is worth SAYING; it is not worth blocking a
+	@# fleet's env validation over.
+	@$(MAKE) --no-print-directory launcher-check || 	  echo "env-check: continuing -- launcher-check is advisory here (run 'make -C pmoves launcher-install' if you use Claude Code on this host)"
+	@# session-check is advisory for the same reason, plus one of its own: on a
+	@# CI runner or any non-Claude host there is no roster to authenticate and
+	@# "13 servers degraded" is not a finding, it is noise. It exits 0 unless
+	@# --strict is passed, so this cannot fail env-check even by accident.
+	@#
+	@# `ARGS=` is REQUIRED, and CI caught its absence
+	@# (tests/make/test_args_no_leak_to_submake.py). env-check consumes $(ARGS)
+	@# and forwards it to env_check.ps1 / env_check.sh; session-check consumes
+	@# $(ARGS) and forwards it to session_check.py. Without the literal clear,
+	@# one ARGS value would have to satisfy two argparse surfaces, so
+	@# `make env-check ARGS=--some-env-check-flag` would hand that flag to
+	@# session_check.py, which rejects unknown flags. The `|| true` would have
+	@# HIDDEN it -- an advisory that silently stops advising is the worst of
+	@# both. Clearing ARGS keeps the advisory honest.
+	@$(MAKE) --no-print-directory ARGS= session-check || true
+	@# chit-provenance-check, same advisory contract and the same cleared ARGS.
+	@# `--offline` is deliberate HERE and only here: env-check is the routine
+	@# environment validation and must not acquire a network dependency, a gh
+	@# auth dependency, or two API round-trips of latency. The local half --
+	@# marker present, bundle age, which declared keys cannot project -- needs
+	@# none of that and is the half that says whether anything is wrong at all.
+	@# Run the target directly, without --offline, to learn whether the artifact
+	@# that would fix it is still inside its 1-day retention.
+	@$(MAKE) --no-print-directory ARGS=--offline chit-provenance-check || true
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else
@@ -36,14 +183,14 @@ else
 endif
 
 flight-check: ## Fast readiness scan (quick mode, no boot animation)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
 	PYTHONUTF8=1 PYTHONIOENCODING=utf-8 $$runner tools/flightcheck/retro_flightcheck.py --quick --theme "$(RETRO_THEME_QUICK)"
 
 flight-check-retro: ## Full retro diagnostics with optional CRT boot animation
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
@@ -110,6 +257,18 @@ submodule-layer-validate-strict: ## Strict submodule-level validation (errors an
 submodule-branch-policy-check: ## Ensure .gitmodules branch pins follow hardened branch policy
 	@$(PRECHECK_PY) tools/submodule_branch_policy_check.py --default "$(SUBMODULE_BRANCH_DEFAULT)" --allow "$(SUBMODULE_BRANCH_ALLOW)" $(ARGS)
 
+runner-labels-check: ## Assert every self-hosted runs-on resolves to a registered runner
+	@$(PRECHECK_PY) tools/validate_runner_labels.py --strict $(ARGS)
+
+runner-labels-refresh: ## Re-read the runner inventory from the GitHub API
+	@$(PRECHECK_PY) tools/validate_runner_labels.py --refresh $(ARGS)
+
+allowed-signers: ## Regenerate pmoves/config/allowed_signers from the signing identity cards
+	@$(PRECHECK_PY) tools/build_allowed_signers.py $(ARGS)
+
+allowed-signers-check: ## Drift gate: fail if allowed_signers disagrees with the cards
+	@$(PRECHECK_PY) tools/build_allowed_signers.py --check $(ARGS)
+
 skill-registry-validate: ## Validate submodule-skill registry completeness
 	@$(PRECHECK_PY) tools/skill_registry_validate.py
 
@@ -125,6 +284,23 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
+	@$(MAKE) --no-print-directory runner-labels-check
+	@# Z890 reported logs eating disk; B850 measured 59 of 62 containers
+	@# logging without any max-size.
+	@#
+	@# Exit 3 means UNMEASURABLE (no Docker socket) and must not fail a static
+	@# certification pass. Exit 1 means OFFENDERS FOUND and must. A bare
+	@# `|| true` cannot tell those apart -- it suppressed both, so a live host
+	@# with 59 unbounded-log containers passed the complete runtime
+	@# certification, which reaches this check only through this line.
+	@$(MAKE) --no-print-directory docker-host-policy-check; \
+	  rc=$$?; \
+	  if [ $$rc -eq 3 ]; then \
+	    echo "[audit] docker-host-policy-check: unmeasurable here (no Docker socket) -- not failing the static pass"; \
+	  elif [ $$rc -ne 0 ]; then \
+	    echo "[audit] docker-host-policy-check FAILED (exit $$rc): container log policy violations above."; \
+	    exit $$rc; \
+	  fi
 	@$(MAKE) --no-print-directory docs-reconcile-check || true
 
 audit-layers-runtime: ## Runtime certification pass once services are online
@@ -167,6 +343,62 @@ showtime-links-open: ## Build clickable UI/API verification pages and open in br
 showtime-links-strict: ## Build verification pages and fail if required endpoints are down
 	@$(PRECHECK_PY) tools/showtime_verify_links.py --strict $(ARGS)
 
+# ----------------------------------------------------------------------------
+# Glances host probe (2026-10-07) -- docs/operations/GLANCES_RUNBOOK.md
+#   glances-check  - glances >= GLANCES_MIN_VERSION and `from glances import api` works
+#   glances-fetch  - one-shot host sitrep (PMOVES conf+template: no addresses; Docker "unreachable" != "0")
+# One-shot only. There is deliberately NO server target: `glances -w` binds all
+# interfaces with no auth by default -- see the runbook's security rule.
+# Resolution: GLANCES_BIN (pin) > .venv-pmoves (Windows, then POSIX) > PATH.
+# ----------------------------------------------------------------------------
+GLANCES_BIN ?=
+GLANCES_MIN_VERSION ?= 4.4
+GLANCES_TEMPLATE ?= config/glances/pmoves-sitrep.jinja
+GLANCES_CONF ?= config/glances/pmoves-glances.conf
+define GLANCES_RESOLVE
+g="$(GLANCES_BIN)"; \
+if [ -n "$$g" ] && ! "$$g" --version >/dev/null 2>&1; then echo "ERROR: GLANCES_BIN=$$g is not a runnable glances"; exit 2; fi; \
+if [ -z "$$g" ]; then \
+  for c in .venv-pmoves/Scripts/glances.exe .venv-pmoves/bin/glances; do \
+    if [ -f "$$c" ] && "$$c" --version >/dev/null 2>&1; then g="$$c"; break; fi; \
+  done; \
+fi; \
+if [ -z "$$g" ] && command -v glances >/dev/null 2>&1; then g="$$(command -v glances)"; fi; \
+if [ -z "$$g" ]; then \
+  echo "ERROR: glances not found (checked GLANCES_BIN, pmoves/.venv-pmoves, PATH)."; \
+  echo "  Install (uv, never pip): uv pip install --python .venv-pmoves/Scripts/python.exe -r tools/bringup/requirements.txt"; \
+  echo "  POSIX: same with .venv-pmoves/bin/python. See docs/operations/GLANCES_RUNBOOK.md#2-install-uv-pinned-45x"; \
+  exit 2; \
+fi
+endef
+
+.PHONY: glances-check glances-fetch
+glances-check: ## Glances probe preflight: version >= GLANCES_MIN_VERSION (4.4) and Python API import (GLANCES_BIN= to pin)
+	@$(GLANCES_RESOLVE); \
+	echo "glances binary: $$g"; \
+	real="$$(readlink -f "$$g" 2>/dev/null || echo "$$g")"; dir="$$(dirname "$$real")"; py=""; \
+	for c in "$$dir/python.exe" "$$dir/python" "$$dir/python3"; do [ -f "$$c" ] && { py="$$c"; break; }; done; \
+	if [ -n "$$py" ]; then v="$$("$$py" -c "import glances; print(glances.__version__)" 2>/dev/null)"; \
+	  [ -n "$$v" ] || { echo "ERROR: $$py cannot import glances -- reinstall with uv (see runbook section 2)"; exit 2; }; \
+	else v="$$("$$g" --version 2>/dev/null | awk '/^Glances version/ {print $$NF; exit}')"; \
+	  [ -n "$$v" ] || { echo "ERROR: $$g --version reported no Glances version"; exit 2; }; fi; \
+	if ! awk -v h="$$v" -v n="$(GLANCES_MIN_VERSION)" 'BEGIN { split(h, a, "."); split(n, b, "."); for (i = 1; i <= 4; i++) { x = a[i] + 0; y = b[i] + 0; if (x > y) exit 0; if (x < y) exit 1 } exit 0 }'; then \
+	  echo "ERROR: glances $$v is older than $(GLANCES_MIN_VERSION) -- the Python API (glances.api) needs >= 4.4; upgrade with uv: -r tools/bringup/requirements.txt"; exit 1; \
+	fi; \
+	echo "glances version: $$v (need >= $(GLANCES_MIN_VERSION))"; \
+	if [ -z "$$py" ]; then \
+	  echo "WARNING: no interpreter beside $$real (PATH / uv tool install) -- Python API not verified; use the pmoves/.venv-pmoves install for a full check"; \
+	  echo "glances-check: OK (binary + version only)"; exit 0; \
+	fi; \
+	PYTHONIOENCODING=utf-8 "$$py" -c "from glances import api; gl = api.GlancesAPI(); pl = gl.plugins(); dw = gl.containers.watchers.get('docker') if 'containers' in pl else None; print('python API: GlancesAPI() OK,', len(pl), 'plugins'); print('docker watcher:', 'not probed (containers plugin disabled)' if 'containers' not in pl else ('extra missing (glances[containers])' if dw is None else ('reachable' if dw.client is not None else 'UNREACHABLE'))); print('gpu plugin:', (str(len(gl.gpu.get_raw())) + ' GPU(s) visible') if 'gpu' in pl else 'disabled')" \
+	  && echo "glances-check: OK"
+
+glances-fetch: ## One-shot host sitrep via `glances --fetch` with the PMOVES conf (ip plugin off) + template (no addresses)
+	@$(GLANCES_RESOLVE); \
+	[ -f "$(GLANCES_TEMPLATE)" ] || { echo "ERROR: fetch template not found: $(GLANCES_TEMPLATE) (the stock template prints the host address and is not supported here)"; exit 2; }; \
+	[ -f "$(GLANCES_CONF)" ] || { echo "ERROR: glances config not found: $(GLANCES_CONF)"; exit 2; }; \
+	PYTHONIOENCODING=utf-8 "$$g" -C "$(GLANCES_CONF)" --fetch --fetch-template "$(GLANCES_TEMPLATE)" $(ARGS)
+
 bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/BotZ/Evo/Flute aware)
 	@echo "→ Showtime bring-up starting..."
 	@watcher_pid=""; \
@@ -182,8 +414,9 @@ bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/Bot
 		fi; \
 	}; \
 	trap cleanup EXIT INT TERM; \
-	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui; \
-	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	$(MAKE) --no-print-directory up-obs && \
+	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui && \
+	RETRO_THEME=$${RETRO_THEME:-galaxy} RETRO_FLAGS=--strict $(MAKE) --no-print-directory flight-check-retro && \
 	$(MAKE) --no-print-directory codex-health-quick || true; \
 	$(MAKE) --no-print-directory showtime-links || true; \
 	cleanup; \
@@ -210,7 +443,7 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 	if [ "$${SHOWTIME_SMOKE_GPU:-0}" = "1" ]; then \
 		GPU_SMOKE_STRICT="$${GPU_SMOKE_STRICT:-true}" $(MAKE) --no-print-directory smoke-gpu; \
 	fi; \
-	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	RETRO_THEME=$${RETRO_THEME:-galaxy} RETRO_FLAGS=--strict $(MAKE) --no-print-directory flight-check-retro; \
 	$(MAKE) --no-print-directory showtime-links-strict; \
 	cleanup; \
 	trap - EXIT INT TERM; \
@@ -223,14 +456,14 @@ auth-alignment-strict: ## Strict auth alignment (warnings also fail)
 	@$(PRECHECK_PY) tools/auth_alignment_check.py --strict
 
 topology-chit-gate: ## Validate Archon topology and CHIT sync/propagation (warning mode)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
 	$$runner tools/topology_chit_gate.py $(ARGS)
 
 topology-chit-gate-strict: ## Strict topology+CHIT gate (warnings fail)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
@@ -261,6 +494,37 @@ pr-trim: ## Full hedge trim cycle: analyze + resolve + trail sign
 	@$(MAKE) --no-print-directory pr-trim-resolve PR="$${PR:-0}" RESOLVE_ACTIONABLE="$${RESOLVE_ACTIONABLE:-}"
 	@$(MAKE) --no-print-directory sign-trail SUMMARY="PR Hedge Trim: trimmed PR #$${PR:-0}" AGENT="$${AGENT:-claude-opus}"
 
+pr-closeout-audit: ## Fail-closed closeout audit for an exact PR head (PR=N EXPECTED_HEAD=full-sha)
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py \
+		--repo "$${PR_CLOSEOUT_REPO:-POWERFULMOVES/PMOVES.AI}" \
+		audit \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		$${ADMIN_REVIEW_BYPASS:+--admin-review-bypass} \
+		$${ADMIN_REVIEW_BYPASS:+--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}"} \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
+pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha')
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@test -n "$${CONFIRM:-}" || { echo "ERROR: CONFIRM is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py \
+		--repo "$${PR_CLOSEOUT_REPO:-POWERFULMOVES/PMOVES.AI}" \
+		merge \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		--method "$${MERGE_METHOD:-squash}" \
+		--admin \
+		--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}" \
+		--confirm "$$CONFIRM" \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
 floos-status: ## Show FlOO$ pairing status
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
 
@@ -272,6 +536,15 @@ floos-pr-monitor-resolve: ## Resolve FlOO$ DAG for PR monitor pairing
 
 floos-pr-monitor-run-dry: ## Dry-run FlOO$ execution plan for PR monitor pairing
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+
+# NO wet runner target here, deliberately. `-dry` is still the only runner, and
+# both chit-flow-pr-monitor wrappers call it, so the FlOO$ pipeline cannot execute.
+# That is a real gap -- but exposing a wet target now would only move the failure,
+# not fix it: /mcp/execute 404s any cmd absent from COMMAND_REGISTRY
+# (services/agent-zero/main.py:852-858), and none of the pairing skills
+# (pr-monitor, pr-hedge-trim, pr-learnings-encode, graphiti-trail-sync) are
+# registered there. Register those four commands first; the wet target is a
+# one-liner once they resolve.
 
 chit-flow-pr-monitor: ## CHIT flow wrapper: PR monitor + FlOO$ validation/resolve + CHIT packet
 	@$(MAKE) --no-print-directory pr-monitor

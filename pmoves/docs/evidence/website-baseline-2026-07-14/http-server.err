@@ -1,0 +1,51 @@
+127.0.0.1 - - [15/Jul/2026 04:43:04] code 501, message Unsupported method ('FOO')
+127.0.0.1 - - [15/Jul/2026 04:43:04] "FOO / HTTP/1.1" 501 -
+127.0.0.1 - - [15/Jul/2026 04:43:15] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:43:25] "GET /stage/ HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:43:25] "GET /stage/stage.css HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:43:25] "GET /assets/favicon.svg HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /persona/boot.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /main.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /persona/persona-resolver.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /persona/surface-cf.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /persona/persona-theme.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /persona/showtime-live.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /embeds/beats-constellation/ HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /hyperdim/?preset=beats_c5.json&ui=none HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /hyperdim/?preset=beats_c1.json&ui=none HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /hyperdim/?preset=beats_c3.json&ui=none HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /hyperdim/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:28] "GET /hyperdim/saves/_list.json HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:29] "GET /hyperdim/saves/beats_c5.json HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:29] "GET /hyperdim/saves/beats_c3.json HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:29] "GET /hyperdim/saves/beats_c1.json HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /stage/ HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] code 404, message File not found
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /demo/voice HTTP/1.1" 404 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /hyperdim/ HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] code 404, message File not found
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /demo/rag HTTP/1.1" 404 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] code 404, message File not found
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /privacy HTTP/1.1" 404 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] code 404, message File not found
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /terms HTTP/1.1" 404 -
+127.0.0.1 - - [15/Jul/2026 04:45:35] code 404, message File not found
+127.0.0.1 - - [15/Jul/2026 04:45:35] "GET /security HTTP/1.1" 404 -
+127.0.0.1 - - [15/Jul/2026 04:45:38] "GET /stage/ HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:38] "GET /stage/stage.css HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:38] "GET /stage/stage.js HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:38] "GET /fonts/orbitron-v35-latin-wght.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:38] "GET /stage/vendor/a2ui.mjs HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:38] "GET /stage/data/public-rooms.json HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:41] "GET /stage/ HTTP/1.1" 200 -
+127.0.0.1 - - [15/Jul/2026 04:45:41] "GET / HTTP/1.1" 200 -

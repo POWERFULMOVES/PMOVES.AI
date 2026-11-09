@@ -2,14 +2,54 @@
 
 Verifies that geometry_publish_cgp signs CGPs before sending.
 """
-import os
+import importlib.util
+import pathlib
 import sys
-import importlib
+
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-# Ensure pmoves is importable
-sys.path.insert(0, "pmoves/services/agent-zero")
+_AGENT_ZERO = pathlib.Path(__file__).resolve().parents[1] / "services" / "agent-zero"
+
+
+def _load_agent_zero_mcp_server():
+    """Load *the agent-zero* `mcp_server`, unambiguously.
+
+    Two modules in this repo are named `mcp_server`:
+    `pmoves/tools/mcp_server.py`, which imports the third-party `mcp` package at
+    module scope, and `pmoves/services/agent-zero/mcp_server.py`, which is the
+    one under test. A bare `import mcp_server` returns whichever already sits in
+    `sys.modules`, so these tests used to pass or fail depending on which other
+    test file shared their pytest process — surfacing as
+    `ModuleNotFoundError: No module named 'mcp'` whenever the tools module won.
+
+    The old `sys.path.insert(0, "pmoves/services/agent-zero")` was also relative
+    to the working directory, so it only worked when pytest happened to be run
+    from the repo root.
+
+    Loading by absolute path removes both dependencies. The module is registered
+    under the name `mcp_server` because `patch("mcp_server.httpx.AsyncClient")`
+    resolves its target through `sys.modules`.
+    """
+    if str(_AGENT_ZERO) not in sys.path:
+        sys.path.insert(0, str(_AGENT_ZERO))
+
+    try:
+        from services.common.bootstrap import bootstrap_import_paths
+    except ImportError:
+        pass
+    else:
+        bootstrap_import_paths()
+
+    sys.modules.pop("mcp_server", None)
+    spec = importlib.util.spec_from_file_location(
+        "mcp_server", _AGENT_ZERO / "mcp_server.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["mcp_server"] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 class TestMCPServerCHITSigning:
@@ -20,15 +60,7 @@ class TestMCPServerCHITSigning:
         monkeypatch.setenv("CHIT_PASSPHRASE", "test-mcp-signing-key")
         # Import the function directly
         # Need to handle the bootstrap import
-        try:
-            from services.common.bootstrap import bootstrap_import_paths
-            bootstrap_import_paths()
-        except ImportError:
-            pass
-
-        # Import the module
-        import mcp_server
-        importlib.reload(mcp_server)
+        mcp_server = _load_agent_zero_mcp_server()
 
         cgp = {
             "spec": "geometry.cgp.v1",
@@ -43,14 +75,7 @@ class TestMCPServerCHITSigning:
         """_sign_cgp_if_available returns unsigned in dev mode."""
         monkeypatch.delenv("CHIT_PASSPHRASE", raising=False)
         monkeypatch.delenv("CHIT_SIGNING_KEY", raising=False)
-        try:
-            from services.common.bootstrap import bootstrap_import_paths
-            bootstrap_import_paths()
-        except ImportError:
-            pass
-
-        import mcp_server
-        importlib.reload(mcp_server)
+        mcp_server = _load_agent_zero_mcp_server()
 
         cgp = {
             "spec": "geometry.cgp.v1",
@@ -64,14 +89,7 @@ class TestMCPServerCHITSigning:
     async def test_geometry_publish_cgp_calls_sign(self, monkeypatch):
         """geometry_publish_cgp signs CGP before posting to gateway."""
         monkeypatch.setenv("CHIT_PASSPHRASE", "test-mcp-signing-key")
-        try:
-            from services.common.bootstrap import bootstrap_import_paths
-            bootstrap_import_paths()
-        except ImportError:
-            pass
-
-        import mcp_server
-        importlib.reload(mcp_server)
+        mcp_server = _load_agent_zero_mcp_server()
 
         signed_cgps = []
         original_sign = mcp_server._sign_cgp_if_available

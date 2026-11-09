@@ -18,9 +18,7 @@ VERIFICATION CHECKS:
 Author: PMOVES.AI Automation
 Version: 1.2.0
 """
-import json
 import logging
-import os
 import re
 import sys
 import subprocess
@@ -49,6 +47,21 @@ def print_check(category, text, passed):
     status = f"{Colors.GREEN}PASS{Colors.RESET}" if passed else f"{Colors.RED}FAIL{Colors.RESET}"
     print(f"{icon} [{status}] {Colors.BOLD}{category}:{Colors.RESET} {text}")
     return passed
+
+
+def print_error(message):
+    """Print an error message."""
+    print(f"{Colors.RED}✗ ERROR:{Colors.RESET} {message}")
+
+
+def print_success(message):
+    """Print a success message."""
+    print(f"{Colors.GREEN}✓{Colors.RESET} {message}")
+
+
+def print_warning(message):
+    """Print a warning message."""
+    print(f"{Colors.YELLOW}⚠ WARNING:{Colors.RESET} {message}")
 
 
 def run_command(cmd, check=False, capture_output=True, timeout=30):
@@ -111,7 +124,7 @@ def read_env_file(file_path):
     except IsADirectoryError:
         print_error(f"Path is a directory, not a file: {file_path}")
         sys.exit(1)
-    except UnicodeDecodeError as e:
+    except UnicodeDecodeError:
         print_error(f"File encoding error in {file_path}")
         print("  Ensure file is UTF-8 encoded")
         sys.exit(1)
@@ -163,7 +176,7 @@ def verify_gh_cli():
         else:
             print_check("GitHub CLI", "Not installed", False)
             return False
-    except Exception as e:
+    except Exception:
         print_check("GitHub CLI", "Error verifying GitHub CLI", False)
         return False
 
@@ -208,7 +221,7 @@ def verify_github_secrets():
     except PermissionError:
         print_check("GitHub Secrets", "Permission denied executing GitHub CLI", False)
         return False
-    except Exception as e:
+    except Exception:
         print_check("GitHub Secrets", "Unexpected error checking GitHub Secrets", False)
         return False
 

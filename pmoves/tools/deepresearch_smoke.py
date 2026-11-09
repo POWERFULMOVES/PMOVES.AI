@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 try:
     from nats.aio.client import Client as NATS
-except Exception as exc:  # pragma: no cover
+except Exception:  # pragma: no cover
     print("nats-py is required: pip install nats-py", file=sys.stderr)
     raise
 
@@ -42,7 +42,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(description="DeepResearch NATS smoke")
     parser.add_argument("--query", default="What changed in PMOVES today?", help="research query")
     parser.add_argument("--timeout", type=float, default=30.0, help="seconds to wait for a result")
-    parser.add_argument("--nats", default=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"), help="NATS URL")
+    parser.add_argument("--nats", default=os.getenv("NATS_URL", "nats://nats:4222"), help="NATS URL")
     args = parser.parse_args()
 
     nc = NATS()

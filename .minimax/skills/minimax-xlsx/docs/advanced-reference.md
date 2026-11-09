@@ -274,7 +274,7 @@ output workbook still needs to do:
 
 | Need | Writer | Why |
 |---|---|---|
-| Output is the terminal artefact (no later openpyxl edits) | `xlsxwriter` (SKILL.md §3.3) | Fastest writer; cannot be reopened with openpyxl for further edits. Formulas must be written via `write_formula(...)`. |
+| Output is the terminal artefact (no later openpyxl edits) | `xlsxwriter` ([`create-edit-guide.md`](create-edit-guide.md)) | Fastest writer; cannot be reopened with openpyxl for further edits. Formulas must be written via `write_formula(...)`. |
 | Need to keep editing with openpyxl after the bulk write | `openpyxl.Workbook(write_only=True)` + `WriteOnlyCell` | Streams rows to disk; ~4× faster than the default writer. Can be reopened normally. Cannot use `cell()` random access during the bulk phase. |
 | Output is small enough that openpyxl works but pivot / chart authoring is the slow part | Default `Workbook()` + chunked `append()` in batches of 10k–50k | Lets you interleave pivot / chart objects with row writes. |
 

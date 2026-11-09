@@ -41,7 +41,8 @@ services:
   agent-zero:
     <<: [*cpu-only, *vps-healthcheck]
     build:
-      dockerfile: Dockerfile  # CPU-only version
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile  # CPU-only version (matches the build in pmoves/docker-compose.yml:2911-2913)
     environment:
       - AGENTZERO_MODE=api
       - TENSORZERO_URL=http://tensorzero-gateway:3000
@@ -70,7 +71,7 @@ services:
     image: pmoves/gateway-agent:latest
     container_name: pmoves-gateway-agent
     ports:
-      - "8111:8111"
+      - "${GATEWAY_AGENT_8111_PORT:-8111}:8111"
     environment:
       - PORT=8111
       - AGENT_ZERO_URL=http://agent-zero:8080
@@ -183,8 +184,8 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_80_PORT:-80}:80"
+      - "${NGINX_443_PORT:-443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
