@@ -1035,7 +1035,7 @@ services:
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
-    - ${A2UI_BIND:-0.0.0.0}:9224:9224
+    - ${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224
     depends_on:
       nats:
         condition: service_healthy
@@ -1252,7 +1252,7 @@ services:
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
-    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
+    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:${EVO_CONTROLLER_PORT:-8113}:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -1300,7 +1300,7 @@ services:
     - SSL_CERT_FILE=
     - REQUESTS_CA_BUNDLE=
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
-    ports: ["${MAI_UI_BIND:-127.0.0.1}:8220:8220"]
+    ports: ["${MAI_UI_BIND:-127.0.0.1}:${MAI_UI_AGENT_PORT:-8220}:8220"]
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_api, pmoves_external]
     extra_hosts:

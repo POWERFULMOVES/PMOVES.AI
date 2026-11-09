@@ -47,7 +47,7 @@ services:
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
       - "${HEADSCALE_PORT:-8096}:8096"
-      - "9091:9090"  # Metrics (avoid conflict with Prometheus at 9090)
+      - "${HEADSCALE_9091_PORT:-9091}:9090"  # Metrics (avoid conflict with Prometheus at 9090)
     volumes:
       - ./config/headscale:/etc/headscale
       - headscale-data:/var/lib/headscale
@@ -78,10 +78,10 @@ services:
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-      - "21115:21115"  # hbbs (TCP)
-      - "21116:21116"  # hbbs (QUIC)
-      - "21116:21116/udp"
-      - "21118:21118"  # hbbs (WebRTC)
+      - "${RUSTDESK_HBBS_21115_PORT:-21115}:21115"  # hbbs (TCP)
+      - "${RUSTDESK_HBBS_21116_PORT:-21116}:21116"  # hbbs (QUIC)
+      - "${RUSTDESK_HBBS_21116_PORT:-21116}:21116/udp"
+      - "${RUSTDESK_HBBS_21118_PORT:-21118}:21118"  # hbbs (WebRTC)
     volumes:
       - rustdesk-data:/root
     networks:
@@ -112,8 +112,8 @@ services:
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-      - "21117:21117"  # hbbr (TCP)
-      - "21119:21119"  # hbbr (QUIC)
+      - "${RUSTDESK_HBBR_21117_PORT:-21117}:21117"  # hbbr (TCP)
+      - "${RUSTDESK_HBBR_21119_PORT:-21119}:21119"  # hbbr (QUIC)
     volumes:
       - rustdesk-data:/root
     networks:
