@@ -151,6 +151,33 @@ def test_builder_bundles_declared_rows_only(tmp_path):
         # DB-init: no row, so never bundled even when present:
         "SERVICE_PASSWORD_POSTGRES": "fake-db-password",
     }
+    # MEASURED 2026-11-02: on WINDOWS this MINIMISED environment could not
+    # even import the standard library, so the test failed for a reason that
+    # said nothing about the secrets bundle it is about.
+    #
+    # The chain: `import asyncio` -> `asyncio.windows_events` ->
+    # `import _overlapped` raised `OSError [WinError 10106] The requested
+    # service provider could not be loaded or initialized`. `asyncio/__init__.py`
+    # swallows the ImportError from `from .base_events import *`, so the
+    # failure surfaced as `NameError: name 'base_events' is not defined` --
+    # raised from inside a stdlib file, in a test about secret bundling.
+    #
+    # BISECTED to the single variable: `SystemRoot`. Adding it ALONE to the
+    # minimised env makes the import succeed; every other system variable
+    # tried (SystemDrive, windir, COMSPEC, PATHEXT, TEMP, TMP,
+    # NUMBER_OF_PROCESSORS, PROCESSOR_ARCHITECTURE, USERPROFILE, HOMEDRIVE,
+    # HOMEPATH, OS) left it failing exactly as before. Winsock cannot
+    # initialise without it.
+    #
+    # The env therefore stays MINIMISED. Inheriting the whole `os.environ`
+    # would also fix the import, but it would let the operator's REAL
+    # secrets into this test's own assertion (`bundled == {...}` reads the
+    # labels of the bundle the builder produced, and a declared row that
+    # happens to be set in the real environment would be bundled too). One
+    # platform variable is the whole fix; the rest of the isolation is the
+    # point of the test.
+    if "SystemRoot" in os.environ:
+        env["SystemRoot"] = os.environ["SystemRoot"]
     out = subprocess.run([sys.executable, str(script)], env=env, cwd=tmp_path,
                          capture_output=True, text=True, timeout=120)
     assert out.returncode == 0, out.stderr[-2000:]
