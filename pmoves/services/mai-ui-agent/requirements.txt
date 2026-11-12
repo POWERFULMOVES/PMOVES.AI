@@ -7,6 +7,6 @@ accelerate>=1.0
 # Pinned, not floored: Pillow>=10.0 resolves to whatever the build day offers, and
 # the 10.x line carries known image-processing CVEs this service feeds directly with
 # caller-supplied bytes. Matches services/media-video/requirements.txt.
-Pillow==12.3.0
+Pillow==13.0.0
 pydantic>=2.0
 requests>=2.32

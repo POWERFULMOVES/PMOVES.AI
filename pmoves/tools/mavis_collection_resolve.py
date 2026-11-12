@@ -103,7 +103,22 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                 errors.append(f"super_nodes.{section}[{i}] must be an object")
                 continue
             # Each entry must have at least one pointer (ref / source / spec / design / endpoint / constellation_id / provider)
-            pointer_keys = {"ref", "source", "spec", "design", "endpoint", "constellation_id", "provider"}
+            # `key` and `target` were added 2026-10-26 with the client-bootstrap
+            # groups: a `tools` entry points at an MCP server key in
+            # pmoves/config/mcp_inventory.json, and a `routing` entry points at
+            # a sibling agent. Both are pointers in the same sense as `ref` --
+            # they name a canonical registry entry rather than copying it.
+            pointer_keys = {
+                "ref",
+                "source",
+                "spec",
+                "design",
+                "endpoint",
+                "constellation_id",
+                "provider",
+                "key",
+                "target",
+            }
             if not (set(entry.keys()) & pointer_keys):
                 errors.append(f"super_nodes.{section}[{i}] has no pointer key")
 

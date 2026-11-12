@@ -22,7 +22,7 @@ def _load_compose():
     """Load and return parsed compose data, skip if unavailable."""
     if not COMPOSE_FILE.exists():
         pytest.skip("docker-compose.yml not found")
-    data = yaml.safe_load(COMPOSE_FILE.read_text())
+    data = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
     assert isinstance(data, dict), "Compose file should parse to a dict"
     return data
 
@@ -334,7 +334,7 @@ def _load_all_compose_files():
     results = {}
     for f in PMOVES_DIR.glob("docker-compose*.yml"):
         try:
-            data = yaml.safe_load(f.read_text())
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
             if isinstance(data, dict) and data.get("services"):
                 results[f.name] = data
         except yaml.YAMLError:
@@ -348,7 +348,7 @@ def test_no_deprecated_version_key():
     deprecated = []
     for f in PMOVES_DIR.glob("docker-compose*.yml"):
         try:
-            data = yaml.safe_load(f.read_text())
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
             if isinstance(data, dict) and "version" in data:
                 deprecated.append(f.name)
         except yaml.YAMLError:
@@ -441,7 +441,7 @@ def test_hardened_override_preserves_critical_config():
     if not hardened_file.exists():
         pytest.skip("docker-compose.hardened.yml not found")
 
-    data = yaml.safe_load(hardened_file.read_text())
+    data = yaml.safe_load(hardened_file.read_text(encoding="utf-8"))
     services = data.get("services", {})
 
     # Services in hardened overlay that strip profiles

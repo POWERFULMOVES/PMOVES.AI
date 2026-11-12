@@ -477,7 +477,7 @@ $ for c in pmoves-pmoves-yt-1 pmoves-ffmpeg-whisper-1 pmoves-bgutil-pot-provider
 pmoves-pmoves-yt-1               8077/tcp -> 127.0.0.1:8077
 pmoves-ffmpeg-whisper-1          8078/tcp -> 127.0.0.1:8078
 pmoves-bgutil-pot-provider-1
-pmoves-yt-cookie-refresher-1     8115/tcp -> 127.0.0.1:8115
+pmoves-yt-cookie-refresher-1     8126/tcp -> 127.0.0.1:8126
 pmoves-yt-cookie-writer-1
 ```
 
@@ -557,7 +557,7 @@ Three cooperating pieces, plus a PO-token provider:
 
 | Service | Role | Down means |
 |---|---|---|
-| `yt-cookie-refresher` (`:8115`) | Weekly Playwright harvest → encrypt → store in Supabase → NATS notify | Cookies go stale; no new harvest. An existing cookie file keeps working until expiry. |
+| `yt-cookie-refresher` (`:8126`) | Weekly Playwright harvest → encrypt → store in Supabase → NATS notify | Cookies go stale; no new harvest. An existing cookie file keeps working until expiry. |
 | `yt-cookie-writer` (no port) | NATS subscriber → decrypt → write `/cookies/yt-cookies.txt` into `yt-cookies-vol` | Harvested cookies never reach `pmoves-yt`. Silent — see §5.2. |
 | `bgutil-pot-provider` (`:4417`, internal) | PO token minting for yt-dlp | PO-token-gated videos fail; non-gated extraction still works. |
 
