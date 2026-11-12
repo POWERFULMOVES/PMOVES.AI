@@ -34,7 +34,7 @@ jobs:
 
   check:
     needs: mint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: always()
     steps:
       - name: Reconcile tracker issue (open/comment on failure, auto-close on success)

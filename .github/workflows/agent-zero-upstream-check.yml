@@ -24,7 +24,7 @@ env:
 
 jobs:
   check-upstream:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       upstream_current: ${{ steps.compare.outputs.UPSTREAM_CURRENT }}
@@ -137,7 +137,7 @@ jobs:
   create-pr:
     needs: check-upstream
     if: needs.check-upstream.outputs.upstream_current == 'false' && needs.check-upstream.outputs.pr_exists != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       pr_number: ${{ steps.create_pr.outputs.PR_NUMBER }}
@@ -357,7 +357,7 @@ jobs:
   post-ci:
     needs: create-pr
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - name: Skip if no PR was created

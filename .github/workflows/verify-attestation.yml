@@ -32,7 +32,7 @@ jobs:
     # So the context is named explicitly. Nothing depended on the old one:
     # this workflow had never been dispatched before that measurement.
     name: verify-slsa-attestation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Verify SLSA attestation
         run: |

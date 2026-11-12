@@ -15,10 +15,21 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY libs /app/libs
 COPY services/common /app/services/common
 
-# PMOVES Python namespace package (for ShapeStore → pmoves.chit import)
+# PMOVES Python namespace packages (ShapeStore → pmoves.chit, plus
+# geometry_decoder / branch_trail / model_fitness → pmoves.tools).
+# See pmoves/tests/test_dockerfile_packages_pmoves_chit.py for the
+# ratchet that pins both namespaces -- the GPU sibling Dockerfile
+# (Dockerfile.gpu) carries the same block; keeping them in lockstep
+# avoids the 503/500 silent-failure cycle the 2026-10-15 gap exposed.
 RUN mkdir -p /app/pmoves \
-    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py \
+    && mkdir -p /app/pmoves/tools \
+    && printf '"""pmoves.tools namespace for Docker."""\n' > /app/pmoves/tools/__init__.py
 COPY chit /app/pmoves/chit
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
+COPY tools/sign_trail.py /app/pmoves/tools/sign_trail.py
 
 COPY services/hi-rag-gateway-v2/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
