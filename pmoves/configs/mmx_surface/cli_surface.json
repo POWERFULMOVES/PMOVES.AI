@@ -1,0 +1,67 @@
+{
+  "global_flags": [
+    "--api-key",
+    "--base-url",
+    "--dry-run",
+    "--help",
+    "--no-color",
+    "--non-interactive",
+    "--output",
+    "--quiet",
+    "--region",
+    "--timeout",
+    "--verbose",
+    "--version"
+  ],
+  "mmx_version": "1.0.25",
+  "resources": {
+    "agent": [
+      "setup"
+    ],
+    "auth": [
+      "login",
+      "logout",
+      "refresh",
+      "status"
+    ],
+    "config": [
+      "export-schema",
+      "set",
+      "show"
+    ],
+    "file": [
+      "delete",
+      "list",
+      "upload"
+    ],
+    "image": [
+      "generate"
+    ],
+    "quota": [
+      "show"
+    ],
+    "search": [
+      "query",
+      "web"
+    ],
+    "speech": [
+      "generate",
+      "synthesize",
+      "voices"
+    ],
+    "text": [
+      "chat",
+      "repl"
+    ],
+    "update": [],
+    "video": [
+      "download",
+      "generate",
+      "task get"
+    ],
+    "vision": [
+      "describe"
+    ]
+  },
+  "schema": "pmoves.mmx-cli-surface/v1"
+}

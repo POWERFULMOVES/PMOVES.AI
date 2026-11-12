@@ -145,7 +145,7 @@
         "--apiUrl",
         "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
         "--apiKey",
-        "${SUPABASE_SERVICE_ROLE_KEY:-${SUP\u2026EY}}",
+        "${SUPABASE_SERVICE_ROLE_KEY}",
         "--schema",
         "public"
       ],

@@ -24,6 +24,7 @@ Each file is a JSON profile with these fields:
 | File | Node | Room | GPU | Purpose |
 |------|------|------|-----|---------|
 | `pmoves-hermes-z890.json` | Z890 | `z890-infra.room.fabric` | No | Local-first infra coordinator with legal/email/messaging workflows |
+| `pmoves-hermes-5090.json` | 5090 (`pmoves-5090`) | `5090-kilocode.room.studio` | RTX 5090 (32GB) | GPU inference specialist: KiloCode GLM coding room + voice studio; Ollama local lane, ollama_cloud fallback |
 
 ## How a launcher uses this
 

@@ -207,6 +207,122 @@ properties:
               type: string
               enum: ["spec", "design", "encoding", "signature"]
 
+      # ---------------------------------------------------------------
+      # Client-bootstrap groups (added 2026-10-26 for the MiniMax Code
+      # client parity lane). These four groups are what a CLIENT needs
+      # to boot with "the same integration and access" as the other
+      # agent stacks -- they are the machine-readable half of what
+      # pmoves/config/mcp_inventory.json + pmoves/tools/mcp_config_
+      # generator.py wire for the other six clients.
+      # ---------------------------------------------------------------
+
+      tools:
+        type: array
+        description: >-
+          MCP servers + tool surfaces this client is allowed to load.
+          Each entry mirrors one key in pmoves/config/mcp_inventory.json
+          so the bootstrap profile and the generated client config can
+          be diffed against each other.
+        items:
+          type: object
+          required: [key, transport]
+          properties:
+            key:
+              type: string
+              description: "MCP server key (must exist in pmoves/config/mcp_inventory.json)."
+            description:
+              type: string
+            transport:
+              type: string
+              enum: ["sse", "http", "streamable-http", "stdio"]
+            endpoint:
+              type: string
+              description: "Resolved URL, or '${VAR}' placeholder left for the launcher to expand."
+            scope:
+              type: string
+              enum: ["local", "fleet", "hosted"]
+              description: "local = this node only; fleet = reachable over the Tailscale tailnet."
+            enabled:
+              type: boolean
+              description: "Default true. Set false to ship the entry disabled."
+            notes:
+              type: string
+
+      services:
+        type: array
+        description: >-
+          Service tags this client is allowed to reach, with the endpoint
+          that resolves each tag. Tags are the operator-facing names
+          (Tailscale / RustDesk / Hostinger / Cloudflare) -- this is the
+          'service tags' half of the bootstrap contract.
+        items:
+          type: object
+          required: [tag]
+          properties:
+            tag:
+              type: string
+              description: "Service tag (e.g. tailscale, rustdesk, hostinger, cloudflare)."
+            kind:
+              type: string
+              enum: ["network", "remote-desktop", "hosting", "cdn", "compute", "storage"]
+            endpoint:
+              type: string
+              description: "Base URL, hostname, or Tailscale magic-DNS name for the tag."
+            description:
+              type: string
+            credentials:
+              type: string
+              description: "Where the credential for this tag lives (path or env var name)."
+
+      routing:
+        type: array
+        description: >-
+          Where to find the other agents and services when this client
+          needs to hand work off. Each entry names a target, how to
+          reach it, and which transport carries the handoff.
+        items:
+          type: object
+          required: [target]
+          properties:
+            target:
+              type: string
+              description: "Agent or service name (e.g. hermes, kilo, spark, p7)."
+            where:
+              type: string
+              description: "How to reach it (URL, magic-DNS name, or command)."
+            via:
+              type: string
+              enum: ["mcp", "nats", "http", "tailscale", "rustdesk", "local"]
+            description:
+              type: string
+
+      constraints:
+        type: array
+        description: >-
+          What this client must NOT do. The 'constraints' half of the
+          bootstrap contract. Each rule is a prohibition with a reason,
+          so a downstream agent can explain the refusal instead of
+          guessing.
+        items:
+          type: object
+          required: [rule]
+          properties:
+            rule:
+              type: string
+              description: "The prohibition, stated as an imperative (e.g. 'do not read pmoves/env.shared')."
+            applies_to:
+              type: array
+              items:
+                type: string
+              description: "Tool names or surfaces the rule binds. Empty = all."
+            reason:
+              type: string
+              description: "Why the prohibition exists (the reason a later agent can cite)."
+            severity:
+              type: string
+              enum: ["advisory", "blocking"]
+              description: "blocking = a Known Roads / damage-control domain is in play."
+
 # =============================================================================
 # Examples
 # =============================================================================
