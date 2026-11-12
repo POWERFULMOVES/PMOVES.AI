@@ -360,6 +360,16 @@ agents:
       ci_runner: null
       compose_profile: null
     description: "Z890 node CLI identity -- infrastructure coordinator, NATS hub"
+    # HOST SCOPE (operator direction 2026-11-08): the node identity holds the
+    # node, not just the repo. node_identity.resolve_host_roots emits these and
+    # the launchers add each as --add-dir ONLY for the main session (no --agent).
+    # Agents and teams it creates stay at max_subagent_scope: their own
+    # .claude/agents/*.md tool lists, inside the repo. Secret paths stay
+    # zero-access via damage-control whatever this says.
+    scope:
+      host_access: node
+      host_roots: ["C:/", "D:/", "I:/", "N:/"]
+      max_subagent_scope: repo
 
   crush_glm52:
     name: "Crush GLM-5.2 (Knuckles)"
