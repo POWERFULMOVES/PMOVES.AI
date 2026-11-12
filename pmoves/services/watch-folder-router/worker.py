@@ -103,9 +103,29 @@ def _transcribe(bucket: str, key: str) -> Dict[str, Any]:
     return resp.json()
 
 
+def _unwrap(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Accept both the standard PMOVES envelope and the legacy flat shape.
+
+    Envelope publishers (drop-folder-ingest, anything using
+    services/common/events.envelope) put the fields under ``payload`` -- the
+    envelope schema forbids extra top-level keys -- so reading ``bucket`` /
+    ``key`` at the top level rejected every one of them. The envelope's
+    ``correlation_id`` is carried onto the unwrapped event so downstream
+    tracing is unchanged. An envelope whose payload has no bucket/key (e.g.
+    pdf-ingest's own announcement) is still rejected below, as before.
+    """
+    payload = event.get("payload")
+    if isinstance(payload, dict) and "topic" in event:
+        merged = dict(payload)
+        if event.get("correlation_id") and not merged.get("correlation_id"):
+            merged["correlation_id"] = event["correlation_id"]
+        return merged
+    return event
+
+
 async def _handle_file_added(msg) -> None:
     try:
-        event = json.loads(msg.data.decode())
+        event = _unwrap(json.loads(msg.data.decode()))
     except Exception:  # noqa: BLE001
         logger.exception("unparseable ingest.file.added event")
         routed_total.labels(route="unknown", status="rejected").inc()
