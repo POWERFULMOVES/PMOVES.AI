@@ -1476,6 +1476,28 @@ services:
       - dockerfile
       - schema
       - topic
+  - name: node-registry
+    directory: pmoves/services/node_registry
+    dockerfile: pmoves/services/node_registry/Dockerfile
+    dockerfile_variants:
+      - Dockerfile
+    roots:
+      - pmoves/services
+    overlays:
+      - overlay: core
+        compose_key: node-registry
+        paths:
+          - pmoves/docker-compose.core.yml
+      - overlay: main
+        compose_key: node-registry
+        paths:
+          - pmoves/docker-compose.yml
+    guard_paths: []
+    known_road_domains:
+      - compose
+      - dockerfile
+      - schema
+      - topic
   - name: notebook-mcp
     directory: pmoves/services/notebook-mcp
     dockerfile: pmoves/services/notebook-mcp/Dockerfile

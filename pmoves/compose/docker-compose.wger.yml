@@ -28,7 +28,7 @@ services:
       - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:?WGER_SECRET_KEY must be set in env.shared}
       - WGER_ENABLE_REGISTRATION=true
     ports:
-      - "8000:8000"
+      - "${WGER_8000_PORT:-8000}:8000"
     networks: [pmoves]
     profiles: ["wger"]
 

@@ -29,6 +29,24 @@ HIRAG_URL = os.environ.get("HIRAG_URL", "http://hi-rag-gateway-v2-gpu:8086")
 ANNOUNCE_SEC = int(os.environ.get("ANNOUNCE_SEC", "15"))
 MESH_PASSPHRASE = os.environ.get("MESH_PASSPHRASE", "")
 
+# Announcement subjects.
+#
+# WHY NAMED CONSTANTS (D4): the node registry subscribes to these exact
+# strings -- it used to subscribe to `compute.nodes.announce.v1` while every
+# publisher announced on `mesh.node.announce.v1`, so the announcement plane
+# and the registry were two finished halves wired to different subjects.
+# The strings are named here (not inlined at the publish sites) so the
+# compatibility ratchet can compare the publisher against the subscriber
+# without parsing call sites.
+#
+# They are NOT shared with the registry through an import: this service's
+# Docker image contains ONLY this directory (COPY . /app/ in ./Dockerfile), so
+# a shared module is not reachable from here. The agreement is enforced by a
+# test instead -- pmoves/tests/tools/test_mesh_node_compatibility.py.
+MESH_ANNOUNCE_SUBJECT_V1 = "mesh.node.announce.v1"
+MESH_ANNOUNCE_SUBJECT_V2 = "mesh.node.announce.v2"
+MESH_SHAPE_HANDSHAKE_SUBJECT = "mesh.shape.handshake.v1"
+
 # Service Registry Integration
 SERVICE_REGISTRY_URL = os.environ.get("SERVICE_REGISTRY_URL", "http://service-registry:8100")
 SERVICE_MODE = os.environ.get("SERVICE_MODE", "docked")  # "standalone" or "docked"
@@ -129,7 +147,7 @@ async def announce_loop(nc):
             "mode": SERVICE_MODE,
             "ts": ts_now,
         }
-        await nc.publish("mesh.node.announce.v1", json.dumps(msg_v1).encode())
+        await nc.publish(MESH_ANNOUNCE_SUBJECT_V1, json.dumps(msg_v1).encode())
 
         # v2 announcement with namespace identity and topology context
         peer_raw = os.environ.get("PEER_EXPECTATIONS", "")
@@ -165,7 +183,7 @@ async def announce_loop(nc):
             "peers": [p for p in peer_raw.split(",") if p],
             "health": {"status": "announcing"},
         }
-        await nc.publish("mesh.node.announce.v2", json.dumps(msg_v2).encode())
+        await nc.publish(MESH_ANNOUNCE_SUBJECT_V2, json.dumps(msg_v2).encode())
 
         # Service Registry registration for multi-host discovery
         await register_with_service_registry()
@@ -187,7 +205,7 @@ async def shape_handshake_sub(nc):
                         requests.post(f"{HIRAG_URL}/geometry/event", json={"type":"geometry.cgp.v1","data":cap["data"]}, timeout=10)
                     except Exception:
                         pass
-    await nc.subscribe("mesh.shape.handshake.v1", cb=handler)
+    await nc.subscribe(MESH_SHAPE_HANDSHAKE_SUBJECT, cb=handler)
 
 
 async def main():
