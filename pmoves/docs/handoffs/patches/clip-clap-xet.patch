@@ -1,0 +1,46 @@
+diff -ru a/pmoves/docker-compose.core.yml b/pmoves/docker-compose.core.yml
+--- a/pmoves/docker-compose.core.yml	2026-10-22 22:27:27.761228609 +0000
++++ b/pmoves/docker-compose.core.yml	2026-10-22 22:27:27.770874449 +0000
+@@ -1553,6 +1553,9 @@
+     environment:
+     - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+     - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
++    # hf-xet 1.5.2 fails every xet-backed weight file here (Reqwest builder
++    # error); plain HTTP works. See pmoves/tests/test_clip_clap_xet_disabled.py.
++    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+     - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+     - CLIP_EMBED_PORT=8109
+     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+@@ -1589,6 +1592,9 @@
+     environment:
+     - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+     - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
++    # hf-xet 1.5.2 fails every xet-backed weight file here (Reqwest builder
++    # error); plain HTTP works. See pmoves/tests/test_clip_clap_xet_disabled.py.
++    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+     - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+     - CLAP_EMBED_PORT=8108
+     - NATS_URL=${NATS_URL:-}
+diff -ru a/pmoves/docker-compose.yml b/pmoves/docker-compose.yml
+--- a/pmoves/docker-compose.yml	2026-10-22 22:27:27.734438118 +0000
++++ b/pmoves/docker-compose.yml	2026-10-22 22:27:27.756214794 +0000
+@@ -2080,6 +2080,9 @@
+     environment:
+     - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+     - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
++    # hf-xet 1.5.2 fails every xet-backed weight file here (Reqwest builder
++    # error); plain HTTP works. See pmoves/tests/test_clip_clap_xet_disabled.py.
++    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+     - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+     - CLIP_EMBED_PORT=8109
+     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+@@ -2116,6 +2119,9 @@
+     environment:
+     - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+     - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
++    # hf-xet 1.5.2 fails every xet-backed weight file here (Reqwest builder
++    # error); plain HTTP works. See pmoves/tests/test_clip_clap_xet_disabled.py.
++    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+     - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+     - CLAP_EMBED_PORT=8108
+     - NATS_URL=${NATS_URL:-}
