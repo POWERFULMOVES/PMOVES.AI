@@ -125,7 +125,8 @@
       "base_url": "http://localhost:11434",
       "api_key": "",
       "max_iterations": 50,
-      "remote_model": "remote_gpu"
+      "remote_model": "remote_gpu",
+      "subagent_auto_approve": false
     },
     "platform_toolsets": {
       "cli": [
@@ -165,7 +166,7 @@
       "tirith_enabled": true,
       "tirith_path": "tirith",
       "tirith_timeout": 5,
-      "tirith_fail_open": true
+      "tirith_fail_open": false
     },
     "memory": {
       "memory_enabled": true,
