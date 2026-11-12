@@ -210,6 +210,14 @@
       "description": "Composio Connect hosted MCP - SaaS toolkits behind 7 COMPOSIO_* meta-tools with in-band managed OAuth (search tools, connect apps, execute, remote sandbox)",
       "type": "http",
       "url": "https://connect.composio.dev/mcp"
+    },
+    "composio-local": {
+      "description": "Composio MCP fleet proxy on this node (supergateway 4.2.0 re-serving Composio Connect, loopback :8190) - same 7 COMPOSIO_* meta-tools as `composio`, but Composio auth is the proxy's ck_ consumer key, so headless clients work",
+      "type": "http",
+      "url": "http://127.0.0.1:8190/composio/mcp",
+      "headers": {
+        "Authorization": "Bearer ${COMPOSIO_MCP_GATEWAY_KEY}"
+      }
     }
   }
 }
