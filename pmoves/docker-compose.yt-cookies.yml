@@ -43,7 +43,12 @@ services:
       nats:
         condition: service_healthy
     ports:
-      - "${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:8115:8115"
+      # The HOST port is 8126, not 8115. 8115 is node-registry's canonical
+      # host port (pmoves/configs/ports.yaml), and this overlay is NOT in the
+      # default stack, so the collision was latent rather than caught. The
+      # CONTAINER port stays 8115 -- that is what the service listens on
+      # inside the container, and what PORT= above tells it.
+      - "${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:${YT_COOKIE_REFRESHER_PORT:-8126}:8115"
     profiles: ["yt-cookies"]
     networks: [pmoves_api, pmoves_bus, pmoves_data, pmoves_external]
     healthcheck:

@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/pmoves-mini.sh        [args...]
-#   install-pmoves-mini-pmoves-command.sh && pmoves-mini         # rc function
+#   install-pmoves-mini-command.sh && pmoves-mini         # rc function
 #   pmoves-mini.cmd                              # Windows Explorer double-click
 #
 # Purpose: PMOVES mini CLI — profiles, models, automations, crush setup

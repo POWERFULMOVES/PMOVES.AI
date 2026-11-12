@@ -25,7 +25,7 @@ services:
       --jetstream
       --store_dir=/data
     ports:
-      - "4222:4222"
+      - "${NATS_LEAF_4222_PORT:-4222}:4222"
     volumes:
       - nats-leaf-data:/data
     networks:
@@ -60,7 +60,7 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     ports:
-      - "11434:11434"
+      - "${OLLAMA_EDGE_PORT:-11434}:11434"
     deploy:
       resources:
         reservations:
