@@ -1,0 +1,13 @@
+[project]
+name = "pmoves-voice-router"
+version = "0.1.0"
+description = "Voice router scaffold - engine selection + request builders for OmniVoice/Flute/UTTS (CLAIM 2026-10-11)"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

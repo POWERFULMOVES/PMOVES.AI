@@ -17,6 +17,13 @@ name: App PR Approve
 #   4. mergeable != CONFLICTING
 # The approval body carries the caller-supplied reason verbatim, so the
 # audit trail on the PR names the human/agent basis for every approval.
+#
+# ON THE VERDICT SPELLING: the check-runs endpoint this workflow reads returns
+# conclusions in LOWERCASE (`success`, `skipped`, `neutral`, `cancelled`) --
+# the GraphQL rollup returns UPPERCASE. Guard 3 therefore NORMALISES the
+# verdict before comparing it. See the comment at the comparison itself for the
+# measurement, and pmoves/tests/tools/test_app_pr_approve_guard.py for the gate
+# that runs the real guard against the API's real output shape.
 
 on:
   workflow_dispatch:
@@ -39,7 +46,7 @@ permissions: {}
 
 jobs:
   approve:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -87,7 +94,23 @@ jobs:
           bad=0; tolerated=0
           while IFS= read -r line; do
             [ -n "$line" ] || continue
-            concl="${line%% *}"; name="${line#* }"
+            raw="${line%% *}"; name="${line#* }"
+            # MEASURED 2026-11-05: the REST check-runs API returns each conclusion
+            # in LOWERCASE (`success`, `skipped`, `neutral`, `cancelled`), while the
+            # GraphQL `statusCheckRollup` returns UPPERCASE. This case was written
+            # against the uppercase spelling, so it matched NOTHING and every check
+            # fell through to the default branch: the guard printed
+            #   BAD: merge-decision is success
+            # for a GREEN check, and then refused with
+            #   REFUSED: 30 check(s) not green at head ...
+            # The workflow had never run before 2026-11-02, so the defect had never
+            # been observed -- and it made this repo's intended non-admin approval
+            # path unusable, so every merge silently fell back to the admin bypass.
+            #
+            # The COMPARISON is now case-normalised. The RAW value is what the error
+            # message reports, so "is success" still reads as a failure rather than
+            # as a verdict the guard accepted.
+            concl="$(printf '%s' "$raw" | tr '[:lower:]' '[:upper:]')"
             case "$concl" in
               SUCCESS|SKIPPED|NEUTRAL) ;;
               CANCELLED)
@@ -96,7 +119,7 @@ jobs:
                     tolerated=$((tolerated+1)); echo "tolerated CANCELLED review-bot check: $name" ;;
                   *) bad=$((bad+1)); echo "BAD: $name is CANCELLED" ;;
                 esac ;;
-              *) bad=$((bad+1)); echo "BAD: $name is $concl" ;;
+              *) bad=$((bad+1)); echo "BAD: $name is $raw" ;;
             esac
           done <<<"$checks"
           [ "$bad" -eq 0 ] || refuse "$bad check(s) not green at head $head"

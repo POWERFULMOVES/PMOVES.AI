@@ -165,3 +165,47 @@ def test_a_windows_install_round_trips_clean(tmp_path):
     assert install_tools.check_installed_wrappers(tmp_path) == 0
     text = (tmp_path / "claude-pmoves.bat").read_text(encoding="utf-8")
     assert "node_identity.py" not in text, "installed a copy, not a delegate"
+
+
+# ---------------------------------------------------------------- required CLIs
+# Operator direction 2026-11-03: cipher memory is a prerequisite, so brv and
+# what it runs on are REQUIRED, and a required CLI must RUN, not just resolve.
+
+def test_cipher_prerequisites_stay_required():
+    import yaml
+
+    host = yaml.safe_load(install_tools.CLI_MANIFEST.read_text(encoding="utf-8"))["host_clis"]
+    for name in ("brv", "node", "npm"):
+        assert host[name]["required"] is True, name
+    assert int(host["node"]["min_major"]) >= 20  # byterover-cli's floor
+
+
+def _doctor(tmp_path, monkeypatch, spec: str, run: tuple[bool, str]):
+    manifest = tmp_path / "cli_tools.yaml"
+    manifest.write_text("host_clis:\n" + spec, encoding="utf-8")
+    monkeypatch.setattr(install_tools, "CLI_MANIFEST", manifest)
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda name: f"/stub/{name}")
+    seen = []
+    monkeypatch.setattr(install_tools, "_run_check", lambda cmd, binary="": (seen.append(binary), run)[1])
+    rc = install_tools.check_host_clis(strict=False)
+    return rc, seen
+
+
+def test_required_cli_that_does_not_run_fails_the_doctor(tmp_path, monkeypatch, capsys):
+    rc, seen = _doctor(tmp_path, monkeypatch,
+                       "  brv:\n    required: true\n    check: brv --version\n", (False, "Node 20 required"))
+    assert rc == 1 and "BROKEN" in capsys.readouterr().out
+    assert seen == ["/stub/brv"]  # the resolved file runs, not the bare name
+
+
+def test_required_cli_below_its_floor_fails_the_doctor(tmp_path, monkeypatch, capsys):
+    rc, _ = _doctor(tmp_path, monkeypatch,
+                    "  node:\n    required: true\n    min_major: 20\n    check: node --version\n", (True, "v18.19.0"))
+    assert rc == 1 and "TOO OLD" in capsys.readouterr().out
+
+
+def test_required_cli_at_its_floor_passes(tmp_path, monkeypatch):
+    rc, _ = _doctor(tmp_path, monkeypatch,
+                    "  node:\n    required: true\n    min_major: 20\n    check: node --version\n", (True, "v20.20.0"))
+    assert rc == 0

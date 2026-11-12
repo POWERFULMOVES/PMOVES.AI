@@ -26,6 +26,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -77,6 +78,9 @@ QR_OUTPUT_DIR = Path(__file__).parent.parent.parent / "docs" / "operations"
 
 # Token ledger (gitignored, local only)
 LEDGER_PATH = Path(__file__).parent / ".enrollment-ledger.jsonl"
+
+# SSH certificate serial width (see mint_serial)
+SERIAL_BITS = 53
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +193,53 @@ def list_active_tokens() -> list[dict[str, Any]]:
     return active
 
 
+def ledger_serials() -> set[int]:
+    """Every serial ever minted, expired tokens included.
+
+    KRL entries outlive the tokens they revoke, so a serial is never free for
+    reuse once it has been issued.
+    """
+    if not LEDGER_PATH.exists():
+        return set()
+    serials = set()
+    for lineno, line in enumerate(LEDGER_PATH.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            # A torn append (crash mid-write) must not brick every later mint.
+            # Best effort: reserve a serial only if the fragment shows it
+            # complete (digits followed by `,` or `}`). A number cut off
+            # mid-digit is ignored instead of reserving a shorter, wrong serial.
+            m = re.search(r'"serial"\s*:\s*(\d+)\s*[,}]', line)
+            if m:
+                serials.add(int(m.group(1)))
+            print(f"warning: {LEDGER_PATH.name}:{lineno} is not valid JSON; "
+                  f"{'reserved serial ' + m.group(1) if m else 'no serial found'}",
+                  file=sys.stderr)
+            continue
+        if "serial" in entry:
+            serials.add(int(entry["serial"]))
+    return serials
+
+
+def mint_serial() -> int:
+    """Mint a certificate serial for KRL revocation.
+
+    53 random bits: ample collision resistance while staying an exact integer
+    for any JSON consumer that parses numbers as IEEE-754 doubles (a 63/64-bit
+    serial would be rounded there, breaking the bundle HMAC). Serials already
+    in the ledger are skipped; two generators racing on the same ledger can
+    still collide, with probability ~2**-53 per pair.
+    """
+    used = ledger_serials()
+    while True:
+        serial = secrets.randbits(SERIAL_BITS)
+        if serial > 0 and serial not in used:
+            return serial
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -222,9 +273,11 @@ def generate(args: argparse.Namespace) -> None:
     expires_at = now + ttl_seconds
 
     # Build enrollment payload
+    serial = mint_serial()
     enrollment = {
         "version": "fleet.enrollment.v1",
         "token_id": secrets.token_urlsafe(16),
+        "serial": serial,
         "role": role,
         "device_name": args.device or f"enrollment-{role}-{int(now)}",
         "issued_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
@@ -264,6 +317,7 @@ def generate(args: argparse.Namespace) -> None:
     # Log to ledger
     ledger_entry = {
         "token_id": enrollment["token_id"],
+        "serial": serial,
         "role": role,
         "device_name": enrollment["device_name"],
         "issued_at": enrollment["issued_at"],

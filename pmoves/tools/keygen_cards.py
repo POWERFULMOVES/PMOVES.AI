@@ -107,12 +107,12 @@ def _load_cards() -> tuple[Any, str]:
 
         yaml = YAML()
         yaml.preserve_quotes = True
-        data = yaml.load(CARDS_PATH.read_text())
+        data = yaml.load(CARDS_PATH.read_text(encoding="utf-8"))
         return data, "ruamel"
     except ImportError:
         import yaml
 
-        data = yaml.safe_load(CARDS_PATH.read_text())
+        data = yaml.safe_load(CARDS_PATH.read_text(encoding="utf-8"))
         return data, "plain"
 
 
@@ -165,7 +165,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         yaml = YAML()
         yaml.preserve_quotes = True
         yaml.width = 4096  # never wrap the long allowed-signers line
-        with CARDS_PATH.open("w") as fh:
+        with CARDS_PATH.open("w", encoding="utf-8") as fh:
             yaml.dump(data, fh)
         print(f"\npatched {CARDS_PATH}")
         return 0
@@ -203,7 +203,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     """Report which cards still lack their ml SSH half."""
     import yaml
 
-    data = yaml.safe_load(CARDS_PATH.read_text())
+    data = yaml.safe_load(CARDS_PATH.read_text(encoding="utf-8"))
     pending, complete = [], []
     for card in data.get("cards", []):
         agent = card.get("h", {}).get("agent_id", "?")

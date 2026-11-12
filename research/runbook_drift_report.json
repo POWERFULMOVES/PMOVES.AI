@@ -1,0 +1,1829 @@
+{
+ "run_digest": "898ef4b2fcbafd677dcfe94ca70e091a248ed1d90672b7d36bd6528ebf6df2ab",
+ "files_scanned": 19,
+ "counts": {
+  "DRIFTED": 24,
+  "VERIFIED": 117,
+  "UNDECIDED": 61
+ },
+ "records": [
+  {
+   "source": "plans/ACP_REGISTRY_MANIFEST_DRAFT_2026-10-07.md",
+   "kind": "file_path",
+   "claim": "pmoves-agent-zero/agent.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:51:33Z",
+   "seal": "d87ef19d9605bb33991f3b47dc4ca30116ce9b23e9f9b6e5f144cd4a38346d8c"
+  },
+  {
+   "source": "plans/ACP_REGISTRY_MANIFEST_DRAFT_2026-10-07.md",
+   "kind": "endpoint",
+   "claim": "https://github.com/3clyp50/a0_acp",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 200 (alive/gated)",
+   "ts": "2026-10-14T03:51:34Z",
+   "seal": "42f666820376a4e8b433f0e235644c4d36baa835ea797e0b506ec5aca83c191f"
+  },
+  {
+   "source": "plans/ACP_REGISTRY_MANIFEST_DRAFT_2026-10-07.md",
+   "kind": "endpoint",
+   "claim": "https://github.com/POWERFULMOVES/a0_acp.git",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 301 (alive/gated)",
+   "ts": "2026-10-14T03:51:34Z",
+   "seal": "234f2bcadd7b30b9a49e1d5faaea07bc7f9dbfd2c4cb998114f66028aa17e2d2"
+  },
+  {
+   "source": "plans/BROWSER_FLEET_DEPLOY_PLAN_2026-10-12.md",
+   "kind": "make_target",
+   "claim": "sign-trail",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:51:34Z",
+   "seal": "aa1bb4779c9646a0d459ffe6fb963dee2f507c3636f87594f85a4c9842b6a7d2"
+  },
+  {
+   "source": "plans/BROWSER_FLEET_DEPLOY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "deploy/docker-compose.yml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./features/gateway/docker-compose.yml",
+   "ts": "2026-10-14T03:51:41Z",
+   "seal": "4ade2c7647df15fff9f8e4864fa169a2e4aea67636dd6e095a64deae6e8c4f1a"
+  },
+  {
+   "source": "plans/BROWSER_FLEET_DEPLOY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:51:49Z",
+   "seal": "c1eedfc8a2ce93e0e242eca339a0b549e18a5be3b0d1f127eb60ca62e4d46a66"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "secrets-funnel",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:51:51Z",
+   "seal": "e41a035662f0c6adb112240f53664ea8892a2599815a970bb0f7972f4acf6af8"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "inject_github_pat_from_gh_cli.py",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/tools/inject_github_pat_from_gh_cli.py",
+   "ts": "2026-10-14T03:51:58Z",
+   "seal": "f504dc21155969a29eada3001c4ffb1686f7b10f12906fd192dab57ba10a4990"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "docker-compose.yml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docker-compose.yml",
+   "ts": "2026-10-14T03:51:58Z",
+   "seal": "a9642c1d99ec0103389dc903aacf4859deb53548d2787597a4b951447c97ae0c"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "docker-compose.apps.yml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docker-compose.apps.yml",
+   "ts": "2026-10-14T03:51:58Z",
+   "seal": "0651de6ba40f5bc34fff07bfb707bfeabd23b3935ecc9765dc834bdc9adf9354"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "docker-compose.darkxside-sidecar.yml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docker-compose.darkxside-sidecar.yml",
+   "ts": "2026-10-14T03:51:58Z",
+   "seal": "9f83773fe39fa57e3df0e92fed3c58c8b867bbaecb4ea7c7524ba21691b6d795"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "docker-compose.spark-sidecar.yml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docker-compose.spark-sidecar.yml",
+   "ts": "2026-10-14T03:51:58Z",
+   "seal": "66117f52b1aaa16ea75758361b5964be6b4b625b82d5bafa646040ebc67e9375"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "nats-rotation-elder-melchor-2026-10-11.signed.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:52:05Z",
+   "seal": "bb9b39700c37ad7ac0fd96758765efc109bb1d720b40a1bf93ce131dc00d3776"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "pmoves/chit/bundles/nats-rotation-elder-melchor-2026-10-12.signed.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/chit/bundles/nats-rotation-elder-melchor-2026-10-12.signed.json",
+   "ts": "2026-10-14T03:52:05Z",
+   "seal": "bf9c78121e8d3f9cccebfdda9ce0012d38511d6622a8f2c2b2a24656e2d88ed3"
+  },
+  {
+   "source": "plans/CREDENTIAL_ROTATION_RUNBOOK_2026-10-11.md",
+   "kind": "file_path",
+   "claim": "nats-rotation-elder-melchor-2026-10-11.signed.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:52:14Z",
+   "seal": "f4e79f2ab220fa05889f34d65e303a1493eac611f66b88512d7b87fcec7dcc4e"
+  },
+  {
+   "source": "plans/DEMO_ACCESS_PROVISIONING_SPEC_2026-10-09.md",
+   "kind": "make_target",
+   "claim": "sign-trail",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:52:14Z",
+   "seal": "73264d38e70d894ab56b01a74869042fe5daa29e7eda7c4d449e37a8b3af8e8e"
+  },
+  {
+   "source": "plans/DEMO_ACCESS_PROVISIONING_SPEC_2026-10-09.md",
+   "kind": "file_path",
+   "claim": "pmoves/scripts/fleet/generate-enrollment.py",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/scripts/fleet/generate-enrollment.py",
+   "ts": "2026-10-14T03:52:14Z",
+   "seal": "6f8231a10bd436891e840c7baf58bf0f8f18d746161826ff48852d0c6d388a69"
+  },
+  {
+   "source": "plans/DEMO_ACCESS_PROVISIONING_SPEC_2026-10-09.md",
+   "kind": "file_path",
+   "claim": "generate-enrollment.py",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/scripts/fleet/generate-enrollment.py",
+   "ts": "2026-10-14T03:52:21Z",
+   "seal": "dbc3dde9c32850dfd25054aacadcc1939a753f6de3bbe7baadec5d81ba0d9723"
+  },
+  {
+   "source": "plans/DEMO_ACCESS_PROVISIONING_SPEC_2026-10-09.md",
+   "kind": "file_path",
+   "claim": "AGNOTE4482PHI.t1.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md",
+   "ts": "2026-10-14T03:52:28Z",
+   "seal": "0dadfda230653a233f6ec3f4ad15d5895cd2783624d4532103684e5604753ec8"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "make_target",
+   "claim": "secrets-rotate",
+   "verdict": "DRIFTED",
+   "evidence": "no such target in pmoves/Makefile(+mk includes): secrets-rotate",
+   "ts": "2026-10-14T03:52:29Z",
+   "seal": "51fd89ab5e879de57db21273d13ce6388c85ab1753d178a10f3a5a4f20485bb3"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "make_target",
+   "claim": "up-cipher",
+   "verdict": "DRIFTED",
+   "evidence": "no such target in pmoves/Makefile(+mk includes): up-cipher",
+   "ts": "2026-10-14T03:52:34Z",
+   "seal": "b92b459fac143022e7bc721e562137d889e799dacd4ce758a9b779e18f514dde"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "make_target",
+   "claim": "sign-trail",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:52:29Z",
+   "seal": "3a42d401bfee4c19e7c90d10b16ebc8080a155bf764275410d04f8949722ce8c"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482.md",
+   "ts": "2026-10-14T03:52:29Z",
+   "seal": "4a0a70c3e32172953ae805f7a854c2947f5b594b8ba1a512f4a87b4d3bafd726"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md",
+   "ts": "2026-10-14T03:52:29Z",
+   "seal": "16def416878877945baf24346bd17186176b244187b6c5fc555ff0d9a4fcb515"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/rooms/catalog.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:52:29Z",
+   "seal": "bc0f1a30f1674ea389e70480361f3c628c61bd375e52c6fddad753c475274b6e"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "beats_to_voice.py",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/tools/beats_to_voice.py",
+   "ts": "2026-10-14T03:52:37Z",
+   "seal": "a5a5d2d1273d36096ab1231bb55c971f406d328aff4d74b87caf5078c9d84a94"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "PMOVES.AI_INTEGRATION.md",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:52:44Z",
+   "seal": "bb8d73c81ebd31b9cae246fa0ba0d8c942e16cbe050bc109c8a372aaa4f8ded3"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "agent-zero/agent.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:52:51Z",
+   "seal": "d9b7788025331185c6b0a56af75bb7945768e17c492a7f384e3aa49c13d72022"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "docs_reconcile.py",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/tools/docs_reconcile.py",
+   "ts": "2026-10-14T03:52:59Z",
+   "seal": "fcaf44f9c0751ccb686a14f1cfb89a94e11ecc31b0e148c0209e80071dc73321"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "validate_room_manifests.py",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/scripts/validate_room_manifests.py",
+   "ts": "2026-10-14T03:53:06Z",
+   "seal": "1539a2422bdb32dd83ffa543231b9b448a67de74821251a067c0e84541079c60"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "PMOVES.AI_INTEGRATION.md",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:53:13Z",
+   "seal": "b54eb8eddea99aa57c0e25e440019cdf12acad747fce1fef0373a7cba4aa184a"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "LIVING_DOCS_INDEX.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: LIVING_DOCS_INDEX.md",
+   "ts": "2026-10-14T03:53:13Z",
+   "seal": "9b14aa3216566e9b33ee929c18ea2e55a89d897b73e4a584363c0784a53c820e"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "living_docs_registry.yaml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/configs/living_docs_registry.yaml",
+   "ts": "2026-10-14T03:53:20Z",
+   "seal": "b87fe1347e6360bca0bc7f07a6d72e656fc6346c3f000fb597df6833704dd809"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "PERSONAS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/docs/AGENTS/PERSONAS.md",
+   "ts": "2026-10-14T03:53:28Z",
+   "seal": "d5ab3142c5e8382161577c8b89b2cec6ed0bda35a7d7bdc07cbd76db353fed68"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": ".kimi/mcp.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .kimi/mcp.json",
+   "ts": "2026-10-14T03:53:28Z",
+   "seal": "c60f4ea2febe3eb14b56e5c4ff59213f43047b435bef1e15e9ad9996e2acb9dd"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "pmoves/contracts/topics.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/contracts/topics.json",
+   "ts": "2026-10-14T03:53:28Z",
+   "seal": "25bd7f00d9ade19389577047839b58d72262da68e0c2f45af787045f53db0d9c"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/agent_registry.yaml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/agent_registry.yaml",
+   "ts": "2026-10-14T03:53:28Z",
+   "seal": "2370011372ad6b8930868043f8bb094ae406cd8af4b2149e9dbc2603ec0e7ce3"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": ".kimi/mcp.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .kimi/mcp.json",
+   "ts": "2026-10-14T03:53:28Z",
+   "seal": "efdb91a7a719b4b1c088ffbec092057d02039282a5013b44738e977c6e314694"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": ".kimi/mcp.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .kimi/mcp.json",
+   "ts": "2026-10-14T03:53:28Z",
+   "seal": "d804d646aca203cddca1d7657e99949181c507ca9280bfacb5f4b7b150f41e06"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "file_path",
+   "claim": "signing_identity_cards.yaml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/config/signing_identity_cards.yaml",
+   "ts": "2026-10-14T03:53:35Z",
+   "seal": "15e0f2ef9b1d552e3e1e2c0423e73e8021dd7d4fd8ce0e1cb14cb4610e062280"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "endpoint",
+   "claim": "https://composio.dev/install",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 302 (alive/gated)",
+   "ts": "2026-10-14T03:53:35Z",
+   "seal": "e7a16ccb73d7c82537bf8c87a94422dbf7998cbafc17fd02fb4cfd0b77035fa1"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "endpoint",
+   "claim": "https://docs.composio.dev/toolkits/discordbot",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 200 (alive/gated)",
+   "ts": "2026-10-14T03:53:35Z",
+   "seal": "ad6da49f112ebcede369f2ff056944a5bd2f78f71f98097f392c96720356e955"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "endpoint",
+   "claim": "https://connect.composio.dev/mcp",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 401 (alive/gated)",
+   "ts": "2026-10-14T03:53:36Z",
+   "seal": "a55aa8d7e0cc64f016ff48c98da75a69a337fd371bc72f4e2ffcfeeb8a9fe578"
+  },
+  {
+   "source": "plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md",
+   "kind": "endpoint",
+   "claim": "https://docs.composio.dev/kb/guide/consumer-project-boundaries-and-auth-selection",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 200 (alive/gated)",
+   "ts": "2026-10-14T03:53:36Z",
+   "seal": "0632eb508d37a2c933f1fff49c130cab417abd7804ea559bec36403d26c69399"
+  },
+  {
+   "source": "plans/KILOCLAW_RECOVERY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:53:43Z",
+   "seal": "e673d049b1a6f62ef6466944fe243852cd1217fc72936a0eb71ccb0c5e8a382e"
+  },
+  {
+   "source": "plans/KILOCLAW_RECOVERY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:53:50Z",
+   "seal": "e5c2659497ba27856ee996765b8863ff1fbfc04eeeba6a74c9e7f4ee56636755"
+  },
+  {
+   "source": "plans/KILOCLAW_RECOVERY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "plans/BROWSER_FLEET_DEPLOY_PLAN_2026-10-12.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: plans/BROWSER_FLEET_DEPLOY_PLAN_2026-10-12.md",
+   "ts": "2026-10-14T03:53:50Z",
+   "seal": "92fc7e935610d5c8c43cf825bd428d2aeedd189793a305cc47468a7742e9caff"
+  },
+  {
+   "source": "plans/KILOCLAW_RECOVERY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:53:58Z",
+   "seal": "48e8316af4fec3114382be98f16947ce2aa726f94b10dbf7b64ad94bdb41e6aa"
+  },
+  {
+   "source": "plans/KILOCLAW_RECOVERY_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "80edcacf5d61dabeee64ab8121adbb3ff511569171d9fc133fefdfb08f77689b"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "9da52271c8bf2c34217a3b4449fa3086c76cbe3b48181f189d08349ece4fed92"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": ".kilocode/rules/kilorules.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .kilocode/rules/kilorules.md",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "e1bf9884f00238350abeb8e1e900f01e1f9428dfdd6195552199985ad01f6706"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": ".claude/CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .claude/CLAUDE.md",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "b8826b24af1eaf69f4a66963881c93782346683e6c50462577ba9dcd7248e855"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "scripts/codex_bootstrap.sh",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/scripts/codex_bootstrap.sh",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "2965fac74575c35c1a2f3623e497bf15ce4b8dec72a1d1b3effabfff9ed6013f"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "GEMINI.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: GEMINI.md",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "70f0ecb1758e32b53d8065191de0e795b8fabecb6550e7f75a0882f1d5156194"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/NEXT_STEPS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/NEXT_STEPS.md",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "462ac838f713cc5c317f6d9063cbb058451d2adfab53223315421b59af7443ff"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": ".claude/context/services-catalog.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .claude/context/services-catalog.md",
+   "ts": "2026-10-14T03:54:05Z",
+   "seal": "96e587819ff0f99b8fb635d5264ccf9ea348e912a5f80892f61b5e3366c37e3d"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": ".kilocode/mcp.json",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/mcp.json",
+   "ts": "2026-10-14T03:54:12Z",
+   "seal": "a49c0c0e431a3fdce34c4d8a3e10ad5e83ec3b809daa26eb206e64138d655aa6"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": ".kilocode/mcp.json",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/mcp.json",
+   "ts": "2026-10-14T03:54:19Z",
+   "seal": "cab86dd7528368030cb803b1ed0906ddb2388ed198812852762c694182b38f42"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": ".kilocode/chit_signals.yaml",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "597e408e6027f4494b6beae45898138dbc31fa0caf6504855c32b6ad22fdaabe"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "d9d9d0c4d49b7ba63320858a116643c49d1492796a8d44f96a915de1fc760e07"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/ALIGNED_IMPLEMENTATION_ROADMAP.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/ALIGNED_IMPLEMENTATION_ROADMAP.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "baf22fa8f1522912a8a780272e26b00a128aedbe83e22f06cff1fc81cd81b707"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "b698128161ad1ecc4196f81b1165982269b48de2629a7840c6ab2cc71068640f"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/BOTZ_GATEWAY_AGENT_INTEGRATION.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/BOTZ_GATEWAY_AGENT_INTEGRATION.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "5980c75e785faabf213fc7975ec132b7419f738c4f2ca429c2a23e4887cff9e0"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/PmovesSKillZ.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/PmovesSKillZ.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "78cba26caac35d555c851806a6cd9b242721e284c3a4429016b5fdf706d838c7"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "fff7aff93592231f02b48eeea6347b7f462e836c9b15fd1d9b6a57de5167767f"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "f5b80de53fe4d0d8a871a2aeb1707a2278ae03c25dc6dee464f03ee75ac26525"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "file_path",
+   "claim": "GEMINI.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: GEMINI.md",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "9a6cab185f88e5b5817b2d6fb5b7dd4b695603635aa9eb985e3ddf5608850c29"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "endpoint",
+   "claim": "http://localhost:8093/geometry/state",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "368a3ce8b7f47931a3a00e14a1bcb81524b2dffefdc73fa12eb49a2dd9790ffe"
+  },
+  {
+   "source": "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md",
+   "kind": "endpoint",
+   "claim": "https://huggingface.co/api/models",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 200 (alive/gated)",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "1ce8322068baf018360686db7316d38163f81461b552c18d7ee70e94bc6fe139"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "scripts/spark_deploy_models.sh",
+   "verdict": "VERIFIED",
+   "evidence": "exists: scripts/spark_deploy_models.sh",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "aca32f8eab8b57165a5039c4f538835b57664375c1a91a3a74df7c25c9f741bb"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "scripts/pmoves-b850-ai-top.sh",
+   "verdict": "VERIFIED",
+   "evidence": "exists: scripts/pmoves-b850-ai-top.sh",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "1a29c3e470ea679bb498f6a9fde2587e09c51384daeb4a31180b3c81de52738d"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": ".github/workflows/local-review.yml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: .github/workflows/local-review.yml",
+   "ts": "2026-10-14T03:54:27Z",
+   "seal": "088c620e786399555f06a846e1d2446e7388275a4d81ff0776b9ca33ea37a0cc"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "pmoves-b850-ai-top.sh",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./scripts/pmoves-b850-ai-top.sh",
+   "ts": "2026-10-14T03:54:34Z",
+   "seal": "2a62ac54683cb4c244b90e6a1fa9f097e605158ec79f8848f194c8e5e702a2dc"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/model_registry.yaml",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:54:41Z",
+   "seal": "05e38ddffbf3d258f12f77c4e6dc4817fda328dcb0c384a55931b83ea3cf44a1"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "endpoint",
+   "claim": "https://pmoves-spark.tailcad9b4.ts.net/ollama/v1",
+   "verdict": "DRIFTED",
+   "evidence": "HTTP 502",
+   "ts": "2026-10-14T03:54:42Z",
+   "seal": "c8414c3fae5124fb9b6aa617709b3f3be25777bda07616f9a677c54d576528ed"
+  },
+  {
+   "source": "plans/LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md",
+   "kind": "endpoint",
+   "claim": "https://100.122.182.3:8000/v1/models",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 000 (alive/gated)",
+   "ts": "2026-10-14T03:54:42Z",
+   "seal": "8f9dd34d750ee69d6273f0486ee176478a1dd6bc35ef91d64a9f46b4fedad735"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/rooms/catalog.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:54:42Z",
+   "seal": "f93d0e6c896108c6cc28de8b1b9db69f34787a3e0ffac8cdd12dcd88aad9289e"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:54:42Z",
+   "seal": "749ea6fba353957756fd5c056674fd2b15612a86066c362cf4a58c21f15185c3"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:54:42Z",
+   "seal": "a383a355f22ca7e0093fab1e9fbcf45ce632a639775adf02d0581bd003326675"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:54:42Z",
+   "seal": "496e6420dbd5074fb67e7cdd4662dcf3c28b22e113ebee5fc242bb5df3c27a08"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/CLAUDE.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/CLAUDE.md",
+   "ts": "2026-10-14T03:54:49Z",
+   "seal": "e9a93376b7f9bbee74b567a6467d449824e5ad7e62e42c928ddeeec54c764148"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:54:54Z",
+   "seal": "6f9fb8c3245bbcef35d8a2028bc6af951e7660bf9e0d4bc6d07d33899126ef8e"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/AGENTS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.kimi/AGENTS.md",
+   "ts": "2026-10-14T03:55:02Z",
+   "seal": "60b72cef1d8cefc5cd7b1e9356eaa38ab1c3dc84e3e387d017a8223506de2ebd"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-BotZ-gateway/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "b927c11578314ddbc3f3f34bdc9b20dd30934808483e645a44813ac53f838025"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "297b0b4a9e8bb05e50c950a95d216007ff5759bb84c59d04e24d3d87de6a6282"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES_ARC.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES_ARC.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "037389f323fffc8b69c19da2df1fafae88b4ec624ac6e30146f8e87de0ada884"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/NEXT_STEPS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/NEXT_STEPS.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "e0ddb3bfdeedf630cb284283a3af0c2811d9899694b79c0cfb79cbb977be59c8"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "efd3550b43f523d24de2ae400e0032e45f54b015be97ca6475e7ee6270aae043"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "2ce8e06063b1aad6a277fe5c15d83fdc2a13979cb11f3526008137b218234090"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "f86ca15cb0ac3c427cb386f3890cfd2c560ca32e00a5d55691c1dfa8c35d5369"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:55:07Z",
+   "seal": "5286a4b721b3a32fe531c44e351b0c9fb553a60b368acff0d60c3032e443906b"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/CLAUDE.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/CLAUDE.md",
+   "ts": "2026-10-14T03:55:14Z",
+   "seal": "309acd2749c625b7c5d909611809ce0fc0ac97d85ca24c105bb8b426edc67a4d"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:55:20Z",
+   "seal": "d2e50d68e55a9e97e5d95ce61d8318f73d485633e1d44dcf0a753f367dc184ef"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/AGENTS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.kimi/AGENTS.md",
+   "ts": "2026-10-14T03:55:27Z",
+   "seal": "3cc463056b8b2993cdfb988cac15aea89e7127ab0cbf3e4be1a7392a513b1e66"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-BotZ-gateway/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "39a7a587492584c79d80f6f488e6dd02d5cdf3464af15cd882171a16bc59a6ef"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "db1f57bafa84aadd16d924384232391cc2004237d02b81c49455efb8cd0d0343"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES_ARC.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES_ARC.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "9e7d3f453143df088d7061e5cee69d3be7a6455fca6d62f599af067984356bb6"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "97757bbb8f53a7000e406683cd74323993afc3559d1f3ddaed588c380797ff76"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "65e5ec85228c21be86666dfa4f98e73c6cfd481ca0522372a94f0593b54898e0"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "ef10486ac336d53c3df5800a18db23c361ef6d21520f738e0030d46d355695ae"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/rooms/catalog.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "1f5a3401c2c0e88915685efb6549cf105082f3fb7379a5920984ccbbb84ea2ff"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/rooms/catalog.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "c684cd6d5281b7a595c86b68c1948e4d812cafcde5a45f8ccb9ee0bc66ac8948"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:55:32Z",
+   "seal": "b9a505363b728e88ed4ed205e8f5057c5bf2735201f638ffffc05d231b35fbed"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "z890-infra.room.fabric.json",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/config/rooms/z890-infra.room.fabric.json",
+   "ts": "2026-10-14T03:55:39Z",
+   "seal": "df27bd5eda6d48e22890a5c2ff823bc2ac785e7c06149a04e9cb25332a84d04f"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "z890-infra.room.fabric.json",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/config/rooms/z890-infra.room.fabric.json",
+   "ts": "2026-10-14T03:55:47Z",
+   "seal": "afbc370d4f37c29fff772ccc86f7bd4f32c9e67454df1dd623e906688a4244ef"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:55:47Z",
+   "seal": "af4cd3ad0d495a981b9eb9a6222ccd299ecd67c573ac9f665a3bea3a7ea4904c"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/rooms/catalog.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:55:47Z",
+   "seal": "8a5c4a4bd2f6baa25799f015237178357b0dfbe466a1e4955b6c47a77d712dc3"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:55:47Z",
+   "seal": "225dde4050216389091bee20b0a26d979748bade136e36e10f5f607623f5d6cf"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "agent_registry.yaml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/config/agent_registry.yaml",
+   "ts": "2026-10-14T03:55:55Z",
+   "seal": "6318e81b740e3a9fba50124b734366193a35c6db4cb3951e240690fc456c6251"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:55:55Z",
+   "seal": "8b27f0e37eb7af2c33606c9edfb9373fe8663660757508197f0d10b1aafee635"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CONTRIBUTING.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CONTRIBUTING.md",
+   "ts": "2026-10-14T03:55:55Z",
+   "seal": "06ae3c6d2ef40ea782e0b96425b5d755f029cf61162678996e7a2232fa60d3bc"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "SECURITY.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: SECURITY.md",
+   "ts": "2026-10-14T03:55:55Z",
+   "seal": "b1c25ec35fe6602b1de9e95e622ef3c2bbb022ef64b200f5460ca331a6a7836d"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "catalog.json",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:56:03Z",
+   "seal": "1edafa651fe1c199ea0e773b575f7c9c0178da7830ec12ae12fe6c0f32d502f5"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "agent_registry.yaml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/config/agent_registry.yaml",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "5b2d8a5582f4cd75ee990f5fbe59a3c411f11481508cfc47b0455edc9dc994df"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "fc14d04c94081a977a8c713ea12552f24aff3d50b1f58e0c9496e11e6f183286"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CONTRIBUTING.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CONTRIBUTING.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "1f1932205163910aa6a534005d2e158423a185aaeb077a2220bfb26360291ecc"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "SECURITY.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: SECURITY.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "5cccb15d54b7944ecd0d8fe24c51685bfd55d8076c799c71fd7eba1b68c91a5f"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "f6a49b317bdc251f98e5f6532a623f373d20cc8c4326217809853d21fa115c8c"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "2fe4a2084c904464ea8118477bb5faef5ae57881fab0c7aba5b8ee19dccaeef2"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "1cf7a88dc9acfd632b1b54dd8abd75bd02f96d31816fc9e199c45d9b386473f1"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "c0dcbe72012cfad7197151dacab7501abf4207e3b1c8abddaf27ac8f58fdb29f"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "a4c1759a8bcdb0ae405cdbcf8b10dea7e1dae77273c2b56c9aeb9eb6390c363c"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md",
+   "ts": "2026-10-14T03:56:09Z",
+   "seal": "5926cd10159981c03045618252f18bb3e60403b930f7c2249d57b3a1fa973b18"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/CLAUDE.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/CLAUDE.md",
+   "ts": "2026-10-14T03:56:17Z",
+   "seal": "5ae1cc54a064a50c4107ed45142683f2e7eff582fee85a38ccb93f079ecdc4c6"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "mcp-api.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/mcp-api.md",
+   "ts": "2026-10-14T03:56:25Z",
+   "seal": "6a406346efc461a79eeb31ec08d7b0fdeecc1f645f646c6928c35bb9f1bb7ee6"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "nats-subjects.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/nats-subjects.md",
+   "ts": "2026-10-14T03:56:32Z",
+   "seal": "d6c9fe769b9a411db68f5ce613266d65e7936e3e992634d6dc2e3c97c57ff249"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "services-catalog.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/services-catalog.md",
+   "ts": "2026-10-14T03:56:39Z",
+   "seal": "a40484c00e387ecc67d02ea15097092f70666a08ebdbee0ce036eb0d4ce572b3"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "geometry-nats-subjects.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/geometry-nats-subjects.md",
+   "ts": "2026-10-14T03:56:47Z",
+   "seal": "1df32bce5fc9bd5544857d109bff8dde6c15c13d6a32f76f50a2a466bfe4229b"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "mcp-api.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/mcp-api.md",
+   "ts": "2026-10-14T03:56:54Z",
+   "seal": "ffaa14d3d59fb336ebedf0ac53497aa3fcff7508fb6114b7e4e7dae7bdf67445"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "nats-subjects.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/nats-subjects.md",
+   "ts": "2026-10-14T03:57:02Z",
+   "seal": "c05a290b7be067b6671c69932cfeb9d802697ac41ed32aa95d6cf69dc8235c92"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "services-catalog.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/services-catalog.md",
+   "ts": "2026-10-14T03:57:10Z",
+   "seal": "76a5fd4dc1ec26f5cd0f0bfbdec3ce71b3268020ac40814ed235f23fae112858"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "geometry-nats-subjects.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/context/geometry-nats-subjects.md",
+   "ts": "2026-10-14T03:57:17Z",
+   "seal": "663ed6c4b98a69d0f0e104808f7ec597cccf120f7a01ff1932d519d19ee664d2"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:57:22Z",
+   "seal": "8970402f59e5739194fb86573046b2eb1f38e441b800200b71650f90e5390c3c"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/AGENTS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.kimi/AGENTS.md",
+   "ts": "2026-10-14T03:57:29Z",
+   "seal": "da72182ded698ad422888f59957d86b7fb4b35f8c0d7f5d18b39b73302e0b990"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/AGENTS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.kimi/AGENTS.md",
+   "ts": "2026-10-14T03:57:36Z",
+   "seal": "5ae18b30eb995e7ed5da94f6d03e56bc667463d0d291fb90f2742962f6356b76"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/CLAUDE.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/CLAUDE.md",
+   "ts": "2026-10-14T03:57:44Z",
+   "seal": "b6935f76b3142c4063eb5443d40578d2dd3a55c139b4bdfef9f3e14f2f38f627"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-BotZ-gateway/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "500ecbdc202a57684e77ea5851bd79e7b0480ac29c0c4783f2b68e0505665f44"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "9784a0f755928475329c37f116d94ced007b568680244de3464dac702866eff3"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES_ARC.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES_ARC.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "f036913ca98580de31928229949cfdbc01d2158a27375f3663d6cf6b2079c346"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "406b451098039f0771d93b6d23f1a8fb8646e1a35ff6e0503a95510c3bd03e3e"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/config/rooms/catalog.json",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/config/rooms/catalog.json",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "2d9f0e49248209609905317afc8b7a03076299e8277ab8c530946d59304d6790"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "06f6c63e56ff4f3aaaa5b3f6688824baf9d24abef88b63e478c6edb0d9112461"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "93c53c30268ab08195aa9e868931e18e7190636ec24e1545fca036e20fccb92f"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:57:49Z",
+   "seal": "2f9b93ed3474fec193382a262f1d5ef4fdf1ead7e136c1c5f6bde48faaa23551"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/CLAUDE.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/CLAUDE.md",
+   "ts": "2026-10-14T03:57:56Z",
+   "seal": "71af0fc2ae19cef4018564e8bd6c27a8ac01d0b36cb6f5cb1e60b72c097bec32"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:58:01Z",
+   "seal": "fa54fd522295d43b2741aacfeafdb4492111f7f9715f2e6ccc04ad51ecc6d65b"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/AGENTS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.kimi/AGENTS.md",
+   "ts": "2026-10-14T03:58:10Z",
+   "seal": "56b7a5aafdd8db7e08933bab46edfc5910216460290e516155a008db39f265cb"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-BotZ-gateway/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:58:20Z",
+   "seal": "8d20112392aa747d606b8fe7943be40a4d4547ebf019addf1f54253d4932359b"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "ts": "2026-10-14T03:58:20Z",
+   "seal": "1f597f2c57ecbe7202769127720c9eed26255b4022bc658d715bd61aecc7577b"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES.md",
+   "ts": "2026-10-14T03:58:20Z",
+   "seal": "b8bfe569a1899f9796651af277cc7bb7acff4715a507e9be57bc1695ed0fe8cf"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES_ARC.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES_ARC.md",
+   "ts": "2026-10-14T03:58:20Z",
+   "seal": "d9ba030fecf7086da336371906efbf149a665fc65f83daa99c00d0698979bad4"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "README.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: README.md",
+   "ts": "2026-10-14T03:58:20Z",
+   "seal": "f34408efb9014d40732c0e5aaf3d3e682b842c99e64a4b7eed8bfa1b87628ffe"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "CLAUDE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: CLAUDE.md",
+   "ts": "2026-10-14T03:58:14Z",
+   "seal": "0e193c822bfe84bc90d637672a54854db3225fffaba9557909c96f5a09e16d10"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "AGENTS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: AGENTS.md",
+   "ts": "2026-10-14T03:58:14Z",
+   "seal": "529c952939612c9782c64b3df20d87a2fb4018fccdad06ddc63b3075becc1f05"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/CLAUDE.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/CLAUDE.md",
+   "ts": "2026-10-14T03:58:22Z",
+   "seal": "9652feb9f4f5353e800fd664ec5f142f06cf68f7db0190d8520c727c7ac4132e"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:58:27Z",
+   "seal": "a611fcaab2cf551fabf32a139dad5b1e1f3d45916aae89a46bfcd3cfc523326e"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-Archon/AGENTS.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.kimi/AGENTS.md",
+   "ts": "2026-10-14T03:58:34Z",
+   "seal": "4e58f1638ed6f8c1a5357e4b3c73e67cafe4c9f8e3741b8b785b68cc2868bb71"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "PMOVES-BotZ-gateway/README.md",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./.claude/hooks/README.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "5bf332882d9d08bef7fa73342f4dfd6cfa0decbe4e7c1f170344e7f940e60ea7"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "8f2d04bdf8df5b963030bd65a0a9a0498f6e23d9619cdf127aecedc6a17184de"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "docs/PMOVES_ARC.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: docs/PMOVES_ARC.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "7131ee4a7d5348b7939317baa3379c5e35bd8534e13103723696045447129ead"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOMS_ON_A_STAGE.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "51ef0289e9c7b669d646c7f381fc8d280fc3c22c230ee2f99cd3b6bacd1c7777"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "8a14a9f1c4d6b7eb925d5a2a4de869b034252352435d7ba55134374738d816ac"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "f1733f7ba8219962d57e259d94c5ee20e9a8e625738701e38176e56c93b00d48"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "ae99f28d427c9ea885c553946cfdc5df0ed9ab81f4f4f123b746d67d92f42cf8"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "314f519d42ef63985194462ee571bb72714a9a9fa6d608c9a686111bdf1eb318"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "5ae928f29fabfe6bd2c648d5f15a3b3f4ddb59633b56bc12e4a191cb6220ee33"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "5343ddb55609e405773216b2e596853bf218814783cd67b6bfda01ca474138cc"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/architecture/PMOVES_CnC.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/docs/architecture/PMOVES_CnC.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "c4cc48e5f52a1d7d46c44410fe1b01b28b7a0554fe48b94c97d5885747bd41ad"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "deploy/HYBRID_RUNNER_STRATEGY.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: deploy/HYBRID_RUNNER_STRATEGY.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "1809c821889e74a640a5c498fa3a5a59b8ba4fc5f912ba81d02ba21e6bba304d"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "research/LONGBOW_COMPARATIVE_ANALYSIS.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: research/LONGBOW_COMPARATIVE_ANALYSIS.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "5155f2bd0a79c9e7d610189d11d397aec243ada37fc66aeb0bc2206b6849f7dc"
+  },
+  {
+   "source": "plans/P7_SITE_DOCS_ALIGNMENT_DRAFT.md",
+   "kind": "file_path",
+   "claim": "research/SIDECAR_PROMOTION_PLAN.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: research/SIDECAR_PROMOTION_PLAN.md",
+   "ts": "2026-10-14T03:58:39Z",
+   "seal": "32df4fa168960013129d25c1b9bfd54efbdea87a96d52a587edb5bb77b6adc34"
+  },
+  {
+   "source": "plans/PROVIDER_MIRROR_TOPOLOGY_DRAFT_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:58:46Z",
+   "seal": "c657cd8e011797dd2b407c08cf7f75ec19114dc0fbb065506f6d943d0b9647e5"
+  },
+  {
+   "source": "plans/PROVIDER_MIRROR_TOPOLOGY_DRAFT_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "openclaw.json",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:58:54Z",
+   "seal": "d4340b9575783068d15edf2cd2b55a2da5dd5ea0ca4429cefd98e7df63a701f4"
+  },
+  {
+   "source": "plans/SELF_HOSTED_EMAIL_MIGRATION_PLAN_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "emailbench/tools.py",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves-nats-mcp/nats_mcp/tools.py",
+   "ts": "2026-10-14T03:59:01Z",
+   "seal": "c038f960f0b5b7e5b626ba5e4c8f6539819cfcd000d2a754b2a8878da9299a5b"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "secrets-funnel",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:59:03Z",
+   "seal": "50bd28873bc6f40f33c4f04023c9a946733321f5a7acdce77d33592f47eb1ada"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "up-agents",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:59:03Z",
+   "seal": "0034a35a3838a5debb2a1977fda8883d35e66156dab9ddfd84d23f5e23a64092"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "fleet-status",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:59:03Z",
+   "seal": "de88154b86278065fa811644b0484ffacf492405d88263864bc419187b6f7914"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "secrets-funnel",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "4b8a368625ab7dbd180434a863d9829d10bd1191917dab06dd73c908bd594e8a"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "up-external",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "84020785647fa6dc40c4e06fdf94edfd7b162aab1515f58da3bc0a52c2f07afd"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "make_target",
+   "claim": "sign-trail",
+   "verdict": "VERIFIED",
+   "evidence": "make -C pmoves -n resolved (dry-run ok)",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "caf716cab4c83182dbb8d991e264549d09dab11504ca6d4f6b856e6ff29d5dca"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "http://localhost:8080/healthz",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "6d30fb524d88f80604f895976b0073693c6e8975efde27bb7216fe7c4d138a72"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:8080",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "64e1d3f392b196696c96492a0db6f12cc483ce4062cfa895193a43949a64e872"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:8081",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "f6c4e04b500f990ddc81805fd4f8c76aa283ff32d344b851f43ed2f6f42191c6"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:11434",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:11Z",
+   "seal": "949fc93964cbcf0de8f9fea73bcaacffbd0e485665127be7cb288e58c4031785"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:5080",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:11Z",
+   "seal": "1690833590ddfa69507fad40ac03e64a35e80de9a5041d6fa1a187b17bcf693d"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:5080/.well-known/agent-card.json",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:11Z",
+   "seal": "58c4198de0c20bfc62bb01d1d8d2c502fd710ce2a2c9a6af8fdbbd21a98cb8db"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "https://pmoves-spark",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 000 (alive/gated)",
+   "ts": "2026-10-14T03:59:11Z",
+   "seal": "1972fd4b7b8cff89878a5de529a3e9c1f309ca391f534bb4db6bc0893a9bbc44"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "https://pmoves-spark",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 000 (alive/gated)",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "5d54195573fcf4e3369383f8e155bea0abc45a4a60035aa5e00f935e690a3e4e"
+  },
+  {
+   "source": "plans/SPARK_ENABLEMENT_RUNBOOK_2026-10-11.md",
+   "kind": "endpoint",
+   "claim": "https://pmoves-spark",
+   "verdict": "VERIFIED",
+   "evidence": "HTTP 000 (alive/gated)",
+   "ts": "2026-10-14T03:59:05Z",
+   "seal": "a4fbbe131e4f9c11fa8bef70fb7bf5d057ac61e64d509180be067f4b5e6bacaf"
+  },
+  {
+   "source": "plans/TAILSCALE_ACL_5090_TIGHTEN_DRAFT_2026-10-12.md",
+   "kind": "file_path",
+   "claim": "pmoves/docs/operations/AUTH_FLIPON_RUNBOOK_2026-10-11.md",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:59:13Z",
+   "seal": "b19e7befc7b9b8b54b8170f3b778dc716d8b8c8e78701ccc151b793887438c4e"
+  },
+  {
+   "source": "plans/VOICE_LAYER_WIRING_PLAN_2026-10-10.md",
+   "kind": "file_path",
+   "claim": "research/analyses/2026-10-10_MEDIA_PLAN_VOICE_SNAPZ_EDIT.md",
+   "verdict": "VERIFIED",
+   "evidence": "exists: research/analyses/2026-10-10_MEDIA_PLAN_VOICE_SNAPZ_EDIT.md",
+   "ts": "2026-10-14T03:59:13Z",
+   "seal": "4e85cff40a7f0ea8129baa851814d6039b226177a79d6813c905fb91bc583837"
+  },
+  {
+   "source": "plans/VOICE_LAYER_WIRING_PLAN_2026-10-10.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:8002/synthesize",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:13Z",
+   "seal": "2349b41abdf88ef2b6ae9c2c47469ea66f323a1f8775eab3c45c7898181673a7"
+  },
+  {
+   "source": "plans/VOICE_LAYER_WIRING_PLAN_2026-10-10.md",
+   "kind": "endpoint",
+   "claim": "http://127.0.0.1:7862",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:13Z",
+   "seal": "e2c62d2020164ba7e58bb48b8f14af6d1f2c28399cb09578683c8e75e8922d06"
+  },
+  {
+   "source": "plans/VOICE_LAYER_WIRING_PLAN_2026-10-10.md",
+   "kind": "endpoint",
+   "claim": "http://100.89.7.106:8055",
+   "verdict": "UNDECIDED",
+   "evidence": "unreachable rc=7 (net/timeout) \u2014 not asserting dead",
+   "ts": "2026-10-14T03:59:14Z",
+   "seal": "ec32018f62390340ea4ac483397fc86f6be9e33dd67925098b4656b22cff19be"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "make_target",
+   "claim": "the",
+   "verdict": "DRIFTED",
+   "evidence": "no such target in pmoves/Makefile(+mk includes): the",
+   "ts": "2026-10-14T03:59:15Z",
+   "seal": "2707feae8f1368b45d157c35f3c498dedfc25ac6bdec50e4809c0466b4463515"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "run_ui.py",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:59:22Z",
+   "seal": "bd407e23ecef0b6a59536e51fa5dac29ee1a2796a529e8848d1d8b16cbff41d9"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "helpers/server_startup.py",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:59:30Z",
+   "seal": "68f6127631ae7db3a0fae4491f1cb2cd22c4865df92f3c3f909a2c98bb39504e"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "helpers/runtime.py",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:59:37Z",
+   "seal": "d05ae1abb7e011455fea934c1f084a525756a950b5917123812069b64e72f8f8"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "docs/guides/launcher.md",
+   "verdict": "DRIFTED",
+   "evidence": "path not found anywhere in tree",
+   "ts": "2026-10-14T03:59:44Z",
+   "seal": "9675ac4bcbb64a28337e5f18dad221eaba3eb5698dbb935f2bebdd843a70ca28"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "plugin.yaml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/data/agent-zero/usr/plugins/pmoves_notes/plugin.yaml",
+   "ts": "2026-10-14T03:59:51Z",
+   "seal": "f655022ee37d10cb872826b8ab48633f2271da1aff92e97ae25c0a1a9af060c2"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "pyproject.toml",
+   "verdict": "VERIFIED",
+   "evidence": "exists: pmoves/pyproject.toml",
+   "ts": "2026-10-14T03:59:51Z",
+   "seal": "e630584a5886ef78e3eb39d15e6dbbb421fbc3dec89b5ef554a5b86145cd4f03"
+  },
+  {
+   "source": "plans/agent-zero-v2.1-pmoves-launcher.md",
+   "kind": "file_path",
+   "claim": "plugin.yaml",
+   "verdict": "UNDECIDED",
+   "evidence": "as-written path missing; basename found at: ./pmoves/data/agent-zero/usr/plugins/pmoves_notes/plugin.yaml",
+   "ts": "2026-10-14T03:59:59Z",
+   "seal": "898ef4b2fcbafd677dcfe94ca70e091a248ed1d90672b7d36bd6528ebf6df2ab"
+  }
+ ]
+}
