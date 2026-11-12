@@ -417,6 +417,65 @@ pairings:
     nats_subject: "skills.pipeline.conch-consciousness-analysis.v1"
 
 # Handoff protocol configuration
+  # Local model fitness: runtime -> model card -> suit -> consumer -> retrieval
+  local-model-fitness:
+    name: "Local Model Fitness"
+    description: "Join Ollama runtime, HF model card, model suit and consumer demand per local model; prove a consumer and retrieval still work"
+    nats_subject: "skills.pipeline.local-model-fitness.v1"
+    chain:
+      - skill: ollama-inventory
+        output: layer_map
+        agent: codex
+        depends:
+          services: ["127.0.0.1:11434"]
+          health: "http://127.0.0.1:11434/api/version"
+        hooks:
+          on_complete: "skills.step.ollama-inventory.done.v1"
+          on_error: "skills.error.v1"
+        notes: "make -C pmoves models-layer-map JSON=1 NO_HF=1 (L1 /api/tags,/api/show,/api/ps + L4 journal demand)"
+      - skill: hf-model-card
+        input: layer_map
+        output: card_evidence
+        agent: hf-research-agent
+        depends:
+          skills: ["ollama-inventory"]
+          health: "http://hf-research-agent:8202/healthz"
+        hooks:
+          on_complete: "skills.step.hf-model-card.done.v1"
+          on_error: "skills.error.v1"
+        notes: "In-mesh only (8202 not host-published). card_evidence.load_card_evidence once #3354 merges; until then models-layer-map uses the Hub REST API"
+      - skill: suit-check
+        input: card_evidence
+        output: suit_verdicts
+        agent: codex
+        depends:
+          skills: ["hf-model-card"]
+        hooks:
+          on_complete: "skills.step.suit-check.done.v1"
+          on_error: "skills.error.v1"
+        notes: "make -C pmoves models-suit-ollama CHECK=1 once #3379 merges; until then make -C pmoves models-layer-map CHECK=1"
+      - skill: consumer-e2e
+        input: suit_verdicts
+        output: consumer_result
+        agent: agent-zero
+        depends:
+          skills: ["suit-check"]
+          health: "http://localhost:8080/healthz"
+        hooks:
+          on_complete: "skills.step.consumer-e2e.done.v1"
+          on_error: "skills.error.v1"
+        notes: "A0 POST :8080/tasks smoke on the local preset"
+      - skill: retrieval-eval
+        input: consumer_result
+        output: retrieval_metrics
+        agent: codex
+        depends:
+          skills: ["consumer-e2e"]
+        hooks:
+          on_complete: "skills.pipeline.local-model-fitness.done.v1"
+          on_error: "skills.error.v1"
+        notes: "README documents make retrieval-eval-smoke but NO such target exists in pmoves/Makefile; run python pmoves/services/retrieval-eval/evaluate.py <dataset> --no-query-details"
+
 handoff:
   # How agents pass work between each other
   protocol: "mcp"
