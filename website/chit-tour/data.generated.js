@@ -1,16 +1,34 @@
 // data.generated.js — LIVE tour data, generated from the agent registry (SSOT).
 // DO NOT EDIT BY HAND. Regenerate: make -C pmoves chit-tour-data
-// source: pmoves/config/agent_registry.yaml · agents: 97 · subjects: 109 · generated: 2026-08-01
+// source: pmoves/config/agent_registry.yaml · agents: 112 · subjects: 120 · generated: 2026-10-11
 
 const LIVE_META = {
-  "generated_at": "2026-08-01",
+  "generated_at": "2026-10-11",
   "source": "pmoves/config/agent_registry.yaml",
-  "agent_count": 97,
-  "subject_count": 109,
+  "agent_count": 112,
+  "subject_count": 120,
   "taxonomy_version": "1.5.0"
 };
 
 const AGENT_ROSTER = [
+  {
+    "name": "4090 Claude",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
+    "name": "5090 Claude",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
+    "layers": 3
+  },
   {
     "name": "a0-plugins",
     "cls": "Utility",
@@ -23,11 +41,11 @@ const AGENT_ROSTER = [
   {
     "name": "A2UI",
     "cls": "Standard",
-    "primary": "Ui",
-    "secondary": "Agent",
-    "tier": 7,
+    "primary": "Agent",
+    "secondary": "Llm",
+    "tier": 6,
     "stage": "Base",
-    "layers": 3
+    "layers": 4
   },
   {
     "name": "Agent Zero",
@@ -73,6 +91,15 @@ const AGENT_ROSTER = [
     "tier": 3,
     "stage": "Pre Stage",
     "layers": 2
+  },
+  {
+    "name": "B850 Claude",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
+    "layers": 3
   },
   {
     "name": "BoTZ Architect",
@@ -156,6 +183,15 @@ const AGENT_ROSTER = [
     "layers": 3
   },
   {
+    "name": "Code Review Body",
+    "cls": "Specialized",
+    "primary": "Agent",
+    "secondary": "Worker",
+    "tier": 6,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
     "name": "Consciousness Service",
     "cls": "Specialized",
     "primary": "Agent",
@@ -174,6 +210,15 @@ const AGENT_ROSTER = [
     "layers": 2
   },
   {
+    "name": "Control Body",
+    "cls": "Specialized",
+    "primary": "Agent",
+    "secondary": "Worker",
+    "tier": 6,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
     "name": "Creator",
     "cls": "Standard",
     "primary": "Media",
@@ -184,6 +229,15 @@ const AGENT_ROSTER = [
   },
   {
     "name": "Crush",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
+    "name": "Crush GLM-5.2 (Knuckles)",
     "cls": "Standard",
     "primary": "Ui",
     "secondary": "Agent",
@@ -217,6 +271,15 @@ const AGENT_ROSTER = [
     "tier": 3,
     "stage": "Stage 1",
     "layers": 4
+  },
+  {
+    "name": "Delivery Body",
+    "cls": "Specialized",
+    "primary": "Agent",
+    "secondary": "Worker",
+    "tier": 6,
+    "stage": "Stage 1",
+    "layers": 3
   },
   {
     "name": "DoX",
@@ -408,6 +471,15 @@ const AGENT_ROSTER = [
     "layers": 3
   },
   {
+    "name": "HF MCP Server",
+    "cls": "Utility",
+    "primary": "Agent",
+    "secondary": "Api",
+    "tier": 6,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
     "name": "HF Research Agent",
     "cls": "Specialized",
     "primary": "Agent",
@@ -471,12 +543,30 @@ const AGENT_ROSTER = [
     "layers": 3
   },
   {
+    "name": "KiloClaw",
+    "cls": "Standard",
+    "primary": "Agent",
+    "secondary": "Llm",
+    "tier": 6,
+    "stage": "Stage 2",
+    "layers": 3
+  },
+  {
     "name": "KiloCode GLM",
     "cls": "Standard",
     "primary": "Agent",
     "secondary": "Llm",
     "tier": 6,
     "stage": "Stage 2",
+    "layers": 3
+  },
+  {
+    "name": "Kimi Knuckles",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
     "layers": 3
   },
   {
@@ -518,10 +608,19 @@ const AGENT_ROSTER = [
   {
     "name": "MAI-UI",
     "cls": "Standard",
-    "primary": "Ui",
-    "secondary": "Agent",
-    "tier": 7,
+    "primary": "Agent",
+    "secondary": "Llm",
+    "tier": 6,
     "stage": "Base",
+    "layers": 4
+  },
+  {
+    "name": "Mavis",
+    "cls": "Standard",
+    "primary": "Agent",
+    "secondary": "Api",
+    "tier": 6,
+    "stage": "Stage 1",
     "layers": 3
   },
   {
@@ -552,6 +651,15 @@ const AGENT_ROSTER = [
     "layers": 2
   },
   {
+    "name": "Memory Body",
+    "cls": "Specialized",
+    "primary": "Agent",
+    "secondary": "Data",
+    "tier": 6,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
     "name": "Mesh Agent",
     "cls": "Standard",
     "primary": "Agent",
@@ -567,6 +675,15 @@ const AGENT_ROSTER = [
     "secondary": "Api",
     "tier": 1,
     "stage": "Base",
+    "layers": 2
+  },
+  {
+    "name": "MiSSinGLinC Validator",
+    "cls": "Specialized",
+    "primary": "Agent",
+    "secondary": "Api",
+    "tier": 6,
+    "stage": "Stage 0",
     "layers": 2
   },
   {
@@ -613,6 +730,15 @@ const AGENT_ROSTER = [
     "tier": 1,
     "stage": "Base",
     "layers": 2
+  },
+  {
+    "name": "Node Steward",
+    "cls": "Specialized",
+    "primary": "Agent",
+    "secondary": "Ui",
+    "tier": 6,
+    "stage": "Stage 1",
+    "layers": 3
   },
   {
     "name": "Notebook Sync",
@@ -777,6 +903,15 @@ const AGENT_ROSTER = [
     "layers": 1
   },
   {
+    "name": "SPARK Claude",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
+    "layers": 3
+  },
+  {
     "name": "Supabase",
     "cls": "Utility",
     "primary": "Data",
@@ -874,13 +1009,27 @@ const AGENT_ROSTER = [
     "tier": 5,
     "stage": "Stage 1",
     "layers": 2
+  },
+  {
+    "name": "Z890 Claude",
+    "cls": "Standard",
+    "primary": "Ui",
+    "secondary": "Agent",
+    "tier": 7,
+    "stage": "Stage 1",
+    "layers": 3
   }
 ];
 
 const NATS_SUBJECTS = [
   {
+    "subject": "a2ui.render.completed.v1",
+    "dir": "Pub: Remotion Renderer",
+    "purpose": "a2ui · render · completed"
+  },
+  {
     "subject": "agent.graphiti.signed.v1",
-    "dir": "Pub: DARKXSIDE Persona, KiloCode GLM ▸ Sub: Crush",
+    "dir": "Pub: DARKXSIDE Persona, KiloClaw, KiloCode GLM ▸ Sub: Crush",
     "purpose": "agent · graphiti · signed"
   },
   {
@@ -960,12 +1109,12 @@ const NATS_SUBJECTS = [
   },
   {
     "subject": "claw.task.assign.v1",
-    "dir": "Sub: KiloCode GLM",
+    "dir": "Sub: KiloClaw, KiloCode GLM",
     "purpose": "claw · task · assign"
   },
   {
     "subject": "claw.task.complete.v1",
-    "dir": "Pub: KiloCode GLM",
+    "dir": "Pub: KiloClaw, KiloCode GLM",
     "purpose": "claw · task · complete"
   },
   {
@@ -1149,6 +1298,11 @@ const NATS_SUBJECTS = [
     "purpose": "hf · model · discovered"
   },
   {
+    "subject": "hf.model.downloaded.v1",
+    "dir": "Pub: HF MCP Server",
+    "purpose": "hf · model · downloaded"
+  },
+  {
     "subject": "hf.model.evaluated.v1",
     "dir": "Pub: HF Research Agent",
     "purpose": "hf · model · evaluated"
@@ -1160,7 +1314,7 @@ const NATS_SUBJECTS = [
   },
   {
     "subject": "ingest.file.added.v1",
-    "dir": "Pub: PMOVES.YT ▸ Sub: Extract Worker, Loki Logs Specialist, Publisher-Discord",
+    "dir": "Pub: PMOVES.YT ▸ Sub: Extract Worker, Loki Logs Specialist, MiSSinGLinC Validator…",
     "purpose": "ingest · file · added"
   },
   {
@@ -1344,6 +1498,26 @@ const NATS_SUBJECTS = [
     "purpose": "p7 · room · stage · changed"
   },
   {
+    "subject": "pmoves.agent.result.v1",
+    "dir": "Pub: KiloClaw, Mavis ▸ Sub: Mavis",
+    "purpose": "pmoves · agent · result"
+  },
+  {
+    "subject": "pmoves.agent.task.v1",
+    "dir": "Pub: Mavis ▸ Sub: KiloClaw",
+    "purpose": "pmoves · agent · task"
+  },
+  {
+    "subject": "pmoves.bpm.phase.v1",
+    "dir": "Pub: Mavis",
+    "purpose": "pmoves · bpm · phase"
+  },
+  {
+    "subject": "pmoves.bpm.pomodoro.v1",
+    "dir": "Sub: Mavis",
+    "purpose": "pmoves · bpm · pomodoro"
+  },
+  {
     "subject": "pmoves.darkxside.beats.group.v1",
     "dir": "Pub: Cipher Beats Analyst",
     "purpose": "pmoves · darkxside · beats · group"
@@ -1402,6 +1576,31 @@ const NATS_SUBJECTS = [
     "subject": "tokenism.prosodic.bpm.v1",
     "dir": "Pub: Flute-Gateway ▸ Sub: Fordham Voice",
     "purpose": "tokenism · prosodic · bpm"
+  },
+  {
+    "subject": "validation.counter.evidence.v1",
+    "dir": "Pub: MiSSinGLinC Validator",
+    "purpose": "validation · counter · evidence"
+  },
+  {
+    "subject": "validation.evidence.chain.v1",
+    "dir": "Pub: MiSSinGLinC Validator",
+    "purpose": "validation · evidence · chain"
+  },
+  {
+    "subject": "validation.run.requested.v1",
+    "dir": "Sub: MiSSinGLinC Validator",
+    "purpose": "validation · run · requested"
+  },
+  {
+    "subject": "validation.verdict.ready.v1",
+    "dir": "Pub: MiSSinGLinC Validator",
+    "purpose": "validation · verdict · ready"
+  },
+  {
+    "subject": "voice.agent.response.v1",
+    "dir": "Sub: MiSSinGLinC Validator",
+    "purpose": "voice · agent · response"
   },
   {
     "subject": "voice.cast.completed.v1",

@@ -211,7 +211,7 @@ while IFS='|' read -r f loadre; do
     bad "call at $call_ln precedes env load at $load_ln: $f"
   fi
 done <<'EOF'
-deploy/provision/claude-pmoves.sh|set \+a; set -u
+deploy/provision/claude-pmoves.sh|done < "\$_allowf"
 deploy/provision/codex-pmoves.sh|set \+a; set -u
 deploy/provision/crush-pmoves.sh|set \+a; set -u
 deploy/provision/hermes-pmoves.sh|set \+a; set -u
