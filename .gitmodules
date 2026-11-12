@@ -483,3 +483,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-spynel.git
 	branch = PMOVES.AI-Edition-Hardened
 	ignore = all
+[submodule "PMOVES-Mike"]
+	path = PMOVES-Mike
+	url = https://github.com/POWERFULMOVES/PMOVES-Mike.git
+	branch = main

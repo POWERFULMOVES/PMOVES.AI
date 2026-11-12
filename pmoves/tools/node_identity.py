@@ -516,6 +516,33 @@ def resolve_register_name(
     )
 
 
+def resolve_host_roots(
+    registry_identity: str | None,
+    registry: dict[str, dict] | None = None,
+) -> tuple[list[str], str]:
+    """Resolve (host_roots, explanation) from the identity's registry `scope:`.
+
+    Only a node identity whose entry declares `scope.host_access: node` gets
+    roots. The launcher turns them into `--add-dir` for the MAIN session only;
+    a session started with `--agent <role>` gets none, so agents and teams the
+    identity creates stay at `scope.max_subagent_scope` (repo). Empty is the
+    default and always carries a reason, like the cipher and register pairs.
+    """
+    if not registry_identity:
+        return [], "no host roots: identity unresolved"
+    registry = registry if registry is not None else load_registry()
+    scope = (registry.get(registry_identity) or {}).get("scope") or {}
+    if not isinstance(scope, dict) or scope.get("host_access") != "node":
+        return [], f"no host roots: {registry_identity} declares no scope.host_access: node"
+    raw = scope.get("host_roots") or []
+    roots = [r for r in raw if isinstance(r, str) and r.strip()] if isinstance(raw, list) else []
+    if not roots:
+        return [], f"no host roots: {registry_identity} has host_access: node but no scope.host_roots"
+    if any("|" in r for r in roots):
+        return [], f"no host roots: {registry_identity} scope.host_roots contains '|', the output separator"
+    return roots, f"host roots from {registry_identity} scope (host_access: node)"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -545,6 +572,7 @@ def main(argv: list[str] | None = None) -> int:
         reg_name, reg_form, reg_why = resolve_register_name(identity, node)
     else:
         reg_name, reg_form, reg_why = None, None, "no register name: identity unresolved"
+    host_roots, host_why = resolve_host_roots(identity)
 
     if fmt in ("shell", "cmd"):
         # Always emit both, empty when unresolved: a consumer that tests for
@@ -570,6 +598,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"PMOVES_IDENTITY_NAME={quote(reg_name or '')}")
         print(f"PMOVES_REGISTER_FORM={quote(reg_form or '')}")
         print(f"PMOVES_REGISTER_WHY={quote(reg_why)}")
+        # '|'-joined: a Windows root may contain spaces, never '|'. Empty
+        # unless the registry grants this identity host access.
+        print(f"PMOVES_HOST_ROOTS={quote('|'.join(host_roots))}")
+        print(f"PMOVES_HOST_WHY={quote(host_why)}")
         return 0
 
     print(why)

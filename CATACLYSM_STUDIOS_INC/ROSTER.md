@@ -6,7 +6,7 @@
 > guilds, and access grants; it **references** the canonical sources for agents/nodes
 > and personas — it does not redefine them:
 >
-> - Agents / teams / node_affinity → [`pmoves/configs/agent-teams.yaml`](../pmoves/configs/agent-teams.yaml) (111 registry agents · 14 teams — source: pmoves/config/agent_registry.yaml + agent-teams.yaml, measured 2026-10-10)
+> - Agents / teams / node_affinity → [`pmoves/configs/agent-teams.yaml`](../pmoves/configs/agent-teams.yaml) (62 agents · 11 teams)
 > - Agent personas → [`pmoves/docs/AGENTS/PERSONAS.md`](../pmoves/docs/AGENTS/PERSONAS.md)
 > - Node hardware → `pmoves/config/profiles/<node>.yaml`
 >
@@ -32,6 +32,7 @@ _Add collaborators / DAO members / Fordham Hill participants in `users.yaml:huma
 | **KiloCode** `kilocode` | External Contributors: kilocode | — | `pmoves-5090` | Infra Cloud · Delivery |
 | **Codex** `codex` | External Contributors: codex | — | — | Delivery |
 | **Cipher** `cipher` | Research & Knowledge: cipher_memory (:8105) | — | — | Core |
+| **Kimi Knuckles** `kimi-knuckles` | node_steward: kimi_knuckles (Kimi Code CLI, B850) | — | `pmoves-knuckles` | Infra Cloud · Governance |
 | **MiniMax (FlOO$)** `minimax-floos` | Media & Voice _(TODO)_ | PERSONAS.md → FlOO$ suits | — | Voice |
 
 ## Nodes  *(access + tailnet host; hardware in node profiles)*
@@ -49,7 +50,7 @@ _Add collaborators / DAO members / Fordham Hill participants in `users.yaml:huma
 
 _Tailnet hostnames marked TODO in `users.yaml` need operator confirmation._
 
-## Org Guilds  *(people/access — distinct from the 14 functional agent teams (measured 2026-10-10))*
+## Org Guilds  *(people/access — distinct from the 11 functional agent teams)*
 
 | Guild | Purpose | Charter | Functional teams | Members |
 |-------|---------|---------|------------------|---------|

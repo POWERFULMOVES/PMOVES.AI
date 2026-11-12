@@ -1,0 +1,95 @@
+# Mavis Orchestrator — Persona
+# Mavis Collection — slice G.3 persona layer
+#
+# Mavis is the Mavis / HyPeRAGInT orchestrator running on the 5090. Per agent identity
+# form (slice A): "HyPeRAGInT persona — per-agent identity at 'level-11 / Spynel framing /
+# post-4090-claude' per pmoves/docs/architecture/DAMAGE_CONTROL_STRUCTURED_POLICY_RFC.md:280."
+#
+# Built FROM POWERFULMOVES/PMOVES-MiniMaXX-AGInT (per operator directive 2026-10-05).
+# Home of HyPeRAGInTZ is POWERFULMOVES/PMOVES-registry (rename pending).
+
+name: mavis-orchestrator
+display_name: "Mavis"
+description: |
+  Mavis — per-agent identity at "level-11 / Spynel framing / post-4090-claude"
+  per pmoves/docs/architecture/DAMAGE_CONTROL_STRUCTURED_POLICY_RFC.md:280.
+
+  Built FROM POWERFULMOVES/PMOVES-MiniMaXX-AGInT (per operator directive 2026-10-05).
+  Home of HyPeRAGInTZ is POWERFULMOVES/PMOVES-registry (rename pending).
+
+  The Mavis orchestrator is the runtime face of the Mavis Collection. It runs on the
+  5090 node with Claude Code + the claude-pmoves-mavis launcher family (slice A, PR #3282).
+
+# Identity refs
+identity_form: pmoves/configs/agents/forms/hyperagint.yaml
+cross_agent_inheritance:
+  - claude-code
+  - kilo-code
+  - codex
+  - hermes
+  - glm-coder
+  - kimi-coder
+  - gpt
+
+# Backbone (cloud + offline)
+backbone:
+  cloud:
+    provider: minimax
+    plan: token_plan
+    key_path: "~/.mmx/config.json"
+    key_format: sk-cp
+    auth_probe: 3-step-gate
+  offline:
+    ollama_local:
+      - qwen3-coder:latest      # 18 GB; code/JSON review
+      - qwen3-vl:8b             # 6.1 GB; quick vision
+      - embeddinggemma           # text embeddings
+      - functiongemma            # function calling
+    ollama_cloud:
+      - qwen3-vl:235b-cloud     # 235B params; deep vision
+  huggingface_local: see pmoves/config/datasets.yaml
+
+# Token Plan capability envelope (per operator 2026-10-05)
+token_plan:
+  provider: minimax
+  plan: token_plan
+  models:
+    - MiniMax-M3
+    - MiniMax-M2.7
+    - MiniMax-M2.7-highspeed
+    - image-01
+    - speech-2.8-hd
+    - asr-1.0
+  shared_quota: true  # text + image + speech draw from one quota
+  context_window: 1000000  # 1M tokens
+  concurrency_advisory: PMOVES_MAX_CONCURRENT_AGENTS  # 3-4 per subscription
+  monthly_budget: "~1.7B tokens/month of M3 usage"
+
+# Multi-harness collaboration
+fleet_harnesses:
+  - mavis (self)
+  - hermes
+  - claude-code
+  - codex
+  - kilo-code
+  - glm-coder
+  - kimi-coder
+
+# Services wired
+services:
+  - PMOVES.YT           # canonical YouTube ingest (per pmoves/services/pmoves-yt/)
+  - pmoves.yt_mini      # lite variant (per operator 2026-10-06 directive; TBD-confirm whether to build or just reference)
+  - Hi-RAG v2 (port 8086)
+  - Cipher (port 8105)
+
+# Pointer-only contract
+pointer_only: true
+resolver_path: "pmoves/tools/mavis_collection_resolve.py resolve --manifest ~/.mavis/collection/manifest.yaml"
+
+chit:
+  design: pmoves/docs/architecture/HYPERAGINTZ_MONIKER_DESIGN.md
+  spec: pmoves/docs/architecture/MAVIS_COLLECTION_DESIGN.md
+  encoding_primitive: hyperagint.yaml
+  signature_moves:
+    - "wakes-as-5090-claude"
+    - "Mavis orchestrator surfaces DARKXSIDE + FlOO$ via runtime routing"

@@ -10,7 +10,8 @@ Implements PMOVES.AI integration patterns:
 
 import logging
 import os
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +34,55 @@ if not os.getenv("DOCKER_CONTAINER") and not os.getenv("DOCKER_ENV"):
             logger.debug("No env.shared found in parent directories, using system environment")
     except ImportError:
         logger.debug("python-dotenv not installed, using system environment")
+
+
+def _dev_mode() -> bool:
+    """Explicit developer signals only — absence of config proves nothing."""
+    return (
+        os.getenv('FLASK_ENV', '') == 'development'
+        or os.getenv('TOKENISM_DEV', '') == '1'
+    )
+
+
+def _resolve_secret_key() -> str:
+    """Resolve the Flask session key fail-closed, mode-aware.
+
+    Fleet mode: SECRET_KEY is set (compose injects it from the secrets
+    funnel; docker-compose.ui.yml gates it with ``${SECRET_KEY:?}``) — use
+    it VERBATIM. No stripping: every byte of the value is part of the
+    trust root, and silently altering it would invalidate live cookies.
+
+    Dev mode: SECRET_KEY is absent AND an explicit dev signal is present
+    (FLASK_ENV=development or TOKENISM_DEV=1) — mint an EPHEMERAL 64-hex
+    key for this process. It is not persisted, so sessions and signed
+    cookies do not survive a restart; that is loud by design.
+
+    Anything else — production, or a bare ``docker run`` outside the
+    compose gate — raises at config load rather than minting. Under
+    multiple Gunicorn workers each worker would mint a DIFFERENT key and
+    signed cookies would fail per-request; a restart would invalidate
+    every cookie. The historical inline default was a public literal in
+    this repository, which let anyone forge session cookies against any
+    deployed instance, so there is no default and no silent fallback.
+    """
+    raw = os.getenv('SECRET_KEY')
+    if raw is not None and raw.strip():
+        return raw
+    if _dev_mode():
+        minted = secrets.token_hex(32)
+        logger.warning(
+            "SECRET_KEY not set: minted an EPHEMERAL session key "
+            "(sessions/signed cookies will NOT survive restart). "
+            "Set SECRET_KEY via the secrets funnel for fleet deployments."
+        )
+        return minted
+    raise RuntimeError(
+        "SECRET_KEY is not set and no dev-mode signal found "
+        "(FLASK_ENV=development or TOKENISM_DEV=1). Refusing to mint an "
+        "ephemeral session key outside dev mode: multi-worker deployments "
+        "would diverge per worker and restarts would invalidate all "
+        "sessions. Provide SECRET_KEY via the secrets funnel."
+    )
 
 
 @dataclass(frozen=True)
@@ -92,7 +142,7 @@ class ServiceConfig:
     host: str = os.getenv('TOKENISM_HOST', '0.0.0.0')
     port: int = int(os.getenv('TOKENISM_PORT', '8100'))
     debug: bool = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
-    secret_key: str = os.getenv('SECRET_KEY', 'pmoves-tokenism-secret')
+    secret_key: str = field(default_factory=_resolve_secret_key)
 
     # Sub-components
     nats: NATSConfig = NATSConfig()
