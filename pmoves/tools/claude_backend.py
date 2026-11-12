@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-BACKENDS = ("auto", "anthropic", "minimax")
+BACKENDS = ("auto", "anthropic", "minimax", "local")
 ANTHROPIC_API_HOST = "api.anthropic.com"
 
 # The Mavis SDK set to strip when `auto` detects hijack or `anthropic` is forced.
@@ -155,6 +155,10 @@ def apply_backend(
       non-empty). Else no-op.
     - `anthropic`: strip unconditionally. WARN is emitted only when something was
       actually stripped.
+    - `local`: strip unconditionally, exactly like `anthropic`. The local-model
+      env is NOT set here -- the launchers set it later, after env.shared's
+      parent-env sweep (which unsets ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN
+      / CLAUDE_CODE_*) has run, via the `local` subcommand. See local_env().
 
     Originals are preserved under STRIPPED_PREFIX + NAME (process env only, never
     written to disk). The returned warn_text is None unless vars were actually
@@ -190,6 +194,247 @@ def apply_backend(
         + "'pmoves-mini claude-backend set anthropic' to make this the default."
     )
     return stripped, warn_text
+
+
+# ---------------------------------------------------------------------------
+# `local` backend — Claude Code on the node's own GPU models (host Ollama).
+#
+# Ollama (>= 0.14) serves the Anthropic Messages API at POST /v1/messages, so
+# Claude Code can talk to it with nothing but ANTHROPIC_BASE_URL + a token it
+# ignores. Measured on SPARK 2026-10-21 against Ollama 0.30.0: a proper message
+# with thinking blocks came back for `qwen3:30b-a3b-gpu`.
+#
+# Two measured failure modes drive the preflight warnings:
+#   * no `num_gpu` on the model: SPARK loaded models mostly off-GPU at ~1 tok/s
+#     (vs 70 tok/s for qwen3:30b-a3b-gpu / 32 tok/s for qwen3:8b-gpu, which pin
+#     num_gpu 999).
+#   * `num_ctx` too small: Ollama's default n_ctx 8192 truncated Agent Zero's
+#     14k-token system prompt so replies were a single token. Claude Code's own
+#     system prompt + tool definitions are larger still -- see LOCAL_MIN_NUM_CTX.
+#
+# The env set here is PER-LAUNCH ONLY. Nothing is written to settings.json;
+# `pmoves-mini claude-backend set` deliberately does not accept `local`.
+# ---------------------------------------------------------------------------
+LOCAL_URL_ENV = "PMOVES_LOCAL_ANTHROPIC_URL"
+LOCAL_MODEL_ENV = "PMOVES_LOCAL_CLAUDE_MODEL"
+LOCAL_SMALL_MODEL_ENV = "PMOVES_LOCAL_CLAUDE_SMALL_MODEL"
+LOCAL_URL_DEFAULT = "http://127.0.0.1:11434"
+LOCAL_MODEL_DEFAULT = "qwen3:30b-a3b-gpu"
+LOCAL_SMALL_MODEL_DEFAULT = "qwen3:8b-gpu"
+# Ollama ignores the bearer. Claude Code still needs SOME credential to send,
+# and a fixed non-secret placeholder guarantees no real key is ever forwarded
+# to (or printed for) the local endpoint.
+LOCAL_DUMMY_TOKEN = "ollama"
+# Floor below which the preflight warns. 32768 is what the GPU-pinned SPARK
+# variants carry; the PR that introduced this records the measured size of
+# Claude Code's own request against it.
+LOCAL_MIN_NUM_CTX = 32768
+LOCAL_HTTP_TIMEOUT_S = 5.0
+# Pinned by the launcher tests: the refusal line both twins surface.
+LOCAL_REFUSE_PHRASE = "local backend refused"
+
+# Vars the `local` subcommand unsets so a real Anthropic key can never ride
+# along to the local endpoint (ANTHROPIC_API_KEY would also outrank nothing
+# useful here: Ollama ignores it).
+LOCAL_UNSET_VARS: Tuple[str, ...] = ("ANTHROPIC_API_KEY",)
+
+
+def local_settings(
+    env: Optional[Mapping[str, str]] = None,
+) -> Tuple[str, str, str]:
+    """Return (url, model, small_model) from env with documented defaults.
+
+    Empty values fall back to the default, mirroring shell `${VAR:-default}`.
+    """
+    e = os.environ if env is None else env
+    url = (e.get(LOCAL_URL_ENV) or "").strip() or LOCAL_URL_DEFAULT
+    model = (e.get(LOCAL_MODEL_ENV) or "").strip() or LOCAL_MODEL_DEFAULT
+    small = (e.get(LOCAL_SMALL_MODEL_ENV) or "").strip() or LOCAL_SMALL_MODEL_DEFAULT
+    return url.rstrip("/"), model, small
+
+
+def local_env(url: str, model: str, small_model: str) -> Dict[str, str]:
+    """The env Claude Code needs to run against a local Anthropic-compatible
+    endpoint. Every model alias is routed so nothing silently asks the local
+    server for a cloud model name (which it does not have):
+
+      ANTHROPIC_MODEL                  main-loop model
+      ANTHROPIC_DEFAULT_OPUS_MODEL     `opus` alias (subagents with model: opus)
+      ANTHROPIC_DEFAULT_SONNET_MODEL   `sonnet` alias
+      ANTHROPIC_DEFAULT_HAIKU_MODEL    `haiku` alias AND the background /
+                                       small-fast model (replaces the
+                                       deprecated ANTHROPIC_SMALL_FAST_MODEL)
+    """
+    return {
+        "ANTHROPIC_BASE_URL": url,
+        "ANTHROPIC_AUTH_TOKEN": LOCAL_DUMMY_TOKEN,
+        "ANTHROPIC_MODEL": model,
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": small_model,
+        "PMOVES_CLAUDE_BACKEND": "local",
+    }
+
+
+# Env names that go into the per-launch `--settings` JSON as well as the
+# process env. WHY BOTH: an `env` block in ~/.claude/settings.json OVERWRITES
+# the same variable exported in the shell (code.claude.com/docs/en/settings-
+# reference, "How env values interact with your shell"), and the Mavis-SDK
+# hijack this module exists for writes exactly ANTHROPIC_BASE_URL there. The
+# command-line `--settings <json>` level outranks user/project settings files
+# (code.claude.com/docs/en/settings, "Settings precedence"), so a node whose
+# settings.json still routes to MiniMax goes local for THIS launch only, and
+# nothing on disk changes.
+LOCAL_SETTINGS_ENV_KEYS: Tuple[str, ...] = (
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+)
+LOCAL_SETTINGS_VAR = "PMOVES_LOCAL_CLAUDE_SETTINGS"
+
+
+def local_settings_json(env_out: Mapping[str, str]) -> str:
+    """Compact JSON for `claude --settings=<json>`. Holds only the dummy token."""
+    return json.dumps(
+        {"env": {k: env_out[k] for k in LOCAL_SETTINGS_ENV_KEYS if k in env_out}},
+        separators=(",", ":"),
+    )
+
+
+def _http_json(
+    method: str, url: str, body: Optional[Dict[str, Any]] = None,
+    timeout: float = LOCAL_HTTP_TIMEOUT_S,
+) -> Any:
+    """Tiny stdlib JSON client. Raises on transport error / non-2xx / bad JSON."""
+    import urllib.request
+
+    data = None
+    headers = {"Accept": "application/json"}
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - operator-chosen URL
+        return json.loads(resp.read().decode("utf-8") or "null")
+
+
+def _parse_ollama_parameters(text: str) -> Dict[str, str]:
+    """`/api/show` returns `parameters` as a Modelfile-ish text block:
+    "num_ctx                        32768\\nnum_gpu                        999".
+    Repeated keys (e.g. `stop`) keep the last value, which is fine for the
+    two numeric keys we read."""
+    out: Dict[str, str] = {}
+    for line in (text or "").splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2:
+            out[parts[0]] = parts[1].strip()
+    return out
+
+
+def _tag_names(tags: Any) -> List[str]:
+    names: List[str] = []
+    for m in (tags or {}).get("models", []) or []:
+        for key in ("name", "model"):
+            v = m.get(key)
+            if isinstance(v, str) and v and v not in names:
+                names.append(v)
+    return names
+
+
+def _model_present(model: str, names: Sequence[str]) -> bool:
+    if model in names:
+        return True
+    # Ollama treats a bare name as `<name>:latest`.
+    if ":" not in model and f"{model}:latest" in names:
+        return True
+    return False
+
+
+def local_preflight(
+    url: str,
+    model: str,
+    small_model: str,
+    *,
+    fetch: Optional[Any] = None,
+    min_num_ctx: int = LOCAL_MIN_NUM_CTX,
+) -> Tuple[List[str], List[str]]:
+    """Probe an Ollama endpoint. Return (errors, warnings).
+
+    errors   -> the launcher REFUSES (endpoint down, model not pulled).
+    warnings -> the launcher launches but says why it may be slow / truncated.
+
+    `fetch(method, url, body)` is injectable for tests; default is stdlib HTTP.
+    """
+    fetch = fetch or (lambda m, u, b=None: _http_json(m, u, b))
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    try:
+        ver = fetch("GET", f"{url}/api/version", None)
+        version = (ver or {}).get("version", "?") if isinstance(ver, dict) else "?"
+    except Exception as exc:  # noqa: BLE001 - any failure here is "not answering"
+        errors.append(
+            f"{url}/api/version did not answer ({type(exc).__name__}: {exc}). "
+            f"Start the host Ollama (e.g. `sudo systemctl start ollama`) or point "
+            f"{LOCAL_URL_ENV} at an Anthropic-compatible Ollama endpoint."
+        )
+        return errors, warnings
+
+    try:
+        names = _tag_names(fetch("GET", f"{url}/api/tags", None))
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"{url}/api/tags failed ({type(exc).__name__}: {exc}); cannot confirm the model exists.")
+        return errors, warnings
+
+    for role, env_name, name in (("model", LOCAL_MODEL_ENV, model),
+                                 ("small/fast model", LOCAL_SMALL_MODEL_ENV, small_model)):
+        if not _model_present(name, names):
+            errors.append(
+                f"{role} '{name}' is not in {url}/api/tags (Ollama {version}). "
+                f"Pick an installed model with {env_name}=<name>; installed: "
+                + (", ".join(names[:20]) if names else "(none)")
+            )
+    if errors:
+        return errors, warnings
+
+    seen = set()
+    for name in (model, small_model):
+        if name in seen:
+            continue
+        seen.add(name)
+        try:
+            show = fetch("POST", f"{url}/api/show", {"model": name}) or {}
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"{url}/api/show for '{name}' failed ({type(exc).__name__}); num_gpu/num_ctx unverified.")
+            continue
+        params = _parse_ollama_parameters(show.get("parameters", "") if isinstance(show, dict) else "")
+        if "num_gpu" not in params:
+            warnings.append(
+                f"'{name}' has no num_gpu parameter. Measured on SPARK: without it the model "
+                f"loads mostly off-GPU at ~1 tok/s (vs 32-70 tok/s pinned). Use a variant "
+                f"created with PARAMETER num_gpu 999 (e.g. qwen3:30b-a3b-gpu)."
+            )
+        raw_ctx = params.get("num_ctx")
+        try:
+            ctx = int(raw_ctx) if raw_ctx is not None else None
+        except ValueError:
+            ctx = None
+        if ctx is None or ctx < min_num_ctx:
+            shown = raw_ctx if raw_ctx is not None else "unset (Ollama default 8192)"
+            warnings.append(
+                f"'{name}' num_ctx is {shown}, below {min_num_ctx}. Measured on SPARK: "
+                f"Ollama's default n_ctx 8192 truncated a 14k-token system prompt and "
+                f"replies were one token. Claude Code's own prompt is larger; use a "
+                f"variant with PARAMETER num_ctx >= {min_num_ctx}."
+            )
+    return errors, warnings
+
+
+def _shell_line_safe(value: str) -> bool:
+    return "'" not in value and "\n" not in value and "\r" not in value
 
 
 def _utc_iso_basic() -> str:
@@ -403,6 +648,17 @@ def _build_argparser() -> argparse.ArgumentParser:
     p_apply.add_argument("--backend", required=True, choices=BACKENDS)
     p_apply.add_argument("--label", default="claude-pmoves")
 
+    p_local = sub.add_parser(
+        "local",
+        help=("Preflight a local Ollama endpoint and emit the per-launch env for "
+              "--backend=local (unset/export lines). Exit 1 = refused."),
+    )
+    p_local.add_argument("--label", default="claude-pmoves")
+    p_local.add_argument("--url", default=None, help=f"default ${LOCAL_URL_ENV} or {LOCAL_URL_DEFAULT}")
+    p_local.add_argument("--model", default=None, help=f"default ${LOCAL_MODEL_ENV} or {LOCAL_MODEL_DEFAULT}")
+    p_local.add_argument("--small-model", default=None,
+                         help=f"default ${LOCAL_SMALL_MODEL_ENV} or {LOCAL_SMALL_MODEL_DEFAULT}")
+
     p_parse = sub.add_parser("parse", help="Parse a --backend= flag value out of argv.")
     p_parse.add_argument("rest", nargs=argparse.REMAINDER)
 
@@ -444,6 +700,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print(f"export {k}='{esc}'")
         if warn:
             print(warn, file=sys.stderr)
+        return 0
+
+    if args.command == "local":
+        url, model, small = local_settings()
+        url = (args.url or url).rstrip("/")
+        model = args.model or model
+        small = args.small_model or small
+        tag = f"[{args.label}] backend=local"
+        errors, warnings = local_preflight(url, model, small)
+        for w in warnings:
+            print(f"{tag}: WARN: {w}", file=sys.stderr)
+        if errors:
+            print(f"{tag}: {LOCAL_REFUSE_PHRASE} -- not launching.", file=sys.stderr)
+            for e in errors:
+                print(f"{tag}:   {e}", file=sys.stderr)
+            return 1
+        env_out = local_env(url, model, small)
+        env_out[LOCAL_SETTINGS_VAR] = local_settings_json(env_out)
+        bad = [k for k, v in env_out.items() if not _shell_line_safe(v)]
+        if bad:
+            print(f"{tag}: {LOCAL_REFUSE_PHRASE} -- unsafe characters in {', '.join(bad)}.", file=sys.stderr)
+            return 1
+        # Same line grammar as `apply`, which both twins already parse. The
+        # values are never eval'd by the launchers: they split on the first '='.
+        for var in LOCAL_UNSET_VARS:
+            print(f"unset {var}")
+        for k, v in env_out.items():
+            print(f"export {k}='{v}'")
+        print(
+            f"{tag}: {url} model={model} small/fast={small} "
+            f"(per-launch only; ~/.claude/settings.json untouched)",
+            file=sys.stderr,
+        )
         return 0
 
     if args.command == "parse":
