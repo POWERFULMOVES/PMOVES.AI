@@ -48,14 +48,6 @@ known_gaps:
     count: 4
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)
-  scripts/fleet/ssh/test_install_ssh_surface.py:
-    count: 4
-    reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
-      cp1252 class)
-  scripts/fleet/ssh/test_serial_roundtrip.py:
-    count: 5
-    reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
-      cp1252 class)
   scripts/fleet/ssh/test_ssh_surface.py:
     count: 2
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
