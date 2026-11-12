@@ -27,6 +27,8 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
+import pytest  # noqa: E402
+
 from pmoves.tools.comfyui_client import OutputAsset, RenderResult  # noqa: E402
 from pmoves.tools.render_skin import (  # noqa: E402
     ComfyUIUnavailable,
@@ -64,6 +66,21 @@ def _sample_workflow() -> dict:
         ]
     }
 
+
+
+@pytest.fixture(autouse=True)
+def _scratch_cwd(tmp_path, monkeypatch):
+    """Every path in this module is CWD-relative ("pmoves/tools/tests/..."), and
+    render_skin stages sketches into a CWD-relative input dir and writes renders
+    next to the output. Run from pmoves/ that wrote pmoves/pmoves/tools/... into
+    the tree. Run each test from a scratch dir instead; the one tracked input
+    the tests read (the ComfyUI workflows) is linked in read-only by path.
+    """
+    workflows = tmp_path / "pmoves" / "tools" / "comfyui" / "workflows"
+    workflows.parent.mkdir(parents=True)
+    workflows.symlink_to(_REPO / "pmoves" / "tools" / "comfyui" / "workflows")
+    monkeypatch.delenv("PMOVES_COMFYUI_INPUT_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
 
 class PatchWorkflowTests(unittest.TestCase):
     def test_patches_positive_prompt(self) -> None:
