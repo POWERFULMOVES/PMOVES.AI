@@ -55,7 +55,8 @@ Rules that follow from it:
   An agent that inherits unrestricted MCP servers (docker, supabase-db) -- flag it.
 - **Claude Desktop:** `claude_desktop_config.json` server names, commands and roots
   only. Desktop runs no damage-control hooks; any filesystem root containing env or
-  key files is a finding.
+  key files is a finding. Compare against the scoped template in
+  `deploy/provision/claude-desktop/` (report drift; the live file is the operator's).
 - **Hermes:** `pmoves/launcher/profiles/pmoves-hermes-*.json` and
   `pmoves/config/profiles/hermes/*.yaml` -- terminal backend, toolsets, `security.*`,
   `delegation.*`. Remember tirith has no Windows build.

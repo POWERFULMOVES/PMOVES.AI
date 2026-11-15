@@ -72,3 +72,71 @@ def test_every_member_measures_the_platform_first(registry, key):
     body = (REPO_ROOT / registry[key]["agent_definition"]).read_text(encoding="utf-8")
     for needle in ("uname -s", "{{.OSType}}", "docker context show", "ContainerAdministrator"):
         assert needle in body, f"{key} never mentions {needle!r}"
+
+
+# --- Claude Desktop template: Desktop runs no damage-control hooks, so the folder
+# list IS the scope. Every folder it opens must hold no zero-access file.
+
+DESKTOP_DIR = REPO_ROOT / "deploy" / "provision" / "claude-desktop"
+DESKTOP_TEMPLATES = ["claude_desktop_config.windows.json", "claude_desktop_config.macos.json"]
+PLACEHOLDER = "<PMOVES_REPO>"
+
+
+def _desktop_roots(name: str) -> list[str]:
+    import json
+
+    servers = json.loads((DESKTOP_DIR / name).read_text(encoding="utf-8"))["mcpServers"]
+    args = servers["pmoves-filesystem"]["args"]
+    return [a.replace("\\", "/")[len(PLACEHOLDER) + 1:] for a in args if a.startswith(PLACEHOLDER)]
+
+
+def _zero_access_hit(rel: str) -> str | None:
+    import fnmatch
+
+    patterns = yaml.safe_load(
+        (REPO_ROOT / ".claude/hooks/damage-control/patterns.yaml").read_text(encoding="utf-8")
+    )["zeroAccessPaths"]
+    base = rel.rsplit("/", 1)[-1]
+    for pat in patterns:
+        if pat.startswith("~"):
+            continue
+        p = pat.rstrip("/")
+        if fnmatch.fnmatch(rel, p) or fnmatch.fnmatch(base, p) or f"/{p}/" in f"/{rel}/":
+            return pat
+    return None
+
+
+@pytest.mark.parametrize("name", DESKTOP_TEMPLATES)
+def test_desktop_template_opens_only_named_repo_subfolders(name):
+    text = (DESKTOP_DIR / name).read_text(encoding="utf-8")
+    assert "${" not in text, "Desktop does not expand ${VAR}; a template must not rely on it"
+    servers = yaml.safe_load(text)["mcpServers"]
+    assert set(servers) == {"pmoves-filesystem"}, "docker/secret-bearing servers are per-node, not template"
+    args = servers["pmoves-filesystem"]["args"]
+    folders = [a for a in args if a not in ("/c", "npx", "-y") and not a.startswith("@")]
+    assert all(a.startswith(PLACEHOLDER) for a in folders), (
+        f"{name}: every folder must sit under {PLACEHOLDER}, never a drive or home root")
+    roots = _desktop_roots(name)
+    assert roots, f"{name} opens no folder"
+    for root in roots:
+        assert root not in ("", "pmoves", ".claude"), f"{root}: too wide"
+        assert (REPO_ROOT / root).is_dir(), f"{root} does not exist in the repo"
+
+
+def test_desktop_templates_agree_across_platforms():
+    assert _desktop_roots(DESKTOP_TEMPLATES[0]) == _desktop_roots(DESKTOP_TEMPLATES[1])
+
+
+@pytest.mark.parametrize("root", _desktop_roots(DESKTOP_TEMPLATES[0]))
+def test_desktop_roots_hold_no_zero_access_file(root):
+    import os
+
+    hits = []
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT / root):
+        dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules")]
+        for f in filenames:
+            rel = Path(dirpath, f).relative_to(REPO_ROOT).as_posix()
+            pat = _zero_access_hit(rel)
+            if pat:
+                hits.append(f"{rel} ({pat})")
+    assert not hits, f"Desktop would expose zero-access files under {root}: {hits}"
