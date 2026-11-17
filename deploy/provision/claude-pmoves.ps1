@@ -926,6 +926,27 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
 [Environment]::SetEnvironmentVariable('PMOVES_MCP_ROSTER', $roster, 'Process')
 [Environment]::SetEnvironmentVariable('PMOVES_MCP_ROSTER_SOURCE', $rosterSource, 'Process')
 
+# HOST SCOPE -- parity with pmoves/scripts/claude-pmoves.sh. The registry's
+# scope.host_roots for this identity become --add-dir for the MAIN session only.
+# With --agent the session is a role and stays repo-scoped, as do the agents
+# and teams the identity creates (their own .claude/agents/*.md tool lists).
+# `--add-dir=<dir>`: the option is variadic; the space form would swallow a
+# trailing positional prompt (same trap as --mcp-config).
+# See pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+$hostArgs = @()
+$hostRole = $script:PmAgentRole
+if (-not $hostRole -and -not (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue)) {
+    foreach ($__a in @($args)) { if ($__a -eq '--agent' -or $__a -like '--agent=*') { $hostRole = 'agent'; break } }
+}
+$hostRoots = $ident['PMOVES_HOST_ROOTS']
+if (-not $hostRole -and $ident['PMOVES_RESOLVED_IDENTITY'] -and $hostRoots) {
+    foreach ($__r in ($hostRoots -split '\|')) { if ($__r) { $hostArgs += "--add-dir=$__r" } }
+    Write-Host ("[claude-pmoves] host scope: " + ($hostRoots -replace '\|', ', ') + " (main session only)")
+} else {
+    $hw = if ($hostRole) { "--agent $hostRole" } elseif ($ident['PMOVES_HOST_WHY']) { $ident['PMOVES_HOST_WHY'].Replace("'\''", "'") } else { 'identity unresolved' }
+    Write-Host "[claude-pmoves] host scope: repo ($hw)"
+}
+
 if (Test-Path $roster) {
     Write-Host ("[claude-pmoves] MCP roster source: " + $rosterSource)
     # Normalize the roster before handing it to Claude. The transform used to be
@@ -1038,10 +1059,10 @@ if (Test-Path $roster) {
     # The RAW roster, not $useRoster: the tool resolves ${VAR}s itself, and
     # the normalized copy is the same servers.
     Add-PmCipherPreflight $roster
-    & claude "--mcp-config=$useRoster" @identityArgs @args
+    & claude "--mcp-config=$useRoster" @hostArgs @identityArgs @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
     Add-PmCipherPreflight ''
-    & claude @identityArgs @args
+    & claude @hostArgs @identityArgs @args
 }
 exit $LASTEXITCODE
