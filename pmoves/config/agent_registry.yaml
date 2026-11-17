@@ -3484,7 +3484,7 @@ agents:
     class: utility
     primary_type: agent
     secondary_type: worker
-    port: 8111   # z890-bound 127.0.0.1:8111 (docker-compose.z890.yml); matches agent-teams.yaml annotation
+    port: 8111   # 127.0.0.1:8111 on z890 (docker-compose.z890.yml) and laptop-4090 (docker-compose.yml)
     health: "/healthz"
     layers: [L0, L2]
     evolution_stage: stage_1
@@ -3503,12 +3503,14 @@ agents:
       recovery_strategy: stateless
       cipher_categories: []
     topology:
-      node_affinity: [kvm4-1, kvm2, jetson]
+      # 4090-Claw 2026-11-17: was [kvm4-1, kvm2, jetson], contradicting this entry's own
+      # description (deployed on z890). Corrected to the nodes it actually runs on.
+      node_affinity: [z890, laptop-4090]
       team: infra
       ci_runner: vps
       compose_profile: agents
     source: "pmoves/services/container-agent/app.py"
-    description: "Real per-node Docker-networking diagnostics sidecar: /healthz, /diagnostic (local-service + upstream-route + DNS checks), /metrics (Prometheus). Source: pmoves/services/container-agent/app.py; deployed on z890 (pmoves/docker-compose.z890.yml, bound 127.0.0.1:8111)."
+    description: "Per-node Docker-networking diagnostics sidecar. Probe topology is env-driven (CA_DNS_TARGETS / CA_LOCAL_SERVICES / CA_UPSTREAM_SERVICES) so one image serves every node without hardcoded 5090 hostnames. Endpoints: /healthz, /config (effective probes), /diagnostic (DNS + local-service + upstream-route + NATS), /metrics (Prometheus), and optional /analyze which routes a diagnostic through Ollama Cloud when OLLAMA_CLOUD_BASE_URL + OLLAMA_CLOUD_API_KEY are set (503 with an explicit reason otherwise). Deployed on z890 (docker-compose.z890.yml) and laptop-4090 (docker-compose.yml), both bound 127.0.0.1:8111."
 
   podcast_producer:
     name: "Podcast Producer"
