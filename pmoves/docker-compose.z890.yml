@@ -56,7 +56,9 @@ services:
     environment:
       - CA_PORT=8111
       - NODE_NAME=${NODE_NAME:-pmoves-3090ti}
-      - NATS_URL=nats://nats:pmoves@nats-leaf:4222
+      # 4090-Claw 2026-11-17: plaintext credential removed from source.
+      # Operator sets Z890_NATS_URL in the machine env file (env.z890).
+      - NATS_URL=${Z890_NATS_URL:-}
       - DOCKED_MODE=${DOCKED_MODE:-true}
       - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
