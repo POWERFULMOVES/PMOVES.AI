@@ -905,6 +905,98 @@ agents:
       signature trails across sessions; no file edits. Loads
       .claude/agents/memory-agent.md.
 
+  harness_scope_auditor:
+    name: "Harness Scope Auditor"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role (Agent tool), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    role_class: reviewer
+    agent_definition: .claude/agents/harness-scope-auditor.md
+    # Subagent of a node identity: capped at that identity's
+    # scope.max_subagent_scope. Withholds Write/Edit/Agent.
+    scope:
+      host_access: repo
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: harness_scope
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Read-only audit of how every harness on a node is scoped vs the registry;
+      platform-aware (Windows/Git Bash/WSL/Linux, Docker linux vs windows
+      containers). Reports drift to harness_provisioner.
+      Loads .claude/agents/harness-scope-auditor.md. See
+      pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+
+  harness_provisioner:
+    name: "Harness Provisioner"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role (Agent tool), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    role_class: worker
+    agent_definition: .claude/agents/harness-provisioner.md
+    # Subagent of a node identity: capped at that identity's
+    # scope.max_subagent_scope. Writes only sources of truth, under Known Roads.
+    scope:
+      host_access: repo
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: harness_scope
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Applies scope, MCP and launcher configuration from the registry to each
+      harness (Claude Code/Desktop, Hermes, A0, crush, minimax, kimi, kilo,
+      codex) per node capability and affinity; both launcher twins.
+      Loads .claude/agents/harness-provisioner.md. See
+      pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+
+  skills_plugin_curator:
+    name: "Skills & Plugin Curator"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role (Agent tool), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    role_class: worker
+    agent_definition: .claude/agents/skills-plugin-curator.md
+    # Subagent of a node identity: capped at that identity's
+    # scope.max_subagent_scope. Writes only sources of truth, under Known Roads.
+    scope:
+      host_access: repo
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: harness_scope
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Keeps skills, plugin packs and MCP rosters in parity across harnesses and
+      nodes (skills_parity.py); CHIT-aware; never widens permission scope.
+      Loads .claude/agents/skills-plugin-curator.md. See
+      pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+
   space_agent:
     name: "PMOVES Space-Agent"
     class: standard
