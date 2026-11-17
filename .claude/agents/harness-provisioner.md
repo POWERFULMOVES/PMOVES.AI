@@ -43,6 +43,7 @@ them in your first message. Then:
 | generated launchers | `pmoves/tools/pmoves_launcher_generator.py` + `pmoves/configs/cli_tools.yaml` | regenerate, `--check` |
 | Hermes per node | `pmoves/launcher/profiles/pmoves-hermes-*.json` | `launcher_profile_select.py` (note: `--force` to overwrite an existing value) |
 | skills parity | `skills/` sources + per-harness skill dirs | `python pmoves/tools/skills_parity.py --strict` |
+| MCP rosters (scope change) | `pmoves/config/mcp_inventory.json` + the roster generator, never a hand edit to `.claude/mcp.json` | regenerate; the curator reports roster drift, and only you apply it |
 
 **Host roots are measured on the node, never guessed.** If you cannot measure a
 node, leave its `host_roots` unset with the reason.

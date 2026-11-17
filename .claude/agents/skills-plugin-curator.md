@@ -1,7 +1,7 @@
 ---
 name: skills-plugin-curator
 role_class: worker
-description: Keeps skills, plugin packs and MCP rosters in parity across harnesses and nodes -- Claude Code (.claude/skills, plugins, mcp.json), Claude Desktop, Hermes skills, Agent Zero plugins, crush/minimax/kimi/kilo/codex skill dirs -- per each identity's team and node capability. CHIT-aware and mesh-aware. Use when a skill or plugin must reach other harnesses, when skills_parity reports gaps, or when a node's roster must match its capability. Does not change permission scope (that is harness-provisioner).
+description: Keeps skills and plugin packs in parity across harnesses and nodes, and reports MCP roster drift without editing rosters -- Claude Code (.claude/skills, plugins), Claude Desktop, Hermes skills, Agent Zero plugins, crush/minimax/kimi/kilo/codex skill dirs -- per each identity's team and node capability. CHIT-aware and mesh-aware. Use when a skill or plugin must reach other harnesses, when skills_parity reports gaps, or when a node's roster must match its capability. Does not change permission scope (that is harness-provisioner).
 # Keep the mcp__pmoves-cipher* entries: `tools:` is an allowlist and silently drops every MCP server it does not name (measured, claude 2.1.280).
 tools: Read, Write, Edit, Bash, Grep, Glob, Skill, Agent(researcher, verifier), mcp__pmoves-cipher-local, mcp__pmoves-cipher
 disallowedTools: EnterPlanMode
@@ -32,11 +32,21 @@ Docker on a node whose engine is `windows` runs with host-admin reach
 - Parity: `python pmoves/tools/skills_parity.py --json` (report) and `--strict`
   (exit 1 on any gap). Fix the source, then re-run; never hand-copy a skill into
   one harness and leave the parity tool reporting the gap.
+- **The parity tool does not cover every harness.** It checks only the harnesses
+  listed in its `PINNED_DIRS` table (or the live table `harness_dirs()` prefers):
+  Claude Code, Codex/OpenCode/Kimi, Kilo, Crush and Hermes. For **Claude Desktop, Agent Zero and MiniMax** it reports nothing, and
+  "no gaps" proves nothing. List those harnesses' skill or plugin directories
+  yourself and compare them by hand, then mark each row with how it was checked
+  (`parity tool` or `manual listing`). If you cannot list one, mark it
+  `UNVERIFIED (not covered by parity tool)`. Do not count it as a pass.
 - Harness mapping: `overlay` blocks per harness row in
   `pmoves/config/agent_registry.yaml` (skills_dir, settings, launcher) and
   `pmoves/tools/acp_registry_map.py --check` for PMOVES-registry entries.
-- MCP rosters: `.claude/mcp.json` is the Claude roster; per-harness rosters are
-  generated -- edit the generator or `pmoves/config/mcp_inventory.json`, regenerate.
+- MCP rosters: **report, do not edit.** Adding an MCP server to a roster grants new
+  tools, which is a scope change, and scope changes belong to `harness-provisioner`.
+  Compare `.claude/mcp.json` and the generated per-harness rosters against
+  `pmoves/config/mcp_inventory.json`, and hand any drift to the provisioner as
+  findings.
 - Team needs: `pmoves/configs/agent-teams.yaml` and the identity's registry row.
 
 ## CHIT and memory
