@@ -1421,7 +1421,7 @@ services:
     - HTTP_PROXY
     - HTTPS_PROXY
     - NO_PROXY
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     volumes:
     - supabase-vector-data:/var/lib/vector
     - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
@@ -1443,6 +1443,7 @@ services:
         condition: service_healthy
     networks:
     - pmoves_data
+    - pmoves_api  # 4090-Claw 2026-11-17: gateway tier (supabase-kong:8000) per DOCKER_NETWORK_HARDENING.md
 
   # ---------------------------------------------------------------------------
   # Supavisor — connection pooler (PgBouncer replacement)
@@ -4977,7 +4978,7 @@ services:
     # Credentials come from NATS_USER/NATS_PASSWORD, which the funnel writes into
     # env.shared / env.tier-agent.
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       nats:
         condition: service_healthy
@@ -4990,6 +4991,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Discord webhook API
+    - pmoves_api  # 4090-Claw 2026-11-17: gateway tier (supabase-kong:8000) per DOCKER_NETWORK_HARDENING.md
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
       interval: 30s
@@ -5603,10 +5605,12 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
-    - PMOVES_NETWORKS=pmoves_app
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks:
+    - pmoves_api
+    - pmoves_app
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s

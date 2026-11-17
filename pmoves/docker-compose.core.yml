@@ -1029,7 +1029,7 @@ services:
     - HTTP_PROXY
     - HTTPS_PROXY
     - NO_PROXY
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     volumes:
     - supabase-vector-data:/var/lib/vector
     - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
@@ -1051,6 +1051,7 @@ services:
         condition: service_healthy
     networks:
     - pmoves_data
+    - pmoves_api  # 4090-Claw 2026-11-17: gateway tier (supabase-kong:8000) per DOCKER_NETWORK_HARDENING.md
 
   # ---------------------------------------------------------------------------
   # Supavisor — connection pooler (PgBouncer replacement)

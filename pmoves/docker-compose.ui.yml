@@ -138,10 +138,12 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
-    - PMOVES_NETWORKS=pmoves_app
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks:
+    - pmoves_api
+    - pmoves_app
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s
