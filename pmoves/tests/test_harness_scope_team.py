@@ -195,9 +195,10 @@ def test_desktop_roots_hold_no_zero_access_file(root):
 
     # Desktop follows links; a name check on a link says nothing about its target.
     # Fail closed on any link under a root rather than resolving and re-checking.
+    # Nothing is pruned: Desktop serves every subfolder, .git and node_modules included,
+    # so a skip list here would also skip the evidence.
     hits, links = [], []
     for dirpath, dirnames, filenames in os.walk(REPO_ROOT / root):
-        dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules")]
         for name in dirnames + filenames:
             if Path(dirpath, name).is_symlink():
                 links.append(Path(dirpath, name).relative_to(REPO_ROOT).as_posix())
