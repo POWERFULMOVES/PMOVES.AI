@@ -141,3 +141,17 @@ upstream_version: "v1.14"  # optional, auto-detects if empty
 | `Dockerfile.multiarch` | `AGENT_ZERO_UPSTREAM_VERSION` marker — comparable version pin when the ref is a rolling branch |
 | `upstream-constraints.txt` | Transitive dep pins for Stage 1 install |
 | `Dockerfile.multiarch` | `AGENT_ZERO_REF` ARG (bumped by workflow) |
+
+---
+
+## Launcher instances and provenance
+
+Measured 2026-11-18 on node 5090. Detail: [`AGENT_ZERO_API.md` § Launcher instances and provenance](../../docs/operations/AGENT_ZERO_API.md#launcher-instances-and-provenance).
+
+- **Two shapes.** This compose service (`pmoves-agent-zero-1`, usr dir `pmoves/data/agent-zero/usr`) and Agent Zero Launcher instances (`a0-inst-<name>`, usr dir `~/agent-zero/<instance>/usr`). Config written into the repo's usr dir reaches only the compose service.
+- **Launcher is upstream.** The installed Launcher is `agent0ai/a0-launcher` v1.9; all three 5090 instances run `agent0ai/agent-zero:latest` (v2.14), not the GHCR `pmoves-agent-zero` image.
+- **Fork never shipped.** `POWERFULMOVES/PMOVES-a0-launcher` has three merged PRs but no tags or releases, and its publish block still points at `agent0ai`.
+- **Overrides are env vars.** `A0_BACKEND_IMAGE_REPO`, `A0_LAUNCHER_GITHUB_REPO`, `A0_LAUNCHER_LOCAL_REPO` + `A0_LAUNCHER_USE_LOCAL_CONTENT` are read at Electron start; a Start-menu launch never sees them.
+- **Presets.** `make -C pmoves a0-model-sync-check` reports DRIFT on 2026-11-18. Do not point `OUT=` at a Launcher instance until the registry path is healthy; it would overwrite that instance's presets.
+- **Container-local fixes vanish on image replacement.** The DARKXSIDE `signal_bridge` `autostart=false` edit lives only in that container.
+- **Startup gap.** Chat loading blocks uvicorn for 6-8 minutes on a heavy instance; restarting resets the clock.

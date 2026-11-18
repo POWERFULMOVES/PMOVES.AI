@@ -191,6 +191,74 @@ via python-jose (`server.py:72-90`). Gated by `A2A_DISCOVERY_PUBLIC` and
 `A2A_TASKS_PUBLIC` — both default `false` in compose, so auth is required
 unless explicitly opened.
 
+## Launcher instances and provenance
+
+Measured 2026-11-18 on node 5090. Everything above describes the compose service; most
+Agent Zero instances an operator touches on a desktop node are something else.
+
+| Shape | Container | Image | usr dir |
+|---|---|---|---|
+| Compose service | `pmoves-agent-zero-1` | built from `pmoves/services/agent-zero/Dockerfile` | `pmoves/data/agent-zero/usr` (bind mount) |
+| Agent Zero Launcher instance | `a0-inst-<name>` | `agent0ai/agent-zero:latest` (upstream v2.14) on all three 5090 instances | `~/agent-zero/<instance>/usr` (one per instance) |
+
+**Config written into the repo's `pmoves/data/agent-zero/usr` reaches only the compose
+service. Launcher instances never receive it.**
+
+**Which Launcher is installed.** The Electron app (`a0-launcher`) on 5090 is the upstream
+`agent0ai/a0-launcher` build, v1.9; its `resources/app-update.yml` names owner `agent0ai`.
+It self-updated from 1.8.0 to 1.9 on 2026-10-21 after an operator-accepted prompt
+(electron-updater, `autoDownload=false`). Upstream v1.10 shipped 2026-11-17 and changes
+Host-access defaults for new instances.
+
+**The PMOVES fork has never shipped.** `POWERFULMOVES/PMOVES-a0-launcher` carries three
+merged PRs on top of upstream v1.9: #1 enforces `AUTH_LOGIN`/`AUTH_PASSWORD` pairing at
+instance creation, #2 adds a registry-qualified backend image repo override, #3 makes the
+digest endpoints registry-aware. The fork has no tags and no releases, so its executables
+workflow (fires on a `v*` tag) has never run, and its `package.json` publish block still
+points at `agent0ai`. There has never been a fork installer to download, and a fork build
+would offer to update itself back to upstream until the publish owner changes.
+
+**Fork overrides are environment variables, not Launcher settings.** The Electron shell
+reads them at process start. `docker_manager/state.json` has no image field, and a
+Start-menu launch never sees these variables.
+
+| Variable | Effect |
+|---|---|
+| `A0_BACKEND_IMAGE_REPO` | Backend image repo; accepts registry-qualified, e.g. `ghcr.io/powerfulmoves/pmoves-agent-zero` |
+| `A0_LAUNCHER_GITHUB_REPO` | Release / content source |
+| `A0_LAUNCHER_LOCAL_REPO` + `A0_LAUNCHER_USE_LOCAL_CONTENT` | Local content |
+
+GHCR `ghcr.io/powerfulmoves/pmoves-agent-zero` publishes `latest` / `pmoves-latest`
+(2026-11-06) plus `candidate-*` tags. No 5090 Launcher instance runs it today.
+
+**Model presets.** `make -C pmoves a0-model-sync` / `a0-model-sync-check` generate / check
+`pmoves/data/agent-zero/usr/plugins/_model_config/presets.yaml` from the model registry and
+accept `INSTANCE=` and `OUT=` to target another usr dir. On 2026-11-18 the check reports
+DRIFT and the generator fell back to template rows (one preset, `TensorZero`); the committed
+file has 3 presets and the DARKXSIDE Launcher instance holds 6 (Default, Efficiency, Power,
+PMOVES, Agentic, Voice). **WARN:** pointing `OUT=` at a Launcher instance overwrites its 6
+presets with the generator's output. Do that only after the registry path is healthy.
+
+**Container-local fixes that are not in any fork yet** (they vanish on image replacement):
+in the DARKXSIDE instance, `/etc/supervisor/conf.d/supervisord.conf` has
+`[program:signal_bridge]` set to `autostart=false` (2026-11-08). The upstream image's
+supervisor event listener kills PID 1 on ANY program FATAL, and the unconfigured Signal
+plugin bridge went FATAL, giving a 5-minute crash loop. Plugin toggles do not edit
+supervisord program blocks. The durable home is the `PMOVES-Agent-Zero` fork image, or a
+plugin that registers its supervisord program with `autostart=false`.
+
+**Startup gap.** Agent Zero loads every saved chat (blocking) before uvicorn listens. On
+DARKXSIDE (94 chats, 2,867 files, 262 MB over the Windows bind mount) the UI is unreachable
+for 6-8 minutes after every start, and the Launcher restart button resets that clock.
+Levers: archive heavy chats from the A0 UI; do not restart during startup; keep model
+weights out of the project tree (the Time Travel plugin's `git add -A` snapshots the whole
+project, and 2.7 GB of weights under `research/models` strand its index lock).
+
+**Docker Desktop restart vs container fault.** A Docker Desktop restart shows identical
+SIGTERM timestamps across unrelated containers plus fleet-wide "Up N minutes".
+`RestartCount` resets to 0 whenever the Launcher issues `docker start`, so read
+`docker logs -t` boundaries instead of trusting the counter.
+
 ## Drift detection
 
 Run periodically to catch shifts between this doc and live state:
