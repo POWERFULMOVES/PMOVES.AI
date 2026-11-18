@@ -6,6 +6,9 @@
 > `.claude/context/mcp-api.md` is **SUPERSEDED** — it documents six endpoints that were
 > never implemented and an `MCP_CLIENT_SECRET` Bearer scheme that authenticates nothing.
 >
+> The **Launcher instances and provenance** section is a separate measurement (2026-11-18);
+> it does not re-probe the routes above, whose dates stand as stated.
+>
 > Use this when driving Agent Zero from a CLI — e.g., from B850-CLAUDE (Knuckles) over Tailscale.
 
 ## Endpoint base + auth
@@ -200,9 +203,12 @@ Agent Zero instances an operator touches on a desktop node are something else.
 |---|---|---|---|
 | Compose service | `pmoves-agent-zero-1` | built from `pmoves/services/agent-zero/Dockerfile` | `pmoves/data/agent-zero/usr` (bind mount) |
 | Agent Zero Launcher instance | `a0-inst-<name>` | `agent0ai/agent-zero:latest` (upstream v2.14) on all three 5090 instances | `~/agent-zero/<instance>/usr` (one per instance) |
+| Instances compose service | `pmoves-agent-zero-darkxside-inst` (`pmoves/docker-compose.agent-zero-instances.yml`) | `agent0ai/agent-zero:latest` | the DARKXSIDE Launcher instance's usr dir, via `A0INST_USR_DIR` |
 
 **Config written into the repo's `pmoves/data/agent-zero/usr` reaches only the compose
-service. Launcher instances never receive it.**
+service. Launcher instances never receive it.** The third row registers the DARKXSIDE
+Launcher instance as a compose service on the SAME usr dir, so it reads exactly what that
+instance reads; `INSTANCE=darkxside-inst` targets that dir (below).
 
 **Which Launcher is installed.** The Electron app (`a0-launcher`) on 5090 is the upstream
 `agent0ai/a0-launcher` build, v1.9; its `resources/app-update.yml` names owner `agent0ai`.
@@ -211,18 +217,20 @@ It self-updated from 1.8.0 to 1.9 on 2026-10-21 after an operator-accepted promp
 Host-access defaults for new instances.
 
 **The PMOVES fork has never shipped.** `POWERFULMOVES/PMOVES-a0-launcher` carries three
-merged PRs on top of upstream v1.9: #1 enforces `AUTH_LOGIN`/`AUTH_PASSWORD` pairing at
-instance creation, #2 adds a registry-qualified backend image repo override, #3 makes the
+merged PRs on top of upstream v1.9: #1 enforces login/password pairing at instance
+creation, #2 adds a registry-qualified backend image repo override, #3 makes the
 digest endpoints registry-aware. The fork has no tags and no releases, so its executables
 workflow (fires on a `v*` tag) has never run, and its `package.json` publish block still
 points at `agent0ai`. There has never been a fork installer to download, and a fork build
 would offer to update itself back to upstream until the publish owner changes.
 
-**Fork overrides are environment variables, not Launcher settings.** The Electron shell
-reads them at process start. `docker_manager/state.json` has no image field, and a
-Start-menu launch never sees these variables.
+**Fork overrides are environment variables, not Launcher settings (fork build only).** A
+fork build's Electron shell reads them at process start; the installed upstream v1.9
+Launcher may ignore them. `docker_manager/state.json` has no image field. Variables set
+only in a shell session never reach a Start-menu launch, but user- or system-scope
+variables (`setx`, or System Properties) are inherited, so `setx` is the persistent route.
 
-| Variable | Effect |
+| Variable (fork build only) | Effect |
 |---|---|
 | `A0_BACKEND_IMAGE_REPO` | Backend image repo; accepts registry-qualified, e.g. `ghcr.io/powerfulmoves/pmoves-agent-zero` |
 | `A0_LAUNCHER_GITHUB_REPO` | Release / content source |
@@ -232,12 +240,33 @@ GHCR `ghcr.io/powerfulmoves/pmoves-agent-zero` publishes `latest` / `pmoves-late
 (2026-11-06) plus `candidate-*` tags. No 5090 Launcher instance runs it today.
 
 **Model presets.** `make -C pmoves a0-model-sync` / `a0-model-sync-check` generate / check
-`pmoves/data/agent-zero/usr/plugins/_model_config/presets.yaml` from the model registry and
-accept `INSTANCE=` and `OUT=` to target another usr dir. On 2026-11-18 the check reports
-DRIFT and the generator fell back to template rows (one preset, `TensorZero`); the committed
-file has 3 presets and the DARKXSIDE Launcher instance holds 6 (Default, Efficiency, Power,
-PMOVES, Agentic, Voice). **WARN:** pointing `OUT=` at a Launcher instance overwrites its 6
-presets with the generator's output. Do that only after the registry path is healthy.
+`pmoves/data/agent-zero/usr/plugins/_model_config/presets.yaml` from the model registry.
+`INSTANCE=` selects a registered usr dir (`INSTANCE=darkxside-inst` maps to
+`A0INST_USR_DIR`: `models_sync.py:401`, `pmoves/docs/MODEL_PRESET_LIFECYCLE.md:52`) and
+`OUT=` names an arbitrary target file.
+
+Observed 2026-11-18 on 5090, `make -C pmoves a0-model-sync-check`:
+
+| Observation | Value |
+|---|---|
+| Exit code | `1` |
+| Printed | "emitting Agent Zero presets from fallback template rows" |
+| Printed | "DRIFT: ... differs from registry output" |
+| JSON `presets` | `["TensorZero"]` |
+| JSON `chat_lane` | `TensorZero` -> `tensorzero::model_name::chat_zai_glm53` |
+
+The exit-code contract in `models_sync.py:841-861` says a template fallback should exit
+`2` (UNDECIDED), not `1`. Treat that discrepancy as a generator defect to file, not as doc
+truth. For comparison, the committed docked file has 3 presets and the DARKXSIDE Launcher
+instance holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
+
+**WARN: `OUT=` at a Launcher usr dir, or `INSTANCE=darkxside-inst`.** A sync archives the
+live file to `pmoves/data/model-sync/review/` first, replaces only generator-owned presets
+(Default, TensorZero, Registry, Fallback-N; for DARKXSIDE that is Default), and carries
+Efficiency, Power, PMOVES, Agentic and Voice over verbatim (`models_sync.py:408-409`,
+`:749-765`, `:895-910`). The real hazard is the new Default: it routes chat to the
+TensorZero gateway by its compose-network service name, which a Launcher instance outside
+`pmoves-net` may not resolve. Run it only after the registry path is healthy.
 
 **Container-local fixes that are not in any fork yet** (they vanish on image replacement):
 in the DARKXSIDE instance, `/etc/supervisor/conf.d/supervisord.conf` has
@@ -251,8 +280,9 @@ plugin that registers its supervisord program with `autostart=false`.
 DARKXSIDE (94 chats, 2,867 files, 262 MB over the Windows bind mount) the UI is unreachable
 for 6-8 minutes after every start, and the Launcher restart button resets that clock.
 Levers: archive heavy chats from the A0 UI; do not restart during startup; keep model
-weights out of the project tree (the Time Travel plugin's `git add -A` snapshots the whole
-project, and 2.7 GB of weights under `research/models` strand its index lock).
+weights out of the project tree (the Time Travel plugin's `git add -f -A` snapshots the
+whole project, and 2.7 GB of weights under `research/models` strand its index lock; the
+`-f` is why `.gitignore` cannot save the weights).
 
 **Docker Desktop restart vs container fault.** A Docker Desktop restart shows identical
 SIGTERM timestamps across unrelated containers plus fleet-wide "Up N minutes".
