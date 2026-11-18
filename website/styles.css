@@ -125,6 +125,7 @@ p  { margin: 0 0 1rem; color: var(--c-ink-dim); }
 }
 .site-nav a {
   color: var(--c-ink-dim); font-weight: 500; font-size: .95rem;
+  white-space: nowrap;
 }
 .site-nav a:hover, .site-nav a:focus-visible { color: var(--c-ink); }
 .nav-cta {
@@ -153,10 +154,15 @@ p  { margin: 0 0 1rem; color: var(--c-ink-dim); }
 .nav-toggle .bars::before { top: -6px; }
 .nav-toggle .bars::after  { top:  6px; }
 
-/* Mobile nav drawer */
+/* Mobile nav drawer.
+   `align-items: center` on .nav-row applies to this abspos child, which
+   shrink-wraps it to one row (~41px) even with inset bottom:0 — every link
+   past the first sits in an overflow:auto sliver. Pin the height explicitly. */
 body.nav-open .site-nav {
   display: flex;
-  position: fixed; inset: 62px 0 0 0;
+  position: fixed; inset: 62px 0 auto 0;
+  height: calc(100vh - 62px);
+  height: calc(100dvh - 62px);
   flex-direction: column; align-items: flex-start; gap: 0;
   background: var(--c-bg);
   padding: 1.25rem;
@@ -168,8 +174,18 @@ body.nav-open .site-nav a {
   border-bottom: 1px solid var(--c-border);
   font-size: 1.05rem;
 }
+/* CTA keeps its pill treatment inside the drawer instead of hugging the edge. */
+body.nav-open .site-nav a.nav-cta {
+  margin-top: .75rem;
+  padding: .7rem 1rem;
+  text-align: center;
+  border-bottom: 0;
+}
 
-@media (min-width: 860px) {
+/* Inline nav needs ~1090px of content width for 10 items; collapse to the
+   drawer below that so labels never wrap mid-phrase (measured: one line at
+   viewport 1100+, two lines at 1080). */
+@media (min-width: 1120px) {
   .nav-toggle { display: none; }
   .site-nav { display: flex; }
 }
@@ -418,8 +434,8 @@ body.nav-open .site-nav a {
    pointer-events: none keeps the gallery embeds display-only. */
 .gallery-item iframe {
   width: 100%;
-  height: 100%;
-  min-height: 300px;
+  height: auto;
+  min-height: 0;
   aspect-ratio: 16 / 9;
   border: none;
   border-radius: 8px;
