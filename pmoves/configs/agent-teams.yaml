@@ -218,6 +218,22 @@ teams:
     ci_runner: null
     compose_profiles: []
     agents: []
+  harness_scope:
+    name: Harness Scope & Provisioning
+    description: >-
+      Durable team that keeps every harness (Claude Code/Desktop, Hermes, A0,
+      crush, minimax, kimi, kilo, codex) scoped per its node identity -- the
+      identity holds the node, what it creates stays at max_subagent_scope --
+      and keeps skills/plugins/MCP rosters in parity. Platform-aware on every
+      node. See pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+    node_affinity:
+    - any
+    ci_runner: null
+    compose_profiles: []
+    agents:
+    - harness_scope_auditor
+    - harness_provisioner
+    - skills_plugin_curator
   life:
     name: Life Integration
     description: Health, wealth, and personal data integrations
