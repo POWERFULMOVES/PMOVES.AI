@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -92,6 +94,69 @@ def venv_python_path(venv_path: Path) -> Path:
     return venv_path / "bin" / "python"
 
 
+def _site_packages_dirs(venv_path: Path) -> list[Path]:
+    if os.name == "nt":
+        candidates = [venv_path / "Lib" / "site-packages"]
+    else:
+        candidates = sorted(venv_path.glob("lib/python*/site-packages"))
+    return [p for p in candidates if p.is_dir()]
+
+
+def broken_distributions(venv_path: Path) -> list[str]:
+    """Distributions whose dist-info has no RECORD: a half-finished uninstall.
+
+    An installer deletes a package's files, then its directories, then rewrites
+    the dist-info. When a directory refuses removal (on Windows, a READONLY
+    attribute -- OneDrive sets it on every synced directory) the uninstall stops
+    between those steps. What remains imports as an empty namespace package, so
+    an import probe passes, while every later install of that package fails for
+    want of the RECORD it uninstalls from. The dist-info is the only place the
+    damage is visible.
+    """
+    broken: list[str] = []
+    for site in _site_packages_dirs(venv_path):
+        for info in sorted(site.glob("*.dist-info")):
+            if not (info / "RECORD").is_file():
+                broken.append(info.name[: -len(".dist-info")])
+    return broken
+
+
+def clear_readonly(root: Path) -> int:
+    """Clear FILE_ATTRIBUTE_READONLY under `root`; return how many were set.
+
+    Windows refuses `rmdir` on a READONLY directory (WinError 5), and an
+    installer upgrading a package must remove the old package's directories.
+    No-op off Windows, where the attribute does not exist.
+    """
+    if os.name != "nt" or not root.exists():
+        return 0
+    cleared = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name in [*dirnames, *filenames]:
+            path = os.path.join(dirpath, name)
+            try:
+                if os.stat(path, follow_symlinks=False).st_file_attributes & stat.FILE_ATTRIBUTE_READONLY:
+                    os.chmod(path, stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)
+                    cleared += 1
+            except OSError:
+                continue
+    return cleared
+
+
+def quarantine_venv(venv_path: Path) -> Path:
+    """Move a damaged venv aside for inspection; never delete it here."""
+    target = venv_path.with_name(f"{venv_path.name}.broken-{time.strftime('%Y%m%dT%H%M%S')}")
+    try:
+        venv_path.rename(target)
+    except OSError as exc:
+        raise SystemExit(
+            f"ERROR: {venv_path} is damaged and could not be moved aside ({exc}).\n"
+            "       A process is probably running from it -- stop it and re-run\n"
+            "       `make -C pmoves env-bootstrap-lite`."
+        ) from exc
+    return target
+
+
 def resolve_pinned_interpreter(python_pin: str) -> str | None:
     """Find an interpreter matching `python_pin` (e.g. "3.11") without uv.
 
@@ -120,6 +185,16 @@ def ensure_venv(
     venv_path: Path, python_pin: str = "3.11", *, strict: bool = False
 ) -> tuple[str | None, Path]:
     uv_bin = shutil.which("uv")
+    broken = broken_distributions(venv_path) if venv_path.exists() else []
+    if broken:
+        # Self-heal: a half-uninstalled dist cannot be repaired in place (its
+        # RECORD is the uninstall manifest, and it is gone), so rebuild. The
+        # lite venv is small; keeping the old one costs disk, not correctness.
+        moved = quarantine_venv(venv_path)
+        print(
+            f"HEAL: {venv_path} had half-uninstalled distributions "
+            f"({', '.join(broken)}); moved to {moved} and rebuilding."
+        )
     if not venv_path.exists():
         if uv_bin:
             # Pin the interpreter: bare `uv venv` grabs uv's newest managed
@@ -257,6 +332,16 @@ def _precheck_only(venv_path: Path, req_files: list[Path]) -> int:
         )
         return 3
 
+    broken = broken_distributions(venv_path)
+    if broken:
+        print(
+            "precheck FAIL: lite venv has half-uninstalled distributions "
+            f"(dist-info without RECORD): {', '.join(broken)}\n"
+            "  remediation: make -C pmoves env-bootstrap-lite  (moves it aside and rebuilds)",
+            file=sys.stderr,
+        )
+        return 3
+
     missing: list[str] = []
     for req_file in req_files:
         for line in req_file.read_text(encoding="utf-8").splitlines():
@@ -311,6 +396,11 @@ def main() -> int:
     print(f"uv available: {'yes' if uv_bin else 'no'}")
 
     if not args.skip_install:
+        # Prevention, before the installer needs to remove anything. Logged
+        # because a non-zero count means something keeps re-applying it.
+        cleared = clear_readonly(venv_path)
+        if cleared:
+            print(f"Cleared READONLY on {cleared} venv entries so upgrades can remove them.")
         install_requirements(uv_bin=uv_bin, venv_python=venv_python, requirement_files=req_files)
 
     activation_hint(venv_path)
