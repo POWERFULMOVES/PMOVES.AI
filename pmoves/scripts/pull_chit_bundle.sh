@@ -18,6 +18,9 @@
 #   - consumer (this script): resolve the newest SUCCESSFUL run, pick this
 #     node's bundle (PMOVES_NODE, default 5090; falls back to any
 #     chit-bundle-*), validate the payload, install 0600 at CHIT_EXPORT_PATH.
+#     When no unexpired bundle exists, it DISPATCHES the producer run itself,
+#     waits for it, and installs that run's bundle (PMOVES_BUNDLE_NO_DISPATCH=1
+#     restores the old fail-with-a-hint behaviour).
 #
 # History: originally shipped with PR #2214 but pmoves/scripts/secrets/ is
 # gitignored, so the file never landed — the make target dangled until this
@@ -76,20 +79,73 @@ if [ -s "$GH_ERR" ] && { [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; }; then
   exit 1
 fi
 command rm -- "$GH_ERR"
+
+# Newest unexpired chit-bundle-* of a run, this node's own preferred.
+artifact_of() {
+  gh api "repos/$REPO/actions/runs/$1/artifacts" \
+    --jq "[.artifacts[]|select(.name|startswith(\"chit-bundle-\"))|select(.expired|not)]
+          | (map(select(.name|startswith(\"chit-bundle-$NODE-\"))) + .) | .[0].name // empty"
+}
+
+# SELF-DISPATCH. Bundles live one day (deliberately: the artifact holds every
+# prod secret), so on most days a consumer finds nothing to pull. Any node
+# whose gh is authed may DISPATCH the producer run -- the producers themselves
+# stay the Linux runners in $PRODUCERS. Opt out with PMOVES_BUNDLE_NO_DISPATCH=1.
+DISPATCH_TIMEOUT="${PMOVES_BUNDLE_DISPATCH_TIMEOUT:-900}"
+self_dispatch() {
+  local why="$1" before new="" waited=0
+  if [ "${PMOVES_BUNDLE_NO_DISPATCH:-0}" = "1" ]; then
+    echo "❌ $why"
+    echo "   Self-dispatch is off (PMOVES_BUNDLE_NO_DISPATCH=1). Dispatch a fresh run on the Linux producers ($PRODUCERS):"
+    echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
+    exit 1
+  fi
+  echo "→ $why"
+  echo "→ Self-dispatching $WORKFLOW on the Linux producers ($PRODUCERS)"
+  # Remember the runs that already exist, so the new one is found by identity
+  # rather than by clock (this node's clock and GitHub's need not agree).
+  before=",$(gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
+    --json databaseId --jq '[.[].databaseId|tostring]|join(",")'),"
+  if ! gh workflow run "$WORKFLOW" --repo "$REPO" --ref main -f "targets=$PRODUCERS"; then
+    echo "❌ Dispatch refused (gh needs a token with workflow/actions:write scope). Run by hand:"
+    echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
+    exit 1
+  fi
+  while [ "$waited" -lt 60 ]; do
+    for id in $(gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
+        --json databaseId --jq '.[].databaseId'); do
+      case "$before" in *",$id,"*) ;; *) new="$id"; break ;; esac
+    done
+    [ -n "$new" ] && break
+    sleep 5; waited=$((waited + 5))
+  done
+  [ -n "$new" ] || { echo "❌ Dispatched, but the new run did not appear within 60s."; exit 1; }
+  echo "→ Waiting for run $new (timeout ${DISPATCH_TIMEOUT}s)"
+  # `timeout` is absent on stock macOS, whose bash 3.2 also rejects an empty
+  # "${arr[@]}" under set -u -- so branch rather than build an argv prefix.
+  local watched=0
+  if command -v timeout >/dev/null; then
+    timeout "$DISPATCH_TIMEOUT" gh run watch "$new" --repo "$REPO" --exit-status --interval 10 >/dev/null || watched=$?
+  else
+    gh run watch "$new" --repo "$REPO" --exit-status --interval 10 >/dev/null || watched=$?
+  fi
+  if [ "$watched" -ne 0 ]; then
+    echo "❌ Run $new did not succeed in time. Is a producer runner ($PRODUCERS) online?"
+    echo "   gh run view $new --repo $REPO"
+    exit 1
+  fi
+  RUN_ID="$new"
+}
+
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-  echo "❌ No successful $WORKFLOW run found. Dispatch one on the Linux producers ($PRODUCERS):"
-  echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
-  exit 1
+  self_dispatch "No successful $WORKFLOW run found."
 fi
 
-ARTIFACT="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
-  --jq "[.artifacts[]|select(.name|startswith(\"chit-bundle-\"))|select(.expired|not)]
-        | (map(select(.name|startswith(\"chit-bundle-$NODE-\"))) + .) | .[0].name // empty")"
+ARTIFACT="$(artifact_of "$RUN_ID")"
 if [ -z "$ARTIFACT" ]; then
-  echo "❌ Run $RUN_ID has no unexpired chit-bundle-* artifact (retention is 1 day)."
-  echo "   Dispatch a fresh run on the Linux producers ($PRODUCERS):"
-  echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
-  exit 1
+  self_dispatch "Run $RUN_ID has no unexpired chit-bundle-* artifact (retention is 1 day)."
+  ARTIFACT="$(artifact_of "$RUN_ID")"
+  [ -n "$ARTIFACT" ] || { echo "❌ Run $RUN_ID succeeded but uploaded no chit-bundle-* artifact."; exit 1; }
 fi
 
 TMP="$(mktemp -d)"
