@@ -93,6 +93,7 @@ delegation:
   model: zai-coding
   provider: zai
   max_iterations: 30
+  subagent_auto_approve: false
 
 # === COMPRESSION ===
 compression:
@@ -115,7 +116,7 @@ security:
   tirith_enabled: true
   tirith_path: tirith
   tirith_timeout: 5
-  tirith_fail_open: true
+  tirith_fail_open: false  # fail closed; no-op on Windows (tirith has no Windows build)
 
 # === PRIVACY (HIPAA-aware — PII redaction for patient data) ===
 privacy:
