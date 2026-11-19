@@ -104,12 +104,19 @@ whitespace-trimmed, and rejects `tbd/todo/none/n/a/-` alongside
 `self/host`. The shipped placeholder is now safe.
 
 **General principle:** config values that mean "not yet wired" must
-be filtered out at the boundary that consumes them, with a clear
-allow-list of "actionable" values. The literal-string-equality
-guard is a foot-gun: every new placeholder the operator adds
-(`hold`, `pending`, `TBA`, `???`) requires editing the guard. A
+be filtered out at the boundary that consumes them. The shipped guard
+is a **deny-list** of non-actionable values, not an allow-list of
+actionable ones: `_is_actionable_node` returns true for every node
+name that is NOT in the set, so a placeholder is inert only once it
+has been added to it. The literal-string-equality guard is a
+foot-gun: every new placeholder the operator adds
+(`hold`, `pending`, `TBA`, `???`) requires editing the guard, and
+until it is edited the guard treats it as a real machine -- the KVM
+controller is asked to switch to a machine named `hold`. A
 case-insensitive set lookup against a documented set of
-non-actionable values is forward-compat.
+non-actionable values is easy to extend -- one entry in the set --
+but it is a deny-list, not a look-ahead: the set has to be kept in
+step with the configs it guards.
 
 The tests `test_placeholder_matching_is_case_insensitive` and
 `test_placeholder_node_does_not_request_kvm_focus` cover this: the
@@ -196,7 +203,7 @@ contract-correctness / defense-in-depth) applies here:
 - **#4** = semantic-naming drift (alias vs target — the
   distinction only shows up at the wire boundary)
 - **#5** = defense-in-depth again (the literal-tuple guard
-  needed a forward-compat set lookup)
+  needed a deny-list set lookup)
 
 The operator's review was the cheapest P1 catch possible: a
 real review by a peer that knows the contract from the other

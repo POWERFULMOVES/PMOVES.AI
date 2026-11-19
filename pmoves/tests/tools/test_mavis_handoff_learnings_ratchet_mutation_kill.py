@@ -10,8 +10,8 @@ the PRE-operator-review design: it said KVM rode ``pmoves.bpm.phase.v1`` with a
 derivation only vaguely. The orchestrator on ``main`` implements the
 POST-review design. A gate that reads the document can only be load-bearing if
 a plausible edit to the document makes it fail -- so this harness puts the
-stale wording back, six ways, and requires the NAMED gate test to die each
-time.
+stale wording back, eight ways, and requires the NAMED gate test to die
+each time.
 
 THE KILL CONTRACT: GREEN, RED, GREEN
 ------------------------------------
@@ -48,6 +48,20 @@ unrelated environment failure also satisfies. The harness reads pytest's own
 short test summary and requires the NAMED test to be IN it. A harness may
 only claim a kill it can point at.
 
+THE KILL SIGNAL IS ALSO A MESSAGE, FOR THE PLACEHOLDER MUTATIONS
+------------------------------------------------------------------
+A test can die for the WRONG reason, so the two mutations that put the
+placeholder guard back to being described as an allow-list (M7 and M8) do not
+settle for "the named test died". They require that death to carry the
+EXPECTED assertion message, which is a property of the MUTATION: M7 must
+die on the Lesson 5 claim ("no longer calls the placeholder guard a
+deny-list") and M8 on the document-wide one ("still calls the placeholder
+guard forward-compatible"). Two mutations, one named test, two different
+messages -- which is exactly why the expected message belongs to the
+mutation and not to the test. The message is matched against pytest's own
+output with whitespace normalised, because pytest WRAPS the assertion
+message to the terminal width.
+
 A MUTATION MUST REVERT THE DOCUMENT, NEVER THE GATE
 ----------------------------------------------------
 Each mutation below changes the LEARNINGS FILE -- the document the gate reads
@@ -56,12 +70,12 @@ gate would prove nothing about the document it claims to check.
 
 THE MUTATIONS
 -------------
-M1  the KVM subject the document names is changed          -> kills
+M1  the KVM subject the document names is changed           -> kills
     test_the_learnings_names_the_kvm_subject_the_orchestrator_publishes_on
-M2  the phase-discriminator design is selected again         -> kills
+M2  the phase-discriminator design is selected again        -> kills
     test_the_learnings_does_not_pick_the_phase_discriminator_design
-M3  the known_targets derivation is put back to the vague    -> kills
-    wording                                               -> kills
+M3  the known_targets derivation is put back to the vague
+    wording                                                 -> kills
     test_the_learnings_agrees_with_the_orchestrator_on_how_known_targets_is_derived
 M4  the envelope's target_alias is put back to the alias    -> kills
     test_the_learnings_agrees_with_the_orchestrator_on_the_wire_target
@@ -69,6 +83,10 @@ M5  a rejected placeholder is dropped from the list         -> kills
     test_the_learnings_placeholder_set_matches_the_orchestrators_non_actionable_nodes
 M6  a named regression test that does not exist is named    -> kills
     test_the_learnings_named_tests_exist_in_the_repo
+M7  the placeholder guard is called an allow-list again     -> kills
+    test_the_learnings_describes_the_placeholder_guard_as_a_deny_list
+M8  the Lesson 8 summary calls the guard forward-compatible -> kills
+    test_the_learnings_describes_the_placeholder_guard_as_a_deny_list
 
 Run it directly to see the mutation kills in action:
 
@@ -82,6 +100,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -135,6 +154,12 @@ class Mutation:
     rationale: str
     target_file: Path
     test_file: Path
+    #: The assertion message the killed test must carry. Empty means "the
+    #: named test must die, and that is the whole contract" -- which is the
+    #: right contract for a mutation whose kill is unambiguous. It is NOT
+    #: empty for a mutation that could kill the named test for the wrong
+    #: reason: there, the message IS the evidence.
+    expected_message: str = ""
 
 
 MUTATIONS: list[Mutation] = [
@@ -298,6 +323,90 @@ MUTATIONS: list[Mutation] = [
         target_file=LEARNINGS,
         test_file=GATE,
     ),
+    # ------------------------------------------------------------------
+    # M7 -- the placeholder guard, described as an allow-list again
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M7_the_placeholder_guard_is_described_as_an_allow_list_again",
+        old=(
+            "**General principle:** config values that mean \"not yet wired\" must\n"
+            "be filtered out at the boundary that consumes them. The shipped guard\n"
+            "is a **deny-list** of non-actionable values, not an allow-list of\n"
+            "actionable ones: `_is_actionable_node` returns true for every node\n"
+            "name that is NOT in the set, so a placeholder is inert only once it\n"
+            "has been added to it. The literal-string-equality guard is a\n"
+            "foot-gun: every new placeholder the operator adds\n"
+            "(`hold`, `pending`, `TBA`, `???`) requires editing the guard, and\n"
+            "until it is edited the guard treats it as a real machine -- the KVM\n"
+            "controller is asked to switch to a machine named `hold`. A\n"
+            "case-insensitive set lookup against a documented set of\n"
+            "non-actionable values is easy to extend -- one entry in the set --\n"
+            "but it is a deny-list, not a look-ahead: the set has to be kept in\n"
+            "step with the configs it guards.\n"
+        ),
+        new=(
+            "**General principle:** config values that mean \"not yet wired\" must\n"
+            "be filtered out at the boundary that consumes them, with a clear\n"
+            "allow-list of \"actionable\" values. The literal-string-equality\n"
+            "guard is a foot-gun: every new placeholder the operator adds\n"
+            "(`hold`, `pending`, `TBA`, `???`) requires editing the guard. A\n"
+            "case-insensitive set lookup against a documented set of\n"
+            "non-actionable values is forward-compat.\n"
+        ),
+        rationale=(
+            "The direction of the guard is the claim this lane got wrong. "
+            "`_is_actionable_node` returns true for every node name that is "
+            "NOT in `_NON_ACTIONABLE_NODES`, so the set is a DENY-LIST: a "
+            "placeholder is actionable -- a real machine, worth a KVM "
+            "request -- until someone adds it to the set. Describing the "
+            "guard as an allow-list of actionable values, or as "
+            "forward-compatible, states the opposite of what the code does, "
+            "and a reader who believes it ships a config carrying `hold`. "
+            "This mutation puts the paragraph back exactly as it was, so the "
+            "kill has to be specific: the gate must die on the deny-list "
+            "claim, not on some unrelated wording."
+        ),
+        target_test=(
+            "test_the_learnings_describes_the_placeholder_guard_as_a_deny_list"
+        ),
+        target_file=LEARNINGS,
+        test_file=GATE,
+        expected_message=(
+            "the LEARNINGS no longer calls the placeholder guard a deny-list"
+        ),
+    ),
+    # ------------------------------------------------------------------
+    # M8 -- the Lesson 8 summary calls the guard forward-compatible again
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M8_the_lesson_8_summary_calls_the_guard_forward_compatible_again",
+        old=(
+            "- **#5** = defense-in-depth again (the literal-tuple guard\n"
+            "  needed a deny-list set lookup)\n"
+        ),
+        new=(
+            "- **#5** = defense-in-depth again (the literal-tuple guard\n"
+            "  needed a forward-compat set lookup)\n"
+        ),
+        rationale=(
+            "Lesson 8 summarises the lessons, so the SAME false claim can "
+            "survive there after the lesson itself was corrected -- a summary "
+            "is the sentence a reader skims, and it is the one that gets "
+            "copied into the next slice's notes. This mutation puts the "
+            "summary bullet back, and it kills through a DIFFERENT assertion "
+            "than M7: Lesson 5 still reads correctly, so the document-wide "
+            "claim is what dies. That is why the expected message is a "
+            "property of the MUTATION rather than of the test."
+        ),
+        target_test=(
+            "test_the_learnings_describes_the_placeholder_guard_as_a_deny_list"
+        ),
+        target_file=LEARNINGS,
+        test_file=GATE,
+        expected_message=(
+            "the LEARNINGS still calls the placeholder guard forward-compatible"
+        ),
+    ),
 ]
 
 
@@ -351,6 +460,23 @@ def _named_test_failed(proc: subprocess.CompletedProcess, test_name: str) -> boo
         for line in stream.splitlines():
             if line.startswith("FAILED ") and test_name in line:
                 return True
+    return False
+
+
+def _expected_message_seen(
+    proc: subprocess.CompletedProcess, expected: str
+) -> bool:
+    """True if pytest's output carries `expected` as the failure message.
+
+    pytest WRAPS the assertion message to the terminal width, so the text can
+    be broken across lines by the writer; both sides are therefore compared
+    with their whitespace runs collapsed to single spaces.
+    """
+    needle = re.sub(r"\s+", " ", expected).strip()
+    for stream in (proc.stdout, proc.stderr):
+        haystack = re.sub(r"\s+", " ", stream)
+        if needle in haystack:
+            return True
     return False
 
 
@@ -443,6 +569,68 @@ def test_every_mutation_anchor_is_present() -> None:
         assert mutation.target_test, mutation.name
 
 
+def _docstring_rows() -> list[tuple[str, str]]:
+    """The mutation table in THIS file's docstring, as (label, row) pairs.
+
+    The table is the harness's own header: it is what a reader consults to
+    see what the harness covers, so a malformed row is a real defect in a
+    file whose entire reason for existing is catching sloppy prose edits.
+    """
+    doc = __doc__ or ""
+    start = doc.index("THE MUTATIONS")
+    end = doc.index("Run it directly")
+    table = doc[start:end]
+
+    rows: list[tuple[str, str]] = []
+    label: str | None = None
+    buf: list[str] = []
+    for line in table.splitlines():
+        match = re.match(r"^(M\d+)\s", line)
+        if match:
+            if label is not None:
+                rows.append((label, "\n".join(buf)))
+            label = match.group(1)
+            buf = [line]
+        elif label is not None:
+            buf.append(line)
+    if label is not None:
+        rows.append((label, "\n".join(buf)))
+    return rows
+
+
+def test_the_mutation_table_in_this_docstring_is_well_formed() -> None:
+    """The harness's own header must not be sloppy.
+
+    THE DEFECT THIS GUARDS: the M3 row once read "put back to the vague    ->
+    kills" on one line and "wording                                               ->
+    kills" on the next, so the cell read as a duplicated kill marker with a
+    stray orphan. That is precisely the class of edit this harness exists to
+    catch, committed by the harness itself.
+
+    So the table is gated like the document it guards: every row carries
+    EXACTLY ONE kill marker, and every row label names a mutation that
+    actually exists in this file.
+    """
+    rows = _docstring_rows()
+    assert rows, "the docstring's mutation table could not be read"
+    assert len(rows) == len(MUTATIONS), (
+        f"the docstring's mutation table lists {len(rows)} rows but this file "
+        f"defines {len(MUTATIONS)} mutations"
+    )
+    for label, row in rows:
+        markers = row.count("-> kills")
+        assert markers == 1, (
+            f"the {label} row of the docstring's mutation table carries "
+            f"{markers} kill markers -- exactly one per row"
+        )
+        assert any(
+            mutation.name.startswith(f"{label}_") for mutation in MUTATIONS
+        ), (
+            f"the docstring's mutation table names {label}, which is not a "
+            "mutation in this file"
+        )
+
+
 @pytest.mark.parametrize("mutation", MUTATIONS, ids=lambda m: m.name)
 def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     """GREEN -> RED, with a byte-exact restore. GREEN is batched (see the
@@ -481,6 +669,13 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
                 f"{mutation.name}: pytest failed, but NOT the named test "
                 f"{mutation.target_test}\n{after.stdout[-4000:]}\n{after.stderr[-2000:]}"
             )
+            if mutation.expected_message:
+                assert _expected_message_seen(after, mutation.expected_message), (
+                    f"{mutation.name}: the named test died, but NOT with the "
+                    f"expected message {mutation.expected_message!r} -- so this "
+                    "is not the kill this mutation claims\n"
+                    f"{after.stdout[-4000:]}\n{after.stderr[-2000:]}"
+                )
         finally:
             # 3. restore -- byte-exact, line endings included
             _write_source(target, original, crlf)
@@ -517,6 +712,14 @@ def test_the_sources_are_intact_after_the_mutation_suite() -> None:
     )
     assert "rejects `tbd/todo/none/n/a/-` alongside" in text, (
         "the rejected-placeholder list is not intact after the mutation suite"
+    )
+    assert "deny-list" in text, (
+        "the corrected placeholder-guard wording is not intact after the "
+        "mutation suite"
+    )
+    assert 'allow-list of "actionable" values' not in text, (
+        "the stale allow-list wording is still in the LEARNINGS file after the "
+        "mutation suite"
     )
     assert "test_routing_for_returns_a_copy_not_a_reference" in text, (
         "the named regression test is not intact after the mutation suite"

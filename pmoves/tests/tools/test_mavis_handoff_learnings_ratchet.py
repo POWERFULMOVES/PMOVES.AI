@@ -33,6 +33,10 @@ expectations are never literals typed here:
 * the wire target comes from the LIVE routing block in ``example.cgp.yaml``;
 * the rejected-placeholder set comes from parsing
   ``_NON_ACTIONABLE_NODES`` out of the orchestrator source;
+* the DIRECTION of that guard is measured against the live
+  ``_is_actionable_node``: a placeholder that is NOT in the set is asked
+  whether it is actionable, so the document's "deny-list, not allow-list"
+  claim is checked against the code rather than against prose;
 * the test counts come from RUNNING ``pmoves/tools/tests/test_orchestrator.py``
   and reading pytest's own summary line.
 
@@ -185,6 +189,28 @@ def _claimed_non_actionable_nodes(doc: str) -> str:
 def _named_tests_in(doc: str) -> set[str]:
     """The test function names the LEARNINGS cites (backticked, code-shaped)."""
     return set(re.findall(r"`(test_[a-z0-9_]+)`", doc))
+
+
+def _section(doc: str, heading: str) -> str:
+    """The text of one ``## <heading>`` section, up to the next ``##``.
+
+    Section-scoped, because some claims are only true (or only false)
+    inside the lesson that makes them: a gate that scanned the whole file
+    would fire on an unrelated sentence.
+    """
+    lines = doc.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if line.startswith(f"## {heading}"):
+            start = index
+            break
+    assert start is not None, f"the LEARNINGS has no '## {heading}' section"
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("## "):
+            end = index
+            break
+    return "\n".join(lines[start:end])
 
 
 def _defined_test_names() -> set[str]:
@@ -464,6 +490,54 @@ def test_the_learnings_placeholder_set_matches_the_orchestrators_non_actionable_
         assert not Orchestrator._is_actionable_node(token), token
         assert not Orchestrator._is_actionable_node(token.upper()), token
         assert not Orchestrator._is_actionable_node(f"  {token}  "), token
+
+
+def test_the_learnings_describes_the_placeholder_guard_as_a_deny_list(
+    doc: str,
+) -> None:
+    """The doc must name the guard's DIRECTION -- and the direction is
+    MEASURED against the live code, not assumed.
+
+    ``_is_actionable_node`` returns true for every node name that is NOT in
+    ``_NON_ACTIONABLE_NODES``, so the set is a DENY-LIST: a placeholder is
+    actionable -- a real machine, worth a KVM request -- until someone adds
+    it to the set. A document that calls the guard an allow-list of
+    actionable values, or calls the set forward-compatible, states the
+    opposite of what the code does, and the reader who believes it ships a
+    config carrying ``hold`` and gets a focus request for a machine named
+    ``hold``.
+
+    The four probes below are the ones the doc itself names as the
+    placeholders an operator might add (``hold``, ``pending``, ``TBA``,
+    ``???``). They are asserted ACTIONABLE, because that is what the
+    shipped deny-list makes of them.
+    """
+    declared = _declared_non_actionable_nodes()
+    assert declared, (
+        "the orchestrator declares no non-actionable nodes -- the guard is no "
+        "longer the deny-list the LEARNINGS describes"
+    )
+    for fresh in ("hold", "pending", "tba", "???"):
+        assert Orchestrator._is_actionable_node(fresh), (
+            f"the orchestrator now REJECTS {fresh!r} -- the deny-list grew, so "
+            "the LEARNINGS' direction claim must be re-measured and updated in "
+            "this same change"
+        )
+
+    lesson5 = _section(doc, "Lesson 5")
+    assert "deny-list" in lesson5, (
+        "the LEARNINGS no longer calls the placeholder guard a deny-list -- "
+        "if the wording changed, update this gate in the same change"
+    )
+    assert "not an allow-list" in lesson5, (
+        "the LEARNINGS no longer says the guard is not an allow-list -- if the "
+        "wording changed, update this gate in the same change"
+    )
+    assert "forward-compat" not in _norm(doc), (
+        "the LEARNINGS still calls the placeholder guard forward-compatible -- "
+        "the guard is a deny-list, so a new placeholder is actionable until it "
+        "has been added to the set"
+    )
 
 
 # ── the test names the document cites ────────────────────────────────────────
