@@ -48,14 +48,46 @@ THE KILL SIGNAL IS A TEST NAME, NOT A MOOD
 The kill signal is NOT "pytest exited non-zero and the word 'failed' appeared
 somewhere in the output" -- a signal that a collection error, a timeout or an
 unrelated environment failure also satisfies. The harness reads pytest's own
-short test summary and requires the NAMED test to be IN it. A harness may
-only claim a kill it can point at.
+short test summary and requires the NAMED test to be in it, as a ``FAILED``
+line whose node id ENDS at that test's name. A harness may only claim a kill
+it can point at.
+
+WHY THE NODE-ID FORM, AND NOT JUST THE NAME
+--------------------------------------------
+A pytest COLLECTION ERROR prints ``ERROR <node id>``, and that line names
+the target test just as loudly as a failure does: when a future refactor
+renames an in-module helper the ratchet subprocess imports, the summary
+carries ``ERROR .../test_bootstrap_windows_host_quirks_ratchet.py::
+test_the_roster_table_matches_the_live_roster_and_the_live_gate``. A gate
+that failed to collect ANY test is not a gate that bit.
+
+The predicate therefore requires all three of:
+  * the line starts with ``FAILED `` -- pytest's own prefix for a failed
+    test, and NOT the ``ERROR `` prefix a collection error carries;
+  * the line carries the node-id form ``::<test name>`` -- so the name is
+    the test's own name and not a word that happens to appear in another
+    test's name or in a failure message;
+  * the node id ENDS at that name -- ``test_x_extra`` is a DIFFERENT test
+    from ``test_x``.
+
+``test_a_collection_error_naming_the_target_is_not_a_kill`` pins all three,
+and the copy-based kill below proves the predicate is load-bearing.
 
 A MUTATION MUST REVERT THE WIRING
 ----------------------------------
 Each mutation below changes the SECTION -- the document the gate reads -- and
 never re-types the gate's own expression. A mutation that edited the gate
 would prove nothing about the document it claims to check.
+
+TWO KILLS MUTATE A COPY OF THE GATE INSTEAD
+--------------------------------------------
+Two of the defects this harness covers live in the GATE, not in the
+document: the kill predicate above, and the brace-set extractor in the
+ratchet. A section mutation cannot prove either of them, so those two kills
+apply their mutation to a COPY of the gate file, run the COPY's OWN test
+function against the mutated copy, and require the copy's test to fail with
+the specific expected message. The tracked original is never written to, and
+its bytes are asserted afterwards.
 
 Run it directly to see the mutation kills in action:
 
@@ -69,6 +101,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -84,6 +117,8 @@ from pmoves.tests import mutation_backup
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 BOOTSTRAP = REPO_ROOT / ".claude" / "BOOTSTRAP.md"
+
+CLAUDE_DOC = REPO_ROOT / ".claude" / "CLAUDE.md"
 
 RATCHET = (
     REPO_ROOT
@@ -114,6 +149,7 @@ class Mutation:
     rationale: str
     target_file: Path
     test_file: Path
+    replace_all: bool = False
 
 
 MUTATIONS: list[Mutation] = [
@@ -197,6 +233,109 @@ MUTATIONS: list[Mutation] = [
         target_file=BOOTSTRAP,
         test_file=RATCHET,
     ),
+    # ------------------------------------------------------------------
+    # The gate described as fail-closed when it is fail-OPEN
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M5_the_section_calls_a_degraded_header_dropped",
+        old=(
+            "| normalizer RAN | the server is KEPT and DEGRADED, and the "
+            "literal `${...}` is left in the header | YES |"
+        ),
+        new=(
+            "| normalizer RAN | the server is DROPPED, and the literal "
+            "`${...}` is left in the header | YES |"
+        ),
+        target_test="test_the_fail_closed_claim_matches_the_live_gate",
+        rationale=(
+            "The retracted claim was that the gate stops a literal `${...}` "
+            "from leaking into an MCP header. It does not: with the "
+            "normalizer running and the credential unset, the live "
+            "normalizer KEEPS the server, records it DEGRADED, and leaves "
+            "the literal in the header -- so the placeholder reaches the "
+            "wire and the session starts. The ratchet derives the verdict "
+            "by CALLING the normalizer, so a section that says DROPPED dies."
+        ),
+        target_file=BOOTSTRAP,
+        test_file=RATCHET,
+    ),
+    # ------------------------------------------------------------------
+    # A roster server the section stopped covering
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M6_the_section_drops_a_roster_server_from_the_footnote",
+        old=(
+            "(`cloudflare`, `tailscale`, `huggingface`, `pmoves-cipher-local`, "
+            "`pmoves-minimax-mcp`, `composio-local`, `hostinger-mcp`)"
+        ),
+        new=(
+            "(`cloudflare`, `huggingface`, `pmoves-cipher-local`, "
+            "`pmoves-minimax-mcp`, `composio-local`, `hostinger-mcp`)"
+        ),
+        target_test=(
+            "test_every_required_roster_var_of_every_roster_server_is_covered"
+        ),
+        rationale=(
+            "`tailscale` requires TAILSCALE_API_KEY and TAILSCALE_TAILNET in "
+            "the live roster. The old gate only swept the servers the TABLE "
+            "names, so this server -- named in the footnote, outside the "
+            "table -- sat outside the gate entirely, and a bare reference "
+            "added to its entry would land in the same blind spot. The "
+            "ratchet now sweeps the FULL roster: every server that yields "
+            "findings must be in the table or in the footnote."
+        ),
+        target_file=BOOTSTRAP,
+        test_file=RATCHET,
+    ),
+    # ------------------------------------------------------------------
+    # A citation whose rule is not in the file it cites
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M7_the_section_cites_a_remedy_the_cited_file_does_not_have",
+        old=(
+            "`make -C pmoves fleet-status` is the hostname-only way to read "
+            "the fleet"
+        ),
+        new=(
+            "`make -C pmoves fleet-listing` is the hostname-only way to read "
+            "the fleet"
+        ),
+        target_test=(
+            "test_every_rule_the_section_cites_is_still_in_the_file_it_cites"
+        ),
+        rationale=(
+            "Fix path 1 sends the operator to "
+            "`.claude/hooks/damage-control/patterns.yaml` for the rule that "
+            "blocks Tailscale IPs, and to `make -C pmoves fleet-status` as "
+            "the hostname-only way to read the fleet. Proving the FILE "
+            "exists is not enough: rename the file, or delete the rule "
+            "inside it, and the always-loaded doc keeps sending operators to "
+            "a justification the tree no longer has. The ratchet "
+            "content-checks the citation."
+        ),
+        target_file=BOOTSTRAP,
+        test_file=RATCHET,
+    ),
+    # ------------------------------------------------------------------
+    # A size budget the always-loaded file does not meet
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M8_the_documented_size_budget_is_below_the_file",
+        old="≤18k chars",
+        new="≤8k chars",
+        target_test="test_the_bootstrap_stays_within_its_documented_budget",
+        rationale=(
+            "`.claude/CLAUDE.md` publishes the character budget for the "
+            "always-loaded `.claude/BOOTSTRAP.md`, and the ratchet reads "
+            "that budget FROM that doc so the published number and the gate "
+            "cannot drift apart. A budget the file does not meet must fail "
+            "the gate, not be ignored -- otherwise the number is fiction "
+            "again, which is exactly what it was before this lane."
+        ),
+        target_file=CLAUDE_DOC,
+        test_file=RATCHET,
+        replace_all=True,
+    ),
 ]
 
 
@@ -241,16 +380,37 @@ def _green_before() -> list[subprocess.CompletedProcess]:
 
 
 def _named_test_failed(proc: subprocess.CompletedProcess, test_name: str) -> bool:
-    """True only if pytest's own short summary names THIS test as failed.
+    """True only if pytest's own short summary names THIS test as FAILED.
 
     A collection error, a timeout, or an unrelated failure also makes pytest
     exit non-zero; none of those is a kill.
+
+    The line must carry the node-id form and END at the test's name:
+
+      * ``FAILED `` -- pytest's prefix for a failed test. A collection error
+        prints ``ERROR <node id>`` and names the target test just as
+        loudly, and a gate that collected nothing did not bite;
+      * ``::<test name>`` -- so the name is the test's own name in the
+        summary, not a word that happens to appear in another test's name
+        or in a failure message;
+      * nothing name-like after it -- ``test_x_extra`` is a DIFFERENT test
+        from ``test_x``.
     """
+    pattern = re.compile(
+        r"^FAILED\s+.*?::" + re.escape(test_name) + r"(?![0-9A-Za-z_])"
+    )
     for stream in (proc.stdout, proc.stderr):
         for line in stream.splitlines():
-            if line.startswith("FAILED ") and test_name in line:
+            if pattern.search(line):
                 return True
     return False
+
+
+def _fake_proc(text: str) -> subprocess.CompletedProcess:
+    """A CompletedProcess carrying pytest-shaped output, for the predicate."""
+    return subprocess.CompletedProcess(
+        args=["pytest"], returncode=1, stdout=text, stderr=""
+    )
 
 
 @contextlib.contextmanager
@@ -306,7 +466,10 @@ def _apply_mutation(mutation: Mutation, original: str) -> str:
             f"{mutation.target_file.name}. The source changed -- update the "
             f"mutation.\n--- expected ---\n{mutation.old}"
         )
-    mutated = original.replace(mutation.old, mutation.new, 1)
+    if mutation.replace_all:
+        mutated = original.replace(mutation.old, mutation.new)
+    else:
+        mutated = original.replace(mutation.old, mutation.new, 1)
     if mutated == original:
         raise AssertionError(f"mutation {mutation.name}: the rewrite was a no-op")
     return mutated
@@ -340,6 +503,205 @@ def test_every_mutation_anchor_is_present() -> None:
         )
         assert mutation.old != mutation.new, mutation.name
         assert mutation.target_test, mutation.name
+
+
+# ---------------------------------------------------------------------------
+# The kill signal itself
+# ---------------------------------------------------------------------------
+#: A pytest COLLECTION ERROR that names the target test. This is the shape a
+#: future refactor produces when it renames an in-module helper the ratchet
+#: subprocess imports: the summary carries the node id, and the harness would
+#: read the name out of it.
+_COLLECTION_ERROR_LINE = (
+    "ERROR pmoves/tests/tools/test_bootstrap_windows_host_quirks_ratchet.py"
+    "::test_the_roster_table_matches_the_live_roster_and_the_live_gate "
+    "- ImportError: cannot import name '_live_verdict'"
+)
+
+
+def test_a_collection_error_naming_the_target_is_not_a_kill() -> None:
+    """A collection ERROR naming the target test is NOT a kill.
+
+    Codex review finding 4630983480. pytest exits non-zero on a collection
+    error and prints the target test's node id in its summary, so a harness
+    that only asks "does the name appear?" records a kill that proves
+    nothing: a gate that collected NO test did not bite.
+
+    The kill signal has to be the `FAILED` prefix AND the node-id form AND
+    the node id must END at the test's name.
+    """
+    target = "test_the_roster_table_matches_the_live_roster_and_the_live_gate"
+
+    error = _fake_proc(
+        "=========================== short test summary info ============================\n"
+        + _COLLECTION_ERROR_LINE
+        + "\n"
+    )
+    assert not _named_test_failed(error, target), (
+        "a collection ERROR naming the target test was counted as a kill -- "
+        "a gate that collected nothing did not bite"
+    )
+
+    failed = _fake_proc(
+        "=========================== short test summary info ============================\n"
+        "FAILED pmoves/tests/tools/test_bootstrap_windows_host_quirks_ratchet.py"
+        "::"
+        + target
+        + " - AssertionError: the section says one thing\n"
+    )
+    assert _named_test_failed(failed, target), (
+        "a real FAILED line for the target test was not counted as a kill"
+    )
+
+    longer = _fake_proc(
+        "FAILED pmoves/tests/tools/other.py::" + target + "_extra - AssertionError\n"
+    )
+    assert not _named_test_failed(longer, target), (
+        "a FAILED line for a DIFFERENT test whose name merely CONTAINS the "
+        "target's name was counted as a kill"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Copy-based kills: the defects that live in the GATE, not in the document
+# ---------------------------------------------------------------------------
+def _copy_of(source: Path, tag: str) -> Path:
+    """A byte-identical copy of *source*, beside itself.
+
+    Beside itself because the copy's own ``Path(__file__).resolve().parents[3]``
+    must still resolve to the repository root, and because pytest can run
+    the copy exactly as it runs the original.
+
+    The name starts with an UNDERSCORE on purpose. ``python_files`` is
+    ``test_*.py``, so a ``test_``-named copy would be picked up by the NEXT
+    session's directory scan -- and it carries a MUTATION, so it would fail
+    tests that have nothing to do with it. A leading underscore is invisible
+    to a directory scan and still collectable when the path is passed
+    explicitly, which is exactly how it is run here.
+    """
+    return source.with_name(f"_mutant_{source.stem}__{tag}.py")
+
+
+def _run_copy_test(copy: Path, test_name: str) -> subprocess.CompletedProcess:
+    """Run ONE test function out of a copy of a gate file."""
+    node_id = f"{copy.relative_to(REPO_ROOT).as_posix()}::{test_name}"
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            node_id,
+            "-q",
+            "-p",
+            "no:warnings",
+            "-p",
+            "no:cacheprovider",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=_PYTEST_TIMEOUT_SECONDS,
+        cwd=str(REPO_ROOT),
+    )
+
+
+def test_the_kill_signal_rejects_a_collection_error() -> None:
+    """The kill predicate must be load-bearing, and this is the proof.
+
+    The mutation is applied to a COPY of this file: the predicate is
+    weakened to the loose form -- "any summary line that contains the test
+    name" -- which is the form that counts a collection ERROR as a kill. The
+    COPY's own ``test_a_collection_error_naming_the_target_is_not_a_kill``
+    must then FAIL, with the specific message. The tracked original is
+    never written to, and its bytes are asserted afterwards.
+    """
+    source = Path(__file__).resolve()
+    original_bytes = source.read_bytes()
+    copy = _copy_of(source, "predicate")
+    strict = "            if pattern.search(line):\n"
+    loose = "            if test_name in line:\n"
+    try:
+        text = original_bytes.decode("utf-8")
+        assert strict in text, (
+            "the kill predicate is not in the shape this kill mutates -- "
+            "update the mutation"
+        )
+        copy.write_bytes(text.replace(strict, loose, 1).encode("utf-8"))
+        try:
+            proc = _run_copy_test(
+                copy, "test_a_collection_error_naming_the_target_is_not_a_kill"
+            )
+            assert proc.returncode != 0, (
+                "the weakened kill predicate did NOT die -- the copy's own "
+                "test passed against a predicate that counts a collection "
+                "ERROR as a kill\n" + proc.stdout[-4000:]
+            )
+            assert (
+                "a collection ERROR naming the target test was counted as a kill"
+                in proc.stdout
+            ), (
+                "the weakened predicate died, but not with the expected "
+                "message\n" + proc.stdout[-4000:]
+            )
+        finally:
+            copy.unlink(missing_ok=True)
+    finally:
+        assert source.read_bytes() == original_bytes, (
+            "the tracked harness file was not restored byte-exactly"
+        )
+
+
+def test_the_brace_extraction_tolerates_both_spellings() -> None:
+    """The ratchet's brace-set extractor must be load-bearing, and this is
+    the proof.
+
+    The mutation is applied to a COPY of the ratchet: the brace-set pattern
+    is tightened back to the single spelling ``{sh,ps1,cmd}``, so the
+    equally valid ``{sh, ps1, cmd}`` extracts NOTHING. The COPY's own
+    ``test_the_launcher_extraction_tolerates_both_brace_spellings`` must
+    then FAIL, with the specific message. The tracked original is never
+    written to, and its bytes are asserted afterwards.
+    """
+    source = RATCHET
+    original_bytes = source.read_bytes()
+    copy = _copy_of(source, "brace")
+    tolerant = (
+        r'_LAUNCHER_SET = re.compile(r"([A-Za-z0-9\-]+)\.\{[ \t]*sh[ \t]*,'
+        r'[ \t]*ps1[ \t]*,[ \t]*cmd[ \t]*\}")'
+    )
+    intolerant = (
+        r'_LAUNCHER_SET = re.compile(r"([A-Za-z0-9\-]+)\.\{sh,ps1,cmd\}")'
+    )
+    try:
+        text = original_bytes.decode("utf-8")
+        assert tolerant in text, (
+            "the brace-set extractor is not in the shape this kill mutates -- "
+            "update the mutation"
+        )
+        copy.write_bytes(text.replace(tolerant, intolerant, 1).encode("utf-8"))
+        try:
+            proc = _run_copy_test(
+                copy, "test_the_launcher_extraction_tolerates_both_brace_spellings"
+            )
+            assert proc.returncode != 0, (
+                "the tightened brace extractor did NOT die -- the copy's own "
+                "test passed against an extractor that reads only one "
+                "spelling\n" + proc.stdout[-4000:]
+            )
+            assert (
+                "the spacey brace spelling extracts differently from the tight one"
+                in proc.stdout
+            ), (
+                "the tightened extractor died, but not with the expected "
+                "message\n" + proc.stdout[-4000:]
+            )
+        finally:
+            copy.unlink(missing_ok=True)
+    finally:
+        assert source.read_bytes() == original_bytes, (
+            "the tracked ratchet file was not restored byte-exactly"
+        )
 
 
 @pytest.mark.parametrize("mutation", MUTATIONS, ids=lambda m: m.name)
@@ -396,21 +758,19 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
 
 def test_the_sources_are_intact_after_the_mutation_suite() -> None:
     """GREEN AFTER: after every mutation has been restored, every target test
-    must pass again -- and the section must be byte-identical to the
+    must pass again -- and every mutated source must be byte-identical to the
     original."""
-    text = BOOTSTRAP.read_text(encoding="utf-8")
-    assert "deploy/provision/claude-pmovos.sh" not in text, (
-        "the mutated launcher path is still in the section"
-    )
-    assert "`--include-hand` flag" in text, (
-        "the generator flag is not intact after the mutation suite"
-    )
-    assert (
-        "| `hostinger` | `HOSTINGER_API_TOKEN` | `env` | DEGRADED |" in text
-    ), "the roster table row is not intact after the mutation suite"
-    assert "or `crush-pmoves.{sh,ps1,cmd}`" in text, (
-        "the hand-written launcher set is not intact after the mutation suite"
-    )
+    for mutation in MUTATIONS:
+        text = mutation.target_file.read_text(encoding="utf-8")
+        assert mutation.old in text, (
+            f"{mutation.name}: the anchor is not intact in "
+            f"{mutation.target_file.name} after the mutation suite"
+        )
+        if mutation.new not in mutation.old:
+            assert mutation.new not in text, (
+                f"{mutation.name}: the mutated text is still in "
+                f"{mutation.target_file.name} after the mutation suite"
+            )
 
     node_ids = [_node_id(mutation) for mutation in MUTATIONS]
     after = _run_pytest(node_ids)
