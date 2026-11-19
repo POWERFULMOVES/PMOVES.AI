@@ -57,7 +57,15 @@ fi
 """
 
 _STUB_SYSTEMCTL = """#!/usr/bin/env bash
-echo "$*" >> "$STUB_RESTART_LOG"
+echo "systemctl $*" >> "$STUB_RESTART_LOG"
+exit "${STUB_RESTART_RC:-0}"
+"""
+
+# Shadows the host's real `service` so the installer's last fallback can
+# never touch the runner's own sshd.
+_STUB_SERVICE = """#!/usr/bin/env bash
+echo "service $*" >> "$STUB_RESTART_LOG"
+exit "${STUB_RESTART_RC:-0}"
 """
 
 
@@ -65,12 +73,13 @@ echo "$*" >> "$STUB_RESTART_LOG"
 def env(tmp_path):
     etc = tmp_path / "etc-ssh"
     etc.mkdir()
-    (etc / "sshd_config").write_text("Include sshd_config.d/*.conf\n")
+    (etc / "sshd_config").write_text("Include sshd_config.d/*.conf\n", encoding="utf-8")
     stubs = tmp_path / "stubs"
     stubs.mkdir()
-    for name, body in (("sshd", _STUB_SSHD), ("systemctl", _STUB_SYSTEMCTL)):
+    for name, body in (("sshd", _STUB_SSHD), ("systemctl", _STUB_SYSTEMCTL),
+                       ("service", _STUB_SERVICE)):
         p = stubs / name
-        p.write_text(body, newline="\n")
+        p.write_text(body, newline="\n", encoding="utf-8")
         p.chmod(0o755)
     ca_dir = tmp_path / "ca"
     generate_ca(ca_dir)
@@ -108,7 +117,7 @@ def _state(etc: Path) -> dict[str, bytes]:
 
 
 def _conf(env) -> str:
-    return (env["etc"] / "sshd_config.d" / "90-pmoves-fleet-ca.conf").read_text()
+    return (env["etc"] / "sshd_config.d" / "90-pmoves-fleet-ca.conf").read_text(encoding="utf-8")
 
 
 def test_installs_ca_and_krl_and_restarts(env):
@@ -125,7 +134,7 @@ def test_bad_krl_rejected_before_any_write(env, krl_kind):
     before = _state(env["etc"])
     krl = env["tmp"] / "bogus.krl"
     if krl_kind == "not-a-krl":
-        krl.write_text("garbage\n")
+        krl.write_text("garbage\n", encoding="utf-8")
     r = _run(env, "--ca-pub", env["ca_pub"].as_posix(), "--krl", krl.as_posix())
     assert r.returncode == 2, r.stderr
     assert _state(env["etc"]) == before
@@ -155,6 +164,33 @@ def test_failed_rerun_restores_previous_install(env):
     assert _state(env["etc"]) == installed
     assert new_ca["public"].encode() not in (env["etc"] / "pmoves-fleet-ca.pub").read_bytes()
     assert not env["restart_log"].exists()
+
+
+def test_failed_first_install_leaves_no_drop_in_dir(env):
+    assert not (env["etc"] / "sshd_config.d").exists()
+    r = _run(env, "--ca-pub", env["ca_pub"].as_posix(), STUB_SSHD_T_RC="1")
+    assert r.returncode == 1
+    assert not (env["etc"] / "sshd_config.d").exists()
+
+
+def test_restart_failure_rolls_back(env):
+    """Every restart path fails: the previous state is restored, as the
+    header promises, and sshd is restarted again on the restored config."""
+    assert _run(env, "--ca-pub", env["ca_pub"].as_posix(),
+                "--krl", env["krl"].as_posix()).returncode == 0
+    installed = _state(env["etc"])
+    env["restart_log"].unlink()
+
+    generate_ca(env["tmp"] / "ca2")
+    r = _run(env, "--ca-pub", (env["tmp"] / "ca2" / "pmoves-fleet-ca_ed25519.pub").as_posix(),
+             STUB_RESTART_RC="1")
+    assert r.returncode == 1
+    assert "restart FAILED" in r.stderr
+    assert _state(env["etc"]) == installed
+    attempts = env["restart_log"].read_text(encoding="utf-8").splitlines()
+    # three paths for the change, then three again for the restored config
+    assert attempts == ["systemctl restart sshd", "systemctl restart ssh",
+                        "service ssh restart"] * 2
 
 
 def test_rerun_without_krl_keeps_revocation(env):

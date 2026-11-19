@@ -164,7 +164,10 @@ host_clis:
     check: "kilo --version"
   brv:
     purpose: "ByteRover CLI (byterover-cli, upstream of the Pmoves-cipher fork) — context-tree memory (brv-query/brv-curate). claude-pmoves warns when absent (pmoves/scripts/pm-brv-check.sh). Runbook: docs/TAC/TAC_CIPHER.md"
-    required: false
+    # REQUIRED (operator, 2026-11-03): cipher memory is a prerequisite of every
+    # harness session, so brv is installed before anything else is built on a
+    # node. `make -C pmoves cli-check` now exits 1 without it.
+    required: true
     install:
       # Keep linux identical to PM_BRV_INSTALL_HINT in pmoves/scripts/pm-brv-check.sh
       # (pinned by pmoves/tests/test_pm_brv_check.py). Requires node >= 20.
@@ -173,14 +176,15 @@ host_clis:
     check: "brv --version"
   node:
     purpose: "Node.js — web toolchains (jest/eslint run via package.json scripts, not global). Windows: nvm4w manages versions"
-    required: false
+    required: true  # brv needs node >= 20 + npm
+    min_major: 20   # enforced by cli-check (install_tools.check_host_clis)
     install:
       windows: "winget install CoreyButler.NVMforWindows  # then: nvm install lts"
       linux: "curl -fsSL https://fnm.vercel.app/install | bash  # or nvm"
     check: "node --version"
   npm:
     purpose: "npm — package management for JS toolchains; global installs discouraged, prefer package.json+npx"
-    required: false
+    required: true  # brv needs node >= 20 + npm
     install:
       windows: "ships with node (nvm4w)"
       linux: "ships with node"

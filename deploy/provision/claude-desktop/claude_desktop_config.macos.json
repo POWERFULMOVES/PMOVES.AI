@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "pmoves-filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem@2.3.0",
+        "<PMOVES_REPO>/pmoves/config",
+        "<PMOVES_REPO>/pmoves/docs/handoffs",
+        "<PMOVES_REPO>/pmoves/docs/AGENTS",
+        "<PMOVES_REPO>/.claude/agents"
+      ]
+    }
+  }
+}

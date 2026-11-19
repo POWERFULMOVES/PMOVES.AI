@@ -71,12 +71,18 @@ actually brought up together.
 
 It is deliberately NOT "every compose file in pmoves/". `pmoves/` holds
 dozens, and `pmoves/docker-compose.yt-cookies.yml` binds
-`${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:8115:8115` for `yt-cookie-refresher`
+`${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:${YT_COOKIE_REFRESHER_PORT:-8126}:8115`
+for `yt-cookie-refresher`
 -- a SECOND claimant of the canonical node-registry port. That overlay is
 not in `STACK_FILES` and the service is behind the `yt-cookies` profile, so
 it is not a default-stack collision. It IS a latent one and it is reported
 to the operator as a separate defect; a ratchet that is red on the day it
 lands teaches the fleet to ignore it.
+
+(That binding was `:8115:8115` until the carry-over-closure lane moved the
+host port to 8126 on 2026-11-01, which is why it is no longer a second
+claimant. The paragraph above records the SHAPE of the finding, not a live
+collision.)
 
 A WIDER SCOPE WOULD ALSO BE WRONG FOR A SECOND REASON: the same service
 appears in BOTH `docker-compose.yml` and an overlay (model-registry, wger,
@@ -741,8 +747,17 @@ def test_the_port_assertion_detects_a_reverted_port() -> None:
     )
 
     compose_text = COMPOSE_FILE.read_text(encoding="utf-8")
+    # MEASURED 2026-11-01: the binding is PARAMETERISED now --
+    # `"${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8115}:8115"` --
+    # so the old `":8115:8115"` anchor no longer exists and the mutation
+    # below rewrote NOTHING. A negative control that mutates nothing proves
+    # nothing, so the mutation now moves the HOST port's default: the
+    # middle segment is the host port, and the container port stays put.
+    #
+    # `:-<port>}:` is unique in this file (MEASURED), so the replacement
+    # touches this one binding and no other.
     reverted_compose = compose_text.replace(
-        f":{catalog_port}:{catalog_port}", f":8082:8082"
+        f":-{catalog_port}}}:", f":-8082}}:"
     )
     assert reverted_compose != compose_text, "the compose mutation was a no-op"
     violations = _compose_port_violations(
