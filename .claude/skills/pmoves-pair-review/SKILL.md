@@ -62,7 +62,7 @@ gh pr list --repo POWERFULMOVES/PMOVES.AI --state open --json number,title,autho
 # observations are independent of peer-CLAUDE angle; let them surface before your review
 ```
 
-### 2. Scan the diff for the four observation classes
+### 2. Scan the diff for the five observation classes
 
 | Class | Catch | Example |
 |-------|-------|---------|
@@ -70,6 +70,7 @@ gh pr list --repo POWERFULMOVES/PMOVES.AI --state open --json number,title,autho
 | **Semantic-naming drift** | Name/label suggests one meaning, code/spec uses another | `timestamp_iso` field on a payload whose canonical spec uses `timestamp` |
 | **Contract-correctness shortfall** | PR establishes contract but doesn't validate other side | New NATS subject without entry in `nats-subjects.md` |
 | **Defense-in-depth gap** | Correct primary mechanism, skipped cheap redundancy | `grep -F connected` works only because `disconnected` happens to start with `dis-` |
+| **Overlay paper-over** | PMOVES layer replaces a harness mechanism instead of connecting to it (`pmoves/docs/danger-room/anti-patterns.md` § `overlay-paper-over`) | launcher greps `kimi --help` to choose a code path; regen deletes a guard the harness shipped; operator home path committed in a settings template |
 
 ### 3. Write the review
 

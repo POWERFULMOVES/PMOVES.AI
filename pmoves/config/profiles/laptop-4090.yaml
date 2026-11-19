@@ -160,7 +160,7 @@ cross_node:
       hardware: "GB10 Grace-Blackwell 128GB unified — ARM64"
       services:
         - ollama:11434                 # Gemma 4 31B FP16, Nemotron-Super-49B
-        - nim:8200                     # NVIDIA NIM (optional)
+        - nim:8206                     # NVIDIA NIM (optional)
       access_via: [tailscale, nats]
       notes: "Primary 120B+ inference node. Route lfm2:24b and qwen3-coder-480b here at full precision."
 

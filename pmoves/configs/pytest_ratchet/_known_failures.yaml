@@ -203,7 +203,6 @@ known_failures:
   - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_handles_inline_json"
   - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources0-expected_urls0]"
   - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources1-expected_urls1]"
-  - "FAIL|services.mesh_exposure.tests.test_app|test_live_registry_loads_12_entries_from_slice4_curated"
   - "FAIL|services.nats_event_bus.tests.test_app|test_read_events_limit_is_respected"
   - "FAIL|services.nats_event_bus.tests.test_app|test_subscriber_disabled_when_nats_url_empty"
   - "FAIL|tests.a2ui.test_bridge.TestMetricsEndpoint|test_metrics_returns_prometheus_format"
