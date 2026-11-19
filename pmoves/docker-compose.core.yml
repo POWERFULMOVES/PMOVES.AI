@@ -1926,6 +1926,9 @@ services:
   container-agent:
     build: ./services/container-agent
     container_name: pmoves-container-agent
+    # Opt-in: host port 8111 is also gateway-agent's (profiles: [agents]).
+    # Enable with --profile container-agent; never together with agents.
+    profiles: ["container-agent"]
     restart: unless-stopped
     env_file:
     - env.shared

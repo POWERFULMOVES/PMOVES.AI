@@ -927,6 +927,14 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+  # ---------------------------------------------------------------------------
+  # Container Agent (CA) - per-node Docker networking diagnostics sidecar.
+  # 4090-Claw 2026-11-17: probe targets are env-driven so one image serves every
+  # node; the previous revision hardcoded the 5090/z890 layout in source.
+  # Endpoints: /healthz /config /diagnostic /metrics /analyze
+  # /analyze uses Ollama Cloud when OLLAMA_CLOUD_BASE_URL + OLLAMA_CLOUD_API_KEY
+  # are set, and returns 503 with an explicit reason otherwise.
+  # ---------------------------------------------------------------------------
   github-runner-ctl:
     build: ./services/github-runner-ctl
     restart: unless-stopped

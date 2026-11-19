@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import os
 import platform
 import socket
@@ -292,11 +293,15 @@ async def analyze_report(report: Dict[str, Any]) -> Dict[str, Any]:
         "model": CA_ANALYZE_MODEL,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": json.dumps(report, separators=(",", ":"))},
+            {"role": "user", "content": json.dumps(_redact(report), separators=(",", ":"))},
         ],
         "stream": False,
     }
-    url = f"{OLLAMA_CLOUD_BASE_URL}/api/chat"
+    # The documented base (https://ollama.com/v1) is OpenAI-compatible; a bare
+    # host (https://ollama.com) speaks the native /api/chat contract.
+    openai_compat = OLLAMA_CLOUD_BASE_URL.endswith("/v1")
+    url = (f"{OLLAMA_CLOUD_BASE_URL}/chat/completions" if openai_compat
+           else f"{OLLAMA_CLOUD_BASE_URL}/api/chat")
     headers = {"Authorization": f"Bearer {OLLAMA_CLOUD_API_KEY}",
                "Content-Type": "application/json"}
     _metrics["analyze_total"] += 1
@@ -310,12 +315,33 @@ async def analyze_report(report: Dict[str, Any]) -> Dict[str, Any]:
                             "reason": f"ollama cloud returned {resp.status}",
                             "body": body[:400]}
                 data = json.loads(body)
-        message = (data.get("message") or {}).get("content", "")
+        if openai_compat:
+            choice = (data.get("choices") or [{}])[0]
+            message = (choice.get("message") or {}).get("content", "")
+        else:
+            message = (data.get("message") or {}).get("content", "")
         return {"ok": True, "model": CA_ANALYZE_MODEL, "analysis": message.strip(),
                 "raw_meta": {k: data.get(k) for k in ("done", "eval_count", "prompt_eval_count")}}
     except Exception as e:
         _metrics["analyze_errors_total"] += 1
         return {"ok": False, "reason": f"{type(e).__name__}: {e}"}
+
+
+_USERINFO_RE = re.compile(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@")
+
+
+def _redact(obj):
+    """Strip URL userinfo (user:password@) from every string in a report.
+
+    The diagnostic report carries NATS_URL verbatim; /analyze ships the report
+    to an external model, so credentials must never ride along."""
+    if isinstance(obj, str):
+        return _USERINFO_RE.sub(r"\g<scheme>***@", obj)
+    if isinstance(obj, dict):
+        return {k: _redact(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_redact(v) for v in obj]
+    return obj
 
 
 # ── HTTP handlers ───────────────────────────────────────────────────────────

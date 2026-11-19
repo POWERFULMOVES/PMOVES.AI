@@ -207,8 +207,9 @@ known_collisions:
     - docker-compose.vps.override.yml
     - docker-compose.yml
     - docker-compose.z890.yml
-    reason: 'container-agent (docker-compose.z890.yml) and gateway-agent (profiles: [agents]). MEASURED:
-      no Makefile recipe composes the z890 overlay with the agents stack.'
+    reason: 'container-agent (docker-compose.z890.yml; docker-compose.yml under profiles: [container-agent])
+      and gateway-agent (profiles: [agents]). Mutually exclusive by profile. MEASURED: no Makefile recipe
+      composes the z890 overlay with the agents stack.'
     services:
     - container-agent
     - gateway-agent
