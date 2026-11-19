@@ -2,8 +2,8 @@
   "version": 1,
   "note": "Canonical inventory of PMOVES MCP servers. Used by pmoves/tools/mcp_config_generator.py to produce client-native config snippets for Claude, Kimi, KiloCode, Hermes, and Crush. Server entries support an optional 'disabled: true' field to mark servers that should be emitted as disabled in generated configs, an optional 'disabled_clients' list that emits the entry disabled for the named clients only, an optional 'client_args' map that replaces 'args' for one client, and an optional 'endpoint_pinned: true' field meaning the entry's 'endpoint' is what the entry IS rather than a default the caller's --endpoint may override (used by local/fleet sibling pairs that must both be emitted).",
   "defaults": {
-    "cipher_local_url": "http://localhost:8105/mcp/sse",
-    "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
+    "cipher_local_url": "http://localhost:8105/mcp",
+    "cipher_fleet_url": "http://${TS_Z890}:8105/mcp",
     "agent_zero_local_url": "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "agent_zero_fleet_url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "docker_gateway_port": 8090,
@@ -19,7 +19,7 @@
         {
           "key": "pmoves-cipher",
           "description": "Agent memory (Neo4j knowledge graph)",
-          "transport": "sse",
+          "transport": "http",
           "endpoint": "fleet",
           "endpoint_prefix": "cipher",
           "headers": {
@@ -29,7 +29,7 @@
         {
           "key": "pmoves-cipher-local",
           "description": "Local agent memory on this node (cipher is published on loopback, so the fleet URL is unreachable cross-node)",
-          "transport": "sse",
+          "transport": "http",
           "endpoint": "local",
           "endpoint_pinned": true,
           "endpoint_prefix": "cipher",
@@ -177,6 +177,21 @@
             "minimax"
           ],
           "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush + minimax (the 4090 control-plane coding agents + the Mavis desktop client; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
+        },
+        {
+          "key": "composio-local",
+          "description": "Composio MCP fleet proxy on this node (supergateway 4.2.0 re-serving Composio Connect, loopback :8190) - same 7 COMPOSIO_* meta-tools as `composio`, but Composio auth is the proxy's ck_ consumer key, so headless clients work",
+          "transport": "http",
+          "endpoint": "local",
+          "endpoint_pinned": true,
+          "url": "http://127.0.0.1:8190/composio/mcp",
+          "headers": {
+            "Authorization": "Bearer ${COMPOSIO_MCP_GATEWAY_KEY}"
+          },
+          "clients": [
+            "claude"
+          ],
+          "_note": "Added 2026-10-21 (feat/composio-mcp-selfhost). Kit: deploy/kvm2/composio-mcp/, bring-up `make -C pmoves up-composio-mcp`, proof `make -C pmoves composio-mcp-smoke`. NOT running on any node yet: until the proxy is up Claude Code shows this entry as failed to connect (no tools) - harmless, the hosted `composio` entry is unchanged. Bearer is bare (no :- default) so a missing COMPOSIO_MCP_GATEWAY_KEY is visible, as with cipher. Provenance: pmoves/docs/handoffs/COMPOSIO_MCP_SELFHOST.md."
         },
         {
           "key": "jcodemunch",
