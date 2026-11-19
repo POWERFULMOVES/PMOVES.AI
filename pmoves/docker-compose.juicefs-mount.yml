@@ -23,7 +23,7 @@ volumes:
 
 services:
   juicefs-mount:
-    image: juicedata/mount:ce-v1.3.0
+    image: juicedata/mount:ce-v1.4.1
     profiles: ["juicefs"]
     restart: unless-stopped
     privileged: true

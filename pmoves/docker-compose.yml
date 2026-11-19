@@ -1753,7 +1753,7 @@ services:
   # Requires supabase-db to be running (make up-supabase before make up-juicefs).
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
-    image: juicedata/mount:ce-v1.3.0
+    image: juicedata/mount:ce-v1.4.1
     profiles: ["juicefs"]
     restart: "no"
     entrypoint: ["sh", "-lc"]
@@ -1789,7 +1789,7 @@ services:
     - SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
-    image: juicedata/mount:ce-v1.3.0
+    image: juicedata/mount:ce-v1.4.1
     profiles: ["juicefs"]
     restart: unless-stopped
     depends_on:
