@@ -107,11 +107,17 @@ def main() -> None:
     for key in refs:
         del secrets[key]
     if refs:
-        # Names only: `refs` holds KEYS; a value that tripped the check is a
-        # `${VAR}` ref, not credential material.
+        # COUNT ONLY -- same doctrine as emit_local_env.emit(). `refs` holds key
+        # names, and a key name is not a secret, but they are drawn from the
+        # loaded secret map and CodeQL's py/clear-text-logging-sensitive-data
+        # (alert #438 on this line) recognises no barrier between the two. A
+        # count keeps the operator signal without dismissing an alert on a
+        # secrets path. The keys are recoverable from the env file itself: they
+        # are its whole-value `KEY=${OTHER}` / `KEY=$OTHER` lines.
         print(
             f"WARNING: excluded {len(refs)} unexpanded ${{VAR}} ref(s) from the "
-            f"CGP: {', '.join(refs)}. Set real values in the env file before "
+            f"CGP (the whole-value KEY=${{OTHER}} lines of {args.env_file}; names "
+            "omitted deliberately). Set real values in the env file before "
             "exporting.",
             file=sys.stderr,
         )

@@ -161,7 +161,7 @@ def test_cleared_secret_is_still_removed(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_chit_encode_excludes_refs_and_names_them(tmp_path, monkeypatch, capsys):
+def test_chit_encode_excludes_refs_and_counts_them(tmp_path, monkeypatch, capsys):
     from pmoves.chit.codec import decode_secret_map, load_cgp
     from pmoves.tools import chit_encode_secrets
 
@@ -180,7 +180,10 @@ def test_chit_encode_excludes_refs_and_names_them(tmp_path, monkeypatch, capsys)
     chit_encode_secrets.main()
 
     err = capsys.readouterr().err
-    assert "SUPABASE_JWT_SECRET" in err
+    # Count, not names: CodeQL py/clear-text-logging-sensitive-data (alert #438)
+    # flags names drawn from the loaded secret map; see emit_local_env.emit().
+    assert "excluded 1 unexpanded" in err
+    assert "SUPABASE_JWT_SECRET" not in err
     assert FRESH not in err
     secrets = decode_secret_map(load_cgp(out))
     assert "SUPABASE_JWT_SECRET" not in secrets
@@ -198,6 +201,9 @@ def test_chit_encode_excludes_refs_and_names_them(tmp_path, monkeypatch, capsys)
 def test_self_generated_mirrors_real_secret_over_a_ref():
     out = fill_self_generated({"JWT_SECRET": FRESH, "SUPABASE_JWT_SECRET": "${JWT_SECRET}"})
     assert out["SUPABASE_JWT_SECRET"] == FRESH
+    # The verifiers read SUPABASE_JWT_SECRET FIRST (verifier_secret). A ref there
+    # must fall through to JWT_SECRET's value, not become the HMAC key.
+    assert out["ANON_KEY"] == derive_supabase_jwt(FRESH, "anon")
 
 
 def test_self_generated_never_signs_with_a_ref():
