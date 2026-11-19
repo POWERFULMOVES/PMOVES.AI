@@ -42,7 +42,14 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.mark.parametrize(
     "value",
-    ["${JWT_SECRET}", "$JWT_SECRET", "${JWT_SECRET:-fallback}", '"${SERVICE_KEY}"', " ${A} "],
+    [
+        "${JWT_SECRET}", "$JWT_SECRET", "${JWT_SECRET:-fallback}", '"${SERVICE_KEY}"', " ${A} ",
+        # nested default -- the exact value env.shared.example ships (codex P1)
+        "${SUPABASE_JWT_SECRET:-${JWT_SECRET}}",
+        "${A:+${B}}",            # nested alternate
+        "${A:-${B:-${C}}}",      # doubly nested
+        "${A-x}", "${A:=x}", "${A:?unset}",  # other POSIX operators
+    ],
 )
 def test_is_unexpanded_ref_recognises_whole_value_refs(value):
     assert is_unexpanded_ref(value) is True
@@ -50,7 +57,12 @@ def test_is_unexpanded_ref_recognises_whole_value_refs(value):
 
 @pytest.mark.parametrize(
     "value",
-    [None, "", FRESH, "sk-live-$OTHER", "${A}${B}", "$1abc", "prefix${A}"],
+    [
+        None, "", FRESH, "sk-live-$OTHER", "${A}${B}", "$1abc", "prefix${A}",
+        # merely CONTAINS `${` mid-string: whole-value semantics leave it a value
+        "abc${def}ghi", "${A}-suffix", "${A:-${B}}x",
+        "${A", "${}", "${1A}", "${A!B}",  # unbalanced / not a parameter name
+    ],
 )
 def test_is_unexpanded_ref_leaves_real_and_interior_values_alone(value):
     assert is_unexpanded_ref(value) is False

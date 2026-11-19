@@ -111,15 +111,56 @@ def is_placeholder(value: str | None) -> bool:
     return False
 
 
-# Whole-value unexpanded variable references: `${VAR}`, `${VAR:-default}` and
-# bare `$VAR`. An interior match (`sk-live-$OTHER`) is not a whole-value ref.
-_UNEXPANDED_REF_RE = re.compile(
-    r"\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}|\$[A-Za-z_][A-Za-z0-9_]*"
-)
+# Whole-value unexpanded variable references. A bare `$VAR` is matched by this
+# regex; a braced `${...}` expansion is matched by _is_braced_expansion, a
+# brace-balanced scan, because a regex like `\$\{NAME(:-[^}]*)?\}` stops at the
+# FIRST `}` and so misses nested defaults -- env.shared.example ships
+# SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}.
+_BARE_REF_RE = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*")
+_PARAM_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# POSIX/compose parameter-expansion operators that may follow the name.
+_PARAM_OPERATORS = (":-", ":=", ":+", ":?", "-", "=", "+", "?")
+
+
+def _is_braced_expansion(value: str) -> bool:
+    """True if *value* is exactly ONE ``${NAME}`` / ``${NAME<op>word}`` expansion.
+
+    The braces must balance and the ``}`` matching the opening ``${`` must be the
+    LAST character, so ``${A:-${B}}`` and ``${A:+${B}}`` are refs while
+    ``${A}${B}`` and ``${A}-suffix`` are not (the opening brace closes early).
+    The *word* after the operator is not interpreted -- whatever it holds, the
+    value is still a pointer, not a secret.
+    """
+    if not value.startswith("${"):
+        return False
+    depth = 0
+    for i, ch in enumerate(value):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                if i != len(value) - 1:
+                    return False
+                break
+    else:
+        return False  # unbalanced: never closed
+    body = value[2:-1]
+    name = _PARAM_NAME_RE.match(body)
+    if name is None:
+        return False
+    rest = body[name.end():]
+    return rest == "" or rest.startswith(_PARAM_OPERATORS)
 
 
 def is_unexpanded_ref(value: str | None) -> bool:
     """Return True if the WHOLE value is an unexpanded ``${VAR}``/``$VAR`` reference.
+
+    Semantics: whole-value only. ``$VAR``, ``${VAR}`` and one braced expansion
+    with any operator and any (nested) word -- ``${A:-${B}}``, ``${A:+${B}}``,
+    ``${A-x}`` -- are refs. A value that merely CONTAINS ``${`` or ``$NAME``
+    (``prefix${A}``, ``sk-live-$OTHER``, ``${A}${B}``) is NOT: a real secret may
+    legitimately contain ``$`` and ``{``, and refusing it would drop a value.
 
     Deliberately not folded into ``is_placeholder``. env.shared legitimately
     carries refs for non-secret interpolation keys, and ``is_placeholder`` also
@@ -135,7 +176,8 @@ def is_unexpanded_ref(value: str | None) -> bool:
     """
     if value is None:
         return False
-    return bool(_UNEXPANDED_REF_RE.fullmatch(normalize_env_value(value)))
+    value = normalize_env_value(value)
+    return bool(_BARE_REF_RE.fullmatch(value)) or _is_braced_expansion(value)
 
 
 # ---------------------------------------------------------------------------
