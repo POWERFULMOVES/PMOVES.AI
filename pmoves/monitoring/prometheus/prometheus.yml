@@ -17,21 +17,34 @@ scrape_configs:
   #     - targets: ["host.docker.internal:9100"]
 
   # Glances — HOST-LOCAL exporter, wired per node (pmoves/docs/operations/GLANCES_RUNBOOK.md
-  # section 4.4). Glances is NOT a compose service (runbook F3): each node runs its own
-  # `glances --export prometheus` with `[prometheus] host=localhost port=9091 prefix=glances`,
-  # loopback/tailnet only (section 4.0), and Prometheus reaches it through the Docker host
-  # gateway -- the same mechanism the (disabled) node_exporter job above uses.
+  # section 4.4). Glances is NOT a compose service (runbook F3): the node running the
+  # monitoring stack runs its own `glances --export prometheus` with
+  # `[prometheus] host=<docker bridge gateway> port=9092 prefix=glances`, and Prometheus
+  # reaches it through the Docker host gateway -- the same mechanism the (disabled)
+  # node_exporter job above uses.
   #
-  # The port MUST match the exporter port the runbook prescribes; `pmoves/tests/tools/
-  # test_prometheus_glances_wiring.py` asserts the two agree and fails closed when they drift.
+  # TWO PROPERTIES THIS TARGET MUST KEEP. Both are asserted by
+  # pmoves/tests/tools/test_prometheus_glances_wiring.py, and both fail closed:
   #
-  # CAVEAT: host port 9091 is Headscale's registered slot (pmoves/configs/ports.yaml,
-  # HEADSCALE_9091_PORT, published by pmoves/docker-compose.remote.yml). Do NOT run Glances
-  # on the remote/VPS node that carries that compose -- Prometheus would scrape Headscale's
-  # metrics and label them as Glances. The GPU nodes (5090 / 4090 / SPARK) do not run it.
+  # 1. THE PORT IS 9092, NOT 9091. Host port 9091 is Headscale's registered slot
+  #    (pmoves/configs/ports.yaml, HEADSCALE_9091_PORT, published by
+  #    pmoves/docker-compose.remote.yml). On the remote/VPS node carrying that compose,
+  #    host.docker.internal:9091 reaches HEADSCALE -- Prometheus would ingest Headscale's
+  #    series under job="glances" / source="glances", i.e. telemetry that is confidently
+  #    mislabelled. 9092 is owned by NO service in the registry and published
+  #    by NO compose file in the repo (88 scanned), so on that node the job is
+  #    simply DOWN and says so, rather than carrying another service's metrics
+  #    under the wrong name.
+  # 2. THE EXPORTER BINDS THE BRIDGE GATEWAY, NOT LOOPBACK. `host.docker.internal`
+  #    resolves here to the Docker host gateway (extra_hosts:
+  #    host.docker.internal:host-gateway, in pmoves/monitoring/docker-compose.monitoring.yml),
+  #    i.e. the default bridge's gateway on native Linux. A listener bound to 127.0.0.1
+  #    is NOT reachable through that gateway: the connection is refused and the job never
+  #    comes up. The runbook therefore prescribes the gateway address, which is a local
+  #    bridge address -- not the LAN, not the WAN, and not the tailnet (runbook 4.0).
   - job_name: glances
     static_configs:
-      - targets: ["host.docker.internal:9091"]
+      - targets: ["host.docker.internal:9092"]
         labels:
           source: glances
 
