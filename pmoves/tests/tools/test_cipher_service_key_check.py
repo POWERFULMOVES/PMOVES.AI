@@ -288,7 +288,7 @@ def test_retired_override_warning_says_when_compose_still_reads_it():
 
 def _parse(path):
     out = {}
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding='utf-8').splitlines():
         if "=" in line:
             k, v = line.split("=", 1)
             out[k] = v
@@ -297,8 +297,8 @@ def _parse(path):
 
 def test_later_env_file_wins_and_process_env_wins_even_empty(tmp_path):
     a, b = tmp_path / "env.shared", tmp_path / ".env.local"
-    a.write_text("X=from-shared\nY=shared\nZ=shared\n")
-    b.write_text("X=from-local\n")
+    a.write_text('X=from-shared\nY=shared\nZ=shared\n', encoding='utf-8')
+    b.write_text('X=from-local\n', encoding='utf-8')
     env, prov, notes = ck.resolve_env([a, b, tmp_path / "absent"], {"Z": ""}, parse=_parse)
     assert env["X"] == "from-local" and env["Y"] == "shared" and env["Z"] == ""
     assert prov["X"] == ["env.shared", ".env.local"]
@@ -307,8 +307,8 @@ def test_later_env_file_wins_and_process_env_wins_even_empty(tmp_path):
 
 def test_env_file_alias_expands_against_earlier_files(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
-    a.write_text("SERVICE_ROLE_KEY=live\n")
-    b.write_text("SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY}\n")
+    a.write_text('SERVICE_ROLE_KEY=live\n', encoding='utf-8')
+    b.write_text('SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY}\n', encoding='utf-8')
     env, _, _ = ck.resolve_env([a, b], {}, parse=_parse)
     assert env["SUPABASE_SERVICE_KEY"] == "live"
 
@@ -332,9 +332,9 @@ services:
 
 def _run_cli(tmp_path, monkeypatch, capsys, cipher_expr, env_lines, *extra):
     compose = tmp_path / "docker-compose.yml"
-    compose.write_text(COMPOSE_FIXTURE.replace("__CIPHER__", cipher_expr))
+    compose.write_text(COMPOSE_FIXTURE.replace('__CIPHER__', cipher_expr), encoding='utf-8')
     envf = tmp_path / "env.shared"
-    envf.write_text("".join(f"{k}={v}\n" for k, v in env_lines.items()))
+    envf.write_text(''.join((f'{k}={v}\n' for k, v in env_lines.items())), encoding='utf-8')
     for k in list(INCIDENT_ENV) + ["JWT_SECRET"]:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(ck, "time", type("T", (), {"time": staticmethod(lambda: NOW)}))
@@ -697,16 +697,16 @@ def test_no_service_presents_the_key_in_reverse_of_kongs_order(files):
 
 def test_overlay_presence_uses_env_local_key_matcher(tmp_path):
     f = tmp_path / ".env.local"
-    f.write_text("# CIPHER_DB_SERVICE_KEY=commented\nOTHER=1\n")
+    f.write_text('# CIPHER_DB_SERVICE_KEY=commented\nOTHER=1\n', encoding='utf-8')
     assert ck.overlay_defines(f, "CIPHER_DB_SERVICE_KEY") is False
-    f.write_text("CIPHER_DB_SERVICE_KEY=" + EXPIRED_PASTE + "\n")
+    f.write_text('CIPHER_DB_SERVICE_KEY=' + EXPIRED_PASTE + '\n', encoding='utf-8')
     assert ck.overlay_defines(f, "CIPHER_DB_SERVICE_KEY") is True
     assert ck.overlay_defines(tmp_path / "absent", "CIPHER_DB_SERVICE_KEY") is False
 
 
 def test_overlay_only_paste_warns_with_runtime_caveat(tmp_path, monkeypatch, capsys):
     local = tmp_path / ".env.local"
-    local.write_text("CIPHER_DB_SERVICE_KEY=" + EXPIRED_PASTE + "\n")
+    local.write_text('CIPHER_DB_SERVICE_KEY=' + EXPIRED_PASTE + '\n', encoding='utf-8')
     env = {k: v for k, v in INCIDENT_ENV.items() if k != "CIPHER_DB_SERVICE_KEY"}
     rc, out, err = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, env, "--env-local", str(local))
     assert rc == 0
@@ -717,7 +717,7 @@ def test_overlay_only_paste_warns_with_runtime_caveat(tmp_path, monkeypatch, cap
 def test_overlay_presence_is_reported_including_unreadable(tmp_path, monkeypatch, capsys):
     absent_env = {k: v for k, v in INCIDENT_ENV.items() if k != "CIPHER_DB_SERVICE_KEY"}
     local = tmp_path / ".env.local"
-    local.write_text("OTHER=1\n")
+    local.write_text('OTHER=1\n', encoding='utf-8')
     rc, out, _ = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, absent_env, "--env-local", str(local))
     assert "retired key in overlay .. absent" in out and rc == 0
     unreadable = tmp_path / "dir.env.local"

@@ -591,17 +591,7 @@ def test_override_and_reset_blocks_are_parsed_as_data_not_dropped(tmp_path):
     from pmoves.tools.secrets_sync import load_compose_docs
 
     f = tmp_path / "docker-compose.overlay.yml"
-    f.write_text(
-        "services:\n"
-        "  studio:\n"
-        "    environment: !override\n"
-        "      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}\n"
-        "  voice:\n"
-        "    deploy: !reset {}\n"
-        "    build:\n"
-        "      args: !override\n"
-        "        ANON: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}\n"
-    )
+    f.write_text('services:\n  studio:\n    environment: !override\n      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}\n  voice:\n    deploy: !reset {}\n    build:\n      args: !override\n        ANON: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}\n', encoding='utf-8')
     docs, skipped = load_compose_docs([f])
     assert skipped == []
     assert compose_consumers(["SUPABASE_SERVICE_ROLE_KEY"], docs) == ["studio"]
