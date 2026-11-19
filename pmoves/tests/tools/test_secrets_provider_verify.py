@@ -231,7 +231,7 @@ def test_unknown_only_name_exits_3():
 )
 def test_a_malformed_probes_file_exits_3(tmp_path, body):
     path = tmp_path / "probes.yaml"
-    path.write_text(body)
+    path.write_text(body, encoding="utf-8")
     http = FakeHttp()
     assert _run(KEYS, http, "--probes", str(path)) == 3
     assert http.calls == []

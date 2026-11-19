@@ -13,28 +13,38 @@ import stat
 import sys
 from pathlib import Path
 
+import pytest
+
+# The fake interpreter is a /bin/sh script standing in for bin/python. Windows
+# cannot execute a shell script as Scripts/python.exe, so the fabricated venv
+# cannot run there. The probe under test is platform-neutral and runs on
+# Linux CI.
+pytestmark = pytest.mark.skipif(
+    os.name == "nt", reason="fake venv interpreter is a POSIX shell script"
+)
+
 from tools.bootstrap_light_env import _precheck_only
 
 
 def _fake_venv(tmp_path: Path, version: str) -> Path:
     site = tmp_path / f"site-{version}"
     (site / "pydantic").mkdir(parents=True)
-    (site / "pydantic" / "__init__.py").write_text(f"VERSION = {version!r}\n")
+    (site / "pydantic" / "__init__.py").write_text(f"VERSION = {version!r}\n", encoding="utf-8")
     dist = site / f"pydantic-{version}.dist-info"
     dist.mkdir()
-    (dist / "METADATA").write_text(f"Metadata-Version: 2.1\nName: pydantic\nVersion: {version}\n")
+    (dist / "METADATA").write_text(f"Metadata-Version: 2.1\nName: pydantic\nVersion: {version}\n", encoding="utf-8")
     venv = tmp_path / f"venv-{version}"
     python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     python.parent.mkdir(parents=True)
     # -S: no site-packages, so only the fabricated distribution is visible.
-    python.write_text(f'#!/bin/sh\nPYTHONPATH="{site}" exec "{sys.executable}" -S "$@"\n')
+    python.write_text(f'#!/bin/sh\nPYTHONPATH="{site}" exec "{sys.executable}" -S "$@"\n', encoding="utf-8")
     python.chmod(python.stat().st_mode | stat.S_IEXEC)
     return venv
 
 
 def _reqs(tmp_path: Path) -> Path:
     req = tmp_path / "requirements-lite.txt"
-    req.write_text("pydantic>=2\n")
+    req.write_text("pydantic>=2\n", encoding="utf-8")
     return req
 
 

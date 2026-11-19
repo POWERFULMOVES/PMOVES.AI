@@ -105,7 +105,7 @@ def test_a_github_token_missing_its_prefix_is_still_withheld():
 
 def test_the_rules_file_holds_no_value_shaped_string():
     """Rules only. A prefix followed by a long token body would be a pasted key."""
-    text = rules_mod.DEFAULT_RULES_PATH.read_text()
+    text = rules_mod.DEFAULT_RULES_PATH.read_text(encoding="utf-8")
     import re
 
     prefixes = [p for rule in load_rules().values() for p in rule.prefixes]
@@ -141,7 +141,7 @@ MALFORMED = {
 @pytest.mark.parametrize("name", sorted(MALFORMED))
 def test_a_malformed_rules_file_exits_3(tmp_path, name, capsys):
     path = tmp_path / "secret_shapes.yaml"
-    path.write_text(MALFORMED[name])
+    path.write_text(MALFORMED[name], encoding="utf-8")
     assert rules_mod.main(["--rules", str(path)]) == 3
     assert "COULD-NOT-MEASURE" in capsys.readouterr().err
 
@@ -253,7 +253,8 @@ def test_manifest_shape_rejects_a_bool_min_length(tmp_path):
     manifest.write_text(
         "version: 1\ncgp_file: x.cgp\nentries:\n"
         "  - id: e\n    source: {type: cgp, label: E}\n"
-        "    targets: [{file: env.tier-x, key: E}]\n    min_length: true\n"
+        "    targets: [{file: env.tier-x, key: E}]\n    min_length: true\n",
+        encoding="utf-8",
     )
     with pytest.raises(ValueError, match="non-integer min_length"):
         secrets_sync.load_manifest(manifest)
@@ -268,7 +269,7 @@ def test_manifest_shape_becomes_the_same_rule_type():
 
 def test_pydantic_is_declared_where_the_funnel_gate_probes_for_it():
     """env-bootstrap-check reads requirements-lite.txt; undeclared = unprobed."""
-    lite = Path(rules_mod.__file__).with_name("requirements-lite.txt").read_text()
+    lite = Path(rules_mod.__file__).with_name("requirements-lite.txt").read_text(encoding="utf-8")
     assert any(line.strip().startswith("pydantic") for line in lite.splitlines())
 
 
@@ -317,7 +318,8 @@ def test_a_gho_token_from_the_gh_cli_injector_reaches_the_tier_file(tmp_path, mo
 def _manifest(tmp_path, entry_yaml: str) -> Path:
     path = tmp_path / "manifest.yaml"
     path.write_text(
-        "version: 1\ncgp_file: x.cgp\nentries:\n" + entry_yaml
+        "version: 1\ncgp_file: x.cgp\nentries:\n" + entry_yaml,
+        encoding="utf-8",
     )
     return path
 
@@ -446,7 +448,7 @@ def test_jwt_punctuation_is_admitted_for_ghs(label):
 )
 def test_a_malformed_prefix_charset_exits_3(tmp_path, rule):
     path = tmp_path / "secret_shapes.yaml"
-    path.write_text("version: 1\nrules:\n  - label: GH_TOKEN\n" + rule)
+    path.write_text("version: 1\nrules:\n  - label: GH_TOKEN\n" + rule, encoding="utf-8")
     assert rules_mod.main(["--rules", str(path)]) == 3
 
 
@@ -484,5 +486,5 @@ def test_manifest_check_exits_3_when_the_document_is_unreadable(tmp_path, body):
 
     path = tmp_path / "manifest.yaml"
     if body is not None:
-        path.write_text(body)
+        path.write_text(body, encoding="utf-8")
     assert secrets_manifest_check.main(["--manifest", str(path)]) == 3
