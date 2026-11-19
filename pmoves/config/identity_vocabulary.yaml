@@ -260,18 +260,23 @@ identities:
     aliases: ["SPARK-KIMI", "KIMI-SPARK"]
     node: spark
     note: >-
-      32 entries under two orderings of the same two words. Measured
-      2026-10-11 against SPARK's session stores. This is the KIMI HARNESS
+      66 register rows resolve here (`identity_lineage.register_entries`,
+      re-counted 2026-11-19): 15 bare `SPARK-KIMI` (10) / `KIMI-SPARK` (5)
+      and 51 `SPARK-KIMI (Crush...)` -- 24 `(Crush)` plus 27 `(Crush, GLM
+      via qwen3-coder)`. Session-window attribution measured 2026-10-11
+      against SPARK's session stores (node-local, not re-measured here). This is the KIMI HARNESS
       identity on SPARK: Kimi CLI (`~/.kimi`, 5 sessions 2026-05-27..07-15)
       signed first, and Kimi Code (`~/.kimi-code`, 50 sessions
       2026-05-29..09-23) followed, both defaulting to model
       `kimi-for-coding`. The 15 bare `SPARK-KIMI` / `KIMI-SPARK` rows fall in
       Kimi activity windows (6 Kimi-only, 9 overlapping, 0 Crush-only). That
       is Kimi's signed work and it stays attributed here.
-      The 34 `SPARK-KIMI (Crush...)` rows are the SPARK Crush seat WEARING
-      this name (identity worn, harness typed into -- see `harnesses: crush`):
-      28 Crush-only, 6 overlapping, models glm-5.2 per the Crush stores. They
-      stay attributed as signed. From 2026-10-11 Crush on SPARK wears its own
+      The 51 `SPARK-KIMI (Crush...)` rows are the SPARK Crush seat WEARING
+      this name (identity worn, harness typed into -- see `harnesses: crush`).
+      The 2026-10-11 window pass classified 34 of them (28 Crush-only, 6
+      overlapping, models glm-5.2 per the Crush stores); its count missed the
+      17 rows whose kind is `CLAIM+RELEASE`, which are not window-classified.
+      All 51 stay attributed as signed. From 2026-10-11 Crush on SPARK wears its own
       `spark-crush`, so the harness defaults no longer clash: spark-kimi is
       Kimi's, spark-crush is Crush's.
 
@@ -292,10 +297,17 @@ identities:
       00000000-0000-4000-8000-000000000056 (interim), cipher agentId
       `spark-crush`, agent_registry.yaml key `crush_spark` (signature
       `spark-crush`). PROVENANCE: the seat named itself `CRUSH-SPARK (KIMI)`
-      for 16 rows (2026-09-08..09-28; 15 fall only in Crush activity, 1 in
-      neither), so those are its own trail and resolve here. The `(KIMI)` was
+      in 15 register rows (2026-09-08..09-28, `identity_lineage.
+      register_entries`), so those are its own trail and resolve here. The
+      2026-10-11 session-window pass reported 16 (15 only in Crush activity,
+      1 in neither); the register holds 15, so that 16th is unaccounted and
+      the per-row split is not re-measured here. The `(KIMI)` was
       the borrowed `spark-kimi` name, not the model: SPARK's Crush stores show
-      zero kimi messages. Before that it wore `spark-kimi` outright (the 34
+      zero kimi messages. PARSE CAVEAT: `identity_lineage.wearing()` still
+      classifies the `(KIMI)` token through the `kimi-k2` model alias, so
+      these rows report `model: kimi-k2` and `describe_self("spark-crush")`
+      lists kimi-k2 in `models_worn`. That is the parser's decoration, not a
+      measured model; see the `kimi-k2` note. Before that it wore `spark-kimi` outright (the 34
       `SPARK-KIMI (Crush...)` rows, which stay spark-kimi's). MODEL is a
       WORN fact, not part of the name: config default `ollama/qwen3-coder:30b`
       (large) / `ollama/qwen3:8b` (small); actually chosen `zai/glm-5.2` in
@@ -598,7 +610,12 @@ models:
       (glm-5.2 answered), so that `(KIMI)` is the borrowed `spark-kimi` name.
       The Kimi model that DID work and sign on SPARK is `kimi-for-coding`,
       through the Kimi CLI and Kimi Code harnesses (see `spark-kimi`).
-      Corrected 2026-10-11.
+      Corrected 2026-10-11. The `KIMI` alias is kept, so the parser still
+      maps a bare `(KIMI)` paren token to this model (`wearing()` on
+      `CRUSH-SPARK (KIMI)` returns model kimi-k2). Dropping the alias would
+      leave that token unclassified rather than correct; until a
+      borrowed-name token class exists, read kimi-k2 on `spark-crush` rows
+      as parse-level decoration, not evidence the model ran.
 
 # Lanes and alters. `field` is a declared ALTER of 4090-claude
 # (agent_signatures.yaml:216), not a free-text note.
