@@ -73,6 +73,7 @@ nodes:
   - PMOVES-SPARK
   default_identity:
     claude-code: claude_spark
+    kimi: kimi_spark
   cipher_agent_id:
     claude-code: spark-claude
 - canonical: z890
