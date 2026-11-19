@@ -203,7 +203,7 @@ Agent Zero instances an operator touches on a desktop node are something else.
 |---|---|---|---|
 | Compose service | `pmoves-agent-zero-1` | built from `pmoves/services/agent-zero/Dockerfile` | `pmoves/data/agent-zero/usr` (bind mount) |
 | Agent Zero Launcher instance | `a0-inst-<name>` | `agent0ai/agent-zero:latest` (upstream v2.14) on all three 5090 instances | `~/agent-zero/<instance>/usr` (one per instance) |
-| Instances compose service | `pmoves-agent-zero-darkxside-inst` (`pmoves/docker-compose.agent-zero-instances.yml`) | `agent0ai/agent-zero:latest` | the DARKXSIDE Launcher instance's usr dir, via `A0INST_USR_DIR` |
+| Instances compose service | service `agent-zero-darkxside-inst`, container `pmoves-agent-zero-darkxside-inst` (`pmoves/docker-compose.agent-zero-instances.yml`) | `agent0ai/agent-zero:latest` | the DARKXSIDE Launcher instance's usr dir, via `A0INST_USR_DIR` |
 
 **Config written into the repo's `pmoves/data/agent-zero/usr` reaches only the compose
 service. Launcher instances never receive it.** The third row registers the DARKXSIDE
@@ -245,24 +245,27 @@ GHCR `ghcr.io/powerfulmoves/pmoves-agent-zero` publishes `latest` / `pmoves-late
 `A0INST_USR_DIR`: `models_sync.py:401`, `pmoves/docs/MODEL_PRESET_LIFECYCLE.md:52`) and
 `OUT=` names an arbitrary target file.
 
-Observed 2026-11-18 on 5090, `make -C pmoves a0-model-sync-check`:
+`make -C pmoves a0-model-sync-check` on 5090:
 
-| Observation | Value |
-|---|---|
-| Exit code | `1` |
-| Printed | "emitting Agent Zero presets from fallback template rows" |
-| Printed | "DRIFT: ... differs from registry output" |
-| JSON `presets` | `["TensorZero"]` |
-| JSON `chat_lane` | `TensorZero` -> `tensorzero::model_name::chat_zai_glm53` |
+| Date | Checkout | Exit | Result |
+|---|---|---|---|
+| 2026-11-18 | stale checkout: node `main`, 98 commits behind `origin/main`, predates PR #3396 | `1` | fallback-template WARNING, then `DRIFT`; JSON `presets` `["TensorZero"]` |
+| 2026-11-19 | worktree at `origin/main` | `2` | `"check": "undecided"`, `"reason": "registry_unreachable"` |
 
-The exit-code contract in `models_sync.py:841-861` says a template fallback should exit
-`2` (UNDECIDED), not `1`. Treat that discrepancy as a generator defect to file, not as doc
-truth. For comparison, the committed docked file has 3 presets and the DARKXSIDE Launcher
-instance holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
+The 11-18 exit 1 came from a checkout older than commit `361e26e9a0b` (PR #3396), which
+added the exit-2 UNDECIDED contract: `_check_undecided` (`models_sync.py:802-808`) is
+called from `:841-846` when `--check` runs with `source == "template_fallback"`. Current
+code behaves as documented. The registry fallback itself is real and measured on
+2026-11-19: the SQL fallback against the node's supabase-db fails with
+`relation "pmoves_core.v_service_models" does not exist`, because the registry migration
+has not been applied on 5090. The operator items are applying that migration on this node
+and updating the node's `main` checkout; nothing is filed against the generator. For
+comparison, the committed docked file has 3 presets and the DARKXSIDE Launcher instance
+holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
 
 **WARN: `OUT=` at a Launcher usr dir, or `INSTANCE=darkxside-inst`.** A sync archives the
 live file to `pmoves/data/model-sync/review/` first, replaces only generator-owned presets
-(Default, TensorZero, Registry, Fallback-N; for DARKXSIDE that is Default), and carries
+(Default, TensorZero, Registry, Fallback-N; this instance has only Default among them), and carries
 Efficiency, Power, PMOVES, Agentic and Voice over verbatim (`models_sync.py:408-409`,
 `:749-765`, `:895-910`). The real hazard is the new Default: it routes chat to the
 TensorZero gateway by its compose-network service name, which a Launcher instance outside
