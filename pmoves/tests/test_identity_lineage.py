@@ -619,6 +619,7 @@ def test_co_owners_resolve_through_the_same_vocabulary_as_signing_authors():
     ("claude_4090", "4090-claude"),
     ("claude_5090", "5090-claude"),
     ("claude_z890", "z890-claude"),
+    ("crush_spark", "spark-crush"),
 ])
 def test_the_agent_registry_key_is_a_declared_spelling(key, canonical):
     """The fifth spelling. `canonical_owner` bridged four and stopped."""

@@ -549,6 +549,22 @@ signatures:
       - dgx-spark
     description: "Agent persona on PMOVES-SPARK (NVIDIA DGX Spark GB10 Grace-Blackwell, 128GB unified, sm_121, ARM64). Distinct from the spark-runner CI identity on the same host. H-half mirror of signing card ...0014 (agent_id spark-claude)."
 
+  spark-crush:
+    agent_id: "spark-crush"
+    display_name: "PMOVES-SPARK-CRUSH"
+    glyph: "⠿"              # ⠿ braille full cell -- terminal-grid mark; proposed for this seat in #3078
+    color: "#A21CAF"             # Fuchsia-700 -- Charm magenta family; distinct from crush #0EA5E9 and spark-claude #4D7C0F
+    accent: "#E879F9"            # Fuchsia-400
+    voice: companion
+    co_author: "PMOVES-SPARK-CRUSH (pmoves-spark) <spark@pmoves.ai>"
+    node: "spark"
+    resonance:
+      - terminal-companion
+      - lsp-context
+      - vhs-evidence
+      - arm64-compute
+    description: "Crush harness identity on PMOVES-SPARK (register form PMOVES-SPARK-CRUSH; earlier self-named CRUSH-SPARK (KIMI) and before that wore the Kimi harness name spark-kimi). H-half mirror of signing card ...0056 (agent_id spark-crush, interim)."
+
   # ---- Community Room Stewards ----
   fordham-steward:
     agent_id: "fordham-steward"
