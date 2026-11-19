@@ -263,6 +263,7 @@ geometry_bridge: Optional[GeometryBridge] = None
 # Voice "S1" registry (preloaded in lifespan; None until startup runs).
 voice_registry: Optional[VoiceRegistry] = None
 voice_registry_task: Optional[asyncio.Task] = None
+announce_task: Optional[asyncio.Task] = None
 
 
 def _resolve_voice_profile(request: "SynthesizeRequest") -> bool:
@@ -487,7 +488,7 @@ class ValidateResponse(BaseModel):
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown with NATS service announcement."""
     global vibevoice_provider, whisper_provider, ultimate_tts_provider, voicebox_provider, omnivoice_provider, nats_client
-    global voice_registry, voice_registry_task
+    global voice_registry, voice_registry_task, announce_task
 
     logger.info("Starting Flute Gateway...")
 
@@ -559,6 +560,33 @@ async def lifespan(app: FastAPI):
                 logger.info("NATS service announcement published: %s at %s", slug, url)
             except Exception as e:
                 logger.warning("Failed to publish NATS service announcement: %s", e)
+
+        # Heartbeat: re-announce periodically so fleet-sentinel's
+        # last_announce_age_s stays bounded instead of growing forever from
+        # a single startup publish (measured 67,360s stale on spark 2026-11-19).
+        async def _announce_heartbeat() -> None:
+            interval = float(os.getenv("SERVICE_ANNOUNCE_INTERVAL_S", "60"))
+            if interval <= 0:
+                return
+            while True:
+                await asyncio.sleep(interval)
+                if not NATS_ANNOUNCE_AVAILABLE:
+                    continue
+                try:
+                    await announce_service(
+                        nats_url=NATS_URL,
+                        slug=slug,
+                        name=name,
+                        url=url,
+                        health_check=health_check,
+                        tier=ServiceTier.MEDIA,
+                        port=port,
+                        metadata={"version": "0.1.0", "publishes": ["tokenism.geometry.event.v1"]},
+                    )
+                except Exception as e:  # noqa: BLE001 - heartbeat must survive transient NATS errors
+                    logger.warning("Announce heartbeat failed (will retry): %s", e)
+
+        announce_task = asyncio.create_task(_announce_heartbeat())
     except Exception as e:
         logger.warning("NATS connection failed: %s (continuing without NATS)", e)
         nats_client = None
@@ -586,6 +614,12 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down Flute Gateway...")
+    if announce_task and not announce_task.done():
+        announce_task.cancel()
+        try:
+            await announce_task
+        except asyncio.CancelledError:
+            pass
     if _cgp_task and not _cgp_task.done():
         _cgp_task.cancel()
         try:
