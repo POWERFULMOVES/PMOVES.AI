@@ -1,0 +1,48 @@
+# pmoves-chit-text — Dataset manifest pointer
+# Mavis Collection — slice G.3 dataset layer
+#
+# Per pmoves/config/datasets.yaml:19, this dataset is published to
+# DARKXSIDE/pmoves-chit-text on HuggingFace Hub. The CHIT-encoded text corpus
+# (CGP v0.2 packets) comes from extract-worker + langextract + hi-rag-v2.
+
+name: pmoves-chit-text
+canonical_ref: pmoves/config/datasets.yaml#pmoves-chit-text
+hf_id: DARKXSIDE/pmoves-chit-text
+description: |
+  CHIT-encoded text corpus -- CGP v0.2 packets from the PMOVES ingestion pipeline.
+  Each row pairs original text with its geometric encoding and reconstruction,
+  enabling models to learn the CHIT compression manifold.
+
+# Sources (per pmoves/config/datasets.yaml:26-29)
+sources:
+  - extract-worker    # Text embedding + indexing
+  - langextract       # Language detection + NLP
+  - hi-rag-v2         # Hybrid RAG query/response pairs
+
+# The YouTube playlist `PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8` feeds this corpus
+# via PMOVES.YT (transcripts -> langextract -> extract-worker -> hi-rag-v2).
+primary_ingestion_via: pmoves-chit-multimodal
+
+# Schema (per pmoves/config/datasets.yaml:31-58)
+schema:
+  format: parquet
+  columns:
+    - {name: cgp_packet, type: json}
+    - {name: original_text, type: string}
+    - {name: reconstruction, type: string}
+    - {name: delta, type: float, description: "Hyperbolic curvature"}
+    - {name: kappa, type: float, description: "Spectral concentration"}
+    - {name: hz, type: float, description: "Frequency domain"}
+    - {name: fidelity_score, type: float, range: [0.0, 1.0]}
+    - {name: evoswarm_pack_id, type: string}
+
+supabase_source:
+  table: pmoves_core.geometry_cgp_v1
+  filter: "payload->>spec=eq.chit.cgp.v0.2"
+
+publishing:
+  hf_org: DARKXSIDE
+  hf_id: DARKXSIDE/pmoves-chit-text
+  default_license: apache-2.0
+
+pointer_only: true

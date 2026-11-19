@@ -27,11 +27,13 @@ PMOVES_5090_DIR ?= /opt/PMOVES.AI/pmoves
 
 # --- NVIDIA NIM Lifecycle ---
 # These targets manage the NIM container on the 5090 GPU node via SSH.
-# Port defaults to 8200 to avoid collision with supabase-kong on 8000.
+# Port defaults to 8206: 8000 is supabase-kong's and 8200 is
+# gpu-orchestrator's, and gpu-orchestrator shares the `gpu` profile with
+# nvidia-nim -- so at 8200 the two fight for the host port.
 # Override locally with: make 5090-nim-status NIM_HOST_PORT=9000
 # Override remote path with: make 5090-nim-up PMOVES_5090_DIR=/srv/pmoves
 
-NIM_HOST_PORT ?= 8200
+NIM_HOST_PORT ?= 8206
 
 5090-nim-up: ## Start NVIDIA NIM container on 5090 (requires NGC_API_KEY)
 	@test -n "$${NGC_API_KEY}" || { echo "ERROR: NGC_API_KEY must be exported before running 5090-nim-up"; exit 1; }

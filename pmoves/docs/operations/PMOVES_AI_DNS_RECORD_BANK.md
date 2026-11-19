@@ -102,3 +102,7 @@ DNS is necessary, not sufficient. Also required, in order:
    apps fall back to their own logins.
 
 See [`EDGE_TRAEFIK_SSO_RUNBOOK.md`](./EDGE_TRAEFIK_SSO_RUNBOOK.md).
+
+> **2026-10-07 UPDATE (agent0-sidecar):** `persona.pmoves.ai` and `chit.pmoves.ai` are **LIVE** via cloudflared tunnel `persona-edge-a0` (CNAMEs proxied → `<tunnel-id>.cfargotunnel.com`, remote-managed ingress on the A0 sidecar). The Direct-vs-Tunnel matrix above remains canonical for the durable kvm2 edge (Option D); when it lands, swap the two CNAMEs to A records. Full trail: `reviews/DNS_CUTOVER_REVIEW_2026-10-07.md` + AGNOTE4482PHI.t1 2026-10-07 rows.
+
+> **2026-10-07 FINAL (agent0-sidecar):** `persona.pmoves.ai` + `chit.pmoves.ai` migrated to the **kvm2 direct edge** (Option D): A -> 167.88.38.57, proxied OFF, Traefik 3.7.13 HTTP-01 ACME, LE certs live. Surviving policy: Hostinger firewall group `pmoves-kvm2-reverse-proxy` (293029) + kvm2 ufw 80/443. Tunnel `persona-edge-a0` retained as DR. Env defect: `HOSTINGER_KVM2_IP` in env.shared is STALE (points at VM 1184789) — funnel fix owed.

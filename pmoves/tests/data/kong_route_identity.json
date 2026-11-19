@@ -1,10 +1,4 @@
 {
-  "MiniMax-M3": {
-    "api_base": "https://api.minimax.chat/v1",
-    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
-    "model_id": "MiniMax-M3",
-    "provider": "minimax"
-  },
   "claude-haiku-4": {
     "api_base": "https://api.openai.com/v1",
     "api_key_env": "ANTHROPIC_API_KEY",
@@ -101,6 +95,12 @@
     "model_id": "kimi-k2",
     "provider": "moonshot_ai"
   },
+  "minimax-image-01": {
+    "api_base": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
+    "model_id": "minimax-image-01",
+    "provider": "minimax"
+  },
   "minimax-m2.1": {
     "api_base": "https://api.minimax.chat/v1",
     "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
@@ -111,6 +111,24 @@
     "api_base": "https://api.minimax.chat/v1",
     "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
     "model_id": "minimax-m2.7",
+    "provider": "minimax"
+  },
+  "minimax-m2.7-highspeed": {
+    "api_base": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
+    "model_id": "minimax-m2.7-highspeed",
+    "provider": "minimax"
+  },
+  "minimax-m3": {
+    "api_base": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
+    "model_id": "minimax-m3",
+    "provider": "minimax"
+  },
+  "minimax-speech-2.8-hd": {
+    "api_base": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
+    "model_id": "minimax-speech-2.8-hd",
     "provider": "minimax"
   },
   "nemotron-3-super": {

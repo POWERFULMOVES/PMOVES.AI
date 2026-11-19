@@ -5,7 +5,8 @@
 > **Version:** 1.0  
 > **Sources:** YouTube playlist (2,000 videos), SoundCloud (82 tracks), LinkedIn, PMOVES.AI architecture  
 > **Method:** Resonance-pattern matching across cultural, technical, and philosophical dimensions  
-> **Topology metrics verified:** 2026-08-10 against `pmoves/config/agent_registry.yaml` (98 agents), `pmoves/configs/agent-teams.yaml` (13 staffed teams), `pmoves/config/rooms/catalog.json` (13 rooms), and the repo's gitlink count (64 submodules). Re-verify before publishing any artifact below — these counts drift with every fleet change.  
+> **Topology metrics verified:** 2026-08-10 against `pmoves/config/agent_registry.yaml` (98 agents), `pmoves/configs/agent-teams.yaml` (13 staffed teams), `pmoves/config/rooms/catalog.json` (13 rooms), and the repo's gitlink count (64 submodules). Re-verify before publishing any artifact below — these counts drift with every fleet change.
+> **SUPERSEDED 2026-09-25 (agent0-sidecar):** this snapshot is two generations old. Live counts 2026-09-25: **111 agents / 14 teams / 16 rooms / 81 submodules; AI playlist 2,389 videos; PMOVES.AI playlist 869** (composio YouTube API, agent_registry.yaml, rooms/catalog.json, .gitmodules). The 98/13/64/2,000 figures below are historical — do not quote them in post copy; re-verify at post time or cite a dated registry snapshot per the recount discipline in 10_creator_pipeline_alt_hiphop_chit.md.  
 
 ---
 

@@ -46,7 +46,7 @@ jobs:
     # noise `if: false` was added to stop. Skipping is correct there: there is
     # no credential to review with. Mirrors review-autofix.yml.
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Least-privilege for a comment-only reviewer: it reads the diff and posts
     # PR review comments — it does not push commits or write attestations.
     # (claude.yml keeps contents:write because @claude can apply fix-ups.)

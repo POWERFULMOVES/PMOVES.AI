@@ -374,6 +374,30 @@ cards:
     voice: analytical
     role: agent
 
+- card_id: "00000000-0000-4000-8000-000000000014"
+  issued_at: "2026-09-21T21:17:40Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, spark, Linux, ARM64"
+  h:
+    agent_id: "spark-claude"
+    display_name: "SPARK Claude"
+    glyph: "⌁"          # ⌁ Electric arrow — spark mark; ⚡ is taken by `powerfulmoves`
+    color: "#4D7C0F"     # lime-700 — unclaimed hue family; distinct from spark-runner #EA580C
+    voice: analytical
+    role: agent
+  notes: |
+    PMOVES-SPARK node (NVIDIA DGX Spark, GB10 Grace-Blackwell) agent persona —
+    20-core Arm CPU + integrated Blackwell GPU on 128GB unified LPDDR5X,
+    sm_121 / CUDA 13.0.2, DGX OS 7.5.0, ARM64. Distinct from the `spark-runner`
+    CI identity on the same host: this is the agent-role card. Issued on SPARK
+    2026-09-21; landed on main with the cipher token lane (card gates
+    `make -C pmoves cipher-mint-token AGENT=spark-claude`). The card itself
+    provisions no Cipher token. ML half (github_app_installation_id) pending,
+    as on the sibling node cards.
+
 - card_id: "00000000-0000-4000-8000-000000000037"
   issued_at: "2026-07-02T00:00:00Z"
   active: true

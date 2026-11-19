@@ -542,6 +542,7 @@ volumes:
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
+  agent-zero-playwright-tmp: {}  # Playwright browser cache for agent-zero (/a0/tmp/playwright)
   pmoves-ollama-models: {}
   hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}

@@ -88,14 +88,18 @@ services:
     - SSL_CERT_DIR=/etc/ssl/certs
     - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    # The xet downloader panics on slim images ("No CA certificates were
+    # loaded from the system"); disabling it is huggingface_hub's documented
+    # fallback to plain HTTPS downloads.
+    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    # GPU via the NVIDIA runtime + NVIDIA_VISIBLE_DEVICES (environment above),
+    # not deploy.resources.reservations.devices: that path fires the legacy
+    # nvidia prestart hook, which fails on Docker Desktop/WSL2 (ld.so
+    # assertion, driver rpc error; container stuck in Created).
+    runtime: nvidia
     deploy:
       resources:
-        reservations:
-          devices:
-          - capabilities:
-            - gpu
-            count: ${GPU_COUNT:-all}
         limits:
           cpus: '4.0'
           memory: 8G
@@ -127,6 +131,7 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
@@ -140,15 +145,15 @@ services:
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
+    # GPU via NVIDIA runtime env (NVIDIA_VISIBLE_DEVICES above) — NOT
+    # deploy.resources.devices: the devices path fires the legacy nvidia
+    # prestart hook, which fails on Docker Desktop/WSL2 (ld.so assertion,
+    # driver rpc error, container stuck Created). The runtime itself is
+    # healthy on those hosts (nvidia-smi live, driver 610.57.01) — CUDA
+    # installs fine through runtime+env. Pattern per PR #3358 (media-audio).
+    runtime: nvidia
     deploy:
       resources:
-        reservations:
-          devices:
-          - driver: nvidia
-            capabilities:
-            - compute
-            - utility
-            count: ${GPU_COUNT:-all}
         limits:
           cpus: '4.0'
           memory: 8G
@@ -324,7 +329,7 @@ services:
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
-    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:8093:8093
+    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:${JELLYFIN_BRIDGE_PORT:-8093}:8093
     profiles:
     - orchestration
     networks:
@@ -360,7 +365,7 @@ services:
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - PMOVES_NETWORKS=pmoves_app,pmoves_monitoring,pmoves_external
-    ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
+    ports: ["${TTS_BIND:-127.0.0.1}:${ULTIMATE_TTS_STUDIO_PORT:-7861}:7861"]
     profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
@@ -441,7 +446,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
-    ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
+    ports: ["${FLUTE_BIND:-127.0.0.1}:${FLUTE_GATEWAY_8055_PORT:-8055}:8055", "${FLUTE_BIND:-127.0.0.1}:${FLUTE_GATEWAY_8056_PORT:-8056}:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -677,6 +682,19 @@ services:
       retries: 5
       start_period: 30s
   nvidia-nim:
+    # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
+    # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
+    # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
+    # nvidia-nim BOTH declare the `gpu` profile -- so under
+    # `docker compose --profile gpu up` they start together and one of them
+    # fails to bind. Override via NIM_HOST_PORT.
+    #
+    # This comment lives INSIDE the service on purpose: the split overlays are
+    # GENERATED from this file, and a comment block that floats above a KEY is
+    # not carried with the service into the overlay that contains it -- it
+    # lands above whatever service the generator emits next. A comment inside
+    # the service body travels with the service into every overlay that has
+    # it, so the note describes the service it is attached to.
     <<: *tier-llm-hardened
     image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
     restart: unless-stopped
@@ -687,7 +705,7 @@ services:
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     ports:
-    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
+    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000"
     profiles: ["gpu", "nim"]
     networks:
     - pmoves_api
@@ -770,9 +788,6 @@ services:
         condition: service_healthy
         required: false
 
-  # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
-  # Default host port is 8200 (NOT 8000) to avoid colliding with supabase-kong,
-  # which binds 8000 by default. Override via NIM_HOST_PORT.
   llama-throughput-lab:
     build:
       context: ../PMOVES-llama-throughput-lab
@@ -813,7 +828,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - ${LLAMA_LAB_BIND:-0.0.0.0}:8201:8201
+    - ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
 
   # =============================================================================
   # GitHub Automation Services (Phase 3)

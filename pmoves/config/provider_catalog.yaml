@@ -493,13 +493,25 @@ providers:
   # ---------------------------------------------------------------------------
   # MiniMax — Token Plan provider
   # ---------------------------------------------------------------------------
+  # Per memory 2026-10-05 ("MiniMax API key formats: sk-cp vs sk-api"):
+  #   Token Plan keys (sk-cp-...) and pay-as-you-go keys (sk-api-...) are NOT
+  #   interchangeable. Pay-as-you-go keys pass auth but every chat call returns
+  #   insufficient-balance (1008). The key_pattern below enforces Token Plan
+  #   format; the Mavis 3-step probe gate (auth -> quota -> chat) catches
+  #   mismatches before treating a credential as wired-up.
   minimax:
     env_var: MINIMAX_API_KEY
-    key_pattern: ".*"
-    api_base: "https://api.minimax.io/v1"
+    key_pattern: "^sk-cp-"            # Token Plan only (mmx agent setup --help)
+    api_base: "https://api.minimax.io/v1"  # validated by mmx smoke test 2026-10-05
     tz_type: openai
     tier: llm
     coding_stack: minimax_token_plan
+    notes: |
+      MiniMax Token Plan (per operator 2026-10-05): ~1.7B tokens/month M3 budget,
+      text + image + speech share one quota, 1M token context, 3-4 concurrent
+      agents per subscription. api_base validated against api.minimax.io (not
+      api.minimaxi.chat). PMOVES_KEY_MAVIS_MODE == "sk-cp" enforces Token Plan;
+      pay-as-you-go keys are NOT accepted.
     models:
       chat_minimax:
         model_name: "MiniMax-M2.7"
@@ -509,8 +521,157 @@ providers:
             variant_name: cloud_minimax
             role: primary
             weight: 0.8
+          - function: agent_zero
+            variant_name: hosted_minimax_m27
+            role: secondary
+            weight: 0.5
+          - function: long_context_research
+            variant_name: cloud_minimax_m27
+            role: primary
+            weight: 0.7
+          - function: archon_work_orders
+            variant_name: hosted_minimax_m27
+            role: secondary
+            weight: 0.4
         strength_ref: minimax-m2.7
         vram_mb: 0
+        notes: "MiniMax M2.7 - 1M context, multimodal; primary for long-context research"
+
+      chat_minimax_m3:
+        model_name: "MiniMax-M3"
+        tz_model_key: chat_minimax_m3
+        serves:
+          - function: orchestrator
+            variant_name: primary_cloud_m3
+            role: primary
+            weight: 1.0
+          - function: agent_zero
+            variant_name: hosted_minimax_m3
+            role: primary
+            weight: 1.0
+          - function: agent_zero_subordinate
+            variant_name: hosted_minimax_m3
+            role: primary
+            weight: 0.7
+          - function: coding_minimax
+            variant_name: cloud_minimax_m3
+            role: primary
+            weight: 0.9
+          - function: long_context_research
+            variant_name: cloud_minimax_m3
+            role: primary
+            weight: 1.0
+          - function: archon_work_orders
+            variant_name: hosted_minimax_m3
+            role: primary
+            weight: 0.6
+          - function: archon_code_review
+            variant_name: hosted_minimax_m3
+            role: secondary
+            weight: 0.5
+          - function: deepresearch
+            variant_name: hosted_minimax_m3
+            role: primary
+            weight: 0.7
+          - function: pmoves_research_coordinator
+            variant_name: hosted_minimax_m3
+            role: primary
+            weight: 0.7
+          - function: pmoves_knowledge_manager
+            variant_name: hosted_minimax_m3
+            role: primary
+            weight: 0.7
+        strength_ref: minimax-m3
+        vram_mb: 0
+        notes: "MiniMax M3 - flagship multimodal; 1M context; 3-4 concurrent agents per subscription"
+        multimodal: true
+        input_modalities: ["text", "image", "video"]
+
+      chat_minimax_m27_highspeed:
+        model_name: "MiniMax-M2.7-highspeed"
+        tz_model_key: chat_minimax_m27_highspeed
+        serves:
+          - function: coding_minimax
+            variant_name: cloud_minimax_m27_highspeed
+            role: primary
+            weight: 1.0
+          - function: long_context_research
+            variant_name: cloud_minimax_m27_highspeed
+            role: secondary
+            weight: 0.8
+          - function: orchestrator
+            variant_name: primary_cloud_highspeed
+            role: secondary
+            weight: 0.6
+          - function: agent_zero
+            variant_name: hosted_minimax_m27_highspeed
+            role: secondary
+            weight: 0.6
+          - function: pmoves_log_analyzer
+            variant_name: hosted_minimax_m27_highspeed
+            role: primary
+            weight: 0.7
+        strength_ref: minimax-m2.7-highspeed
+        vram_mb: 0
+        notes: "MiniMax M2.7 highspeed - lower latency for high-throughput lanes"
+
+      chat_minimax_image01:
+        model_name: "image-01"
+        tz_model_key: chat_minimax_image01
+        serves:
+          - function: pmoves_image_gen
+            variant_name: minimax_image01
+            role: primary
+            weight: 1.0
+          - function: pmoves_poster_art
+            variant_name: minimax_image01
+            role: primary
+            weight: 1.0
+          - function: pmoves_visual_anchor_gen
+            variant_name: minimax_image01
+            role: primary
+            weight: 0.9
+        strength_ref: minimax-image-01
+        vram_mb: 0
+        notes: "MiniMax image-01 - text-to-image generation; persona imagery (FlOO$ + DARKXSIDE anchors)"
+        multimodal: false
+        output_modalities: ["image"]
+
+      chat_minimax_speech28:
+        model_name: "speech-2.8-hd"
+        tz_model_key: chat_minimax_speech28
+        serves:
+          - function: pmoves_tts
+            variant_name: minimax_speech28_hd
+            role: primary
+            weight: 1.0
+          - function: pmoves_voice_clone
+            variant_name: minimax_speech28_hd
+            role: primary
+            weight: 1.0
+        strength_ref: minimax-speech-2.8-hd
+        vram_mb: 0
+        notes: "MiniMax speech-2.8-hd - TTS (text-to-speech); primary for PMOVES voice lanes"
+        multimodal: false
+        output_modalities: ["audio"]
+
+      chat_minimax_asr10:
+        model_name: "asr-1.0"
+        tz_model_key: chat_minimax_asr10
+        serves:
+          - function: pmoves_stt
+            variant_name: minimax_asr10
+            role: primary
+            weight: 1.0
+          - function: pmoves_transcribe
+            variant_name: minimax_asr10
+            role: primary
+            weight: 1.0
+        strength_ref: minimax-asr-1.0
+        vram_mb: 0
+        notes: "MiniMax asr-1.0 - speech-to-text; primary for PMOVES ingest transcribe lanes"
+        multimodal: false
+        input_modalities: ["audio"]
 
   # ---------------------------------------------------------------------------
   # Together AI — Multi-model hosting

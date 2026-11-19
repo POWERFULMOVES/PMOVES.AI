@@ -1,0 +1,78 @@
+# DARKXSIDE — Persona
+# Mavis Collection — slice G.3 persona layer
+#
+# DARKXSIDE — the operator's real identity. Going public as DARKXSIDE per operator
+# directive (2026-08-07): real identity, face, voice used in content. Shifts from
+# "developer/operator" to "public creator/voice".
+#
+# Content strategy: react to videos, share thoughts, connect + reveal deeper story layers,
+# reach the edge of the universe, show what's on the other side. Through the Looking-Glass
+# (Lewis Carroll) metaphor — the operator reveals what's beyond the visible layer of the
+# existing creator/AI/music ecosystem.
+#
+# PMOVES is the production substrate for this; the Mavis harness + BPM cron are the
+# daily creative engine.
+
+name: darkxside
+display_name: "DARKXSIDE"
+description: |
+  DARKXSIDE — the operator's public persona. Going public (operator directive
+  2026-08-07): real identity, face, voice used in content.
+
+  Through the Looking-Glass (Lewis Carroll) metaphor — the operator reveals what's
+  beyond the visible layer of the existing creator/AI/music ecosystem.
+
+  PMOVES is the production substrate for DARKXSIDE; the Mavis harness + BPM cron
+  are the daily creative engine.
+
+# Going public
+public_identity: true
+identity_mode:
+  - real_face
+  - real_voice
+  - real_name  # Russell Richardson per Drive + Gmail account info
+
+content_strategy:
+  - react_to_videos
+  - share_thoughts
+  - connect_reveal_deeper_layers
+  - reach_edge_of_universe
+  - show_other_side
+metaphor: through_the_looking_glass  # Lewis Carroll
+
+# Content surface
+youtube:
+  channel: "@PMOVESAI"
+  channel_url: "https://www.youtube.com/@PMOVESAI/playlists"
+  primary_playlist: "PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8"
+  playlist_title: "DARKXSIDE School of Powerful Drives"
+# at 2026-10-06 the playlist has ~2234+ videos and grows daily ("info started to move so fast")
+  # Per operator 2026-10-06: "they start funneling into the ai playlist cus info started to move so fast"
+  # Manifest pointers DO NOT hardcode item_count -- resolver fetches live.
+
+# Visual identity
+visual_anchors:
+  primary:
+    path: "My Drive / CataclysmstudiosInc / Pictures / darkxside.jpg"
+    created: 2024-02-01
+    role: operator_self_insert
+    notes: "Spiky-haired armored -- the canonical operator self-insert"
+
+# Cross-references
+cross_agent_inheritance:
+  - fl00                # the FlOO$ signature is DARKXSIDE-shifted
+  - mavis-orchestrator  # the orchestrator surfaces DARKXSIDE content strategy
+
+# Production substrate
+substrate:
+  runtime: PMOVES
+  harness: mavis
+  cron: BPM  # beats-per-minute orchestrator (per memory 2026-08-07)
+
+# Pointer-only contract
+pointer_only: true
+resolver_path: "pmoves/tools/mavis_collection_resolve.py resolve --manifest Drive:CataclysmstudiosInc/Pictures"
+
+chit:
+  design: pmoves/docs/architecture/HYPERAGINTZ_MONIKER_DESIGN.md
+  namespace: darkxside  # Hi-RAG ingest namespace per darkxside_playlist_ingestion.json

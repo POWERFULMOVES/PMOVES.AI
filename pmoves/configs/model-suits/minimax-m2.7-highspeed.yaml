@@ -1,0 +1,127 @@
+# Model Suit: MiniMax M2.7 Highspeed
+# PMOVES.AI MiniMax Edition Configuration
+# Provider: MiniMax Token Plan
+# Documentation: https://platform.minimax.io/docs/token-plan/intro
+#
+# Theme: M2.7-highspeed is the lower-latency variant of M2.7 -- same 1M context
+# window, faster throughput, share of Token Plan quota. Used as primary for
+# coding_minimax (alongside M2.7) and high-throughput lanes (log analyzer).
+
+suit:
+  id: minimax-m2.7-highspeed
+  name: MiniMax M2.7 Highspeed (Token Plan)
+  provider: minimax
+  flare_name: pmoves/minimax-m2.7-highspeed
+  model_family: minimax
+  tier: primary_highspeed
+  role: primary_highspeed  # PRIMARY for high-throughput coding lanes
+
+model_config:
+  context_window: 1000000  # same 1M as M2.7
+  max_output_tokens: 32000
+  supports_vision: true
+  supports_streaming: true
+  supports_multimodal: true
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+  input_modalities: [text, image, video]
+
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  api_base: https://api.minimax.io/v1
+  fallback_api_key_env: MINIMAX_API_KEY
+  key_format: sk-cp
+  plan_tiers:
+    # Highspeed tiers
+    - starter_highspeed: 4500
+    - plus_highspeed: 4500
+    - max_highspeed: 15000
+    - ultra_highspeed: 30000
+  quota_reset: rolling_5h
+  quota_sharing: shares the same Token Plan bucket as M2.7 / M3
+  monthly_budget: "~1.7B tokens/month M3+highspeed combined (operator 2026-10-05)"
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      notes: MiniMax M2.7-highspeed configuration tuning
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are MiniMax M2.7-highspeed, the low-latency variant of M2.7 with the
+        same 1M token context window. You serve as the primary backbone for
+        high-throughput lanes (coding + log analysis) where latency is more
+        important than peak quality.
+
+        Your unique capabilities include:
+        - 1M token context window (same as M2.7)
+        - Lower latency for high-volume lanes
+        - Share Token Plan quota with M2.7 / M3 (one bucket, drawn together)
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model"
+
+tensorzero_config:
+  model_name: minimax-m2.7-highspeed
+  weight: 1.0  # PRIMARY for coding_minimax alongside M2.7
+  routing:
+    - function: coding_minimax
+      priority: 1
+    - function: pmoves_log_analyzer
+      priority: 1
+    - function: long_context_research
+      priority: 2
+
+flare_namespace:
+  alias: pmoves/minimax-m2.7-highspeed
+  canonical_name: minimax-m2.7-highspeed
+  provider_url: https://api.minimax.io/v1
+  already_registered: true
+
+capabilities:
+  - long_context
+  - multimodal
+  - vision
+  - code_generation
+  - reasoning
+  - fast_inference            # low-latency lane
+  - high_throughput            # for batch + log analysis
+  - agent_trails
+
+local_fallback:
+  available: true
+  fallback_model_suit: glm-4.7
+  fallback_trigger: quota_exhausted
+
+cross_agent:
+  agent_zero: full
+  clawz: limited
+  archon: full
+  typer: untested
+  pinokio: full
+  a2ui: full
+  kilocode: full
+  hermes: full
+  glm_coder: full
+  kimi_coder: full
+
+huggingface:
+  model_id: MiniMaxAI/MiniMax-M2.7-highspeed
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
+metadata:
+  source: pmoves/minimax-integration
+  last_verified: 2026-10-05
+  benchmark_data:
+    - source: "MiniMax Token Plan Documentation"
+      url: "https://platform.minimax.io/docs/token-plan/intro"
+  runtime_note: "PRIMARY HIGHSPEED - coding + log analyzer lanes"

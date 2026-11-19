@@ -1,0 +1,93 @@
+# pmoves-chit-multimodal — Dataset manifest pointer
+# Mavis Collection — slice G.3 dataset layer
+#
+# Per pmoves/config/datasets.yaml:62, this dataset is published to
+# DARKXSIDE/pmoves-chit-multimodal on HuggingFace Hub. The CHIT-encoded
+# multimodal corpus (text + image + audio) is built by PMOVES.YT + pmoves.yt_mini
+# services from the operator's YouTube playlist PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8
+# (DARKXSIDE School of Powerful Moves / DARKXSIDE AI Playlist).
+#
+# This manifest pointer does NOT copy the data; it tells the resolver where to
+# fetch live counts + how to wire ingestion.
+
+name: pmoves-chit-multimodal
+canonical_ref: pmoves/config/datasets.yaml#pmoves-chit-multimodal
+hf_id: DARKXSIDE/pmoves-chit-multimodal
+description: |
+  Multi-lane CHIT dataset -- text, image, and audio CGP packets with reconstruction
+  targets. Each lane uses lane-specific EvoSwarm-evolved geometry parameters
+  (delta, kappa, Hz). Enables cross-modal training where models learn to map between
+  modalities via shared geometric space.
+
+# Sources (per pmoves/config/datasets.yaml:64-101)
+sources:
+  - pmoves-yt               # Video transcripts + audio (CANONICAL SOURCE)
+  - media-video-analyzer    # Frame analysis (YOLO)
+  - media-audio-analyzer    # Audio emotion/speaker
+  - extract-worker          # Text embeddings
+
+# Primary ingestion route (per operator 2026-10-06)
+primary_ingestion:
+  account: cataclysmstudios@gmail.com
+  channel: "@PMOVESAI"
+  playlist_id: PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8
+  playlist_url: "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8"
+  playlist_title: "DARKXSIDE School of Powerful Moves"
+  namespace: darkxside
+  services:
+    - name: PMOVES.YT
+      role: canonical_youtube_ingest
+      source: pmoves/services/pmoves-yt/  # canonical submodule: C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT
+      endpoints:
+        - POST ${HIRAG_URL}/geometry/event  # http://localhost:8086
+    - name: pmoves.yt_mini
+      role: lite_youtube_ingest
+      status: not-yet-built  # operator referenced 2026-10-06; needs design+build
+
+  ingest_flow: pmoves/n8n/flows/darkxside_playlist_ingestion.json
+  channel_monitor_ref: pmoves/config/channel_monitor.json
+  channel_monitor_channel_id: "yt:playlist:PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8"
+
+# Live playlist counts (per memory entry + operator 2026-10-06)
+playlist_growth:
+  - date: 2026-07-28
+    count: 102
+    source: docs/handoffs/DARKXSIDE_PLAYLIST_PROCESSING_2026-07-28.md
+  - date: 2026-07-28
+    count: 2028
+    source: docs/handoffs/DARKXSIDE_PLAYLIST_PROCESSING_2026-07-28.md (crawl-derived)
+  - date: 2026-09-03
+    count: 2234
+    source: docs/operations/KILOCLAW_INSTANCE_INTEGRATION_2026-09-03.md
+  - date: 2026-10-06
+    status: live-growing
+    note: "Operator 2026-10-06: 'they start funneling into the ai playlist cus info started to move so fast'"
+    resolver_fetches: live_count_via_YOUTUBE_LIST_PLAYLIST_ITEMS
+
+# Schema (per pmoves/config/datasets.yaml:76-101)
+schema:
+  format: parquet
+  columns:
+    - {name: lane, type: string, description: "text|image|audio|mixed"}
+    - {name: cgp_packet, type: json, description: "CGP v0.2 packet"}
+    - {name: original, type: bytes, description: "Source bytes"}
+    - {name: original_mime, type: string, description: "MIME type"}
+    - {name: reconstruction, type: bytes, description: "Reconstructed bytes"}
+    - {name: modality_scores, type: json, description: "Per-dimension fidelity"}
+    - {name: evoswarm_pack_id, type: string, description: "EvoSwarm pack"}
+
+# Storage
+supabase_source:
+  table: pmoves_core.geometry_cgp_v1
+  filter: "payload->>spec=eq.chit.cgp.v0.2"
+
+# Publishing
+publishing:
+  hf_org: DARKXSIDE
+  hf_id: DARKXSIDE/pmoves-chit-multimodal
+  default_license: apache-2.0
+
+# Pointer-only contract
+pointer_only: true
+# This YAML describes the dataset's shape + ingestion route; the resolver fetches
+# live counts and the canonical config holds the column schema.

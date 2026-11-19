@@ -9,7 +9,7 @@ Provide a text blueprint for the grouped horizontal bar chart that highlights RO
 
 ## Regeneration Options
 1. **Plotly rebuild**  
-   `python "CATACLYSM_STUDIOS_INC/ABOUT/notes/Community Wealth Building Through Diverse Resident/chart_script.py"`  
+   `python "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Community Wealth Building Through Diverse Resident/chart_script.py"`  
    Restores `enterprise_roi_chart.png`
 2. **Creator pipeline prompt**  
    ```

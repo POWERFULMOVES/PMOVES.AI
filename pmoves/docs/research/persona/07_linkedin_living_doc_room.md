@@ -1,6 +1,6 @@
 # LinkedIn Persona → Living-Doc Room (Design Plan)
 
-> **Status:** DESIGN PLAN (scope-only, no build in this pass)
+> **Status:** BUILT — phases 1–4.5 shipped per §9; Phase 5 operator-blocked (DNS cutover for persona.pmoves.ai still pending as of 2026-09-25). Header corrected 2026-09-25 — previously read 'scope-only, no build', which contradicted §9.
 > **Companion to:** [`06_linkedin_profile.md`](06_linkedin_profile.md) (the content source of truth)
 > **Requested:** a "better version" of the LinkedIn profile — a *living doc with a web overlay* that shows **Remotion** + **PreTeXt** skills, uses **design elements from the website and rooms**, and eventually becomes **a room on pmoves.ai proper (not Cloudflare Pages)**.
 
