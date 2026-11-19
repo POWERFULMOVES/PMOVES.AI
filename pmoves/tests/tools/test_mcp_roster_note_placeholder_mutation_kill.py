@@ -54,6 +54,26 @@ M4  The INVENTORY changes under the roster.
     Kills ``test_the_fleet_roster_still_agrees_with_its_generator``. The
     roster is generated from the inventory and merged over the tracked file,
     so a change to the source that the roster does not reflect is drift.
+
+M5  An UNBALANCED reference (``${BROKEN``) lands in a config value.
+    Kills ``test_no_env_value_carries_a_malformed_reference``. Codex finding
+    4631230891: the filter used to require a CLOSING brace, so an unbalanced
+    reference was discarded -- and the normalizer still degrades the server,
+    because it records the literal text it could not close. The hole left the
+    malformed-reference class half-unprotected.
+
+M6  The INVENTORY gains a server the roster does not carry.
+    Kills ``test_the_fleet_roster_still_agrees_with_its_generator``. Codex
+    finding 4631230905: the absence branch used to `continue`, so a whole
+    missing server was invisible -- a field-by-field comparison has nothing
+    to compare when the entry is not there at all.
+
+M7  A server recorded as deliberately absent BECOMES rostered.
+    Kills ``test_the_fleet_roster_still_agrees_with_its_generator``. The
+    other direction of the absence record: without it, the record of
+    measured reasons could go stale and keep claiming a server is missing
+    when it is not. The roster entry is inserted VERBATIM from the
+    generator, so the only thing that can fail is the stale record.
 """
 
 from __future__ import annotations
@@ -80,6 +100,19 @@ MALFORMED = "${...}"
 
 # A well-formed reference to a real variable. Unresolved, but not malformed.
 WELL_FORMED = "${NATS_CREDS}"
+
+# An UNBALANCED reference: it opens a placeholder and never closes it, so no
+# environment variable can ever satisfy it. The normalizer records the literal
+# text it could not close.
+UNBALANCED = "${BROKEN"
+
+# The key used by the M6 mutation: a server the inventory declares and the
+# tracked roster does not carry.
+ABSENT_PROBE_KEY = "natsnote-absent-probe"
+
+# One of the servers recorded in GENERATED_NOT_ROSTERED as deliberately
+# absent. M7 rosters it, so the absence record must notice.
+RECORDED_ABSENT_SERVER = "flute-voice-mcp"
 
 
 def _load_ratchet():
@@ -108,6 +141,21 @@ def _mutated_roster(tmp_path: Path, mutate) -> Path:
     shutil.copy(ratchet.ROSTER_PATH, dest)
     raw = json.loads(dest.read_text(encoding="utf-8"))
     mutate(raw["mcpServers"][TARGET_SERVER])
+    dest.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+    return dest
+
+
+def _mutated_roster_raw(tmp_path: Path, mutate) -> Path:
+    """Copy the real roster and apply *mutate* to the WHOLE roster document.
+
+    Some mutations are not about one server's fields -- adding a server to the
+    roster, for instance -- so they need the top-level document.
+    """
+    ratchet = _load_ratchet()
+    dest = tmp_path / "mcp.json"
+    shutil.copy(ratchet.ROSTER_PATH, dest)
+    raw = json.loads(dest.read_text(encoding="utf-8"))
+    mutate(raw)
     dest.write_text(json.dumps(raw, indent=2), encoding="utf-8")
     return dest
 
@@ -261,4 +309,121 @@ def test_mutation_inventory_drift_is_killed(tmp_path: Path) -> None:
     assert "drifted from the inventory" in str(excinfo.value), (
         "the ratchet raised, but not with the drift message -- the assertion "
         f"that should have fired changed shape: {excinfo.value!r}"
+    )
+
+
+def test_mutation_unbalanced_placeholder_is_killed(tmp_path: Path) -> None:
+    """An UNBALANCED reference MUST fail the malformed-reference rule.
+
+    Codex finding 4631230891: the filter used to require a CLOSING brace, so
+    `${BROKEN` was discarded and the ratchet passed -- while the normalizer
+    still degraded the server, because it records the literal text it could
+    not close. An unbalanced reference is exactly as unsatisfiable as a
+    malformed one, so the hole left the class half-unprotected.
+    """
+    ratchet = _load_ratchet()
+
+    def _set_unbalanced(server: Dict[str, Any]) -> None:
+        env = server.get("env")
+        if not isinstance(env, dict):
+            env = {}
+            server["env"] = env
+        env["NATS_BROKEN_PROBE"] = UNBALANCED
+
+    mutated = _mutated_roster(tmp_path, _set_unbalanced)
+    ratchet.ROSTER_PATH = mutated
+
+    with pytest.raises(AssertionError) as excinfo:
+        ratchet.test_no_env_value_carries_a_malformed_reference()
+    assert "can never resolve" in str(excinfo.value), (
+        "the ratchet raised, but not with the malformed-reference message -- "
+        f"the assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+    assert UNBALANCED in str(excinfo.value), (
+        "the ratchet fired, but did not name the unbalanced reference -- "
+        f"the assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+
+
+def test_mutation_missing_generated_server_is_killed(tmp_path: Path) -> None:
+    """A generated server ABSENT from the roster MUST fail the ratchet.
+
+    Codex finding 4631230905: the absence branch used to `continue`, so an
+    inventory addition -- or an accidental deletion from the roster -- was
+    invisible. The field-by-field comparison has nothing to compare when the
+    entry is not there at all.
+    """
+    ratchet = _load_ratchet()
+    inventory = json.loads(ratchet.INVENTORY_PATH.read_text(encoding="utf-8"))
+    placed = False
+    for group in inventory["groups"].values():
+        for server in group.get("servers", []):
+            if server.get("key") == TARGET_SERVER:
+                probe = dict(server)
+                probe["key"] = ABSENT_PROBE_KEY
+                group["servers"].append(probe)
+                placed = True
+                break
+        if placed:
+            break
+    if not placed:
+        pytest.fail(f"mutation setup failed: {TARGET_SERVER} is not in the inventory")
+
+    dest = tmp_path / "mcp_inventory.json"
+    dest.write_text(json.dumps(inventory, indent=2), encoding="utf-8")
+    ratchet.INVENTORY_PATH = dest
+
+    with pytest.raises(AssertionError) as excinfo:
+        ratchet.test_the_fleet_roster_still_agrees_with_its_generator()
+    assert "MISSING a server the inventory declares" in str(excinfo.value), (
+        "the ratchet raised, but not with the missing-server message -- the "
+        f"assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+    assert ABSENT_PROBE_KEY in str(excinfo.value), (
+        "the ratchet fired, but did not name the missing server -- the "
+        f"assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+
+
+def test_mutation_stale_absence_record_is_killed(tmp_path: Path) -> None:
+    """A recorded absence that BECOMES rostered MUST fail the ratchet.
+
+    The other direction of the absence record. Without it, the record of
+    measured reasons could go stale and keep claiming a server is missing
+    when it is not -- and a ratchet nobody trusts is decoration.
+
+    The roster entry is inserted VERBATIM from the generator, so the only
+    thing that can fail here is the stale record: the field-by-field drift
+    check must stay silent.
+    """
+    from pmoves.tools import mcp_config_generator as gen
+
+    ratchet = _load_ratchet()
+    inventory = gen.load_inventory(ratchet.INVENTORY_PATH)
+    generated = gen.generate_for_client(
+        "claude", inventory=inventory, endpoint="fleet", allow_os_environ=False
+    )
+    entry = generated.get("mcpServers", {}).get(RECORDED_ABSENT_SERVER)
+    if not isinstance(entry, dict):
+        pytest.fail(
+            "mutation setup failed: the generator does not emit "
+            f"{RECORDED_ABSENT_SERVER}"
+        )
+
+    def _add_server(raw: Dict[str, Any]) -> None:
+        raw["mcpServers"][RECORDED_ABSENT_SERVER] = entry
+
+    mutated = _mutated_roster_raw(tmp_path, _add_server)
+    ratchet.ROSTER_PATH = mutated
+
+    with pytest.raises(AssertionError) as excinfo:
+        ratchet.test_the_fleet_roster_still_agrees_with_its_generator()
+    assert "has gone stale" in str(excinfo.value), (
+        "the ratchet raised, but not with the stale-record message -- the "
+        f"assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+    assert RECORDED_ABSENT_SERVER in str(excinfo.value), (
+        "the ratchet fired, but did not name the server whose record went "
+        f"stale -- the assertion that should have fired changed shape: "
+        f"{excinfo.value!r}"
     )

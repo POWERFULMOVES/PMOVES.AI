@@ -104,6 +104,70 @@ DOCUMENTED_VAR = "NATS_CREDS"
 # ratchet cannot drift from the component it constrains.
 SCANNED_FIELDS = tuple(mrn._DROP_FIELDS) + tuple(mrn._WARN_FIELDS)
 
+# Servers the inventory declares for the `claude` client that the FLEET roster
+# deliberately does NOT carry, each with the MEASURED reason.
+#
+# WHY THIS LIST IS NOT OPTIONAL. MEASURED 2026-11-19 with the LIVE generator
+# at client `claude`, endpoint `fleet`, `allow_os_environ=False`:
+#
+#   * the inventory declares 19 server entries in total;
+#   * the generator EMITS 14 of them for this client;
+#   * the tracked roster carries 21 servers.
+#
+# Of the 14 generated, exactly THREE are not rostered -- and the reason
+# differs per server, so the difference has to be WRITTEN DOWN, not skipped.
+# The roster's other 10 servers are the opposite direction: they are in the
+# roster but are not described by the inventory at all (hand-added), so they
+# are not absences and are not listed here.
+#
+# The previous version of this test skipped an absent server in silence, which
+# meant an inventory addition (the generator would emit it) or an accidental
+# deletion from the roster was invisible: the test passed while the fleet was
+# missing a whole server. Codex finding 4631230905 on this file.
+#
+# The reasons, measured:
+#
+#   e2b-danger-room   A stdio server whose command runs
+#                     `node ./pmoves-e2b-mcp-server/packages/js/build/index.js`.
+#                     MEASURED: the e2b submodule's tree at `e19e1ac7d` has NO
+#                     `packages/js/build` entry at all (only `src/`,
+#                     `package.json`, `tsconfig.json`), and NO file in
+#                     `pmoves/mk`, `pmoves/Makefile`, `deploy/`,
+#                     `pmoves/tools` or `pmoves/scripts` performs the
+#                     `npm run build` that produces it. The entry would
+#                     therefore launch and exit with MODULE_NOT_FOUND on every
+#                     node -- a permanently failed MCP server in every session.
+#
+#   flute-voice       The SSE surface of the flute-gateway. On the fleet
+#                     endpoint the inventory resolves it to
+#                     `http://${TS_Z890}:8055/sse`, so it is only reachable
+#                     where that tailnet name resolves, and it needs
+#                     `FLUTE_API_KEY` (present in `pmoves/env.shared.example`).
+#
+#   flute-voice-mcp   The streamable-http twin of the same gateway at the same
+#                     host, with the same `FLUTE_API_KEY` dependency.
+#
+# A NEW absence must fail this ratchet; a server that BECOMES rostered must
+# fail it too, so this record cannot silently go stale.
+GENERATED_NOT_ROSTERED: Dict[str, str] = {
+    "e2b-danger-room": (
+        "stdio server whose command runs node ./pmoves-e2b-mcp-server/packages/js/"
+        "build/index.js; the e2b submodule's tree has no packages/js/build entry and "
+        "no file in pmoves/mk, pmoves/Makefile, deploy/, pmoves/tools or "
+        "pmoves/scripts performs the npm run build that produces it, so the entry "
+        "would launch and fail on every node"
+    ),
+    "flute-voice": (
+        "SSE surface of the flute-gateway; on the fleet endpoint the inventory "
+        "resolves it to http://${TS_Z890}:8055/sse, so it is reachable only where "
+        "that tailnet name resolves, and it needs FLUTE_API_KEY"
+    ),
+    "flute-voice-mcp": (
+        "streamable-http twin of the flute-gateway at the same host, with the same "
+        "FLUTE_API_KEY dependency"
+    ),
+}
+
 
 def _load_roster(path: Path | None = None) -> Dict[str, Any]:
     return json.loads((path or ROSTER_PATH).read_text(encoding="utf-8"))
@@ -129,16 +193,30 @@ def _scannable_values(entry: Mapping[str, Any]) -> Iterable[tuple[str, str, str]
 def _malformed_references(value: str) -> list[str]:
     """References that can NEVER resolve, found with the tool's own `expand`.
 
-    `expand()` records an unresolvable but well-formed reference under its
-    NAME (`NATS_CREDS`) and a malformed one under its LITERAL TEXT
-    (`${...}`). So with an EMPTY environment, a recorded miss that still
-    looks like a reference is malformed, and one that does not is a real
-    variable the operator has not set. This uses the tool's own parser rather
-    than a second regex, so the two cannot disagree.
+    `expand()` records three kinds of miss, and the RECORDING is what tells
+    them apart:
+
+      * an unresolvable but well-formed reference, under its NAME
+        (`NATS_CREDS`) -- a real variable the operator has not set;
+      * a malformed one, under its LITERAL TEXT (`${...}`) -- the name is not
+        an identifier, so no variable can ever have it;
+      * an UNBALANCED one (`${BROKEN`), under the literal text it could not
+        close.
+
+    So the discriminator is "does the recorded miss still look like a
+    REFERENCE?", i.e. does it start with `${`. A well-formed miss is a bare
+    name and never starts with `${`; every malformed miss does, whether or
+    not it has a closing brace. Requiring the closing brace here would drop
+    the unbalanced case -- and an unbalanced reference is exactly as
+    unsatisfiable as a malformed one, so it would leave a hole in the class
+    this ratchet exists to close.
+
+    This uses the tool's own parser rather than a second regex, so the two
+    cannot disagree.
     """
     missing: list[str] = []
     mrn.expand(value, {}, missing)
-    return [m for m in missing if m.startswith("${") and m.endswith("}")]
+    return [m for m in missing if m.startswith("${")]
 
 
 def test_no_env_value_carries_a_malformed_reference() -> None:
@@ -271,6 +349,19 @@ def test_the_fleet_roster_still_agrees_with_its_generator() -> None:
     the tracked file, so the tracked entry may carry hand-added keys the
     inventory does not describe -- but every key the generator DOES describe
     must hold the same value, or the roster has drifted from its source.
+
+    A server the generator describes and the roster does NOT carry is the
+    OTHER direction, and it is the more dangerous one: it is invisible to a
+    field-by-field comparison, because there is no field to compare. It means
+    the deployed fleet is missing an entire inventory-defined server.
+
+    The three measured exceptions are recorded in `GENERATED_NOT_ROSTERED`,
+    and this test holds that record to BOTH directions:
+
+      * a NEW absence fails -- the inventory moved on and the roster did not;
+      * a recorded absence that BECOMES rostered also fails -- otherwise the
+        record of measured reasons goes stale and keeps claiming a server is
+        missing when it is not.
     """
     inventory = gen.load_inventory(INVENTORY_PATH)
     generated = gen.generate_for_client(
@@ -278,9 +369,15 @@ def test_the_fleet_roster_still_agrees_with_its_generator() -> None:
     )
     tracked = _servers(_load_roster())
     drift: list[str] = []
+    absent: list[str] = []
     for key, gen_entry in _servers(generated).items():
         tracked_entry = tracked.get(key)
-        if not isinstance(gen_entry, dict) or not isinstance(tracked_entry, dict):
+        if not isinstance(gen_entry, dict):
+            continue
+        if not isinstance(tracked_entry, dict):
+            # NOT a `continue`. An absent server is a drift of its own, and
+            # skipping it is how a whole server goes missing unnoticed.
+            absent.append(key)
             continue
         for field, value in gen_entry.items():
             if field == "env" and isinstance(value, dict):
@@ -300,6 +397,31 @@ def test_the_fleet_roster_still_agrees_with_its_generator() -> None:
                     f"{key}.{field}: tracked {tracked_entry.get(field)!r} "
                     f"!= generated {value!r}"
                 )
+
+    undocumented = sorted(set(absent) - set(GENERATED_NOT_ROSTERED))
+    assert not undocumented, (
+        "the fleet roster is MISSING a server the inventory declares:\n  "
+        + "\n  ".join(
+            f"{key} -- no recorded reason; add the measured reason to "
+            f"GENERATED_NOT_ROSTERED in this file, or roster the server"
+            for key in undocumented
+        )
+        + "\nThe generator emits these servers for the `claude` client, so the "
+        "inventory has moved on and the tracked roster has not. A missing "
+        "server is invisible to the field-by-field check below: there is no "
+        "field to compare."
+    )
+
+    resolved = sorted(set(GENERATED_NOT_ROSTERED) - set(absent))
+    assert not resolved, (
+        "these servers are recorded in GENERATED_NOT_ROSTERED as deliberately "
+        "absent from the fleet roster, but they are now rostered:\n  "
+        + "\n  ".join(resolved)
+        + "\nThe record of measured reasons has gone stale. Remove them from "
+        "GENERATED_NOT_ROSTERED and update the measurement note above with "
+        "the current numbers."
+    )
+
     assert not drift, (
         "the tracked fleet roster has drifted from the inventory it is "
         "generated from:\n  " + "\n  ".join(drift) + "\nRegenerate with "
