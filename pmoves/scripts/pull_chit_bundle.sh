@@ -87,13 +87,38 @@ artifact_of() {
           | (map(select(.name|startswith(\"chit-bundle-$NODE-\"))) + .) | .[0].name // empty"
 }
 
+# gh_json_field ID FIELD -- one run view query, fails soft (empty) so a
+# transient API error cannot kill the caller under set -e.
+gh_run_field() {
+  local v
+  v="$(gh run view "$1" --repo "$REPO" --json "$2" --jq ".$2" 2>/dev/null || true)"
+  printf '%s\n' "${v//\"/}"  # gh --jq string output is quoted; strip for compare
+}
+
+# gh_retry CMD... -- up to 3 attempts against transient gh failures (rate
+# limit, proxy hiccup). A command substitution like
+#   before="$(gh run list ...)"
+# under `set -e` aborts the whole script with ZERO output on the first
+# failure -- the exact silent-death mode the PR review flagged. Every gh
+# call whose failure is not itself the answer goes through here.
+gh_retry() {
+  local attempt=0 out rc=1
+  while [ "$attempt" -lt 3 ]; do
+    attempt=$((attempt + 1))
+    if out="$("$@" 2>&1)"; then printf '%s\n' "$out"; return 0; fi
+    rc=$?
+    [ "$attempt" -lt 3 ] && sleep $((attempt * 2))
+  done
+  return "$rc"
+}
+
 # SELF-DISPATCH. Bundles live one day (deliberately: the artifact holds every
 # prod secret), so on most days a consumer finds nothing to pull. Any node
 # whose gh is authed may DISPATCH the producer run -- the producers themselves
 # stay the Linux runners in $PRODUCERS. Opt out with PMOVES_BUNDLE_NO_DISPATCH=1.
 DISPATCH_TIMEOUT="${PMOVES_BUNDLE_DISPATCH_TIMEOUT:-900}"
 self_dispatch() {
-  local why="$1" before new="" waited=0
+  local why="$1" before floor_ts new="" id created
   if [ "${PMOVES_BUNDLE_NO_DISPATCH:-0}" = "1" ]; then
     echo "❌ $why"
     echo "   Self-dispatch is off (PMOVES_BUNDLE_NO_DISPATCH=1). Dispatch a fresh run on the Linux producers ($PRODUCERS):"
@@ -102,35 +127,61 @@ self_dispatch() {
   fi
   echo "→ $why"
   echo "→ Self-dispatching $WORKFLOW on the Linux producers ($PRODUCERS)"
-  # Remember the runs that already exist, so the new one is found by identity
-  # rather than by clock (this node's clock and GitHub's need not agree).
-  before=",$(gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
-    --json databaseId --jq '[.[].databaseId|tostring]|join(",")'),"
+  # Correlation floor: GitHub's OWN createdAt for the newest existing run.
+  # A new run only counts if its server-side createdAt is strictly newer --
+  # immune to local clock skew, and a run dispatched by a CONCURRENT consumer
+  # before our floor is correctly treated as not-ours only if it predates the
+  # snapshot; a simultaneous dispatch race then resolves to the same fresh
+  # run (same workflow, same inputs), which is the safe outcome.
+  floor_ts="$(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 1 \
+    --json createdAt --jq '.[0].createdAt // "0"' || true)"
+  before=",$(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
+    --json databaseId --jq '[.[].databaseId|tostring]|join(",")' || true),"
   if ! gh workflow run "$WORKFLOW" --repo "$REPO" --ref main -f "targets=$PRODUCERS"; then
     echo "❌ Dispatch refused (gh needs a token with workflow/actions:write scope). Run by hand:"
     echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
     exit 1
   fi
-  while [ "$waited" -lt 60 ]; do
-    for id in $(gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
-        --json databaseId --jq '.[].databaseId'); do
-      case "$before" in *",$id,"*) ;; *) new="$id"; break ;; esac
+  local discover_waited=0
+  while [ "$discover_waited" -lt 60 ]; do
+    for id in $(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" \
+        --event workflow_dispatch --limit 20 --json databaseId --jq '.[].databaseId' || true); do
+      case "$before" in *",$id,"*) continue ;; esac
+      created="$(gh_run_field "$id" createdAt)"
+      # Identity, not clock: server-side createdAt must postdate the floor
+      # snapshot, and the event must be our dispatch class.
+      if [ -n "$created" ] && [ "$created" \> "${floor_ts//\"/}" ]; then new="$id"; break; fi
     done
     [ -n "$new" ] && break
-    sleep 5; waited=$((waited + 5))
+    sleep 5; discover_waited=$((discover_waited + 5))
   done
-  [ -n "$new" ] || { echo "❌ Dispatched, but the new run did not appear within 60s."; exit 1; }
-  echo "→ Waiting for run $new (timeout ${DISPATCH_TIMEOUT}s)"
+  [ -n "$new" ] || { echo "❌ Dispatched, but no new workflow_dispatch run appeared within 60s."; exit 1; }
+  echo "→ Waiting for run $new (timeout ${DISPATCH_TIMEOUT}s, correlated by createdAt > ${floor_ts//\"/})"
   # `timeout` is absent on stock macOS, whose bash 3.2 also rejects an empty
   # "${arr[@]}" under set -u -- so branch rather than build an argv prefix.
+  # Both branches enforce DISPATCH_TIMEOUT; the fallback loop additionally
+  # covers fine-grained PATs, where `gh run watch` (streaming API) can fail
+  # while plain status polling works -- so poll status,conclusion instead.
   local watched=0
   if command -v timeout >/dev/null; then
     timeout "$DISPATCH_TIMEOUT" gh run watch "$new" --repo "$REPO" --exit-status --interval 10 >/dev/null || watched=$?
-  else
-    gh run watch "$new" --repo "$REPO" --exit-status --interval 10 >/dev/null || watched=$?
+    if [ "$watched" -ne 0 ]; then
+      # watch can fail for auth/streaming reasons even while the run is fine
+      # (fine-grained PAT) -- fall through to status polling before declaring death.
+      watched=0
+    else
+      RUN_ID="$new"; return 0
+    fi
   fi
-  if [ "$watched" -ne 0 ]; then
-    echo "❌ Run $new did not succeed in time. Is a producer runner ($PRODUCERS) online?"
+  local waited=0 status="" conclusion=""
+  while [ "$waited" -lt "$DISPATCH_TIMEOUT" ]; do
+    status="$(gh_run_field "$new" status)"
+    [ "$status" = "completed" ] && break
+    sleep 10; waited=$((waited + 10))
+  done
+  conclusion="$(gh_run_field "$new" conclusion)"
+  if [ "$status" != "completed" ] || [ "$conclusion" != "success" ]; then
+    echo "❌ Run $new did not succeed in time (status=${status:-unknown} conclusion=${conclusion:-unknown}). Is a producer runner ($PRODUCERS) online?"
     echo "   gh run view $new --repo $REPO"
     exit 1
   fi
