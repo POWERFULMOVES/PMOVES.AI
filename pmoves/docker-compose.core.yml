@@ -1947,7 +1947,7 @@ services:
       CA_UPSTREAM_SERVICES: '[["host-kong","host.docker.internal",8000,"Host-published Kong (hairpin check)"],["github","github.com",443,"Egress check"]]'
       PMOVES_NETWORKS: "pmoves_bus,pmoves_api,pmoves_data,pmoves_monitoring,pmoves_external"
     ports:
-    - "127.0.0.1:8111:8111"
+    - "127.0.0.1:${CONTAINER_AGENT_PORT:-8111}:8111"
     networks:
     - pmoves_bus
     - pmoves_api
