@@ -435,7 +435,7 @@ agents:
       publishes: []
       subscribes: []
     topology:
-      node_affinity: [pmoves-spark]
+      node_affinity: [spark]
       team: orchestration
       ci_runner: null
       compose_profile: null

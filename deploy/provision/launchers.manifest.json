@@ -330,25 +330,25 @@
       "sha256": "6e38429d29a5e725544248f90b62e186a4c683b254febf2b7720b775830039a0"
     },
     {
-      "bytes": 1550,
+      "bytes": 1529,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/crush-pmoves-spark.sh",
-      "sha256": "98b036d6e1f1d92ca249fdd573ba9418ee702c6fdc9fcdf9480d5adb9cc1c5a2"
+      "sha256": "b944337be519cdc9afb4b58ce3f181b4ae249ae15171d06343a3a482fe301ea5"
     },
     {
-      "bytes": 1158,
+      "bytes": 1137,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/crush-pmoves-spark.ps1",
-      "sha256": "f6b09aaac08ec60b5e1fecc2221c0ebdb57921f9a0f330ce572d6d55d9004ef5"
+      "sha256": "b156e30d422001a30938498a0558941bd738cf6a926887d7ab6baf66f7773c21"
     },
     {
-      "bytes": 781,
+      "bytes": 774,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/crush-pmoves-spark.cmd",
-      "sha256": "20100e9cee14d62e16cea675a0cc71809c2d169a10a515e193d74d8fdbacee58"
+      "sha256": "335d91c4029637cc09596fa02928eedf2b421b5d46951023d80bd8b7c585ae94"
     },
     {
       "bytes": 1469,

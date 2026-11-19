@@ -7,15 +7,15 @@
 # (pmoves/configs/launcher_overrides.yaml), not to this file.
 # crush-pmoves-spark.ps1 -- per-node identity pin
 # ===========================================================================
-# Sets $env:PMOVES_NODE_ID='pmoves-spark' and calls crush-pmoves.ps1
+# Sets $env:PMOVES_NODE_ID='spark' and calls crush-pmoves.ps1
 # so the session binds to the `crush_spark` identity from
 # pmoves/config/agent_registry.yaml.
 #
 # Source of truth: agent_registry.yaml entry `crush_spark`
 #   signature: spark-crush
-#   node_affinity: [pmoves-spark, ...]
+#   node_affinity: [spark, ...]
 # ===========================================================================
 $ErrorActionPreference = 'Stop'
-$env:PMOVES_NODE_ID = 'pmoves-spark'
+$env:PMOVES_NODE_ID = 'spark'
 $ps1 = Join-Path $PSScriptRoot 'crush-pmoves.ps1'
 & $ps1 @args

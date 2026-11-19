@@ -7,13 +7,13 @@
 # (pmoves/configs/launcher_overrides.yaml), not to this file.
 # crush-pmoves-spark.sh -- per-node identity pin
 # ===========================================================================
-# Sets PMOVES_NODE_ID=pmoves-spark and execs crush-pmoves.sh so the
+# Sets PMOVES_NODE_ID=spark and execs crush-pmoves.sh so the
 # session binds to the `crush_spark` identity from
 # pmoves/config/agent_registry.yaml.
 #
 # Source of truth: agent_registry.yaml entry `crush_spark`
 #   signature: spark-crush
-#   node_affinity: [pmoves-spark, ...]
+#   node_affinity: [spark, ...]
 #   description: SPARK (DGX Spark, GB10, ARM64) Crush identity -- the terminal companion harness on this node, working alongside claude_spark
 #
 # Wezterm sets per-pane env via `set-pane-environment-variables`; this is
@@ -22,5 +22,5 @@
 # PMOVES_NODE_ID is overridden -- the registry is the canonical binding.
 # ===========================================================================
 set -u
-export PMOVES_NODE_ID="pmoves-spark"
+export PMOVES_NODE_ID="spark"
 exec "$(dirname "${BASH_SOURCE[0]:-$0}")/crush-pmoves.sh" "$@"

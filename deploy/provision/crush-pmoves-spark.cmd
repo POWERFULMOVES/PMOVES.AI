@@ -6,6 +6,6 @@ REM DO NOT EDIT BY HAND -- your changes will be overwritten by the next regen.
 REM If you need a per-CLI customisation, add it to launcher_overrides.yaml
 REM (pmoves/configs/launcher_overrides.yaml), not to this file.
 REM crush-pmoves-spark.cmd -- per-node identity pin (Windows wrapper).
-REM Sets PMOVES_NODE_ID=pmoves-spark via the .ps1 then delegates to it.
+REM Sets PMOVES_NODE_ID=spark via the .ps1 then delegates to it.
 @echo off
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0crush-pmoves-spark.ps1" %*
