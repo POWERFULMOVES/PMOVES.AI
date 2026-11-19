@@ -13,16 +13,30 @@ the ones that are generated elsewhere so callers can skip them in
 Two classes of self-generated secret:
 
 * **Derivable now** — the Supabase ``anon`` / ``service_role`` API keys are
-  HS256 JWTs over ``JWT_SECRET``. We recreate them byte-for-byte with the same
-  header/claims as ``scripts/supabase/generate-keys.sh`` (the canonical
-  generator), so an operator only ever sets ``JWT_SECRET``.
+  HS256 JWTs over the secret the verifiers use
+  (``${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}``). We recreate them byte-for-byte
+  with the same header/claims as ``scripts/supabase/generate-keys.sh`` (the
+  canonical generator), so an operator only ever sets the JWT secret.
 * **Generated elsewhere** — ``POSTGRES_PASSWORD`` is minted at db-init
   (``scripts/supabase/db-passwd.sh``) and must match the running database, so we
   do **not** fabricate it here (a funnel-invented value would desync the DB). It
   is only *recognized* as self-generated so it is not flagged as an operator gap.
 
-Design: additive and idempotent — an operator-supplied value is never
-overwritten; missing ``JWT_SECRET`` is a no-op (nothing to derive).
+Design: idempotent, and additive for every value it cannot prove is this
+node's. An existing key is rewritten only when this node minted it (ownership
+is proven by SIGNATURE alone: HS256 verifying under one of this node's JWT
+secrets) AND this node's compose Supabase is its verifier (stated
+``SUPABASE_RUNTIME=compose``, local URLs). Two things can trigger a rewrite:
+it is stale (expired, malformed exp, wrong role claim, or signed with this
+node's other secret), or it is a live key that differs from its role's key and
+is converged onto it (one role, one key, in Kong's order). Keys this node did
+not sign (cloud, a peer, a Supabase CLI stack with its own secret), RS256/ES256
+keys and opaque ``sb_*`` keys are never rewritten, expired or not: an expired
+or malformed-exp one is reported ``left_unchanged``, and a live one that
+differs from the role key is reported ``divergent_foreign``. A key the Supabase
+CLI minted with THIS node's secret is ours by signature, and is rewritten under
+the same two conditions as any other. Every change and refusal is reported by
+NAME through ``events``. A missing JWT secret is a no-op.
 """
 
 from __future__ import annotations
@@ -31,8 +45,9 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import time
-from typing import Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from pmoves.tools._secrets_common import is_placeholder
 
@@ -42,9 +57,10 @@ _JWT_IAT = 1641769200   # fixed timestamp for reproducibility (generate-keys.sh)
 _JWT_EXP = 1799535600   # far-future expiry (generate-keys.sh)
 
 # Refreshed keys are minted with a rolling 10-year window instead of the fixed
-# generate-keys.sh timestamps: a refresh only happens when the previous value
-# has already expired, so re-deriving with the same fixed exp would reproduce
-# the same dead key on every funnel run forever.
+# generate-keys.sh timestamps: a fresh mint happens only when a role has a stale
+# label (expired, malformed exp, wrong role, or signed with this node's other
+# secret) and no live verifying sibling to adopt, and re-deriving with the same
+# fixed exp would reproduce an expired key on every run forever.
 _REFRESH_LIFETIME_S = 10 * 365 * 24 * 3600
 
 # Canonical label -> role, plus the short aliases the pipe also carries.
@@ -60,6 +76,20 @@ _SUPABASE_JWT_KEYS: dict[str, str] = {
     "SUPABASE_SERVICE_KEY": "service_role",
     "SUPABASE_SERVICE_ROLE_KEY": "service_role",
     "SERVICE_ROLE_KEY": "service_role",
+}
+
+# One role, one key. When a label of a role is stale or absent, it ADOPTS a
+# live sibling that already verifies under the verifiers' secret, in KONG'S
+# order (supabase-kong: SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-
+# ${SERVICE_ROLE_KEY}}, SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY}}),
+# before minting a new value. Measured on knuckles 2026-10-31 after the #3410
+# funnel run: SERVICE_ROLE_KEY (Kong's key) was live but signed with the other
+# secret while SUPABASE_SERVICE_KEY was live and verified. A fresh mint for the
+# stale one would leave two different live service keys, and Kong refuses every
+# consumer of whichever its consumer key is not.
+_ROLE_DONOR_ORDER: dict[str, tuple[str, ...]] = {
+    "service_role": ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY"),
+    "anon": ("ANON_KEY", "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
 }
 
 # Self-generated but NOT derivable in the funnel (minted at db-init, must match
@@ -100,7 +130,7 @@ def derive_supabase_jwt(
     return f"{signing_input}.{_b64url(signature)}"
 
 
-def _jwt_exp_claim(value: Optional[str]) -> Optional[int]:
+def _jwt_exp_claim(value: Optional[str]) -> Optional[float]:
     """Return the ``exp`` claim of a JWT-shaped value, or None if not decodable.
 
     Deliberately does NOT verify the signature: this decides whether a value is
@@ -118,63 +148,409 @@ def _jwt_exp_claim(value: Optional[str]) -> Optional[int]:
     except (ValueError, UnicodeDecodeError):
         return None
     exp = claims.get("exp") if isinstance(claims, dict) else None
-    return exp if isinstance(exp, int) else None
+    return exp if _is_numeric_date(exp) else None
 
 
-def fill_self_generated(secrets: Mapping[str, str]) -> Dict[str, str]:
+def _is_numeric_date(exp: object) -> bool:
+    # RFC 7519 NumericDate: a FINITE int or float. bool is an int subclass in
+    # Python and is NOT a date ({"exp": true} must not read as exp=1). Python's
+    # json accepts NaN / Infinity / -Infinity literals: NaN compares false with
+    # everything (numeric-but-never-live), Infinity would never expire -- so a
+    # non-finite exp is malformed, not a date.
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return False
+    return isinstance(exp, int) or math.isfinite(exp)
+
+
+def _exp_state(value: Optional[str]) -> str:
+    """``absent`` (no ``exp`` key), ``numeric`` (a finite NumericDate),
+    ``malformed`` (``exp`` PRESENT with any other value -- null, NaN, +/-Infinity,
+    bool, string...: unknown, so neither live nor adoptable), or ``undecodable``."""
+    decoded = _claims(value)
+    if decoded is None:
+        return "undecodable"
+    if "exp" not in decoded[1]:
+        return "absent"      # key MISSING: no expiry claimed
+    # key PRESENT: null, NaN, +/-Infinity, bool, string, ... are all malformed
+    return "numeric" if _is_numeric_date(decoded[1]["exp"]) else "malformed"
+
+
+# The precedence every compose verifier uses: PostgREST (PGRST_JWT_SECRET),
+# GoTrue (GOTRUE_JWT_SECRET), Realtime (API_JWT_SECRET), Studio (AUTH_JWT_SECRET)
+# all read ${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}. Minting with any other order
+# produces keys Kong admits (exact-match consumer key) but PostgREST refuses
+# with PGRST301 on every node where the two secrets differ.
+_VERIFIER_SECRET_ORDER = ("SUPABASE_JWT_SECRET", "JWT_SECRET")
+
+
+def verifier_secret(values: Mapping[str, str]) -> str:
+    """The JWT secret the Supabase verifiers will use, by their own precedence."""
+    for name in _VERIFIER_SECRET_ORDER:
+        value = (values.get(name) or "").strip()
+        if value and not is_placeholder(value):
+            return value
+    return ""
+
+
+def _hs256_verifies(value: Optional[str], secret: str) -> Optional[bool]:
+    """True/False for an HS256 JWT under ``secret``; None if not an HS256 JWT.
+
+    Non-HS256 values (asymmetric keys, opaque sb_* keys) return None, so they
+    are never ``signed_with_other_secret`` and never minted here: they are never
+    re-minted. A non-HS256 JWT is still read for ``exp``. An expired one is
+    reported ``left_unchanged`` / ``expired_not_minted_here``, and one with a
+    malformed exp is reported ``not_minted_here``. Otherwise, if it differs from
+    its role's key, it is reported ``divergent_foreign`` and left in place.
+    """
+    if not value:
+        return None
+    parts = value.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        pad = parts[0] + "=" * (-len(parts[0]) % 4)
+        header = json.loads(base64.urlsafe_b64decode(pad.encode("ascii")))
+        sig = base64.urlsafe_b64decode((parts[2] + "=" * (-len(parts[2]) % 4)).encode("ascii"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(header, dict) or header.get("alg") != "HS256":
+        return None
+    expected = hmac.new(
+        secret.encode(), f"{parts[0]}.{parts[1]}".encode(), hashlib.sha256
+    ).digest()
+    return hmac.compare_digest(expected, sig)
+
+
+# Hosts that mean "the Supabase on this machine / this compose project":
+# loopback, the Docker host alias, and -- passed in by the caller -- the service
+# and container names actually DEFINED in our compose files. A dotless host is
+# NOT assumed local: tailnet MagicDNS short names (pmoves-z890) and LAN
+# hostnames are dotless too, and point at a PEER's Supabase. Unknown = remote.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"})
+_URL_KEYS = ("SUPABASE_URL", "SUPABASE_REST_URL")
+_RUNTIME_KEY = "SUPABASE_RUNTIME"
+_LOCAL_RUNTIME = "compose"
+# The runtimes the Makefile knows (SUPABASE_RUNTIME=cli|kong|compose). A reason
+# never carries the raw SUPABASE_RUNTIME value -- it comes from the secret map
+# or the shell, so anything outside this set is reported as "other".
+KNOWN_RUNTIMES = ("compose", "cli", "kong")
+
+# CLOSED vocabulary of every event field (#3433 CodeQL): every label, role and
+# reason fill_self_generated can emit is a member of these tuples, so a printer
+# can map each field onto a constant and nothing from a value reaches output.
+EVENT_ROLES = ("anon", "service_role")
+EVENT_ACTIONS = ("filled", "reminted", "left_unchanged")
+_REFUSALS = (
+    "not_minted_here", "runtime_unknown", "remote_url", "divergent_foreign",
+    *(f"empty_{k}" for k in ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")),
+    *(f"runtime_{r}" for r in (*KNOWN_RUNTIMES[1:], "other")),
+)
+EVENT_REASONS = (
+    "absent", "expired", "signed_with_other_secret", "malformed_exp", "role_mismatch",
+    "converged_to_role_key",
+    *_REFUSALS, *(f"expired_{r}" for r in _REFUSALS),
+)
+
+
+def _host_is_local(url: str, local_services: Optional[frozenset] = None) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return bool(host) and (host in _LOOPBACK_HOSTS or host in (local_services or frozenset()))
+
+
+def local_runtime_is_verifier(
+    context: Mapping[str, str], local_services: Optional[frozenset] = None
+) -> Tuple[bool, str]:
+    """``(yes, reason)``: is this node's own compose Supabase the verifier?
+
+    * ``SUPABASE_RUNTIME`` must be STATED as the compose runtime. Absent is
+      ``runtime_unknown``; set-but-EMPTY is ``empty_SUPABASE_RUNTIME`` (an empty
+      export shadows the secret map exactly as it shadows compose's env files).
+    * Every Supabase URL present must name a local host (loopback, the Docker
+      host alias, or a service/container defined in our compose files, passed as
+      *local_services*; ``None`` = none known, so only loopback counts).
+      Set-but-EMPTY is ``empty_<VAR>``: unknown, never "unset therefore local".
+    """
+    if _RUNTIME_KEY not in context:
+        return False, "runtime_unknown"
+    runtime = (context.get(_RUNTIME_KEY) or "").strip()
+    if not runtime:
+        return False, f"empty_{_RUNTIME_KEY}"
+    if runtime != _LOCAL_RUNTIME:
+        known = next((r for r in KNOWN_RUNTIMES if r == runtime), "other")
+        return False, f"runtime_{known}"
+    for key in _URL_KEYS:
+        if key not in context:
+            continue
+        url = (context.get(key) or "").strip()
+        if not url or is_placeholder(url):
+            return False, f"empty_{key}"
+        if not _host_is_local(url, local_services):
+            return False, "remote_url"
+    return True, "local"
+
+
+def _claims(value: Optional[str]) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+    if not value:
+        return None
+    parts = value.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        header = json.loads(base64.urlsafe_b64decode((parts[0] + "=" * (-len(parts[0]) % 4)).encode("ascii")))
+        claims = json.loads(base64.urlsafe_b64decode((parts[1] + "=" * (-len(parts[1]) % 4)).encode("ascii")))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(header, dict) or not isinstance(claims, dict):
+        return None
+    return header, claims
+
+
+def _node_secrets(values: Mapping[str, str]) -> List[str]:
+    """This node's JWT secrets (both names, deduplicated, placeholders dropped)."""
+    out: List[str] = []
+    for name in _VERIFIER_SECRET_ORDER:
+        v = (values.get(name) or "").strip()
+        if v and not is_placeholder(v) and v not in out:
+            out.append(v)
+    return out
+
+
+def _minted_by_this_node(value: Optional[str], node_secrets: Sequence[str]) -> bool:
+    """HS256 and the signature VERIFIES under one of this node's own JWT secrets.
+    ``iss`` is deliberately not the proof: every PMOVES funnel stamps
+    ``supabase-local``, so it shows "some PMOVES node", not this one -- while a
+    signature under a local secret can only have been made here (that includes
+    a Supabase-CLI-minted key signed with this node's secret, which is what
+    expired on knuckles 2026-10-21). The ROLE is judged separately
+    (``role_mismatch``), so a wrong-role token minted here is still ours."""
+    decoded = _claims(value)
+    if decoded is None or decoded[0].get("alg") != "HS256":
+        return False
+    return any(_hs256_verifies(value, sec) is True for sec in node_secrets)
+
+
+def _is_live_role_key(value: Optional[str], role: str, jwt_secret: str, now: int) -> bool:
+    """A value fit to BE the role's key: HS256, the role's own role claim,
+    verifies under the verifiers' secret, and its exp is absent or a NumericDate
+    in the future (a malformed exp is unknown, so never live)."""
+    if is_placeholder(value) or _hs256_verifies(value, jwt_secret) is not True:
+        return False
+    if (_claims(value) or ({}, {}))[1].get("role") != role:
+        return False
+    state = _exp_state(value)
+    return state == "absent" or (state == "numeric" and _jwt_exp_claim(value) > now)
+
+
+def fill_self_generated(
+    secrets: Mapping[str, str],
+    *,
+    context: Optional[Mapping[str, str]] = None,
+    events: Optional[List[Dict[str, str]]] = None,
+    local_services: Optional[frozenset] = None,
+) -> Dict[str, str]:
     """Return a copy of ``secrets`` with derivable self-generated keys filled.
 
-    Derives the Supabase ``anon``/``service_role`` keys from ``JWT_SECRET`` for
-    any of their labels that are absent (or set to an empty/sentinel value).
-    Operator-supplied values are preserved. A missing ``JWT_SECRET`` is a no-op.
+    What it changes, exactly (every change and every refusal is appended to
+    *events* as ``{label, role, action, reason}`` -- names only, never values,
+    reasons from the closed ``EVENT_REASONS``):
 
-    An EXPIRED JWT under a derivable label is refreshed even though a value is
-    present: these labels are self-generated by construction (re-derivable from
-    ``JWT_SECRET``), so a dead key is stale, not operator intent. Measured on
-    knuckles 2026-10-22: a Supabase CLI-minted 1-year service_role JWT expired
-    at 2026-10-21T04:03:43Z and the funnel re-propagated the corpse to every
-    tier env on every subsequent run, taking down every per-agent token check
-    that authenticates to PostgREST with it (cipher memory writes 503'd).
-    Refreshed keys mint with a rolling 10-year window so a refresh outlives the
-    value it replaces; live keys are never touched.
+    Two gates guard every rewrite of an existing value:
+      - **minted here** -- ownership is proven by SIGNATURE alone: HS256 and the
+        signature verifies under one of this node's JWT secrets
+        (``_minted_by_this_node``). ``iss`` is irrelevant (every PMOVES funnel
+        stamps ``supabase-local``) and the role is judged separately;
+      - **local verifier** -- this node's compose Supabase is the verifier
+        (``local_runtime_is_verifier``: ``SUPABASE_RUNTIME=compose`` STATED,
+        every present ``SUPABASE_URL``/``SUPABASE_REST_URL`` local; unset or
+        set-but-empty is unknown).
+
+    * **absent / placeholder** label -> filled from the role's live key if one
+      exists, else derived from the verifiers' secret (``filled``, ``absent``).
+    * **stale** label -> ``reminted`` when both gates pass, with reason (first
+      that applies; ``expired`` and ``malformed_exp`` are read from any
+      decodable JWT, the other two only from HS256 -- a non-HS256 key never
+      passes the minted-here gate, so it is only ever reported):
+        - ``expired`` -- a finite NumericDate ``exp`` in the past (#3410: a
+          CLI-minted 1-year service_role JWT on knuckles expired
+          2026-10-21T04:03:43Z and the funnel re-propagated the corpse to every
+          tier env);
+        - ``malformed_exp`` -- ``exp`` PRESENT but not a finite int/float
+          (null, NaN, +/-Infinity, bool, string, ...): unknown, so never live,
+          never adoptable, never the role key;
+        - ``role_mismatch`` -- the token's role claim is not the label's role
+          (e.g. an anon token under a service label);
+        - ``signed_with_other_secret`` -- live, but does not verify under the
+          verifiers' secret.
+      A stale label whose gates fail is LEFT UNCHANGED and reported
+      (``left_unchanged``): ``not_minted_here`` (cloud/CLI/peer: it may be right
+      for ITS verifier) or the runtime reason (``runtime_unknown``,
+      ``runtime_cli``/``kong``/``other``, ``remote_url``, ``empty_<VAR>``); an
+      expired one is prefixed ``expired_`` -- a new key must come from its
+      issuer, and re-minting it under our secret would hide that behind a
+      fresh-looking key its real verifier refuses.
+    * **one role, one key** -- every stale/absent label takes the role's key:
+      the first live verifying sibling in Kong's order (``_ROLE_DONOR_ORDER``,
+      Kong's own consumer-key expression first). If there is none, a role with
+      a stale label gets ONE rolling mint (10-year window); a role whose labels
+      are only absent gets the canonical ``generate-keys.sh`` vector (fixed
+      ``iat``/``exp``, byte-compatible). Then
+      every remaining label that differs from that role key is CONVERGED:
+        - a live, verifying key minted here moves onto the role key
+          (``reminted``, ``converged_to_role_key``) -- only when the local
+          verifier gate passes, else ``left_unchanged`` with the runtime reason;
+        - anything else that differs (not minted here, non-HS256 such as
+          RS256/ES256, opaque ``sb_*``) is never overwritten and is reported
+          ``left_unchanged`` / ``divergent_foreign``.
+    * a label that already IS the role key is not touched.
+
+    Keys are minted with the secret the VERIFIERS use
+    (``${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}``). A missing secret is a no-op.
+    *context* supplies ``SUPABASE_RUNTIME`` and the URLs (callers pass process
+    env over the secret map; defaults to *secrets*). *local_services* is the set
+    of compose service/container names; ``None`` means only loopback is local.
     """
     out: Dict[str, str] = dict(secrets)
-    jwt_secret = (out.get("JWT_SECRET") or out.get("SUPABASE_JWT_SECRET") or "").strip()
-    if not jwt_secret or is_placeholder(jwt_secret):
+    ctx = secrets if context is None else context
+    log = events if events is not None else []
+    jwt_secret = verifier_secret(out)
+    if not jwt_secret:
         return out
+    node_secrets = _node_secrets(out)
 
     # Mirror JWT_SECRET into SUPABASE_JWT_SECRET if missing (manifest requires both)
     if not out.get("SUPABASE_JWT_SECRET") or is_placeholder(out.get("SUPABASE_JWT_SECRET")):
         out["SUPABASE_JWT_SECRET"] = jwt_secret
 
+    verifier_ok, runtime_reason = local_runtime_is_verifier(ctx, local_services)
     now = int(time.time())
     # Group labels by role so a refresh mints ONE token per role: filling an
     # absent alias with the fixed byte-compat vector while refreshing its
-    # expired sibling with a rolling mint would leave the same role carrying
-    # two different (and differently-expiring) keys.
+    # stale sibling with a rolling mint would leave the same role carrying two
+    # different (and differently-expiring) keys.
     roles: dict[str, list[str]] = {}
     for label, role in _SUPABASE_JWT_KEYS.items():
         roles.setdefault(role, []).append(label)
     for role, labels in roles.items():
-        expired = [
-            label
-            for label in labels
-            if not is_placeholder(out.get(label))
-            and (exp := _jwt_exp_claim(out.get(label))) is not None
-            and exp <= now
-        ]
-        if expired:
-            # Stale self-generated JWTs: refresh rather than re-propagate a
-            # corpse. Every placeholder/expired alias of the role moves to the
-            # same rolling mint; live operator values stay untouched.
-            rolling = derive_supabase_jwt(
+        order = [lb for lb in _ROLE_DONOR_ORDER.get(role, tuple(labels)) if lb in labels]
+        order += [lb for lb in labels if lb not in order]
+        # A live, verifying sibling to adopt (Kong's order), else None -> mint.
+        donor = next((out[lb] for lb in order if _is_live_role_key(out.get(lb), role, jwt_secret, now)), None)
+        stale: Dict[str, str] = {}
+        reported: set = set()
+        for label in labels:
+            value = out.get(label)
+            if is_placeholder(value):
+                continue
+            exp = _jwt_exp_claim(value)
+            decoded = _claims(value)
+            hs256 = decoded is not None and decoded[0].get("alg") == "HS256"
+            if exp is not None and exp <= now:
+                why = "expired"
+            elif _exp_state(value) == "malformed":
+                why = "malformed_exp"
+            elif hs256 and decoded[1].get("role") != role:
+                # e.g. an anon token under a service label: Kong would admit it
+                # as the service consumer key while it carries anon rights.
+                why = "role_mismatch"
+            elif _hs256_verifies(value, jwt_secret) is False:
+                why = "signed_with_other_secret"
+            else:
+                continue  # live, verifying, right role -- or not an HS256 JWT
+            if not _minted_by_this_node(value, node_secrets):
+                refusal = "not_minted_here"
+            elif not verifier_ok:
+                refusal = runtime_reason
+            else:
+                stale[label] = why
+                continue
+            reported.add(label)
+            log.append({"label": label, "role": role, "action": "left_unchanged",
+                        "reason": ("expired_" if why == "expired" else "") + refusal})
+        if stale:
+            # Every placeholder/stale alias of the role moves to the same value:
+            # the live verifying sibling if there is one, else one rolling mint.
+            rolling = donor or derive_supabase_jwt(
                 jwt_secret, role, iat=now, exp=now + _REFRESH_LIFETIME_S
             )
             for label in labels:
-                if is_placeholder(out.get(label)) or label in expired:
+                if label in stale:
                     out[label] = rolling
+                    log.append({"label": label, "role": role, "action": "reminted",
+                                "reason": stale[label]})
+                elif is_placeholder(out.get(label)):
+                    out[label] = rolling
+                    log.append({"label": label, "role": role, "action": "filled",
+                                "reason": "absent"})
         else:
             for label in labels:
                 if is_placeholder(out.get(label)):
-                    out[label] = derive_supabase_jwt(jwt_secret, role)
+                    out[label] = donor or derive_supabase_jwt(jwt_secret, role)
+                    log.append({"label": label, "role": role, "action": "filled",
+                                "reason": "absent"})
+        # CONVERGE: one role, one key. Every label of the role ends on the first
+        # live role key in Kong's order (Kong's own consumer-key expression wins),
+        # including labels that were live and verifying but DIFFERENT -- Kong
+        # admits only one value per consumer. Only keys minted by this node move,
+        # and only when this node's compose Supabase is the verifier; anything
+        # else that differs is left in place and reported 'divergent_foreign'.
+        role_key = next((out[lb] for lb in order if _is_live_role_key(out.get(lb), role, jwt_secret, now)), None)
+        if role_key is None:
+            continue
+        for label in labels:
+            value = out.get(label)
+            if is_placeholder(value) or value == role_key or label in reported:
+                continue
+            if _is_live_role_key(value, role, jwt_secret, now) and _minted_by_this_node(value, node_secrets):
+                if verifier_ok:
+                    out[label] = role_key
+                    log.append({"label": label, "role": role, "action": "reminted",
+                                "reason": "converged_to_role_key"})
+                else:
+                    log.append({"label": label, "role": role, "action": "left_unchanged",
+                                "reason": runtime_reason})
+            else:
+                log.append({"label": label, "role": role, "action": "left_unchanged",
+                            "reason": "divergent_foreign"})
     return out
+
+
+def compose_service_names(docs: Sequence[Mapping[str, Any]]) -> frozenset:
+    """Service names and explicit ``container_name``/``hostname`` values defined in
+    the compose *docs*: the only dotless hosts that mean "this compose project"."""
+    names = set()
+    for doc in docs:
+        for name, svc in ((doc or {}).get("services") or {}).items():
+            names.add(str(name).lower())
+            for key in ("container_name", "hostname"):
+                val = (svc or {}).get(key) if isinstance(svc, Mapping) else None
+                if isinstance(val, str) and val and "$" not in val:
+                    names.add(val.lower())
+    return frozenset(names)
+
+
+def compose_consumers(labels: Sequence[str], docs: Sequence[Mapping[str, Any]]) -> List[str]:
+    """Compose services that name any of *labels* in ``environment`` or
+    ``build.args`` (a UI build with a baked-in anon key). Services that only
+    inherit a label through ``env_file`` are NOT visible here."""
+    import re
+
+    pats = [re.compile(r"\$\{?" + re.escape(lb) + r"(?![A-Za-z0-9_])") for lb in labels]
+    found: List[str] = []
+    for doc in docs:
+        for name, svc in ((doc or {}).get("services") or {}).items():
+            svc = svc or {}
+            build = svc.get("build") if isinstance(svc.get("build"), Mapping) else {}
+            texts: List[str] = []
+            for block in (svc.get("environment"), (build or {}).get("args")):
+                if isinstance(block, Mapping):
+                    texts += [f"{k}={v}" for k, v in block.items()]
+                elif isinstance(block, list):
+                    texts += [str(x) for x in block]
+            if any(p.search(t) for t in texts for p in pats) and name not in found:
+                found.append(name)
+    return sorted(found)
