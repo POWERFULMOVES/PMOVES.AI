@@ -1,0 +1,118 @@
+name: MMX CLI Surface Parity
+
+# Hard gate: the mmx CLI surface doc must describe the CLI that is installed.
+#
+# WHY THIS EXISTS
+# ---------------
+# `pmoves/docs/services/MMX_CLI_SURFACE.md` catalogued the `mmx` command
+# surface from memory, and the memory was wrong. It promised `mmx music
+# generate` (the installed build has no `music` resource at all), `mmx speech
+# list-voices` and `mmx speech clone` (both renamed), `mmx config get` and
+# `mmx search news` (never existed in the installed build), it omitted `mmx
+# agent setup`, `mmx text repl`, `mmx config show`, `mmx config export-schema`
+# and the `video task get` / `video download` pair, and it stated npm version
+# `v1.0.19` against an installed `1.0.25`.
+#
+# A doc that names a command the binary does not have is a promise the
+# sidecar lane breaks at run time, on a device, with a half-written output
+# file. So the surface is MEASURED (`pmoves/tools/mmx_surface_probe.py` reads
+# the binary's own `--help`) and the doc is held against that measurement
+# (`pmoves/tools/mmx_surface_parity.py`).
+#
+# WHAT THIS JOB DOES
+# ------------------
+# 1. installs the CLI at the version the committed snapshot claims,
+# 2. re-probes it and DIFFS the result against the committed snapshot -- the
+#    snapshot is the baseline, and this job never widens it,
+# 3. runs the doc-vs-snapshot gate,
+# 4. runs the gate's own tests, including the mutation harness that proves
+#    the gate still bites.
+#
+# The pin is read from the committed snapshot rather than written here, so
+# there is exactly one place to change when the surface moves. A reviewer
+# bumping the snapshot is making a deliberate, reviewable statement about
+# which CLI build this doc describes.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/docs/services/MMX_CLI_SURFACE.md"
+      - "pmoves/configs/mmx_surface/cli_surface.json"
+      - "pmoves/tools/mmx_surface_probe.py"
+      - "pmoves/tools/mmx_surface_parity.py"
+      - "pmoves/tests/tools/test_mmx_surface_parity.py"
+      - "pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py"
+      - ".github/workflows/mmx-surface-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  mmx-surface-parity:
+    name: mmx-surface-parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "20"
+
+      - name: Install the mmx CLI at the snapshot's version
+        run: |
+          set -euo pipefail
+          PINNED_VERSION="$(python -c "import json;print(json.load(open('pmoves/configs/mmx_surface/cli_surface.json'))['mmx_version'])")"
+          echo "installing mmx-cli@${PINNED_VERSION} (the version the committed snapshot claims)"
+          npm install -g "mmx-cli@${PINNED_VERSION}"
+          INSTALLED_VERSION="$(mmx --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)"
+          if [ "${INSTALLED_VERSION}" != "${PINNED_VERSION}" ]; then
+            echo "::error::the installed mmx is ${INSTALLED_VERSION}, the snapshot claims ${PINNED_VERSION}"
+            exit 1
+          fi
+
+      - name: Probe the installed CLI
+        run: |
+          set -euo pipefail
+          python pmoves/tools/mmx_surface_probe.py --out "${RUNNER_TEMP}/mmx_surface.json"
+
+      - name: Diff the probe against the committed snapshot
+        run: |
+          set -euo pipefail
+          if ! diff -u pmoves/configs/mmx_surface/cli_surface.json "${RUNNER_TEMP}/mmx_surface.json"; then
+            echo "::error::the installed mmx CLI surface differs from pmoves/configs/mmx_surface/cli_surface.json"
+            echo "::error::re-run 'python pmoves/tools/mmx_surface_probe.py' on the pinned build and commit the snapshot deliberately -- this job never widens the baseline"
+            exit 1
+          fi
+
+      - name: Check the doc against the snapshot
+        run: python pmoves/tools/mmx_surface_parity.py --check
+
+      - name: Pytest the gate and its mutation harness
+        run: |
+          # pmoves/conftest.py is shared across the tools/tests suite and imports
+          # pytest_asyncio + pyyaml. These tests are sync and stdlib-only, but
+          # the conftest import chain still has to resolve or collection dies
+          # before a single test runs. Same note as
+          # windows-encoding-ratchet.yml, learned the same way.
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
+          python -m pytest \
+            pmoves/tests/tools/test_mmx_surface_parity.py \
+            pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py \
+            -v

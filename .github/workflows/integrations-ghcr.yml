@@ -59,6 +59,26 @@ on:
       # Priority 3: media/content
       - 'PMOVES-transcribe-and-fetch'
       - 'PMOVES-autoresearch'
+      # THE RECORDED PIN's own inputs.
+      #
+      # This lane now publishes from the commit PMOVES.AI RECORDS for each fork
+      # (the gitlink), not from a moving branch. That makes the pin STATIC --
+      # so advancing a pin no longer changes what the next run builds, and a
+      # pin that advances without re-publishing leaves the published image on
+      # the PREVIOUS commit. Every input that can change a resolved pin must
+      # therefore trigger this workflow:
+      #   * the submodule paths whose gitlink IS the pin
+      #   * .gitmodules -- it maps a fork URL to those paths
+      #   * the resolver itself -- it decides which path wins
+      # The set is DERIVED from the matrix and the tree by
+      # pmoves/tests/tools/test_resolve_recorded_pin.py, so a new fork-backed
+      # entry cannot be added without also being covered here.
+      - 'pmoves/integrations/archon'
+      - 'Pmoves-Health-wger'
+      - 'PMOVES-ToKenism-Multi'
+      - 'PMOVES-llama-throughput-lab'
+      - '.gitmodules'
+      - 'pmoves/tools/resolve_recorded_pin.py'
       - '.github/workflows/integrations-ghcr.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - '.github/trivy/**'
@@ -91,6 +111,26 @@ on:
       # Priority 3: media/content
       - 'PMOVES-transcribe-and-fetch'
       - 'PMOVES-autoresearch'
+      # THE RECORDED PIN's own inputs.
+      #
+      # This lane now publishes from the commit PMOVES.AI RECORDS for each fork
+      # (the gitlink), not from a moving branch. That makes the pin STATIC --
+      # so advancing a pin no longer changes what the next run builds, and a
+      # pin that advances without re-publishing leaves the published image on
+      # the PREVIOUS commit. Every input that can change a resolved pin must
+      # therefore trigger this workflow:
+      #   * the submodule paths whose gitlink IS the pin
+      #   * .gitmodules -- it maps a fork URL to those paths
+      #   * the resolver itself -- it decides which path wins
+      # The set is DERIVED from the matrix and the tree by
+      # pmoves/tests/tools/test_resolve_recorded_pin.py, so a new fork-backed
+      # entry cannot be added without also being covered here.
+      - 'pmoves/integrations/archon'
+      - 'Pmoves-Health-wger'
+      - 'PMOVES-ToKenism-Multi'
+      - 'PMOVES-llama-throughput-lab'
+      - '.gitmodules'
+      - 'pmoves/tools/resolve_recorded_pin.py'
       - '.github/workflows/integrations-ghcr.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - '.github/trivy/**'
@@ -224,6 +264,55 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
+      - name: Resolve the recorded commit
+        id: pin
+        run: |
+          set -euo pipefail
+          # THE RECORDED COMMIT, NOT THE BRANCH TIP.
+          #
+          # `git clone --branch <name>` resolves a MOVING ref, so the image this
+          # lane builds is not reproducible from the repository state: two runs
+          # a week apart produce two different artifacts under the same tag, and
+          # no commit in PMOVES.AI names what was built. PMOVES.AI already
+          # records the answer for every fork it tracks as a submodule -- the
+          # gitlink -- and `build-images.yml` already builds from those pins
+          # (it checks out with `submodules: recursive` and builds
+          # `github.workspace/<repo>`). This lane did not.
+          #
+          # `pmoves/tools/resolve_recorded_pin.py` turns the fork URL into that
+          # recorded commit. Its exit codes are the contract:
+          #   0  resolved -- the SHA is on stdout
+          #   3  the fork is NOT tracked as a submodule: nothing is recorded,
+          #      so the branch ref is the only source there is
+          #   4  several submodules track the fork and disagree on the commit
+          #   5  a submodule declares the fork but the tree records no gitlink
+          #   6  the repository state could not be read
+          # 4, 5 and 6 FAIL the step. A build that resolves a different commit
+          # than the recorded one is the defect this step removes, so it must
+          # not be papered over with a fallback.
+          pybin="$(command -v python3 || command -v python || true)"
+          if [ -z "$pybin" ]; then
+            echo "::error::python3/python is required on runner to resolve the recorded commit."
+            exit 1
+          fi
+          cfg_url='${{ steps.cfg.outputs.git_url }}'
+          pin=""
+          status=0
+          pin="$("$pybin" pmoves/tools/resolve_recorded_pin.py --url "$cfg_url")" || status=$?
+          case "$status" in
+            0)
+              echo "::notice::recorded commit for ${cfg_url}: ${pin}"
+              ;;
+            3)
+              echo "::notice::${cfg_url} is not tracked as a submodule; nothing is recorded for it, so the branch ref is the source"
+              ;;
+            *)
+              echo "::error::could not resolve the recorded commit for ${cfg_url} (exit ${status})"
+              exit 1
+              ;;
+          esac
+          echo "pin=${pin}" >> "$GITHUB_OUTPUT"
+
       - name: Prepare integration source
         run: |
           set -euo pipefail
@@ -231,6 +320,10 @@ jobs:
           cfg_ref='${{ steps.cfg.outputs.ref }}'
           cfg_context='${{ steps.cfg.outputs.context }}'
           cfg_dockerfile='${{ steps.cfg.outputs.dockerfile }}'
+          # The RECORDED commit for this fork, resolved by the step above.
+          # Empty when the fork is not tracked as a submodule, in which case
+          # the branch ref is the only source there is.
+          cfg_pin='${{ steps.pin.outputs.pin }}'
           case "$cfg_url" in
             https://github.com/*) ;;
             *)
@@ -279,6 +372,18 @@ jobs:
             git ls-files --recurse-submodules -z | tar --null -T - -cf - | tar -xf - -C integration-src
           else
             git clone --depth=1 --branch "$cfg_ref" "$cfg_url" integration-src
+            # PIN TO THE RECORDED COMMIT.
+            #
+            # The clone above resolves a MOVING branch; this makes the build
+            # reproducible from the repository state by checking out the exact
+            # commit PMOVES.AI records for this fork. The idiom is the one the
+            # release-tracked entries below already use -- fetch the SHA, then
+            # `checkout --detach` it -- so the house has one way of saying it.
+            if [ -n "$cfg_pin" ]; then
+              git -C integration-src fetch --depth=1 origin "$cfg_pin"
+              git -C integration-src checkout --detach "$cfg_pin"
+              echo "✔ pinned to the recorded commit $cfg_pin"
+            fi
           fi
 
           # Fail here, loudly, rather than letting docker/build-push-action emit a
@@ -475,6 +580,55 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
+      - name: Resolve the recorded commit
+        id: pin
+        run: |
+          set -euo pipefail
+          # THE RECORDED COMMIT, NOT THE BRANCH TIP.
+          #
+          # `git clone --branch <name>` resolves a MOVING ref, so the image this
+          # lane publishes is not reproducible from the repository state: two
+          # runs a week apart produce two different artifacts under the same
+          # tag, and no commit in PMOVES.AI names what was built. PMOVES.AI
+          # already records the answer for every fork it tracks as a submodule
+          # -- the gitlink -- and `build-images.yml` already builds from those
+          # pins (it checks out with `submodules: recursive` and builds
+          # `github.workspace/<repo>`). This lane did not.
+          #
+          # `pmoves/tools/resolve_recorded_pin.py` turns the fork URL into that
+          # recorded commit. Its exit codes are the contract:
+          #   0  resolved -- the SHA is on stdout
+          #   3  the fork is NOT tracked as a submodule: nothing is recorded,
+          #      so the branch ref is the only source there is
+          #   4  several submodules track the fork and disagree on the commit
+          #   5  a submodule declares the fork but the tree records no gitlink
+          #   6  the repository state could not be read
+          # 4, 5 and 6 FAIL the step. A build that resolves a different commit
+          # than the recorded one is the defect this step removes, so it must
+          # not be papered over with a fallback.
+          pybin="$(command -v python3 || command -v python || true)"
+          if [ -z "$pybin" ]; then
+            echo "::error::python3/python is required on runner to resolve the recorded commit."
+            exit 1
+          fi
+          cfg_url='${{ steps.cfg.outputs.git_url }}'
+          pin=""
+          status=0
+          pin="$("$pybin" pmoves/tools/resolve_recorded_pin.py --url "$cfg_url")" || status=$?
+          case "$status" in
+            0)
+              echo "::notice::recorded commit for ${cfg_url}: ${pin}"
+              ;;
+            3)
+              echo "::notice::${cfg_url} is not tracked as a submodule; nothing is recorded for it, so the branch ref is the source"
+              ;;
+            *)
+              echo "::error::could not resolve the recorded commit for ${cfg_url} (exit ${status})"
+              exit 1
+              ;;
+          esac
+          echo "pin=${pin}" >> "$GITHUB_OUTPUT"
+
       - name: Validate secrets presence
         id: secrets_check
         run: |
@@ -528,6 +682,10 @@ jobs:
           cfg_ref='${{ steps.cfg.outputs.ref }}'
           cfg_context='${{ steps.cfg.outputs.context }}'
           cfg_dockerfile='${{ steps.cfg.outputs.dockerfile }}'
+          # The RECORDED commit for this fork, resolved by the step above.
+          # Empty when the fork is not tracked as a submodule, in which case
+          # the branch ref is the only source there is.
+          cfg_pin='${{ steps.pin.outputs.pin }}'
           case "$cfg_url" in
             https://github.com/*) ;;
             *)
@@ -585,6 +743,21 @@ jobs:
             if ! git clone --depth=1 --branch "$cfg_ref" "$url" integration-src; then
               echo "::error::Failed to clone ${cfg_url} (ref=${cfg_ref}). If this is a private integration repo, ensure GH_APP_ID/GH_APP_SEC secrets are set, or set CI_GIT_CLONE_TOKEN (PAT with repo read)."
               exit 1
+            fi
+            # PIN TO THE RECORDED COMMIT.
+            #
+            # The clone above resolves a MOVING branch; this makes the
+            # PUBLISHED image reproducible from the repository state by
+            # checking out the exact commit PMOVES.AI records for this fork.
+            # The idiom is the one the release-tracked entries below already
+            # use -- fetch the SHA, then `checkout --detach` it -- so the house
+            # has one way of saying it. That block runs AFTER this one and
+            # still wins for the entries it governs, which is deliberate: the
+            # release track's resolver is the authority for those entries.
+            if [ -n "$cfg_pin" ]; then
+              git -C integration-src fetch --depth=1 origin "$cfg_pin"
+              git -C integration-src checkout --detach "$cfg_pin"
+              echo "✔ pinned to the recorded commit $cfg_pin"
             fi
           fi
 
@@ -942,7 +1115,7 @@ jobs:
 
       - name: Upload SBOM artifact
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
@@ -1014,10 +1187,26 @@ jobs:
 
       - name: Upload Trivy report artifact
         if: ${{ steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
+
+      - name: Promote :latest after Trivy gate (agent-zero only)
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          SOURCE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
+          IMAGE_NAME_CFG: ${{ steps.cfg.outputs.image_name }}
+          GHCR_NS: ${{ steps.meta.outputs.ghcr_ns }}
+          REGISTRY_HOST: ${{ env.REGISTRY }}
+        run: |
+          set -euo pipefail
+          if [ "$IMAGE_NAME_CFG" != "pmoves-agent-zero" ]; then
+            echo "Not agent-zero; the :latest consumer channel is not managed by this lane."
+            exit 0
+          fi
+          echo "Promoting $SOURCE -> ${REGISTRY_HOST}/${GHCR_NS}/${IMAGE_NAME_CFG}:latest"
+          docker buildx imagetools create --tag "${REGISTRY_HOST}/${GHCR_NS}/${IMAGE_NAME_CFG}:latest" "$SOURCE"
 
       - name: Clean up pulled image and dangling layers
         if: ${{ steps.meta.outputs.has_tags == 'true' && always() }}

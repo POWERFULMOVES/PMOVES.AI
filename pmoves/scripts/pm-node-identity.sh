@@ -63,6 +63,10 @@ pm_node_identity() {
   PM_IDENT_DISPLAY=""
   PM_IDENT_REGISTER_FORM=""
   PM_IDENT_DISPLAY_WHY=""
+  # Host roots the registry grants this identity (scope.host_access: node),
+  # '|'-joined. The launcher adds them as --add-dir for the main session only.
+  PM_IDENT_HOST_ROOTS=""
+  PM_IDENT_HOST_WHY=""
 
   local tool="$root/pmoves/tools/node_identity.py"
   if [ ! -f "$tool" ]; then
@@ -145,6 +149,8 @@ pm_node_identity() {
   PM_IDENT_DISPLAY="${PMOVES_IDENTITY_NAME:-}"
   PM_IDENT_REGISTER_FORM="${PMOVES_REGISTER_FORM:-}"
   PM_IDENT_DISPLAY_WHY="${PMOVES_REGISTER_WHY:-resolver emitted no register name}"
+  PM_IDENT_HOST_ROOTS="${PMOVES_HOST_ROOTS:-}"
+  PM_IDENT_HOST_WHY="${PMOVES_HOST_WHY:-resolver emitted no host scope}"
 
   if [ -z "${PMOVES_NODE_IDENTITY:-}" ]; then
     PM_IDENT_LINE="[$label] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}"

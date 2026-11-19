@@ -73,7 +73,7 @@ def extract_port_mappings_from_compose(compose_file: Path) -> Dict[str, List[Tup
         return port_mappings
 
     try:
-        with open(compose_file) as f:
+        with open(compose_file, encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except yaml.YAMLError:
         return port_mappings
@@ -108,7 +108,7 @@ def get_all_compose_files() -> List[Path]:
 
 def _get_service_profile(compose_file: Path, service_name: str) -> str:
     """Get the Docker Compose profile for a service (empty string if none)."""
-    content = compose_file.read_text()
+    content = compose_file.read_text(encoding="utf-8")
     # Simple heuristic: search for "profiles:" near the service name
     in_service = False
     for line in content.splitlines():
@@ -301,7 +301,7 @@ def test_no_localhost_references_in_compose_ports() -> None:
     compose_files = get_all_compose_files()
 
     for compose_file in compose_files:
-        content = compose_file.read_text()
+        content = compose_file.read_text(encoding="utf-8")
 
         # Only flag actual port binding lines, not healthchecks, URLs, or env vars
         in_ports = False
@@ -363,7 +363,7 @@ def test_health_check_ports_match_service_ports() -> None:
     if not compose_file.exists():
         pytest.skip("docker-compose.yml not found")
 
-    content = compose_file.read_text()
+    content = compose_file.read_text(encoding="utf-8")
 
     healthcheck_ports = re.findall(r'localhost:(\d+)', content)
 
@@ -399,7 +399,7 @@ def test_no_legacy_cli_port_in_compose() -> None:
     compose_files = get_all_compose_files()
 
     for compose_file in compose_files:
-        content = compose_file.read_text()
+        content = compose_file.read_text(encoding="utf-8")
 
         if re.search(r'["\s]54321["\s:]', content):
             lines_with_54321 = []

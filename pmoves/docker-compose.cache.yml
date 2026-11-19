@@ -13,7 +13,7 @@ services:
     container_name: pmoves-semantic-cache
     restart: unless-stopped
     ports:
-      - "8100:8100"
+      - "${SEMANTIC_CACHE_PORT:-8100}:8100"
     environment:
       # Required — must be set in env.shared or local.env
       CACHE_DATABASE_URL: ${CACHE_DATABASE_URL}

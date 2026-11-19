@@ -72,7 +72,7 @@ services:
           cpus: '16.0'
           memory: 96G
     ports:
-    - "127.0.0.1:11434:11434"
+    - "127.0.0.1:${PMOVES_OLLAMA_PORT:-11434}:11434"
     networks:
     - spark_net
     healthcheck:

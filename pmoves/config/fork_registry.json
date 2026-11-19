@@ -169,7 +169,7 @@
       "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+      "reason": "Spark-specific integration, manual updates; submodule tracks PMOVES.AI-Edition-Hardened; sync=false. The submodule is checked out at the PATH 'PMOVES-Spark-VSS' but the REPO is 'PM-Spark-video-search-and-summarization' -- this key is the repo name, on purpose: a registry key names a repo, and the org has no repo called PMOVES-Spark-VSS. This entry used to be duplicated under the path as well; the duplicate was removed on 2026-11-01 after the GH App installation audit resolved 93 of 94 registry repos and the 94th came back HTTP 404. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-activepieces": {
       "upstream": "activepieces/activepieces",
@@ -362,12 +362,6 @@
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-Spark-VSS": {
-      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false (Spark-specific integration, manual updates)"
     },
     "pmoves-keygen": {
       "upstream": "charmbracelet/keygen",
