@@ -369,13 +369,31 @@ if [ -n "$AGENT" ]; then
 fi
 echo "[claude-pmoves] agent=${AGENT:-none (main session is the node identity)}" >&2
 
+# HOST SCOPE. The registry's scope.host_roots for this identity become --add-dir
+# for the MAIN session only. With --agent the session is a role, not the node
+# identity, and stays repo-scoped -- as do the agents and teams the identity
+# creates, which carry their own .claude/agents/*.md tool lists.
+# `--add-dir=<dir>` (the `=` form): the option is variadic, and the space form
+# would swallow a trailing positional prompt (same trap as --mcp-config).
+# See pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+HOST_ARGS=()
+if [ -z "$AGENT" ] && [ "${PM_IDENT_OK:-0}" = "1" ] && [ -n "${PM_IDENT_HOST_ROOTS:-}" ]; then
+  IFS='|' read -r -a _host_roots <<< "$PM_IDENT_HOST_ROOTS"
+  for _r in "${_host_roots[@]}"; do
+    [ -n "$_r" ] && HOST_ARGS+=("--add-dir=$_r")
+  done
+  echo "[claude-pmoves] host scope: ${PM_IDENT_HOST_ROOTS//|/, } (main session only)" >&2
+else
+  echo "[claude-pmoves] host scope: repo (${AGENT:+--agent $AGENT; }${PM_IDENT_HOST_WHY:-identity unresolved})" >&2
+fi
+
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
   # loads, MCP creds do not. Warn so the missing half is visible, not silent.
   echo "[claude-pmoves] WARN: $LAUNCHER not found — launching without env.shared or the MCP roster." >&2
-  exec claude ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
+  exec claude ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${HOST_ARGS[@]+"${HOST_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
 fi
 
 # The launcher forwards "$@" straight to claude after --mcp-config=, so --agent,
 # when there is one, rides through unchanged.
-exec bash "$LAUNCHER" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
+exec bash "$LAUNCHER" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${HOST_ARGS[@]+"${HOST_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"

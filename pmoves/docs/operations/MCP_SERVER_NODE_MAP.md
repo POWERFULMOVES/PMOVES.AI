@@ -9,7 +9,7 @@ Single reference for where each first-party MCP package runs, how fleet nodes re
 | Package | Node (target) | Runtime shape | Endpoint | Auth env var | Status |
 | --- | --- | --- | --- | --- | --- |
 | `pmoves-tailscale-mcp` | **KVM2** (Hostinger VPS) | container (`--network none`, mounts `tailscaled.sock`), no published ports | `PMOVES_TAILSCALE_MCP_ENDPOINT` | tailnet-local (tailscaled socket auth) | **deployed + verified on KVM2** (MCP handshake + tools/list) |
-| `pmoves-composio-mcp-plugin` | **KVM2** | npx `@composio/mcp` proxy container, loopback bind | `COMPOSIO_MCP_ENDPOINT=http://kvm2:<PORT>/sse` (add post-deploy) | `COMPOSIO_API_KEY` (lives in `env.shared` + `env.tier-llm`) | **PLANNED — deploy blocked 2026-10-09** (SSH unreachable + broken key, see Pending) |
+| `pmoves-composio-mcp-plugin` (hosted Composio Connect, proxied) | **SPARK** (first, live-target) → **KVM2** (kit ready) | supergateway 4.2.0 container (`supercorp/supergateway:4.2.0@sha256:61ffc26b…`, amd64+arm64) re-serving `https://connect.composio.dev/mcp` over streamable HTTP, loopback bind `127.0.0.1:8190` (`COMPOSIO_MCP_BIND`/`COMPOSIO_MCP_PORT`). Kit `deploy/kvm2/composio-mcp/`; SPARK `make -C pmoves up-composio-mcp`, proof `make -C pmoves composio-mcp-smoke` | SPARK host `http://127.0.0.1:8190/composio/mcp`; in-mesh `COMPOSIO_MCP_ENDPOINT=http://composio-mcp:8000/composio/mcp`; KVM2 `https://<kvm2>.<tailnet>.ts.net:8190/composio/mcp` via `tailscale serve` | Upstream: `COMPOSIO_MCP_CONSUMER_KEY` (`ck_` Connect consumer key, sent as `x-consumer-api-key`) — **not** `COMPOSIO_API_KEY` (that slot now carries a `uak_` user key). Callers: `COMPOSIO_MCP_GATEWAY_KEY` (Bearer). Both live in the proxy's chmod-600 env file | **NOT DEPLOYED (2026-10-21)** — compose blocks are operator-apply (`pmoves/docs/handoffs/COMPOSIO_MCP_SELFHOST.md`); proxy-owned `ck_` client not yet minted; tool list unverified. The old plan's `@composio/mcp` is deprecated upstream, and Composio ships no self-hostable MCP server |
 | `titanmail` (seed spec) | **KVM2** | MCP server, loopback bind | `PMOVES_TITANMAIL_MCP_ENDPOINT=http://kvm2:<PORT>/sse` | composio connectors reuse `COMPOSIO_API_KEY` | **SEED SPEC ONLY** — see `research/analyses/2026-10-09_TITANMAIL_MCP_SPEC.md` |
 | `pmoves-cipher-mcp` | **A0 prod side (8081 stack)** | compose service `cipher-api` | `PMOVES_CIPHER_MCP_ENDPOINT=http://pmoves-cipher-mcp:8080/sse`; streamable-http form `CIPHER_MCP_HTTP_URL=http://cipher-api:8105/mcp` | `CIPHER_API_TOKEN` (Bearer header) | live |
 | `pmoves-e2b-mcp-server` | **GPU node** | container | `PMOVES_E2B_MCP_ENDPOINT` | `E2B_API_KEY` | mapping defined |
@@ -43,7 +43,7 @@ Defined per-compose in `pmoves/docker-compose.agents.yml` (~line 135, mirrored i
 }
 ```
 
-Remote/loopback MCP endpoints (composio, titanmail, tailscale-on-KVM2) wire in as `streamable-http`/SSE entries pointing at `http://kvm2:<port>/sse` once the tailnet route exists.
+Remote/loopback MCP endpoints (titanmail, tailscale-on-KVM2) wire in as `streamable-http`/SSE entries pointing at `http://kvm2:<port>/sse` once the tailnet route exists. Composio's A0 entry (`composio`, streamable-http, `${COMPOSIO_MCP_ENDPOINT}` + `Authorization: Bearer ${COMPOSIO_MCP_GATEWAY_KEY}`, `"disabled": ${COMPOSIO_MCP_A0_DISABLED:-true}`) is Block 3 of `pmoves/docs/handoffs/COMPOSIO_MCP_SELFHOST.md` — operator-apply, ships disabled; A0's `MCPConfig` records a failing server as that server's error and keeps booting.
 
 ### 2. `PMOVES_*_MCP_ENDPOINT` convention (`env.shared.example`)
 
@@ -54,7 +54,7 @@ PMOVES_HIRAG_MCP_ENDPOINT=http://pmoves-hirag-mcp:8080/sse
 PMOVES_NATS_MCP_ENDPOINT=http://pmoves-nats-mcp:8080/sse
 PMOVES_TAILSCALE_MCP_ENDPOINT=http://pmoves-tailscale-mcp:8080/sse
 # post-deploy additions (KVM2, tailnet):
-# COMPOSIO_MCP_ENDPOINT=http://kvm2:<PORT>/sse
+COMPOSIO_MCP_ENDPOINT=http://composio-mcp:8000/composio/mcp   # SPARK in-mesh; KVM2: https://<kvm2>.<tailnet>.ts.net:8190/composio/mcp
 # PMOVES_TITANMAIL_MCP_ENDPOINT=http://kvm2:<PORT>/sse
 ```
 
@@ -67,5 +67,5 @@ PMOVES_TAILSCALE_MCP_ENDPOINT=http://pmoves-tailscale-mcp:8080/sse
 ## Pending items (2026-10-09)
 
 1. **KVM2 SSH access broken from the Windows host**: both routes (`167.88.38.57`, `31.97.42.207:22`) timed out (circuit breaker: 2 attempts, stopped). Additionally `HOSTINGER_SSH_PRIVATE_KEY` in `env.tier-agent` is **structurally truncated** (value = BEGIN header only, no key body/END marker) — re-funnel the key before the KVM2 deployment lane.
-2. Composio proxy deployment on KVM2 (docker + `/opt/composio-mcp/.env` + loopback bind + SSE health probe) is specified but **not executed**; port to be recorded here after deploy.
+2. Composio proxy (updated 2026-10-21): kit + Make road landed (`deploy/kvm2/composio-mcp/`, `up-composio-mcp`, `composio-mcp-smoke`, host port 8190). **Not executed** on SPARK or KVM2: needs the operator-applied compose blocks, a `ck_` key for a proxy-owned Connect client, and (KVM2) the Hostinger project + `tailscale serve` steps in `deploy/kvm2/composio-mcp/README.md`. Record the KVM2 tailnet URL here after deploy.
 3. Titanmail build: see seed spec; placement KVM2.

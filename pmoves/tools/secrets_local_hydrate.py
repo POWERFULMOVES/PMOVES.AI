@@ -33,7 +33,23 @@ from pmoves.tools._secrets_common import (
 # Single source of truth for the tombstone list — imported rather than
 # reimplemented, so the writer (--clear) and the reader (hydrate) can never
 # drift apart on the file's format.
-from pmoves.scripts.bootstrap_env import read_cleared_keys
+from pmoves.scripts.bootstrap_env import (
+    DEFAULT_REGISTRY_PATH,
+    load_registry,
+    pinned_variables,
+    read_cleared_keys,
+)
+
+
+def _pinned_keys(registry_path: Path | None = None) -> set:
+    """Registry keys whose value is fixed (the CA host-leak guards).
+
+    Hydrate must never overlay them -- not even under force: env-shared-repair
+    empties them as the funnel's first step, and an empty value is a
+    placeholder here, so without this the very next step put a stale local.env
+    value straight back (Codex/Kilo #3459).
+    """
+    return {v["key"] for v in pinned_variables(load_registry(registry_path or DEFAULT_REGISTRY_PATH))}
 
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
 
@@ -87,6 +103,7 @@ def hydrate(
     dry_run: bool = False,
     force: bool = False,
     cleared_keys_path: Path | None = None,
+    registry_path: Path | None = None,
 ) -> Dict[str, str]:
     """Overlay local.env values into env.shared for empty/placeholder keys.
 
@@ -103,15 +120,21 @@ def hydrate(
     stale local value on the next `secrets-funnel` run, silently undoing the
     clear. force= exists to push a rotated GH Secret over a stale local value,
     which is a different intent from "this key is supposed to be empty".
+
+    Registry-PINNED keys (bootstrap/registry.json ``"pinned": true``) are never
+    overlaid either, for the same reason -- see ``_pinned_keys``.
     """
     local_values = _parse_env(local_env_path)
     shared_values = _parse_env(env_shared_path)
     cleared = set(read_cleared_keys(cleared_keys_path))
+    pinned = _pinned_keys(registry_path)
 
     updates: Dict[str, str] = {}
     for key, local_val in sorted(local_values.items()):
         if key in cleared:
             continue  # Deliberately empty — see secrets_cleared.yaml
+        if key in pinned:
+            continue  # Fixed by the registry — see _pinned_keys
         if is_placeholder(local_val):
             continue  # Don't overlay empty local values
         current = shared_values.get(key, "")
