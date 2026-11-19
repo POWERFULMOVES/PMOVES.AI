@@ -84,8 +84,10 @@ If a rebuild manifest arrives as raw `docker compose build ...`, translate to th
 `scripts/with-env.sh` loads after the generated tier files. Nothing generates
 it, so every change used to be a hand edit with no record. That is how
 `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached a fleet node: someone copied it from
-a recipe in commit `df0218537` and it left no trail. It now points at a key
-Kong rejects (see `pmoves/docs/TAC/TAC_CIPHER.md` § `CIPHER_DB_SERVICE_KEY`).
+a recipe in commit `df0218537` and it left no trail, then expired 2026-10-21 and
+shadowed the funnel-refreshed keys. The knob is retired: cipher presents Kong's
+own key expression, and `make -C pmoves cipher-auth-check` WARNs when a node
+still sets it, in compose's env or in `.env.local` (read by presence only) (see `pmoves/docs/TAC/TAC_CIPHER.md` § Cipher's service key).
 Operator rule (2026-09-23): a key comes out the same way it should have gone
 in, on this road.
 
@@ -244,8 +246,8 @@ including paths that do not exist, so an unauthenticated 401 tells you nothing.
 
 | Your client | Use |
 |---|---|
-| Claude Code / Crush via the fleet roster (`.claude/mcp.json`) | server **`pmoves-cipher-local`** (`http://localhost:8105/mcp/sse`). This entry connects today. |
-| Same roster, other node's cipher | server `pmoves-cipher` (`http://${TS_Z890}:8105/mcp/sse`). It is refused or times out unless the serving node published beyond loopback: compose binds `"${CIPHER_BIND:-127.0.0.1}:8105:8105"`. The fix is setting `CIPHER_BIND` on the serving node, which is an operator decision. Do not delete the entry. |
+| Claude Code / Crush via the fleet roster (`.claude/mcp.json`) | server **`pmoves-cipher-local`** (`http://localhost:8105/mcp`, type `http`). This entry connects today. Moved off `/mcp/sse` 2026-10-10: the SSE pair 400s `stream is not readable` on containers built before pin a0ee2314; `/mcp` works on both. |
+| Same roster, other node's cipher | server `pmoves-cipher` (`http://${TS_Z890}:8105/mcp`). It is refused or times out unless the serving node published beyond loopback: compose binds `"${CIPHER_BIND:-127.0.0.1}:8105:8105"`. The fix is setting `CIPHER_BIND` on the serving node, which is an operator decision. Do not delete the entry. |
 | New MCP harness (Hermes, Kimi, A0-style, a drop-in model's agent loop) | **streamable-http `POST http://localhost:8105/mcp`**, which is stateless and cannot hit the legacy "Unknown session" 400. Agent Zero uses this. |
 | No MCP at all | REST: `POST /api/memory` `{agentId, content, category?, tags?}` and `GET /api/memory/search?q=&agentId=&limit=`. REST **always** refuses an `agentId` that differs from the token's agent (403), whatever `CIPHER_MCP_ENFORCE` says. |
 
