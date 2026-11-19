@@ -170,12 +170,22 @@ class Decision:
         }[self.state]
 
 
+class DockerProbeUnreadable(RuntimeError):
+    """Docker answered (exit 0) but its output could not be decoded.
+
+    Distinct from "docker absent": the unread output may hold a live holder or
+    a state volume, so the only safe reading is "could not measure".
+    """
+
+
 class DockerProbe:
     """Host-side docker reads. Never ``exec``, never mutating.
 
     Every method degrades to "nothing found" rather than raising, because a node
     without docker is a legitimate STATE 1 (CI, a fresh clone) and must not be
-    turned into a hard funnel failure.
+    turned into a hard funnel failure. The one exception is docker that answered
+    with undecodable output: that raises :class:`DockerProbeUnreadable`, because
+    "could not read" must never be mistaken for "nothing there".
     """
 
     def __init__(self) -> None:
@@ -189,6 +199,13 @@ class DockerProbe:
         # kills the reader thread, stdout comes back None, and every live holder
         # vanishes -- a false "no holder" refusal. Strict, not "replace": a
         # harvested value must arrive byte-for-byte or not at all.
+        #
+        # "" means exactly one thing here: docker is absent or the command
+        # failed (a legitimate STATE 1). Docker that ANSWERED but whose output
+        # cannot be read is a different fact -- it may be hiding a holder or a
+        # state volume -- so it raises DockerProbeUnreadable and build_plan
+        # refuses. Folding it into "" would let an undecodable `docker version`
+        # read as "no docker", which classify() maps to MINT.
         try:
             proc = subprocess.run(
                 cmd,
@@ -199,11 +216,23 @@ class DockerProbe:
                 check=False,
                 timeout=60,
             )
-        except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+        except UnicodeDecodeError as exc:
+            # POSIX decodes on the calling thread and raises here. Report the
+            # position only -- never the offending bytes, which may be a secret.
+            raise DockerProbeUnreadable(
+                "`%s` output is not valid UTF-8 (position %d)" % (" ".join(cmd[:2]), exc.start)
+            ) from None
+        except (OSError, subprocess.SubprocessError):
             return ""
         if proc.returncode != 0:
             return ""
-        return proc.stdout or ""
+        if proc.stdout is None:
+            # Windows decodes on a reader thread; a decode error kills that
+            # thread and stdout comes back None with a zero exit code.
+            raise DockerProbeUnreadable(
+                "`%s` exited 0 but its output was lost (undecodable)" % " ".join(cmd[:2])
+            )
+        return proc.stdout
 
     def available(self) -> bool:
         if not self._checked:
@@ -385,6 +414,25 @@ def classify(
     return Decision(key, STATE_MINT, reason, detail=", ".join(present))
 
 
+def _unmeasured(key: str, *, env_path: Path, why: str) -> Decision:
+    existing = read_env_value(key, env_path)
+    if existing not in (None, ""):
+        return Decision(key, STATE_SATISFIED, "already set in the funnel source")
+    return Decision(
+        key,
+        STATE_REFUSE,
+        "docker output could not be read",
+        detail=(
+            "%s: docker is present but %s, so whether a running container holds %s "
+            "or a state volume exists could NOT be measured. Harvest has no value and "
+            "minting could destroy live state, so this refuses. Re-run once `docker "
+            "ps` / `docker inspect` / `docker volume ls` decode as UTF-8, or set the "
+            "value explicitly with make -C pmoves secrets-rotate KEY=%s."
+            % (key, why, key, key)
+        ),
+    )
+
+
 def build_plan(
     keys: Sequence[str],
     *,
@@ -394,8 +442,14 @@ def build_plan(
     ack_destructive: Optional[Set[str]] = None,
 ) -> List[Decision]:
     probe = probe if probe is not None else DockerProbe()
-    container_envs = probe.container_envs()
-    volumes = probe.volumes()
+    try:
+        container_envs = probe.container_envs()
+        volumes = probe.volumes()
+    except DockerProbeUnreadable as exc:
+        # Could not measure the fleet. A key already in the funnel source is
+        # untouched either way; every other key refuses, because both harvest
+        # (no value read) and mint (holders/volumes unproven absent) would guess.
+        return [_unmeasured(key, env_path=env_path, why=str(exc)) for key in keys]
     return [
         classify(
             key,
