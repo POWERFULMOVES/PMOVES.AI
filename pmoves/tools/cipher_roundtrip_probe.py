@@ -254,6 +254,32 @@ def exit_code(row: Dict[str, Any]) -> int:
     return 1
 
 
+# The session binding: the bearer plus the identity it was minted for.
+SESSION_IDENTITY_VARS = ("PMOVES_RESOLVED_IDENTITY", "PMOVES_NODE_IDENTITY")
+
+
+def _process_session_wins(
+    layered: Mapping[str, str], process: Mapping[str, str], token_env: str
+) -> Dict[str, str]:
+    """Put the process's own session binding back over the env-file overlay.
+
+    ``cp.layered_environ`` lays env.shared OVER the process env, and env.shared
+    carries the node bootstrap bearer. Inside a launched session that clobbers
+    the per-agent token the launcher deliberately re-binds AFTER loading
+    env.shared (deploy/provision/claude-pmoves.sh, "CIPHER TOKEN BIND"), so the
+    probe would test writes as 'bootstrap' instead of the session identity.
+    Same precedence as the launcher: a bearer already present in the process
+    wins; env.shared only fills a gap. The identity variables travel with the
+    bearer so resolve_agent() names the agent that token is bound to.
+    """
+    env = dict(layered)
+    for key in ((token_env,) if token_env else ()) + SESSION_IDENTITY_VARS:
+        value = (process.get(key) or "").strip()
+        if value:
+            env[key] = value
+    return env
+
+
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base-url", default=None,
@@ -275,6 +301,7 @@ def main(argv: Optional[list] = None) -> int:
             environ, note = cp.layered_environ(args.env_file)
             if note:
                 print(f"[cipher-roundtrip] {note}", file=sys.stderr)
+            environ = _process_session_wins(environ, os.environ, args.token_env)
         else:
             environ = dict(os.environ)
         token = (environ.get(args.token_env) or "").strip() if args.token_env else ""

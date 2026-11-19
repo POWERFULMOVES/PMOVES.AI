@@ -239,6 +239,37 @@ def test_bearer_resolves_from_the_env_file_like_the_session(monkeypatch, tmp_pat
     assert fake.auth_headers[0] == f"Bearer {BOOT_TOKEN}"
 
 
+def test_process_per_agent_bearer_wins_over_the_env_file_bootstrap(monkeypatch, tmp_path, capsys):
+    """Inside a launched session the launcher re-binds the per-agent token AFTER
+    env.shared (claude-pmoves.sh "CIPHER TOKEN BIND"). The overlay must not undo
+    that and quietly test writes as 'bootstrap'."""
+    env_file = tmp_path / "env.shared"
+    env_file.write_text(f"CIPHER_API_TOKEN={BOOT_TOKEN}\n", encoding="utf-8")
+    monkeypatch.setenv("CIPHER_API_TOKEN", MINTED_TOKEN)
+    monkeypatch.setenv("PMOVES_RESOLVED_IDENTITY", "z890-claude")
+    fake = FakeCipher(token_agent={MINTED_TOKEN: "z890-claude", BOOT_TOKEN: "bootstrap"})
+    rc, out = _run(monkeypatch, fake, ["--json", "--env-file", str(env_file)], capsys)
+    row = json.loads(out.out)
+    assert rc == 0, out
+    assert all(h == f"Bearer {MINTED_TOKEN}" for h in fake.auth_headers)
+    assert row["agent"] == "z890-claude"
+    assert row["agent_source"] == "minted bearer + session identity"
+    assert all(rec["agentId"] == "z890-claude" for rec in fake.store.values())
+    assert MINTED_TOKEN not in out.out + out.err and BOOT_TOKEN not in out.out + out.err
+
+
+def test_env_file_bearer_still_fills_a_gap_in_the_process(monkeypatch, tmp_path):
+    layered = {"CIPHER_API_TOKEN": BOOT_TOKEN, "OTHER": "x"}
+    assert rp._process_session_wins(layered, {}, "CIPHER_API_TOKEN") == layered
+    # an empty process value is a gap, not a binding
+    assert rp._process_session_wins(layered, {"CIPHER_API_TOKEN": " "}, "CIPHER_API_TOKEN") == layered
+    won = rp._process_session_wins(
+        layered, {"CIPHER_API_TOKEN": MINTED_TOKEN, "PMOVES_RESOLVED_IDENTITY": "z890-claude"},
+        "CIPHER_API_TOKEN")
+    assert won["CIPHER_API_TOKEN"] == MINTED_TOKEN
+    assert won["PMOVES_RESOLVED_IDENTITY"] == "z890-claude" and won["OTHER"] == "x"
+
+
 def test_keep_skips_cleanup(monkeypatch, capsys):
     fake = FakeCipher()
     rc, _ = _run(monkeypatch, fake, ["--keep"], capsys)
