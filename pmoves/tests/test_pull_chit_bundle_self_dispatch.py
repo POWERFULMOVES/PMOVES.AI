@@ -17,11 +17,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "pull_chit_bundle.sh"
-BASH = shutil.which("bash")
 
-pytestmark = pytest.mark.skipif(BASH is None, reason="needs bash")
+pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 
 # Fake gh answers the script's full query surface. State:
 #   run 100 = old success (expired bundle), createdAt 2026-11-01
@@ -117,7 +117,7 @@ def _run(tmp_path: Path, **env_extra: str) -> tuple[subprocess.CompletedProcess,
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gh = fake_bin / "gh"
-    gh.write_text(FAKE_GH, newline="\n")
+    gh.write_text(FAKE_GH, encoding="utf-8", newline="\n")
     gh.chmod(0o755)
     state = tmp_path / "state"
     state.mkdir()
@@ -134,11 +134,11 @@ def _run(tmp_path: Path, **env_extra: str) -> tuple[subprocess.CompletedProcess,
         if k not in env_extra:
             env.pop(k, None)
     proc = subprocess.run(
-        [BASH, str(SCRIPT)], env=env, capture_output=True, text=True,
+        [resolve_bash(), str(SCRIPT)], env=env, capture_output=True, text=True,
         encoding="utf-8", timeout=120,
     )
     calls_file = state / "calls"
-    calls = calls_file.read_text() if calls_file.exists() else ""
+    calls = calls_file.read_text(encoding="utf-8") if calls_file.exists() else ""
     return proc, calls
 
 
@@ -150,7 +150,7 @@ def test_an_expired_bundle_is_replaced_by_a_self_dispatched_run(tmp_path):
     assert "targets=spark,b850" in calls, "dispatch goes to the producers, not this node"
     assert "run watch 200" in calls
     assert "run download 200" in calls
-    assert json.loads((tmp_path / "chit" / "env.cgp.json").read_text()) == {"k": "v"}
+    assert json.loads((tmp_path / "chit" / "env.cgp.json").read_text(encoding="utf-8")) == {"k": "v"}
 
 
 def test_a_live_bundle_is_pulled_without_dispatching(tmp_path):
@@ -197,7 +197,7 @@ def test_a_failing_watch_falls_back_to_status_polling(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "--json status" in calls, "fallback must poll run status"
     assert "run download 200" in calls
-    assert json.loads((tmp_path / "chit" / "env.cgp.json").read_text()) == {"k": "v"}
+    assert json.loads((tmp_path / "chit" / "env.cgp.json").read_text(encoding="utf-8")) == {"k": "v"}
 
 
 def test_a_transient_gh_failure_does_not_kill_the_dispatch(tmp_path):
