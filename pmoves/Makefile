@@ -240,6 +240,8 @@ include mk/preflight.mk
 include mk/infra.mk
 include mk/worktree.mk
 include mk/build-gate.mk
+include mk/image-staleness.mk
+include mk/node-registry.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
 include mk/amd-rdna4.mk
@@ -258,6 +260,7 @@ include mk/kilo.mk
 include mk/voice.mk
 include mk/kong.mk
 include mk/review.mk
+include mk/mike.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -1299,7 +1302,7 @@ supabase-bootstrap-no-start: ## Apply migrations+seeds against already-running D
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found — start it first"; exit 1; fi; \
 	pg_user=$$(docker exec "$$db" sh -c 'echo $${POSTGRES_USER:-postgres}'); \
 	echo "   DB container: $$db | pg_user: $$pg_user"; \
-	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d ${POSTGRES_DB:-pmoves} "$$@"; }; \
+	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d "$${POSTGRES_DB:-pmoves}" "$$@"; }; \
 	_psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
@@ -1341,17 +1344,17 @@ supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in 
 	@set -euo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-pmoves}" -d "$${POSTGRES_DB:-pmoves}" -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$migration"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-pmoves}" -d "$${POSTGRES_DB:-pmoves}" -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi; \
 	if [ -d "supabase/initdb" ]; then \
 		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$seed"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-pmoves}" -d "$${POSTGRES_DB:-pmoves}" -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi
 	@echo "✅ Bootstrap history updated"
@@ -1721,14 +1724,15 @@ nats-streams-init: ## Idempotently create JetStream streams via the nats-init si
 	@bash scripts/nats/init_streams.sh
 	@echo "✅ NATS stream init complete"
 
-nats-streams-validate: ## Assert the 8 expected streams exist (CI-runnable)
+nats-streams-validate: ## Assert the expected streams exist with the expected subjects + retention (CI-runnable)
 	@echo "🔍 Validating NATS JetStream streams..."
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
-	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
-	    -c "nats -s \"$$NATS_URL\" stream ls -n" > /tmp/nats_streams_actual.txt 2>&1
-	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.txt
-	@rm -f /tmp/nats_streams_actual.txt
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" -e NATS_URL="$$NATS_URL" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c 'for name in $$(nats -s "$$NATS_URL" stream ls -n); do nats -s "$$NATS_URL" stream info "$$name" -j; done' \
+	    > /tmp/nats_streams_actual.json
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.json
+	@rm -f /tmp/nats_streams_actual.json
 
 nats-streams-list: ## List current JetStream streams (ad-hoc)
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
@@ -3026,7 +3030,7 @@ smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict 
 smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemma 3n)
 	@echo "=== New Model Providers Smoke Test ==="
 	@echo "1) NVIDIA NIM health:"
-	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null 2>&1 \
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8206}/v1/health/ready >/dev/null 2>&1 \
 	  && echo "   NIM: ready" \
 	  || echo "   NIM: not available (skipped)"
 	@echo "2) TensorZero model catalog:"
@@ -4115,6 +4119,24 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 
 .PHONY: up-cipher
 up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --build cipher-api
 	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
 	@# gate fails loudly on it); every other failure — bad Qdrant creds,
@@ -4125,6 +4147,24 @@ up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory
 
 .PHONY: up-cipher-nobuild
 up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
 	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
 	@# recreated here is exactly as empty as a fresh build's.
@@ -4221,6 +4261,24 @@ up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embeddin
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --build cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher
 	@echo "✔ Cipher Memory + embedding pipeline ready"
@@ -4284,6 +4342,24 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
 
+# Read-only: will the key cipher-api presents for per-agent token lookups pass
+# Kong key-auth AND PostgREST? Evaluates the compose expressions on disk against
+# the SAME --env-file list $(DC) uses, so it judges what the next up-cipher
+# delivers. Tells expired / wrong pair (gateway or signature) / missing / wrong
+# role apart, and WARNs on the retired CIPHER_DB_SERVICE_KEY paste (also read
+# from .env.local by presence only, since SUPABASE_RUNTIME=compose leaves the
+# overlay out of COMPOSE_ENV_FILES). Prints no key, digest or secret. The static
+# facets do NOT see the running Kong: CONTAINER=1 reads the running cipher-api
+# and supabase-kong (digests compared in-process); PROBE=1 runs cipher's own
+# lookup from inside cipher-api (GET ...?limit=0) and is the authority on what
+# the live gateway admits. make collapses exit
+# codes to 2, so read the CIPHER_AUTH_VERDICT= line (0 ok / 1 finding / 3
+# could-not-measure) or run the tool directly.
+CIPHER_AUTH_CHECK_ARGS = --compose docker-compose.yml --scan docker-compose.agents.yml --env-local .env.local $(COMPOSE_ENV_FILES)
+.PHONY: cipher-auth-check
+cipher-auth-check: ## Read-only: does cipher's service key pass Kong + PostgREST? (expired / wrong pair / missing; never prints a key) [CONTAINER=1 PROBE=1]
+	@$(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) $(if $(CONTAINER),--container,) $(if $(PROBE),--probe,)
+
 .PHONY: spark-health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
 	@$(PYTHON) scripts/spark_health.py
@@ -4331,9 +4407,26 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 # Registry (not compose env) owns the Agent Zero model-config surface.
+# Per-node deployment pass-through: INSTANCE stamps header/manifest and picks
+# the instance's usr-dir var; OUT relocates output (default follows that var
+# like compose does). INSTANCE/OUT are generic names, so they are honoured ONLY
+# from the make command line: a stray exported OUT/INSTANCE in the invoking
+# shell must not relocate presets. The namespaced A0_MODEL_SYNC_INSTANCE /
+# A0_MODEL_SYNC_OUT may come from the environment. Empty INSTANCE= -> docked.
+A0_MODEL_SYNC_INSTANCE ?=
+A0_MODEL_SYNC_OUT ?=
+A0_SYNC_INSTANCE = $(or $(if $(filter command line,$(origin INSTANCE)),$(INSTANCE)),$(A0_MODEL_SYNC_INSTANCE),docked)
+A0_SYNC_OUT = $(or $(if $(filter command line,$(origin OUT)),$(OUT)),$(A0_MODEL_SYNC_OUT))
+
 .PHONY: a0-model-sync
 a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
-	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}"
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
+
+# Variant 3 of the ownership plan: drift control. Clean rooms stay quiet;
+# drifted rooms exit 1 so fleet sweepers can score them.
+.PHONY: a0-model-sync-check
+a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (writes nothing; exit 0 clean, 1 drift, 2 undecided)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
@@ -5679,6 +5772,10 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 .PHONY: docs-reconcile-json
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
+
+.PHONY: skills-parity
+skills-parity: ## Which harnesses see which skills (report; ARGS=--strict to gate, --json for machine output)
+	@$(PYTHON) tools/skills_parity.py $(ARGS)
 
 # Renamed from docs-render-living: it silently shadowed the Lane 2228
 # registry iterator (make keeps the LAST single-colon recipe) — same

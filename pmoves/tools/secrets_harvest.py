@@ -170,12 +170,22 @@ class Decision:
         }[self.state]
 
 
+class DockerProbeUnreadable(RuntimeError):
+    """Docker answered (exit 0) but its output could not be decoded.
+
+    Distinct from "docker absent": the unread output may hold a live holder or
+    a state volume, so the only safe reading is "could not measure".
+    """
+
+
 class DockerProbe:
     """Host-side docker reads. Never ``exec``, never mutating.
 
     Every method degrades to "nothing found" rather than raising, because a node
     without docker is a legitimate STATE 1 (CI, a fresh clone) and must not be
-    turned into a hard funnel failure.
+    turned into a hard funnel failure. The one exception is docker that answered
+    with undecodable output: that raises :class:`DockerProbeUnreadable`, because
+    "could not read" must never be mistaken for "nothing there".
     """
 
     def __init__(self) -> None:
@@ -184,13 +194,37 @@ class DockerProbe:
 
     @staticmethod
     def _run(cmd: Sequence[str]) -> str:
+        # Docker emits UTF-8. text=True alone decodes with the platform codec
+        # (cp1252 on Windows): one UTF-8 byte such as 0x8d in `docker inspect`
+        # kills the reader thread, stdout comes back None, and every live holder
+        # vanishes -- a false "no holder" refusal. So capture BYTES and decode
+        # stdout here, UTF-8 strict -- not "replace": a harvested value must
+        # arrive byte-for-byte or not at all. stderr is never decoded: it is
+        # diagnostics, and a localized non-UTF-8 docker error message must not
+        # be able to turn a plain failure into an unreadable-output refusal.
+        #
+        # "" means exactly one thing here: docker is absent or the command
+        # failed (a legitimate STATE 1). Docker that ANSWERED but whose output
+        # cannot be read is a different fact -- it may be hiding a holder or a
+        # state volume -- so it raises DockerProbeUnreadable and build_plan
+        # refuses. Folding it into "" would let an undecodable `docker version`
+        # read as "no docker", which classify() maps to MINT.
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60)
+            proc = subprocess.run(cmd, capture_output=True, check=False, timeout=60)
         except (OSError, subprocess.SubprocessError):
             return ""
         if proc.returncode != 0:
             return ""
-        return proc.stdout
+        if proc.stdout is None:
+            raise DockerProbeUnreadable("`%s` exited 0 but its output was lost" % " ".join(cmd[:2]))
+        try:
+            return proc.stdout.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            # Report the position only -- never the offending bytes, which may
+            # be part of a secret.
+            raise DockerProbeUnreadable(
+                "`%s` output is not valid UTF-8 (position %d)" % (" ".join(cmd[:2]), exc.start)
+            ) from None
 
     def available(self) -> bool:
         if not self._checked:
@@ -372,6 +406,25 @@ def classify(
     return Decision(key, STATE_MINT, reason, detail=", ".join(present))
 
 
+def _unmeasured(key: str, *, env_path: Path, why: str) -> Decision:
+    existing = read_env_value(key, env_path)
+    if existing not in (None, ""):
+        return Decision(key, STATE_SATISFIED, "already set in the funnel source")
+    return Decision(
+        key,
+        STATE_REFUSE,
+        "docker output could not be read",
+        detail=(
+            "%s: docker is present but %s, so whether a running container holds %s "
+            "or a state volume exists could NOT be measured. Harvest has no value and "
+            "minting could destroy live state, so this refuses. Re-run once `docker "
+            "ps` / `docker inspect` / `docker volume ls` decode as UTF-8, or set the "
+            "value explicitly with make -C pmoves secrets-rotate KEY=%s."
+            % (key, why, key, key)
+        ),
+    )
+
+
 def build_plan(
     keys: Sequence[str],
     *,
@@ -381,8 +434,14 @@ def build_plan(
     ack_destructive: Optional[Set[str]] = None,
 ) -> List[Decision]:
     probe = probe if probe is not None else DockerProbe()
-    container_envs = probe.container_envs()
-    volumes = probe.volumes()
+    try:
+        container_envs = probe.container_envs()
+        volumes = probe.volumes()
+    except DockerProbeUnreadable as exc:
+        # Could not measure the fleet. A key already in the funnel source is
+        # untouched either way; every other key refuses, because both harvest
+        # (no value read) and mint (holders/volumes unproven absent) would guess.
+        return [_unmeasured(key, env_path=env_path, why=str(exc)) for key in keys]
     return [
         classify(
             key,

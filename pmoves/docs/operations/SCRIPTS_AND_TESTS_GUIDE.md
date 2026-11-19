@@ -90,8 +90,8 @@ The task tracker parses tasks from the roadmap markdown file:
   depends_on: []
   effort: 4 hours
   files:
-    - pmoves/services/node-registry/
-    - pmoves/services/resource-detector/
+    - pmoves/services/node_registry/
+    - pmoves/services/resource_detector/
   description: Core service for tracking distributed compute nodes
 ```
 

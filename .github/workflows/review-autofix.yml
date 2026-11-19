@@ -32,7 +32,7 @@ jobs:
        github.event.review.user.login == 'coderabbitai[bot]' ||
        github.event.review.user.login == 'chatgpt-codex-connector' ||
        github.event.review.user.login == 'chatgpt-codex-connector[bot]')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Aggressive: needs contents:write to apply + push fixes to the PR head branch.
     permissions:
       contents: write
