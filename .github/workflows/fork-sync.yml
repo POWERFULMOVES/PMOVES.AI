@@ -43,7 +43,9 @@ jobs:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          # client-id is the non-deprecated input (v3 warns on app-id). Same
+          # App, same key material; GH_APP_CLIENT_ID holds the Iv1.x string.
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
           # Without owner, the minted token is scoped to THIS repo only, so
           # branch creation / merges on the fork repos 403. owner + repositories
