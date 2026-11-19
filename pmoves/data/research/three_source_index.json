@@ -1,0 +1,1212 @@
+{
+ "schema": "three_source_index/v1",
+ "generated": "2026-11-19T12:35:03.378264+00:00",
+ "sources": {
+  "videos": {
+   "playlist_title": "DARKXSIDE AI (PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8)",
+   "count": 2825,
+   "top_channels": [
+    [
+     "Fahd Mirza",
+     108
+    ],
+    [
+     "Discover AI",
+     103
+    ],
+    [
+     "Chris McFeely",
+     80
+    ],
+    [
+     "(unknown)",
+     64
+    ],
+    [
+     "Richard Aragon",
+     50
+    ],
+    [
+     "AICodeKing",
+     46
+    ],
+    [
+     "Cole Medin",
+     44
+    ],
+    [
+     "Keith D",
+     44
+    ],
+    [
+     "Coin Bureau",
+     43
+    ],
+    [
+     "AI Search",
+     37
+    ],
+    [
+     "Bijan Bowen",
+     32
+    ],
+    [
+     "Prompt Engineering",
+     31
+    ],
+    [
+     "Wes Roth",
+     27
+    ],
+    [
+     "Sabine Hossenfelder",
+     26
+    ],
+    [
+     "Gamers Nexus",
+     25
+    ],
+    [
+     "David Shapiro",
+     25
+    ],
+    [
+     "IndyDevDan",
+     25
+    ],
+    [
+     "AI News & Strategy Daily | Nate B Jones",
+     25
+    ],
+    [
+     "More Perfect Union",
+     24
+    ],
+    [
+     "Aitrepreneur",
+     24
+    ]
+   ],
+   "provisioning_candidates": [
+    {
+     "id": "JuX99JSj8ro",
+     "title": "Hermes Agent + DeepSeek V4.1 Flash is an ACTUAL GAME CHANGER!😱",
+     "channel": "Julian Goldie SEO",
+     "duration_s": 482,
+     "url": "https://www.youtube.com/watch?v=JuX99JSj8ro"
+    },
+    {
+     "id": "CsSnSBCVoDU",
+     "title": "DeepSeek-V4.1 Flash: The Most Insane Optimization So Far",
+     "channel": "bycloud",
+     "duration_s": 1504,
+     "url": "https://www.youtube.com/watch?v=CsSnSBCVoDU"
+    },
+    {
+     "id": "qZHBagp7xvM",
+     "title": "I Tested DeepSeek V4.1 Flash on Every Hardware Setup",
+     "channel": "Local Explained",
+     "duration_s": 720,
+     "url": "https://www.youtube.com/watch?v=qZHBagp7xvM"
+    },
+    {
+     "id": "5ctTkkJQpug",
+     "title": "Qwen 3.8 Flash Next + HERMES AGENT = AWESOME LOCAL AI AGENTS!",
+     "channel": "Digital Spaceport",
+     "duration_s": 1056,
+     "url": "https://www.youtube.com/watch?v=5ctTkkJQpug"
+    },
+    {
+     "id": "cWn1dayfrZo",
+     "title": "Please Remove Windows and Install Linux Right Now...",
+     "channel": "SomeOrdinaryGamers",
+     "duration_s": 1292,
+     "url": "https://www.youtube.com/watch?v=cWn1dayfrZo"
+    },
+    {
+     "id": "1UCjRlPQp9s",
+     "title": "install grapheneOS right now...",
+     "channel": "SomeOrdinaryGamers",
+     "duration_s": 1012,
+     "url": "https://www.youtube.com/watch?v=1UCjRlPQp9s"
+    },
+    {
+     "id": "LV3mcfqNgcQ",
+     "title": "Jellyfin Media Server | Automated Pipeline | VPN Docker Network",
+     "channel": "Thomas Wilde",
+     "duration_s": 3326,
+     "url": "https://www.youtube.com/watch?v=LV3mcfqNgcQ"
+    },
+    {
+     "id": "P6X037tssiE",
+     "title": "Prime Agent + V4 Flash,Claude,Codex: This is OPEN & TECHNICALLY the BEST AGENT HARNESS YET!",
+     "channel": "AICodeKing",
+     "duration_s": 565,
+     "url": "https://www.youtube.com/watch?v=P6X037tssiE"
+    },
+    {
+     "id": "dAZCrky2qns",
+     "title": "Tailscale Subnet Router in 5 Minutes: The Missing Piece of Your Self-Hosted Setup Guide (RPi & Win)",
+     "channel": "Dad, the engineer",
+     "duration_s": 1179,
+     "url": "https://www.youtube.com/watch?v=dAZCrky2qns"
+    },
+    {
+     "id": "pmfJ-PsWacM",
+     "title": "Deepseek V4 Flash 0731 Local AI Review",
+     "channel": "Digital Spaceport",
+     "duration_s": 1146,
+     "url": "https://www.youtube.com/watch?v=pmfJ-PsWacM"
+    },
+    {
+     "id": "XjotthYbL08",
+     "title": "1399$ Humsienk 12000 Plus 48 Volt 120/240 Split phase Inverter Testing, Setup, Load Test, Overview",
+     "channel": "Mike Builds",
+     "duration_s": 1123,
+     "url": "https://www.youtube.com/watch?v=XjotthYbL08"
+    },
+    {
+     "id": "930DlHopjws",
+     "title": "Build and Optimize Robotics and Edge AI with the New Jetson Thor T2000 and T3000",
+     "channel": "NVIDIA Developer",
+     "duration_s": 2794,
+     "url": "https://www.youtube.com/watch?v=930DlHopjws"
+    },
+    {
+     "id": "I83lB-_M3e4",
+     "title": "DeepSeek V4 Flash Fully Local — 32 tok/s on a Single Chip",
+     "channel": "Fahd Mirza",
+     "duration_s": 556,
+     "url": "https://www.youtube.com/watch?v=I83lB-_M3e4"
+    },
+    {
+     "id": "czteUSONG-c",
+     "title": "Run GenAI Locally on NVIDIA Jetson | NVIDIA Jetson AI Lab",
+     "channel": "NVIDIA Developer",
+     "duration_s": 2876,
+     "url": "https://www.youtube.com/watch?v=czteUSONG-c"
+    },
+    {
+     "id": "v-A-rQALF38",
+     "title": "Replacing Claude Code’s AI Model with Ollama on Jetson",
+     "channel": "JetsonHacks",
+     "duration_s": 716,
+     "url": "https://www.youtube.com/watch?v=v-A-rQALF38"
+    },
+    {
+     "id": "U8yzw0rc-RI",
+     "title": "WebAssembly Is Quietly Killing Docker (Millisecond Startup)",
+     "channel": "Cloud Codes",
+     "duration_s": 566,
+     "url": "https://www.youtube.com/watch?v=U8yzw0rc-RI"
+    },
+    {
+     "id": "swH7ogB2mz8",
+     "title": "AI Coding on Jetson with Claude Code and NVIDIA Skills",
+     "channel": "JetsonHacks",
+     "duration_s": 763,
+     "url": "https://www.youtube.com/watch?v=swH7ogB2mz8"
+    },
+    {
+     "id": "st_HMMt0T7g",
+     "title": "Hermes AI Setup (plus business skills)",
+     "channel": "Wes Roth",
+     "duration_s": 3210,
+     "url": "https://www.youtube.com/watch?v=st_HMMt0T7g"
+    },
+    {
+     "id": "O3Zx8WVW1MA",
+     "title": "My New Local-Only Security Camera Setup",
+     "channel": "Hardware Haven",
+     "duration_s": 1585,
+     "url": "https://www.youtube.com/watch?v=O3Zx8WVW1MA"
+    },
+    {
+     "id": "7A4jNucDlkY",
+     "title": "Install JetPack 7.2 on Orin Nano Super",
+     "channel": "JetsonHacks",
+     "duration_s": 550,
+     "url": "https://www.youtube.com/watch?v=7A4jNucDlkY"
+    },
+    {
+     "id": "o4KZH_KSqYQ",
+     "title": "Pi Coding Agent Observability: HTML Specs with Gemini 3.5 Flash and GPT Image 2",
+     "channel": "IndyDevDan",
+     "duration_s": 1526,
+     "url": "https://www.youtube.com/watch?v=o4KZH_KSqYQ"
+    },
+    {
+     "id": "uv75G4ed2dw",
+     "title": "How to Install a $360 Mini Split Heat Pump — Complete DIY Guide",
+     "channel": "There's A Trick For That",
+     "duration_s": 1092,
+     "url": "https://www.youtube.com/watch?v=uv75G4ed2dw"
+    },
+    {
+     "id": "nXROzh6vOps",
+     "title": "AgentMemory + Hermes Agent + Ollama  = AI Agent That Never Forgets | Fully Local Setup",
+     "channel": "Fahd Mirza",
+     "duration_s": 770,
+     "url": "https://www.youtube.com/watch?v=nXROzh6vOps"
+    },
+    {
+     "id": "kNGXuIPXR24",
+     "title": "Docker Sandboxes Hands-On Guide – A Safe Space for AI Agents!",
+     "channel": "Bijan Bowen",
+     "duration_s": 1508,
+     "url": "https://www.youtube.com/watch?v=kNGXuIPXR24"
+    },
+    {
+     "id": "TdN-YdFLWvY",
+     "title": "Gemini 3.5 Flash Is INSANE – Is THIS a Frontier Coding Model?",
+     "channel": "Bijan Bowen",
+     "duration_s": 2777,
+     "url": "https://www.youtube.com/watch?v=TdN-YdFLWvY"
+    },
+    {
+     "id": "PdHnioaSqTo",
+     "title": "I Made Qwen 3.6 Long Prompts 7X Faster on Jetson Thor",
+     "channel": "JetsonHacks",
+     "duration_s": 672,
+     "url": "https://www.youtube.com/watch?v=PdHnioaSqTo"
+    },
+    {
+     "id": "qGKIa1ABZfs",
+     "title": "Hermes Agent Now Runs Natively on LM Studio - Full Local AI Agent Setup",
+     "channel": "Fahd Mirza",
+     "duration_s": 533,
+     "url": "https://www.youtube.com/watch?v=qGKIa1ABZfs"
+    },
+    {
+     "id": "N_UZDrxNaZo",
+     "title": "Install Linux on PS5 - Running Ubuntu Clusters on Game Systems",
+     "channel": "Eli the Computer Guy",
+     "duration_s": 621,
+     "url": "https://www.youtube.com/watch?v=N_UZDrxNaZo"
+    },
+    {
+     "id": "oOCN30ulVyo",
+     "title": "My FULL OpenClaw Setup (steal my prompts!)",
+     "channel": "Tina Huang",
+     "duration_s": 1563,
+     "url": "https://www.youtube.com/watch?v=oOCN30ulVyo"
+    },
+    {
+     "id": "rFGlJ4oIlhw",
+     "title": "Parallel Claude Code + Git Worktrees: This Setup Will Change How You Ship",
+     "channel": "Cole Medin",
+     "duration_s": 1434,
+     "url": "https://www.youtube.com/watch?v=rFGlJ4oIlhw"
+    },
+    {
+     "id": "EGnA_kqu3is",
+     "title": "How I Made Gemma 4 10x Faster on Jetson Orin Nano",
+     "channel": "JetsonHacks",
+     "duration_s": 677,
+     "url": "https://www.youtube.com/watch?v=EGnA_kqu3is"
+    },
+    {
+     "id": "z-D0KLt5S6g",
+     "title": "Run Gemma 4 Locally on AGX Orin — Private NemoClaw for Itself and Other Orins",
+     "channel": "JetsonHacks",
+     "duration_s": 799,
+     "url": "https://www.youtube.com/watch?v=z-D0KLt5S6g"
+    },
+    {
+     "id": "8jBX3RatIus",
+     "title": "Hermes Agent FULLY LOCAL Ai Setup Guide",
+     "channel": null,
+     "duration_s": 1224,
+     "url": "https://www.youtube.com/watch?v=8jBX3RatIus"
+    },
+    {
+     "id": "7HQSFgP6vOE",
+     "title": "First Look: NemoClaw on Jetson with a Local LLM",
+     "channel": "JetsonHacks",
+     "duration_s": 874,
+     "url": "https://www.youtube.com/watch?v=7HQSFgP6vOE"
+    },
+    {
+     "id": "PA5i7HcyUxE",
+     "title": "Jetson Thor Made LLMs 3.5× Faster in 5 Weeks — But How?",
+     "channel": "JetsonHacks",
+     "duration_s": 544,
+     "url": "https://www.youtube.com/watch?v=PA5i7HcyUxE"
+    },
+    {
+     "id": "BGbb0O1k-r8",
+     "title": "Jetson Nano Computer Vision Setup | USB Camera + OpenCV Live Test",
+     "channel": "AronAyub",
+     "duration_s": 387,
+     "url": "https://www.youtube.com/watch?v=BGbb0O1k-r8"
+    },
+    {
+     "id": "gZSb6r5DYoo",
+     "title": "GLM 5.1 with OpenClaw: Full Setup Guide with Testing and Whinging",
+     "channel": "Fahd Mirza",
+     "duration_s": 1024,
+     "url": "https://www.youtube.com/watch?v=gZSb6r5DYoo"
+    },
+    {
+     "id": "g2fzaLKNRLs",
+     "title": "First Look: NemoClaw on Jetson Orin",
+     "channel": "JetsonHacks",
+     "duration_s": 561,
+     "url": "https://www.youtube.com/watch?v=g2fzaLKNRLs"
+    },
+    {
+     "id": "NgjFGDeF2q4",
+     "title": "DeepSeek Did It. Now LongCat Just Raised the Bar with Flash Prover",
+     "channel": "Fahd Mirza",
+     "duration_s": 537,
+     "url": "https://www.youtube.com/watch?v=NgjFGDeF2q4"
+    },
+    {
+     "id": "JRuwxLNXfcY",
+     "title": "GLM-5 KING MODE: I have LEFT OPUS & CODEX for this FULLY FREE SETUP!",
+     "channel": "AICodeKing",
+     "duration_s": 892,
+     "url": "https://www.youtube.com/watch?v=JRuwxLNXfcY"
+    },
+    {
+     "id": "tQPPjFY1gDc",
+     "title": "PicoClaw + Ollama + Telegram: Run AI Agent on $10 Hardware - Full Local Setup Guide",
+     "channel": "Fahd Mirza",
+     "duration_s": 580,
+     "url": "https://www.youtube.com/watch?v=tQPPjFY1gDc"
+    },
+    {
+     "id": "ZcIqiLLT7Fg",
+     "title": "INSTALL OPENCLAW in 30 seconds and START BUILDING... | Local Install and VPS FULL Tutorial",
+     "channel": "Wes Roth",
+     "duration_s": 3036,
+     "url": "https://www.youtube.com/watch?v=ZcIqiLLT7Fg"
+    },
+    {
+     "id": "AKxiKb42Cqk",
+     "title": "Nanobot with Local Ollama Models - Complete Easy Setup Guide",
+     "channel": "Fahd Mirza",
+     "duration_s": 587,
+     "url": "https://www.youtube.com/watch?v=AKxiKb42Cqk"
+    },
+    {
+     "id": "4jQChe0rg1c",
+     "title": "Schematron-3B: The Best Local AI Model for Web Scraping (Setup & Demo)",
+     "channel": "Fahd Mirza",
+     "duration_s": 489,
+     "url": "https://www.youtube.com/watch?v=4jQChe0rg1c"
+    },
+    {
+     "id": "SndCWC-jQ5o",
+     "title": "Run Anima 2B Locally in ComfyUI: For Anime Lovers (Setup + Best Prompts)",
+     "channel": "Fahd Mirza",
+     "duration_s": 589,
+     "url": "https://www.youtube.com/watch?v=SndCWC-jQ5o"
+    },
+    {
+     "id": "06foOD5yQuY",
+     "title": "Qwen3-Coder-Next + OpenClaw - llama.cpp Local Setup Guide",
+     "channel": "Fahd Mirza",
+     "duration_s": 550,
+     "url": "https://www.youtube.com/watch?v=06foOD5yQuY"
+    },
+    {
+     "id": "PYfLYoYwyxY",
+     "title": "LFM2 Audio: End-to-End Audio Foundation Model: Install and Test",
+     "channel": "Fahd Mirza",
+     "duration_s": 513,
+     "url": "https://www.youtube.com/watch?v=PYfLYoYwyxY"
+    },
+    {
+     "id": "egofv8c7oEk",
+     "title": "OpenClaw with Local Ollama Models - Complete Easy Setup Guide",
+     "channel": "Fahd Mirza",
+     "duration_s": 818,
+     "url": "https://www.youtube.com/watch?v=egofv8c7oEk"
+    },
+    {
+     "id": "3K37-n80tDg",
+     "title": "Clawdbot With LM Studio & GPT-OSS – Full Test & Setup Guide (Moltbot)",
+     "channel": "Bijan Bowen",
+     "duration_s": 1929,
+     "url": "https://www.youtube.com/watch?v=3K37-n80tDg"
+    },
+    {
+     "id": "mY-4Ls_2TS0",
+     "title": "GLM-4.7 Flash In OpenCode Is an Agentic Coding BEAST!",
+     "channel": "Bijan Bowen",
+     "duration_s": 1409,
+     "url": "https://www.youtube.com/watch?v=mY-4Ls_2TS0"
+    },
+    {
+     "id": "JxrVtFER1Q8",
+     "title": "Insane 3D models, realtime AI video, new #1 open model, realtime AI worlds, Gemini 3 Flash: AI NEWS",
+     "channel": "AI Search",
+     "duration_s": 2875,
+     "url": "https://www.youtube.com/watch?v=JxrVtFER1Q8"
+    },
+    {
+     "id": "mzx1FLDkBOo",
+     "title": "Human Audio Sidecar Explained: Use Cases & Setup Guide",
+     "channel": "Richard Aragon",
+     "duration_s": 1451,
+     "url": "https://www.youtube.com/watch?v=mzx1FLDkBOo"
+    },
+    {
+     "id": "KMNS_JoHFhg",
+     "title": "the ULTIMATE Proxmox Guide - Post-Install, ZFS, GPU Passthrough, and more!",
+     "channel": "NetBird",
+     "duration_s": 2364,
+     "url": "https://www.youtube.com/watch?v=KMNS_JoHFhg"
+    },
+    {
+     "id": "ysE8FMhAPH0",
+     "title": "Jetson ONE - Let the Jetson Air Games begin!",
+     "channel": "Jetson",
+     "duration_s": 185,
+     "url": "https://www.youtube.com/watch?v=ysE8FMhAPH0"
+    },
+    {
+     "id": "TxlVdB2gmGE",
+     "title": "Docker Just Made Using MCP Servers 100x Easier (One Click Installs!)",
+     "channel": "Cole Medin",
+     "duration_s": 1388,
+     "url": "https://www.youtube.com/watch?v=TxlVdB2gmGE"
+    },
+    {
+     "id": "cI6P6BGFTUc",
+     "title": "🔥Create Suno-Level AI Music LOCALLY on Just 6GB VRAM! (SongBloom DPO + ComfyUI Setup)",
+     "channel": "Fahd Mirza",
+     "duration_s": 1086,
+     "url": "https://www.youtube.com/watch?v=cI6P6BGFTUc"
+    },
+    {
+     "id": "0hvnBBC9HRI",
+     "title": "Open Sourcing My Nvidia Jetson Nano AI Chat Robot – Local LLM, Voice, and Face!",
+     "channel": "Bijan Bowen",
+     "duration_s": 3099,
+     "url": "https://www.youtube.com/watch?v=0hvnBBC9HRI"
+    },
+    {
+     "id": "a3SMraZWNNs",
+     "title": "How to Systematically Setup LLM Evals (Metrics, Unit Tests, LLM-as-a-Judge)",
+     "channel": null,
+     "duration_s": 3302,
+     "url": "https://www.youtube.com/watch?v=a3SMraZWNNs"
+    },
+    {
+     "id": "woZK76EJ47k",
+     "title": "Install Microsoft VibeVoice Locally on CPU or GPU",
+     "channel": "Fahd Mirza",
+     "duration_s": 505,
+     "url": "https://www.youtube.com/watch?v=woZK76EJ47k"
+    },
+    {
+     "id": "9gHdeOBK6tY",
+     "title": "FalkorDB - GraphRAG for GenAI Apps - Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 499,
+     "url": "https://www.youtube.com/watch?v=9gHdeOBK6tY"
+    },
+    {
+     "id": "kVn9pnq0WN4",
+     "title": "8 Setup to Film Yourself Driving",
+     "channel": "WES BENOA",
+     "duration_s": 273,
+     "url": "https://www.youtube.com/watch?v=kVn9pnq0WN4"
+    },
+    {
+     "id": "e6ROs4Ld03k",
+     "title": "Qwen-Image Released: FLUX.1 on Run: Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 762,
+     "url": "https://www.youtube.com/watch?v=e6ROs4Ld03k"
+    },
+    {
+     "id": "63I56qnfJis",
+     "title": "Qwen3-MT Translator: Realtime Multilingual AI Translation: Install and Test Model",
+     "channel": "Fahd Mirza",
+     "duration_s": 592,
+     "url": "https://www.youtube.com/watch?v=63I56qnfJis"
+    },
+    {
+     "id": "Y1Xr3EA7GxE",
+     "title": "Jetson Nano Agentic AI Update + New Case Setup (n8n Bot with Ollama)",
+     "channel": "Bijan Bowen",
+     "duration_s": 1186,
+     "url": "https://www.youtube.com/watch?v=Y1Xr3EA7GxE"
+    },
+    {
+     "id": "OZnfsJjLH5k",
+     "title": "Alibaba Just Released VideoRefer - Model That Understands Video - Install Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 638,
+     "url": "https://www.youtube.com/watch?v=OZnfsJjLH5k"
+    },
+    {
+     "id": "ZK14js2BiNM",
+     "title": "Kramer UI - GUI for Ollama on Windows - Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 486,
+     "url": "https://www.youtube.com/watch?v=ZK14js2BiNM"
+    },
+    {
+     "id": "YBVutqyVF5Y",
+     "title": "Devstral Small 1.1 - NEW Agentic LLM as Software Engineer - Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 918,
+     "url": "https://www.youtube.com/watch?v=YBVutqyVF5Y"
+    },
+    {
+     "id": "h_CEr9i9Cnc",
+     "title": "Kyutai Just Released TTS Model: Realtime Streaming TTS - Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 640,
+     "url": "https://www.youtube.com/watch?v=h_CEr9i9Cnc"
+    },
+    {
+     "id": "2zFhnTuDLdk",
+     "title": "Install FastDeploy Locally to Serve AI Models with High Performance",
+     "channel": "Fahd Mirza",
+     "duration_s": 657,
+     "url": "https://www.youtube.com/watch?v=2zFhnTuDLdk"
+    },
+    {
+     "id": "k3eWOYeX4Ns",
+     "title": "GLM-4.1V-9B-Thinking: Visual Reasoning at its Best - Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 782,
+     "url": "https://www.youtube.com/watch?v=k3eWOYeX4Ns"
+    },
+    {
+     "id": "GVMOF7GhXjU",
+     "title": "Install FLUX.1 Kontext [dev] in ComfyUI – Full Local Setup Guide!",
+     "channel": "Fahd Mirza",
+     "duration_s": 1000,
+     "url": "https://www.youtube.com/watch?v=GVMOF7GhXjU"
+    },
+    {
+     "id": "Z7THIy3kLgo",
+     "title": "Nanonets-OCR-s: Image-to-Markdown Model with LaTeX, Tables, Charts - Install Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 897,
+     "url": "https://www.youtube.com/watch?v=Z7THIy3kLgo"
+    },
+    {
+     "id": "sMO3BAPBLG4",
+     "title": "Meta Releases V-JEPA 2: First World Model for Video Understanding - Install and Test Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 533,
+     "url": "https://www.youtube.com/watch?v=sMO3BAPBLG4"
+    },
+    {
+     "id": "lG5-DkfawtQ",
+     "title": "Complete MinerU 2 Setup Locally: From Install to Fixing Every Error",
+     "channel": "Fahd Mirza",
+     "duration_s": 1004,
+     "url": "https://www.youtube.com/watch?v=lG5-DkfawtQ"
+    },
+    {
+     "id": "8tUteukEqFE",
+     "title": "Run Any LLM on Your Phone or Any Device - Full Easy Setup Guide",
+     "channel": "Fahd Mirza",
+     "duration_s": 614,
+     "url": "https://www.youtube.com/watch?v=8tUteukEqFE"
+    },
+    {
+     "id": "FuylIIjtDbs",
+     "title": "Kyutai's STT Now Open-Sourced - Streaming Speech-to-Text Model - Install and Test",
+     "channel": "Fahd Mirza",
+     "duration_s": 640,
+     "url": "https://www.youtube.com/watch?v=FuylIIjtDbs"
+    },
+    {
+     "id": "-1J5XwVUGQo",
+     "title": "Install Dolphin-Logger with Ollama: LLM Proxy to Create Datasets",
+     "channel": "Fahd Mirza",
+     "duration_s": 588,
+     "url": "https://www.youtube.com/watch?v=-1J5XwVUGQo"
+    },
+    {
+     "id": "NwSMIDBHYCg",
+     "title": "Alibaba TaoAvatar LOCAL Test & Install (LLM-Powered Mobile AI Avatar)",
+     "channel": "Bijan Bowen",
+     "duration_s": 1322,
+     "url": "https://www.youtube.com/watch?v=NwSMIDBHYCg"
+    },
+    {
+     "id": "k9FGiK5Fu0M",
+     "title": "Install K-Transformers to Run 600B+ AI Models Locally with Low VRAM",
+     "channel": "Fahd Mirza",
+     "duration_s": 1000,
+     "url": "https://www.youtube.com/watch?v=k9FGiK5Fu0M"
+    },
+    {
+     "id": "NksYHoLcPKs",
+     "title": "Jetson Orin Nano Super Setup Guide | OS Install, NVMe Upgrade, + Ollama AI",
+     "channel": "SYNACK Time",
+     "duration_s": 1567,
+     "url": "https://www.youtube.com/watch?v=NksYHoLcPKs"
+    },
+    {
+     "id": "gJPIJ3yxME0",
+     "title": "Connect Your Raspberry Pi Camera to Jetson Orin Nano Super in Minutes!",
+     "channel": "JetsonHacks",
+     "duration_s": 275,
+     "url": "https://www.youtube.com/watch?v=gJPIJ3yxME0"
+    },
+    {
+     "id": "4VDiyUbnFDU",
+     "title": "YOLO on Raspberry Pi, Jetson Nano, RDK X3 or RDK X5 Edge Devices with NCNN Real-Time Optimization",
+     "channel": "Kevin Wood | Robotics & AI",
+     "duration_s": 667,
+     "url": "https://www.youtube.com/watch?v=4VDiyUbnFDU"
+    },
+    {
+     "id": "6S0hplgfDaI",
+     "title": "Kimi-Audio: Model for Audio Understanding, Generation, and Conversation - Install Locally",
+     "channel": "Fahd Mirza",
+     "duration_s": 845,
+     "url": "https://www.youtube.com/watch?v=6S0hplgfDaI"
+    },
+    {
+     "id": "_KwVgipVzWY",
+     "title": "Ollama Local AI Server ULTIMATE Setup Guide: Open WebUI + Proxmox",
+     "channel": "Digital Spaceport",
+     "duration_s": 1851,
+     "url": "https://www.youtube.com/watch?v=_KwVgipVzWY"
+    },
+    {
+     "id": "ZhlM4ntQBGI",
+     "title": "Boost AI Agents with Model Context Protocol (Docker & Claude)",
+     "channel": "Docker",
+     "duration_s": 230,
+     "url": "https://www.youtube.com/watch?v=ZhlM4ntQBGI"
+    },
+    {
+     "id": "-PjMC0gyH9s",
+     "title": "NVIDIA Jetson Orin Nano Super COMPLETE Setup Guide & Tutorial",
+     "channel": "Bijan Bowen",
+     "duration_s": 3395,
+     "url": "https://www.youtube.com/watch?v=-PjMC0gyH9s"
+    },
+    {
+     "id": "TSbl5ZxdbPk",
+     "title": "NVIDIA Jetson Orin Nano SUPER Unleashed: Build an AI Super Cluster",
+     "channel": "Gary Explains",
+     "duration_s": 910,
+     "url": "https://www.youtube.com/watch?v=TSbl5ZxdbPk"
+    },
+    {
+     "id": "mpk4Q5feWaw",
+     "title": "The Ultimate VS Code Setup for Data & AI Projects",
+     "channel": "Dave Ebbelaar",
+     "duration_s": 1920,
+     "url": "https://www.youtube.com/watch?v=mpk4Q5feWaw"
+    },
+    {
+     "id": "fH_np9MEfLI",
+     "title": "ScreenshotToCode: FREE Text-to-Frontend AI with 100% LOCAL Setup (OpenUI & v0 Alternative)",
+     "channel": "AICodeKing",
+     "duration_s": 554,
+     "url": "https://www.youtube.com/watch?v=fH_np9MEfLI"
+    },
+    {
+     "id": "Z50BFFrmMbc",
+     "title": "How To Install QUIVR 🧠 Locally - Dump Data & CHAT | 100% FREE | 100% PRIVATE",
+     "channel": "Data Science Basics | AI",
+     "duration_s": 2375,
+     "url": "https://www.youtube.com/watch?v=Z50BFFrmMbc"
+    },
+    {
+     "id": "caSxLzgyLOs",
+     "title": "Custom GPT For Zapier Webhooks AI Actions: Complete Setup Guide",
+     "channel": "corbin",
+     "duration_s": 1079,
+     "url": "https://www.youtube.com/watch?v=caSxLzgyLOs"
+    },
+    {
+     "id": "WnBCPG-ZdLk",
+     "title": "AutoGen Introduction in 5 files step by step including how to enable Docker",
+     "channel": "echohive",
+     "duration_s": 1569,
+     "url": "https://www.youtube.com/watch?v=WnBCPG-ZdLk"
+    },
+    {
+     "id": "aiZWEbUjAGw",
+     "title": "Easiest Install Ever! AI Art Generator on Your PC! MIDJOURNEY QUALITY | How to Install SDXL Locally",
+     "channel": "MattVidPro",
+     "duration_s": 1007,
+     "url": "https://www.youtube.com/watch?v=aiZWEbUjAGw"
+    },
+    {
+     "id": "yTJxDzqo4fQ",
+     "title": "Python for AI #1: Dev Environment Setup",
+     "channel": null,
+     "duration_s": 1660,
+     "url": "https://www.youtube.com/watch?v=yTJxDzqo4fQ"
+    },
+    {
+     "id": "Zn5tmx0ynw8",
+     "title": "Full Python Environment Setup for AI (or other) Apps + Virtual Environments",
+     "channel": "Alejandro AO",
+     "duration_s": 2708,
+     "url": "https://www.youtube.com/watch?v=Zn5tmx0ynw8"
+    }
+   ]
+  },
+  "beats": {
+   "origin": "soundcloud/darkxside 82-track set",
+   "count": 82,
+   "tracks": [
+    {
+     "track": "ARCANE NIGHT",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Ask Me",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Asylum 2 nice",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Frayed",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Gone till remember",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Harbinger",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "HERE",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Ice Cream 3 In 1",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "IMCRAZY",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Johnny 5",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Like you a lot",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "SIRIUSSADHAPPYMIX",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Sketch 5 116.44 LOUD",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "SOUL MOVES",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Star Dreams ⧸ Wild Far",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Street Fighter Lower",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "THE ALIEN IN THE WINDOW",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "The Harbringer",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "THE SMALLEST VIOLINS",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "Whosupnext - 01",
+     "group": "Allegro_balanced_Bright_c5",
+     "count_in_group": 20
+    },
+    {
+     "track": "14 Track 14",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Aquary Rnb",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Guitary Dwstro 3busy 4",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Life Ex Machina",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Looops 6long",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "MATTER COMMANDER",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Mood no# 3",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Rak no# 10 mix issue no# 4",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Reminiscence",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Shae lullaby",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Shaelamix1loudLONG 183bpm",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Sketchy tech 11",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Strange Love",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Strange things",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "TALK SLOW",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "the empath",
+     "group": "Allegro_balanced_Bright_c1",
+     "count_in_group": 16
+    },
+    {
+     "track": "Ask You",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "CLANK",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Crush no # 71",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "FIRST BOSS",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "inquiringcuriousmind",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Jazz2loud",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "LITTY",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Lost Tapes A Side B Side - 1",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "NICE BABY",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Ree 3b 25",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Sketch 8 B Loud Dark",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "STARBLAST",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Starscreams and Loud Scars",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "The Setup Just Leave Me Alone ⧸ Don't Leave Me Alone",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "WACK",
+     "group": "Allegro_balanced_Bright_c0",
+     "count_in_group": 16
+    },
+    {
+     "track": "Absynth Club mix",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "Arcade Low - 2",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "BoomBap Low Long",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "Darque 8",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "Lira 9",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "MULTI BIT DARK",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "MULTIBIT",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "RAKS LIT",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "RAKS SLOW",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "Rav Low",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "SCARD",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "the legend of Rattlesnake Jake",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "WEIRD v1",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "When",
+     "group": "Moderato_balanced_Bright_c2",
+     "count_in_group": 14
+    },
+    {
+     "track": "Aquary 4",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "Hip Hops n Star Snaps",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "Lately",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "Piano Wax 76 Bpm dnb Dark",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "Piano Wax Loud",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "Shrooms 9 Low slow change",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "Storms",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "The Calm Storm",
+     "group": "Allegro_balanced_Bright_c7",
+     "count_in_group": 8
+    },
+    {
+     "track": "808 Low",
+     "group": "Allegro_balanced_Bright_c3",
+     "count_in_group": 4
+    },
+    {
+     "track": "808 SIGNS",
+     "group": "Allegro_balanced_Bright_c3",
+     "count_in_group": 4
+    },
+    {
+     "track": "Final Chrono 3",
+     "group": "Allegro_balanced_Bright_c3",
+     "count_in_group": 4
+    },
+    {
+     "track": "Final Chrono Dark Rev A",
+     "group": "Allegro_balanced_Bright_c3",
+     "count_in_group": 4
+    },
+    {
+     "track": "FLATTERY 4",
+     "group": "Presto_balanced_Bright_c6",
+     "count_in_group": 3
+    },
+    {
+     "track": "Happy Practice",
+     "group": "Presto_balanced_Bright_c6",
+     "count_in_group": 3
+    },
+    {
+     "track": "Krukky 18drums 6frek 4premaster 4b",
+     "group": "Presto_balanced_Bright_c6",
+     "count_in_group": 3
+    },
+    {
+     "track": "BOLLYWOOD MADNESS",
+     "group": "Moderato_balanced_Bright_c4",
+     "count_in_group": 1
+    }
+   ]
+  },
+  "models": {
+   "count": 5,
+   "entries": [
+    {
+     "name": "qwen3-coder-next:latest",
+     "size": "51",
+     "host": "spark-ollama-local"
+    },
+    {
+     "name": "qwen3:30b-a3b-q4_K_M",
+     "size": "18",
+     "host": "spark-ollama-local"
+    },
+    {
+     "name": "glm-5.3",
+     "host": "zai-coding-plan",
+     "size": null
+    },
+    {
+     "name": "glm-5.2",
+     "host": "zai-coding-plan",
+     "size": null
+    },
+    {
+     "name": "minimax-m3",
+     "host": "minimax-token-plan",
+     "size": null
+    }
+   ]
+  }
+ },
+ "notes": [
+  "OAuth refresh token measured revoked 2026-11-19 (invalid_grant); Supabase playlist",
+  "upsert via yt_playlist_crawl.py is blocked until operator re-runs the OAuth flow.",
+  "Flat listing requires only the cookie vault; re-crawl with yt-dlp --flat-playlist.",
+  "Capability matrix (model x beat x video) derives from this index; see remix-graph",
+  "plan in ROADMAP_4LANE_RESEARCH_DRYRUN Lane 3 / twin verdict (d)."
+ ]
+}
