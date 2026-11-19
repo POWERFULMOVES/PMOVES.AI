@@ -46,6 +46,8 @@ def _touch(root: Path, rel: str) -> Path:
         ".worktrees/some-branch/pmoves/tools/thing.py",
         # The layout the original exclusion covered.
         ".claude/worktrees/other-branch/pmoves/tools/thing.py",
+        # Kilo's linked-worktree home; a stale copy here failed the funnel audit.
+        ".kilo/worktrees/troubled-hail/pmoves/tools/thing.py",
     ],
 )
 def test_worktree_copies_are_not_audited(audit, tmp_path, worktree_rel):
