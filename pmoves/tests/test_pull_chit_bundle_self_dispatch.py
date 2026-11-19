@@ -29,6 +29,11 @@ pytestmark = pytest.mark.skipif(BASH is None, reason="needs bash")
 #   run 300 = a live-bundle success used by FAKE_SUCCESS_RUN
 # FAKE_FLAKY=1 makes the FIRST `run list` fail once (gh_retry must survive it);
 # FAKE_WATCH_RC=1 makes `run watch` fail (PAT fallback must poll status instead).
+# FAKE_SNAPSHOT_FAIL=1 makes every pre-dispatch floor query fail.
+# FAKE_DISPATCH_URL=<id> makes `workflow run` print the created run's URL.
+# FAKE_RACE=1 adds run 250: a CONCURRENT consumer's dispatch, created after
+#   ours (12:00:09), already completed with conclusion=failure.
+# FAKE_STUCK=1 leaves run 200 queued forever (deadline must still fire).
 FAKE_GH = r"""#!/usr/bin/env bash
 S="$FAKE_STATE"
 echo "$*" >> "$S/calls"
@@ -42,6 +47,7 @@ case "$1 $2" in
         # correlation floor: newest run's server-side createdAt. FAKE_FLAKY
         # makes the FIRST floor query fail once -- gh_retry must survive it.
         # (post-jq string: quoted, matching real gh output)
+        if [ "${FAKE_SNAPSHOT_FAIL:-0}" = 1 ]; then echo "gh: HTTP 502" >&2; exit 1; fi
         if [ "${FAKE_FLAKY:-0}" = 1 ] && [ ! -f "$S/flaked" ]; then
           touch "$S/flaked"; echo "gh: rate limited" >&2; exit 1
         fi
@@ -49,22 +55,50 @@ case "$1 $2" in
         else echo '"2026-11-01T00:00:00Z"'; fi ;;
       *"workflow_dispatch"*)
         # post-jq '.[].databaseId': one id per line
-        if [ -f "$S/dispatched" ]; then echo 200; else true; fi ;;
+        # newest first, like gh
+        if [ -f "$S/dispatched" ]; then
+          [ "${FAKE_RACE:-0}" = 1 ] && echo 250
+          echo 200
+        fi ;;
       *)
         # post-jq join(",")
         if [ -f "$S/dispatched" ]; then echo "100,200"; else echo "100"; fi ;;
     esac ;;
-  "workflow run") [ "${FAKE_REFUSE_DISPATCH:-0}" = 1 ] && exit 1; touch "$S/dispatched" ;;
+  "workflow run")
+    [ "${FAKE_REFUSE_DISPATCH:-0}" = 1 ] && exit 1
+    touch "$S/dispatched"
+    if [ -n "${FAKE_DISPATCH_URL:-}" ]; then
+      echo "https://github.com/OWNER/REPO/actions/runs/${FAKE_DISPATCH_URL}"
+    fi ;;
   "run view")
     id="$3"
     case "$*" in
-      *"--json createdAt"*) [ "$id" = 200 ] && echo '"2026-11-19T12:00:05Z"' || echo '"2026-11-01T00:00:00Z"' ;;
-      *"--json status"*) [ "$id" = 200 ] && echo '"completed"' || echo '"in_progress"' ;;
-      *"--json conclusion"*) [ "$id" = 200 ] && echo "\"${FAKE_CONCLUSION:-success}\"" || echo 'null' ;;
+      *"--json createdAt"*)
+        case "$id" in
+          200) echo '"2026-11-19T12:00:05Z"' ;;
+          250) echo '"2026-11-19T12:00:09Z"' ;;
+          *) echo '"2026-11-01T00:00:00Z"' ;;
+        esac ;;
+      *"--json status"*)
+        case "$id" in
+          200) [ "${FAKE_STUCK:-0}" = 1 ] && echo '"queued"' || echo '"completed"' ;;
+          250) echo '"completed"' ;;
+          *) echo '"in_progress"' ;;
+        esac ;;
+      *"--json conclusion"*)
+        case "$id" in
+          200) echo "\"${FAKE_CONCLUSION:-success}\"" ;;
+          250) echo '"failure"' ;;
+          *) echo 'null' ;;
+        esac ;;
     esac ;;
   "run watch")
     # --exit-status: a failed run must make watch exit non-zero
     if [ "${FAKE_CONCLUSION:-success}" != "success" ]; then exit 1; fi
+    [ "$3" = 250 ] && exit 1
+    # stuck run: behave like a fine-grained PAT (watch unsupported) so the
+    # status-polling deadline is what has to stop the wait
+    [ "${FAKE_STUCK:-0}" = 1 ] && exit 1
     exit "${FAKE_WATCH_RC:-0}" ;;
   "run download")
     while [ $# -gt 0 ]; do [ "$1" = --dir ] && d="$2"; shift; done
@@ -186,3 +220,66 @@ def test_the_dispatched_run_is_correlated_by_server_createdat(tmp_path):
     assert "--event workflow_dispatch" in calls, "candidates filtered by event"
     assert "--json createdAt" in calls, "floor snapshot taken before dispatch"
     assert "run watch 200" in calls
+
+
+def test_a_failed_snapshot_aborts_before_dispatching(tmp_path):
+    """gh_retry used to return 0 after three failures (`$?` read after a false
+    `if` is 0), so an empty floor was accepted and ANY recent
+    workflow_dispatch run counted as ours. The snapshot must fail closed."""
+    proc, calls = _run(tmp_path, FAKE_SNAPSHOT_FAIL="1")
+
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "Could not snapshot" in proc.stdout
+    assert "HTTP 502" in proc.stderr, "gh's own error is replayed"
+    assert "workflow run" not in calls, "nothing dispatched without a floor"
+    assert not (tmp_path / "chit" / "env.cgp.json").exists()
+
+
+def test_a_concurrent_foreign_dispatch_is_not_adopted(tmp_path):
+    """Run 250 is another consumer's dispatch, created AFTER ours and failed.
+    Fallback correlation takes the OLDEST post-floor candidate (200), so this
+    pull neither watches nor reports the foreign failure."""
+    proc, calls = _run(tmp_path, FAKE_RACE="1")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "Adopted run 200" in proc.stdout
+    assert "run watch 250" not in calls
+    assert "run download 200" in calls
+
+
+def test_the_run_url_from_the_dispatch_is_used_verbatim(tmp_path):
+    """When gh returns the created run's URL, that id is exact: no list-based
+    discovery happens at all, so a race cannot occur."""
+    proc, calls = _run(tmp_path, FAKE_DISPATCH_URL="200", FAKE_RACE="1")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "id returned by the dispatch API" in proc.stdout
+    assert "--event workflow_dispatch" not in calls
+    assert "run download 200" in calls
+
+
+def test_the_dispatch_timeout_holds_without_gh_run_watch(tmp_path):
+    """A queued-forever run (offline producer) must fail after the deadline on
+    the polling path too -- the path stock macOS (no `timeout`) and
+    fine-grained PATs (no `gh run watch`) both take."""
+    import time
+
+    t0 = time.monotonic()
+    proc, calls = _run(
+        tmp_path, FAKE_STUCK="1",
+        PMOVES_BUNDLE_DISPATCH_TIMEOUT="2", PMOVES_BUNDLE_POLL_INTERVAL="1",
+    )
+    elapsed = time.monotonic() - t0
+
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "status=queued" in proc.stdout
+    assert "run download" not in calls
+    assert elapsed < 60, f"deadline not enforced ({elapsed:.0f}s)"
+
+
+def test_a_non_numeric_timeout_is_refused(tmp_path):
+    proc, calls = _run(tmp_path, PMOVES_BUNDLE_DISPATCH_TIMEOUT="15m")
+
+    assert proc.returncode == 1
+    assert "whole seconds" in proc.stdout
+    assert "workflow run" not in calls

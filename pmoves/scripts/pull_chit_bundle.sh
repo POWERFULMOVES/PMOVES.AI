@@ -87,7 +87,7 @@ artifact_of() {
           | (map(select(.name|startswith(\"chit-bundle-$NODE-\"))) + .) | .[0].name // empty"
 }
 
-# gh_json_field ID FIELD -- one run view query, fails soft (empty) so a
+# gh_run_field ID FIELD -- one run view query, fails soft (empty) so a
 # transient API error cannot kill the caller under set -e.
 gh_run_field() {
   local v
@@ -101,14 +101,27 @@ gh_run_field() {
 # under `set -e` aborts the whole script with ZERO output on the first
 # failure -- the exact silent-death mode the PR review flagged. Every gh
 # call whose failure is not itself the answer goes through here.
+#
+# stdout carries ONLY the command's stdout (stderr warnings must never be
+# parsed as run ids or timestamps); on final failure the last stderr is
+# replayed to stderr and the command's own exit code is returned. The rc is
+# captured in the else-branch: `$?` read after a false `if ...; fi` is 0.
 gh_retry() {
-  local attempt=0 out rc=1
+  local attempt=0 out rc=1 err
+  err="$(mktemp)"
   while [ "$attempt" -lt 3 ]; do
     attempt=$((attempt + 1))
-    if out="$("$@" 2>&1)"; then printf '%s\n' "$out"; return 0; fi
-    rc=$?
-    [ "$attempt" -lt 3 ] && sleep $((attempt * 2))
+    if out="$("$@" 2>"$err")"; then
+      command rm -- "$err"
+      printf '%s\n' "$out"
+      return 0
+    else
+      rc=$?
+    fi
+    if [ "$attempt" -lt 3 ]; then sleep $((attempt * 2)); fi
   done
+  sed 's/^/   /' "$err" >&2
+  command rm -- "$err"
   return "$rc"
 }
 
@@ -117,8 +130,13 @@ gh_retry() {
 # whose gh is authed may DISPATCH the producer run -- the producers themselves
 # stay the Linux runners in $PRODUCERS. Opt out with PMOVES_BUNDLE_NO_DISPATCH=1.
 DISPATCH_TIMEOUT="${PMOVES_BUNDLE_DISPATCH_TIMEOUT:-900}"
+case "$DISPATCH_TIMEOUT" in
+  ''|*[!0-9]*) echo "❌ PMOVES_BUNDLE_DISPATCH_TIMEOUT must be whole seconds (got '$DISPATCH_TIMEOUT')"; exit 1 ;;
+esac
+DISCOVER_TIMEOUT="${PMOVES_BUNDLE_DISCOVER_TIMEOUT:-60}"
+POLL_INTERVAL="${PMOVES_BUNDLE_POLL_INTERVAL:-10}"
 self_dispatch() {
-  local why="$1" before floor_ts new="" id created
+  local why="$1" before floor_ts floor new="" id created best_ts="" dispatch_out deadline
   if [ "${PMOVES_BUNDLE_NO_DISPATCH:-0}" = "1" ]; then
     echo "❌ $why"
     echo "   Self-dispatch is off (PMOVES_BUNDLE_NO_DISPATCH=1). Dispatch a fresh run on the Linux producers ($PRODUCERS):"
@@ -127,59 +145,73 @@ self_dispatch() {
   fi
   echo "→ $why"
   echo "→ Self-dispatching $WORKFLOW on the Linux producers ($PRODUCERS)"
-  # Correlation floor: GitHub's OWN createdAt for the newest existing run.
-  # A new run only counts if its server-side createdAt is strictly newer --
-  # immune to local clock skew, and a run dispatched by a CONCURRENT consumer
-  # before our floor is correctly treated as not-ours only if it predates the
-  # snapshot; a simultaneous dispatch race then resolves to the same fresh
-  # run (same workflow, same inputs), which is the safe outcome.
-  floor_ts="$(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 1 \
-    --json createdAt --jq '.[0].createdAt // "0"' || true)"
-  before=",$(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
-    --json databaseId --jq '[.[].databaseId|tostring]|join(",")' || true),"
-  if ! gh workflow run "$WORKFLOW" --repo "$REPO" --ref main -f "targets=$PRODUCERS"; then
+  # Pre-dispatch snapshot. If it cannot be taken, STOP: an empty floor would
+  # make every recent workflow_dispatch run look "new", including old and
+  # foreign ones, so we would install whatever happened to be there.
+  if ! floor_ts="$(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 1 \
+      --json createdAt --jq '.[0].createdAt // "0"')" \
+     || ! before="$(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" --limit 20 \
+      --json databaseId --jq '[.[].databaseId|tostring]|join(",")')"; then
+    echo "❌ Could not snapshot existing $WORKFLOW runs before dispatching (gh error above); nothing dispatched."
+    exit 1
+  fi
+  floor="${floor_ts//\"/}"
+  before=",$before,"
+  if ! dispatch_out="$(gh workflow run "$WORKFLOW" --repo "$REPO" --ref main -f "targets=$PRODUCERS" 2>&1)"; then
+    [ -n "$dispatch_out" ] && printf '%s\n' "$dispatch_out" | sed 's/^/   /'
     echo "❌ Dispatch refused (gh needs a token with workflow/actions:write scope). Run by hand:"
     echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
     exit 1
   fi
-  local discover_waited=0
-  while [ "$discover_waited" -lt 60 ]; do
-    for id in $(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" \
-        --event workflow_dispatch --limit 20 --json databaseId --jq '.[].databaseId' || true); do
-      case "$before" in *",$id,"*) continue ;; esac
-      created="$(gh_run_field "$id" createdAt)"
-      # Identity, not clock: server-side createdAt must postdate the floor
-      # snapshot, and the event must be our dispatch class.
-      if [ -n "$created" ] && [ "$created" \> "${floor_ts//\"/}" ]; then new="$id"; break; fi
+  [ -n "$dispatch_out" ] && printf '%s\n' "$dispatch_out" | sed 's/^/   /'
+  # EXACT correlation first: gh versions that get the run id back from the
+  # dispatch API print the created run's URL. That id IS our run -- no race.
+  new="$(printf '%s\n' "$dispatch_out" | sed -n 's|.*/actions/runs/\([0-9][0-9]*\).*|\1|p' | head -1)"
+  if [ -z "$new" ]; then
+    # FALLBACK correlation (older gh, no URL). A candidate must be a
+    # workflow_dispatch run absent from the pre-dispatch snapshot whose
+    # SERVER-side createdAt is strictly newer than the floor (immune to local
+    # clock skew). Among candidates take the OLDEST: two consumers that
+    # dispatch concurrently from the same floor then converge on the same
+    # run instead of each adopting whichever appeared last. A foreign run
+    # can still be adopted in that race; it has identical inputs, and a
+    # failure in it fails this pull CLOSED (nothing installed) -- re-run.
+    local disc_deadline=$((SECONDS + DISCOVER_TIMEOUT))
+    while [ "$SECONDS" -lt "$disc_deadline" ]; do
+      for id in $(gh_retry gh run list --repo "$REPO" --workflow "$WORKFLOW" \
+          --event workflow_dispatch --limit 20 --json databaseId --jq '.[].databaseId' || true); do
+        case "$before" in *",$id,"*) continue ;; esac
+        created="$(gh_run_field "$id" createdAt)"
+        [ -n "$created" ] && [ "$created" \> "$floor" ] || continue
+        if [ -z "$best_ts" ] || [ "$created" \< "$best_ts" ]; then new="$id"; best_ts="$created"; fi
+      done
+      [ -n "$new" ] && break
+      sleep 5
     done
-    [ -n "$new" ] && break
-    sleep 5; discover_waited=$((discover_waited + 5))
-  done
-  [ -n "$new" ] || { echo "❌ Dispatched, but no new workflow_dispatch run appeared within 60s."; exit 1; }
-  echo "→ Waiting for run $new (timeout ${DISPATCH_TIMEOUT}s, correlated by createdAt > ${floor_ts//\"/})"
-  # `timeout` is absent on stock macOS, whose bash 3.2 also rejects an empty
-  # "${arr[@]}" under set -u -- so branch rather than build an argv prefix.
-  # Both branches enforce DISPATCH_TIMEOUT; the fallback loop additionally
-  # covers fine-grained PATs, where `gh run watch` (streaming API) can fail
-  # while plain status polling works -- so poll status,conclusion instead.
-  local watched=0
-  if command -v timeout >/dev/null; then
-    timeout "$DISPATCH_TIMEOUT" gh run watch "$new" --repo "$REPO" --exit-status --interval 10 >/dev/null || watched=$?
-    if [ "$watched" -ne 0 ]; then
-      # watch can fail for auth/streaming reasons even while the run is fine
-      # (fine-grained PAT) -- fall through to status polling before declaring death.
-      watched=0
-    else
-      RUN_ID="$new"; return 0
-    fi
+    [ -n "$new" ] || { echo "❌ Dispatched, but no new workflow_dispatch run appeared within ${DISCOVER_TIMEOUT}s."; exit 1; }
+    echo "→ Adopted run $new (createdAt $best_ts > pre-dispatch floor $floor)"
+  else
+    echo "→ Dispatched run $new (id returned by the dispatch API)"
   fi
-  local waited=0 status="" conclusion=""
-  while [ "$waited" -lt "$DISPATCH_TIMEOUT" ]; do
+  echo "→ Waiting for run $new (timeout ${DISPATCH_TIMEOUT}s): gh run view $new --repo $REPO"
+  # ONE deadline for the whole wait, tracked by bash's SECONDS, so it holds on
+  # every platform (stock macOS has no `timeout`) and is never paid twice.
+  # `gh run watch` is only a fast path: it does not support fine-grained PATs
+  # (`gh run watch --help`), so any non-zero exit falls through to polling
+  # run status -- which those tokens can read -- for the time that remains.
+  deadline=$((SECONDS + DISPATCH_TIMEOUT))
+  if command -v timeout >/dev/null \
+     && timeout "$DISPATCH_TIMEOUT" gh run watch "$new" --repo "$REPO" --exit-status --interval "$POLL_INTERVAL" >/dev/null 2>&1; then
+    RUN_ID="$new"; return 0
+  fi
+  local status="" conclusion=""
+  while :; do
     status="$(gh_run_field "$new" status)"
     [ "$status" = "completed" ] && break
-    sleep 10; waited=$((waited + 10))
+    [ "$SECONDS" -lt "$deadline" ] || break
+    sleep "$POLL_INTERVAL"
   done
-  conclusion="$(gh_run_field "$new" conclusion)"
+  [ "$status" = "completed" ] && conclusion="$(gh_run_field "$new" conclusion)"
   if [ "$status" != "completed" ] || [ "$conclusion" != "success" ]; then
     echo "❌ Run $new did not succeed in time (status=${status:-unknown} conclusion=${conclusion:-unknown}). Is a producer runner ($PRODUCERS) online?"
     echo "   gh run view $new --repo $REPO"
