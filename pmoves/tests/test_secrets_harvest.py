@@ -498,54 +498,59 @@ def test_probe_decodes_docker_output_as_utf8_on_every_platform():
     assert "a\u200db" in out
 
 
-def test_probe_pins_utf8_strict_rather_than_the_platform_codec(monkeypatch):
-    """Pins the intent where the platform codec is already UTF-8 (Linux CI)."""
-    seen = {}
+class _Proc:
+    def __init__(self, returncode=0, stdout=b"", stderr=b""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
-    class _Done:
-        returncode = 0
-        stdout = "x"
+
+def test_probe_decodes_stdout_itself_as_utf8_strict(monkeypatch):
+    """Pins the intent where the platform codec is already UTF-8 (Linux CI):
+    the probe captures BYTES and decodes stdout itself, never via the
+    platform codec (no text=/encoding= handed to subprocess)."""
+    seen = {}
 
     def fake_run(cmd, **kwargs):
         seen.update(kwargs)
-        return _Done()
+        return _Proc(stdout="a\u200db".encode("utf-8"))
 
     monkeypatch.setattr(sh.subprocess, "run", fake_run)
-    assert sh.DockerProbe._run(["docker", "ps"]) == "x"
-    assert seen.get("encoding") == "utf-8"
-    assert seen.get("errors") == "strict"
+    assert sh.DockerProbe._run(["docker", "ps"]) == "a\u200db"
+    assert not seen.get("text") and not seen.get("universal_newlines")
+    assert "encoding" not in seen and "errors" not in seen
 
 
 def test_probe_raises_when_stdout_is_lost(monkeypatch):
-    """Windows: a decode error kills the reader thread and stdout is None with
-    exit 0. That is "could not read", not "nothing there" -- it must raise."""
-
-    class _Lost:
-        returncode = 0
-        stdout = None
-
-    monkeypatch.setattr(sh.subprocess, "run", lambda cmd, **kw: _Lost())
+    """Exit 0 with no stdout is "could not read", not "nothing there"."""
+    monkeypatch.setattr(sh.subprocess, "run", lambda cmd, **kw: _Proc(stdout=None))
     import pytest
 
     with pytest.raises(sh.DockerProbeUnreadable):
         sh.DockerProbe._run(["docker", "inspect", "x"])
 
 
-def test_probe_raises_on_posix_decode_error_without_leaking_bytes(monkeypatch):
-    """POSIX decodes on the calling thread and raises UnicodeDecodeError. The
-    probe must surface it as unreadable and never echo the offending bytes."""
-    secretish = b"\xff\xfeSECRETBYTES"
-
-    def boom(cmd, **kw):
-        raise UnicodeDecodeError("utf-8", secretish, 0, 1, "invalid start byte")
-
-    monkeypatch.setattr(sh.subprocess, "run", boom)
+def test_probe_raises_on_undecodable_stdout_without_leaking_bytes(monkeypatch):
+    """Non-UTF-8 stdout from a successful docker call must surface as
+    unreadable, and the error must never echo the offending bytes."""
+    monkeypatch.setattr(
+        sh.subprocess, "run", lambda cmd, **kw: _Proc(stdout=b"\xff\xfeSECRETBYTES")
+    )
     import pytest
 
     with pytest.raises(sh.DockerProbeUnreadable) as info:
         sh.DockerProbe._run(["docker", "version", "--format", "x"])
     assert "SECRETBYTES" not in str(info.value)
     assert "position 0" in str(info.value)
+
+
+def test_probe_ignores_undecodable_stderr_on_a_failed_call(monkeypatch):
+    """Fleet review on #3321: a localized, non-UTF-8 docker error message on
+    stderr must not turn a plain failure into an unreadable-output refusal."""
+    monkeypatch.setattr(
+        sh.subprocess, "run", lambda cmd, **kw: _Proc(returncode=1, stderr=b"\x8d\xff")
+    )
+    assert sh.DockerProbe._run(["docker", "version"]) == ""
 
 
 def test_absent_docker_still_reads_as_nothing(monkeypatch):

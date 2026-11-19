@@ -197,8 +197,11 @@ class DockerProbe:
         # Docker emits UTF-8. text=True alone decodes with the platform codec
         # (cp1252 on Windows): one UTF-8 byte such as 0x8d in `docker inspect`
         # kills the reader thread, stdout comes back None, and every live holder
-        # vanishes -- a false "no holder" refusal. Strict, not "replace": a
-        # harvested value must arrive byte-for-byte or not at all.
+        # vanishes -- a false "no holder" refusal. So capture BYTES and decode
+        # stdout here, UTF-8 strict -- not "replace": a harvested value must
+        # arrive byte-for-byte or not at all. stderr is never decoded: it is
+        # diagnostics, and a localized non-UTF-8 docker error message must not
+        # be able to turn a plain failure into an unreadable-output refusal.
         #
         # "" means exactly one thing here: docker is absent or the command
         # failed (a legitimate STATE 1). Docker that ANSWERED but whose output
@@ -207,32 +210,21 @@ class DockerProbe:
         # refuses. Folding it into "" would let an undecodable `docker version`
         # read as "no docker", which classify() maps to MINT.
         try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="strict",
-                check=False,
-                timeout=60,
-            )
-        except UnicodeDecodeError as exc:
-            # POSIX decodes on the calling thread and raises here. Report the
-            # position only -- never the offending bytes, which may be a secret.
-            raise DockerProbeUnreadable(
-                "`%s` output is not valid UTF-8 (position %d)" % (" ".join(cmd[:2]), exc.start)
-            ) from None
+            proc = subprocess.run(cmd, capture_output=True, check=False, timeout=60)
         except (OSError, subprocess.SubprocessError):
             return ""
         if proc.returncode != 0:
             return ""
         if proc.stdout is None:
-            # Windows decodes on a reader thread; a decode error kills that
-            # thread and stdout comes back None with a zero exit code.
+            raise DockerProbeUnreadable("`%s` exited 0 but its output was lost" % " ".join(cmd[:2]))
+        try:
+            return proc.stdout.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            # Report the position only -- never the offending bytes, which may
+            # be part of a secret.
             raise DockerProbeUnreadable(
-                "`%s` exited 0 but its output was lost (undecodable)" % " ".join(cmd[:2])
-            )
-        return proc.stdout
+                "`%s` output is not valid UTF-8 (position %d)" % (" ".join(cmd[:2]), exc.start)
+            ) from None
 
     def available(self) -> bool:
         if not self._checked:
