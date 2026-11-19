@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/codex-pmoves.sh        [args...]
-#   install-codex-pmoves-pmoves-command.sh && codex-pmoves         # rc function
+#   install-codex-pmoves-command.sh && codex-pmoves         # rc function
 #   codex-pmoves.cmd                              # Windows Explorer double-click
 #
 # Purpose: Codex CLI rooted in the PMOVES repo

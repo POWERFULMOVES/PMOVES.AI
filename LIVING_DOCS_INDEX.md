@@ -29,6 +29,9 @@
 |-----|------|------|------------------|
 | Known Roads + dev patterns | [`.claude/PATTERNS.md`](./.claude/PATTERNS.md) | CHIT, skill pairings, hook recovery, debug recipes | 30d / P2 |
 | Pinokio launcher guide | [`.claude/PINOKIO_LAUNCHER_GUIDE.md`](./.claude/PINOKIO_LAUNCHER_GUIDE.md) | On-demand for `D:\pinokio\` work | 60d / INFO |
+| Harness overlay map | [`pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md`](./pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md) | Per-harness native surface vs PMOVES overlay seam; check BEFORE writing a launcher, cite in the PR | 30d / P2 |
+| Danger Room anti-patterns | [`pmoves/docs/danger-room/anti-patterns.md`](./pmoves/docs/danger-room/anti-patterns.md) | Room catalog + matching index (`overlay-paper-over` et al.); reviewer surfaces point here | 60d / P2 |
+| TAC integration topology | [`pmoves/docs/TAC/TAC_INTEGRATION_TOPOLOGY.md`](./pmoves/docs/TAC/TAC_INTEGRATION_TOPOLOGY.md) | Index of TAC trees + cross-repo integration points (refresh pending after #3345; Jev plugins not yet indexed) | 90d / P2 |
 
 ## Tier 3 — Architecture thesis (slow-changing)
 

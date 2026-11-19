@@ -1,0 +1,284 @@
+# Mavis Collection — MiniMax Code Client Bootstrap Profile
+# =============================================================================
+# spec: pmoves.bootstrap/v1
+# home:  ~/.minimax/
+#
+# WHY THIS FILE EXISTS (2026-10-26 lane)
+# The operator's other agent stacks (claude, kimi, kilocode, opencode, hermes,
+# crush) each get the PMOVES MCP roster from
+# pmoves/config/mcp_inventory.json via pmoves/tools/mcp_config_generator.py.
+# The MiniMax Code client (this runtime) was NOT one of the generator's
+# client targets, so `~/.minimax/mcp.json` carried only the `composio` entry
+# and the client had none of the PMOVES integration the sibling stacks have.
+#
+# This profile is the machine-readable statement of WHAT the client is
+# allowed to load and reach, in the same pmoves.bootstrap/v1 envelope the
+# Collection already uses (CGP v1.0-derived: spec / meta / sig / super_nodes).
+# The generator renders the `tools` group into `~/.minimax/mcp.json`; the
+# launcher (`minimax-pmoves`) reads `services` + `routing` + `constraints`
+# and the operator reads `identity`.
+#
+# Validation:
+#   pmoves/tools/mavis_collection_resolve.py validate \
+#     --manifest pmoves/configs/mavis_collection/clients/minimax-code.yaml
+#
+# This is a POINTER manifest, not a copy of canonical data: every tool
+# entry names a key that must exist in pmoves/config/mcp_inventory.json,
+# so the profile and the generated config can be diffed against each other.
+# =============================================================================
+
+spec: pmoves.bootstrap/v1
+
+meta:
+  schema_version: 1.0
+  created: 2026-10-26
+  last_updated: 2026-10-26
+  operator: DARKXSIDE
+  home: ~/.minimax/
+  notes: |
+    MiniMax Code (MCode) desktop client bootstrap profile. The MCP roster
+    is rendered from the `tools` group into ~/.minimax/mcp.json by
+    pmoves/tools/mcp_config_generator.py (client target: `minimax`).
+    The `services` group is the operator-facing service-tag map (Tailscale /
+    RustDesk / Hostinger / Cloudflare); `routing` says where to find the
+    sibling agents when work hands off; `constraints` is the explicit
+    "do not" list so a downstream agent can CITE the refusal instead of
+    guessing. Credentials are never inline -- each entry points at the
+    location the launcher resolves it from.
+
+identity:
+  agent: Mavis
+  form_ref: pmoves/configs/agents/forms/mavis.yaml
+  cross_agent_inheritance:
+    - claude-code
+    - kilo-code
+    - codex
+    - hermes
+    - glm-coder
+    - kimi-coder
+    - gpt
+
+super_nodes:
+
+  # ---------------------------------------------------------------------------
+  # auth — the MiniMax provider key resolution for this client.
+  # Mirrors the Collection's existing minimax auth entry; mmx stays the
+  # canonical CLI + single source of truth for the key.
+  # ---------------------------------------------------------------------------
+  auth:
+    - provider: minimax
+      format: sk-cp
+      source: ~/.mmx/config.json
+      probe: 3-step-gate
+      notes: |
+        Token Plan keys (sk-cp-...). The MiniMax Code runtime reads the
+        same ~/.mmx/config.json -- do NOT mint a second credential path
+        for this client.
+
+  # ---------------------------------------------------------------------------
+  # tools — the MCP roster this client is allowed to load.
+  # Every `key` must exist in pmoves/config/mcp_inventory.json. The
+  # generator's `minimax` target renders these into ~/.minimax/mcp.json
+  # in the MiniMax-native schema (type / enabled / configured / builtin).
+  #
+  # `endpoint` is left as the inventory's own resolution: `local` for
+  # node-local services, `fleet` for tailnet-reachable ones. The launcher
+  # picks the resolution mode; the profile states the INTENT.
+  # ---------------------------------------------------------------------------
+  tools:
+    - key: pmoves-cipher-local
+      description: "Local agent memory (cipher published on loopback)."
+      transport: sse
+      endpoint: local
+      scope: local
+      enabled: true
+      notes: "Local variant on purpose -- the fleet URL is unreachable cross-node."
+
+    - key: agent-zero
+      description: "Agent Zero orchestrator (SSE with MCP token auth)."
+      transport: sse
+      endpoint: local
+      scope: local
+      enabled: true
+
+    - key: pmoves-nats-fleet
+      description: "NATS fleet messaging bridge (pmoves.nats subjects)."
+      transport: stdio
+      scope: fleet
+      enabled: true
+      notes: "NATS_URL comes from the launcher-resolved env, never inline."
+
+    - key: flute-voice
+      description: "Flute voice gateway (SSE transport: GET /sse + POST /messages)."
+      transport: sse
+      endpoint: local
+      scope: local
+      enabled: true
+      notes: |
+        MEASURED 2026-10-26: the gateway's only MCP surface is the SSE pair
+        -- GET /sse and POST /messages?session_id=... (plus /healthz). There
+        is NO /mcp route, so the inventory's separate `flute-voice-mcp`
+        entry (flute_mcp_local_url = http://localhost:8055/mcp) 404s.
+        That entry is therefore NOT declared here -- a client profile must
+        name only surfaces that actually answer. The inventory defect
+        (it reaches all six sibling clients too) is tracked as its own
+        lane; see the LEARNINGS for this slice.
+
+    - key: tailscale
+      description: "Tailscale network administration (tailnet device + ACL view)."
+      transport: stdio
+      scope: fleet
+      enabled: true
+
+    - key: hostinger
+      description: "Hostinger VPS API (requires the pmz-hostinger container)."
+      transport: stdio
+      scope: fleet
+      enabled: true
+      notes: "Only useful once the pmz-hostinger container exists on the host."
+
+    - key: composio
+      description: "Composio Connect hosted MCP (SaaS toolkits; YouTube + Drive)."
+      transport: http
+      scope: hosted
+      enabled: true
+      notes: |
+        Pre-existing entry in ~/.minimax/mcp.json. The generator MERGES,
+        so this key's operator-provided `x-consumer-api-key` header is
+        preserved rather than overwritten with an empty value.
+
+  # ---------------------------------------------------------------------------
+  # services — the operator-facing service-tag map. This is the "service
+  # tags" half of the bootstrap contract: which surface does each tag
+  # actually resolve to.
+  # ---------------------------------------------------------------------------
+  services:
+    - tag: tailscale
+      kind: network
+      endpoint: "tailnet (magic DNS)"
+      description: "Private overlay the fleet nodes + the 5 mobile devices share."
+      credentials: "~/.minimax/mcp.json (Tailscale MCP env)"
+
+    - tag: rustdesk
+      kind: remote-desktop
+      endpoint: "rustdesk://fleet (self-hosted relay)"
+      description: "Keyboard/video/mouse control of the Pixel 10 XL / Tab Ultra fleet."
+      credentials: "~/.minimax/mcp.json (RustDesk env)"
+
+    - tag: hostinger
+      kind: hosting
+      endpoint: "https://<account>.hostinger.com API"
+      description: "Public-facing web surface for the DARKXSIDE content work."
+      credentials: "HOSTINGER_API_TOKEN (resolved by the launcher)"
+
+    - tag: cloudflare
+      kind: cdn
+      endpoint: "https://api.cloudflare.com/client/v4"
+      description: "Edge/Workers surface in front of the public web."
+      credentials: "CLOUDFLARE_API_TOKEN (resolved by the launcher)"
+
+    - tag: local-gpu
+      kind: compute
+      endpoint: "127.0.0.1:8087 (hi-rag-gateway-v2-gpu), 127.0.0.1:11436 (ollama)"
+      description: "Node-local GPU surfaces: Hi-RAG CGP gateway + host Ollama."
+      credentials: "n/a (loopback)"
+
+  # ---------------------------------------------------------------------------
+  # routing — where to find the sibling agents and services when this
+  # client hands work off. `via` names the transport that carries it.
+  # ---------------------------------------------------------------------------
+  routing:
+    - target: hermes
+      where: "elder-melchor -- the Hermes AGInT instance (POWERFULMOVES/PMOVES-hermes-agent)"
+      via: mcp
+      description: "Reviews and merges PMOVES lanes; owns the hermes-review contract."
+
+    - target: kilo
+      where: "KiloCode / opencode on the Spark node (dgx-spark-ollama)"
+      via: nats
+      description: "Second implementation lane; Spark-node GPU models via host Ollama."
+
+    - target: claude
+      where: "5090-CLAUDE / B850-CLAUDE peers on the 5090 + B850 nodes"
+      via: nats
+      description: "Peer reviewers for cross-lane code review."
+
+    - target: p7
+      where: "p7 room orchestrator (127.0.0.1:8120) + p7-room-orchestrator (8122)"
+      via: http
+      description: "Room lifecycle: rehearsal -> live -> review -> archive."
+
+    - target: archon
+      where: "archon gateway (127.0.0.1:3090)"
+      via: http
+      description: "Fleet-wide event routing + the PMOVES control plane."
+
+    - target: youtube-ingest
+      where: "pmoves-yt (127.0.0.1:8077) -> hi-rag-gateway-v2-gpu (127.0.0.1:8087)"
+      via: http
+      description: |
+        The CGP path: pmoves-yt POSTs /yt/emit, which publishes a CGP
+        geometry event to HIRAG. Verified `cgp_ok: true` on 2026-10-17
+        (image 86c2cef01f94). A `cgp_ok: false` here means the HIRAG
+        image is stale, not that the transcript failed.
+
+  # ---------------------------------------------------------------------------
+  # constraints — what this client must NOT do. The 'constraints' half of
+  # the bootstrap contract. Each rule carries a reason so a downstream
+  # agent can cite the refusal instead of guessing.
+  # ---------------------------------------------------------------------------
+  constraints:
+    - rule: "Do not read, print, or copy the contents of pmoves/env.shared."
+      source: "pmoves/.claude/hooks/damage-control/patterns.yaml (env.shared zeroAccess)"
+      applies_to: ["bash", "read", "write"]
+      reason: >-
+        env.shared carries the live secrets for the whole fleet (cipher
+        tokens, Supabase JWT, Neo4j + MinIO passwords). It is gitignored
+        and zeroAccess by policy; the launcher resolves it into the
+        process env without ever surfacing it in output.
+      severity: blocking
+
+    - rule: "Do not hand-edit the launcher twins in deploy/provision/ or pmoves/scripts/."
+      source: "pmoves/.claude/hooks/damage-control/known_roads.py (_is_launcher_target)"
+      applies_to: ["write", "edit"]
+      reason: >-
+        The launcher domain is readOnly for agents (known_roads.py
+        _is_launcher_target). Legitimate edits go through a Known Road
+        grant (`KNOWN_ROAD=launcher:handoff:<file>.md` or
+        `KNOWN_ROAD=launcher:pr:<number>`); the generator path exists
+        precisely so the twins are never hand-edited.
+      severity: blocking
+
+    - rule: "Do not run `gh pr review --approve` or `--request-changes` on PMOVES PRs."
+      source: "operator directive 2026-10-17 (gh authenticates as POWERFULMOVES, the PR author)"
+      applies_to: ["bash"]
+      reason: >-
+        `gh` authenticates as POWERFULMOVES, which is also the PR
+        author on every lane PR -- GitHub rejects self-approval with
+        "Review Can not approve your own pull request". The substantive
+        recommendation goes in a `gh pr comment`; the operator does the
+        formal review and the merge.
+      severity: blocking
+
+    - rule: "Do not write to ~/.minimax/mcp.json except through the generator or the mcp tool."
+      source: "pmoves/tools/mcp_config_generator.py (merge mode preserves runtime-managed keys)"
+      applies_to: ["write", "edit"]
+      reason: >-
+        The MiniMax runtime owns that file's runtime-managed keys
+        (`configured`, `builtin`). A hand-written overwrite drops them
+        and can silently disable a wired server. Use
+        `pmoves/tools/mcp_config_generator.py --client minimax` (which
+        merges) or the `mcp` tool.
+      severity: blocking
+
+    - rule: "Do not re-declare the HIRAG GPU image as live without a fresh `POST /yt/emit` returning `cgp_ok: true`."
+      source: "pmoves/docs/AGENTS/hirag_cgp_geometry_event_pmoves_tools_LEARNINGS.md"
+      applies_to: ["bash"]
+      reason: >-
+        The 2026-10-17 gap was exactly this: the Dockerfile carried the
+        pmoves.chit namespace, the image built clean, and the container
+        still returned 500 because a SECOND namespace (pmoves.tools) was
+        missing. Container healthchecks pass with the geometry path
+        broken, so the cgp_ok signal -- not the healthcheck -- is the
+        real acceptance test.
+      severity: advisory

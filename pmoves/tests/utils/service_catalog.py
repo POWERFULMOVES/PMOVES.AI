@@ -192,7 +192,12 @@ HIRAG_V1 = ServiceDefinition(
 
 HIRAG_V1_GPU = ServiceDefinition(
     name="hi-rag-gateway-gpu",
-    port=8110,
+    # 8187 is the host port compose publishes
+    # (${HIRAG_V1_GPU_HOST_PORT:-8187}:8086). This said 8110, which is
+    # neither that host port nor the container port -- it is stale. Found by
+    # pmoves/tools/port_registry_ratchet.py, which cross-checks this catalog
+    # against pmoves/configs/ports.yaml.
+    port=8187,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
     expected_fields=["status"],

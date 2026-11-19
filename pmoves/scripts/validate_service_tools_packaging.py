@@ -42,7 +42,7 @@ def _parse_compose_build() -> Dict[str, Dict[str, str]]:
     if not COMPOSE_FILE.exists():
         return {}
 
-    text = COMPOSE_FILE.read_text()
+    text = COMPOSE_FILE.read_text(encoding="utf-8")
     # Compose services are nested under the top-level ``services:`` key, so
     # split on service names at exactly one indent level (2 spaces) INSIDE
     # that section — splitting on column-0 keys would collapse every service

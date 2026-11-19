@@ -63,6 +63,8 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
 | Give an agent / drop-in model cipher memory (store + search) | § Known Road — Cipher memory for any agent or drop-in model (below) | `pmoves-cipher-memory` |
 | Add / change / remove ONE key in `pmoves/.env.local` (**operator-run**; agents stay zero-access) | `make -C pmoves env-local-{has,set,unset} KEY=NAME` — § Known Road — node-local env overlay keys (below) | — |
+| Overlay a coding harness (launcher, generator, settings template, skill) — map BEFORE build | row in `pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md` + `kind: harness` registry row with `overlay:` → `python pmoves/tools/acp_registry_map.py` (ACP `linked`?) → `make -C pmoves skills-parity` (does the skill reach every AGInT?); never sniff `--help`, exec another binary, or commit an operator path (`anti-patterns.md` § `overlay-paper-over`) | `pmoves-pair-review` class 5 |
+| Docker engine hang on z890 → `docker desktop restart` / Reset | **Do not restart yet.** Run `make -C pmoves docker-disk-preflight` (read-only) first, then a read-only `e2fsck -fn` of the bare-mounted vhdx. Docker's bootstrap formats a disk it can't read. Runbook: `pmoves/docs/handoffs/z890-docker-data-disk-usb-spof-2026-10-14.md` | — |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
@@ -82,8 +84,10 @@ If a rebuild manifest arrives as raw `docker compose build ...`, translate to th
 `scripts/with-env.sh` loads after the generated tier files. Nothing generates
 it, so every change used to be a hand edit with no record. That is how
 `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached a fleet node: someone copied it from
-a recipe in commit `df0218537` and it left no trail. It now points at a key
-Kong rejects (see `pmoves/docs/TAC/TAC_CIPHER.md` § `CIPHER_DB_SERVICE_KEY`).
+a recipe in commit `df0218537` and it left no trail, then expired 2026-10-21 and
+shadowed the funnel-refreshed keys. The knob is retired: cipher presents Kong's
+own key expression, and `make -C pmoves cipher-auth-check` WARNs when a node
+still sets it, in compose's env or in `.env.local` (read by presence only) (see `pmoves/docs/TAC/TAC_CIPHER.md` § Cipher's service key).
 Operator rule (2026-09-23): a key comes out the same way it should have gone
 in, on this road.
 
@@ -195,6 +199,40 @@ make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
 Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
 rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
 
+## Known Road — a local model lane for an Agent Zero node
+
+**What it's for.** Putting an A0 node on its own GPU models (the local analog
+of a cloud lane) without hand-editing generated config. Built from SPARK on
+2026-10-21, where each layer failed silently in turn: A0 crash-looped on an
+unwritable `_model_config` dir; a generated preset set with no `Default` let
+A0's migration install upstream's paid OpenRouter Default; three suits named
+Ollama tags that 404 at the registry; GB10 loaded 16/37 layers (0.9 tok/s)
+until `num_gpu 999` (49/49, ~70 tok/s); and Ollama's default 8192 context cut
+A0's ~14.5k-token prompt so every reply was one token. Each was found only by
+going through the real consumer.
+
+**The road, in order — tooling first, hand probes only where a tool can't answer:**
+
+1. **Suit** — the suit enforcer from PR #3379 (`models-suit-ollama`, dry run
+   by default). A `SKIP ... base not installed` can mean the suit names a tag that does not exist upstream:
+   fix the tag in `pmoves/configs/model-suits/` (the registry has no tag list;
+   compare model-layer digests of `/v2/library/<m>/manifests/<tag>`).
+2. **Variant** — every local variant pairs `num_gpu` with a `num_ctx` that fits
+   the consumer's prompt (A0 ~14.5k, Claude Code ~27-31k). Proof:
+   `journalctl -u ollama | grep -E "task.n_tokens|truncated = 1"`.
+3. **Reach** — containers reach host Ollama via `make -C pmoves
+   ollama-host-bridge` (plan; operator applies with sudo). Ollama itself stays
+   on loopback: it has no auth.
+4. **Presets** — the node's lane is a checked-in instance variant,
+   `pmoves/config/agent-zero/model-presets-<instance>.yaml` (see
+   `MODEL_PRESET_LIFECYCLE.md`). Generated `presets.yaml` is never hand-edited
+   and never lives only in a shared checkout or outside git. A preset named
+   `Default` must exist. Cloud lanes stay as named presets — hybrid by node.
+5. **Prove through the consumer** — `POST :8080/tasks` must return
+   `status: completed`. A fast direct Ollama call proves nothing about A0.
+6. **Bank it** — Cipher `context`/`code_pattern` entries (a `decision` store
+   came back `embedded:false`), then sign the trail.
+
 ## Known Road — Cipher memory for any agent or drop-in model
 
 This takes a harness or model with no PMOVES context from zero to a working
@@ -208,8 +246,8 @@ including paths that do not exist, so an unauthenticated 401 tells you nothing.
 
 | Your client | Use |
 |---|---|
-| Claude Code / Crush via the fleet roster (`.claude/mcp.json`) | server **`pmoves-cipher-local`** (`http://localhost:8105/mcp/sse`). This entry connects today. |
-| Same roster, other node's cipher | server `pmoves-cipher` (`http://${TS_Z890}:8105/mcp/sse`). It is refused or times out unless the serving node published beyond loopback: compose binds `"${CIPHER_BIND:-127.0.0.1}:8105:8105"`. The fix is setting `CIPHER_BIND` on the serving node, which is an operator decision. Do not delete the entry. |
+| Claude Code / Crush via the fleet roster (`.claude/mcp.json`) | server **`pmoves-cipher-local`** (`http://localhost:8105/mcp`, type `http`). This entry connects today. Moved off `/mcp/sse` 2026-10-10: the SSE pair 400s `stream is not readable` on containers built before pin a0ee2314; `/mcp` works on both. |
+| Same roster, other node's cipher | server `pmoves-cipher` (`http://${TS_Z890}:8105/mcp`). It is refused or times out unless the serving node published beyond loopback: compose binds `"${CIPHER_BIND:-127.0.0.1}:8105:8105"`. The fix is setting `CIPHER_BIND` on the serving node, which is an operator decision. Do not delete the entry. |
 | New MCP harness (Hermes, Kimi, A0-style, a drop-in model's agent loop) | **streamable-http `POST http://localhost:8105/mcp`**, which is stateless and cannot hit the legacy "Unknown session" 400. Agent Zero uses this. |
 | No MCP at all | REST: `POST /api/memory` `{agentId, content, category?, tags?}` and `GET /api/memory/search?q=&agentId=&limit=`. REST **always** refuses an `agentId` that differs from the token's agent (403), whatever `CIPHER_MCP_ENFORCE` says. |
 
