@@ -66,6 +66,82 @@ jobs:
           echo "✓ Requirements are installable"
 
   # ============================================================================
+  # Change detection
+  # ============================================================================
+  # WHY THIS JOB EXISTS
+  # ------------------
+  # The workflow's `paths:` filter includes `.github/workflows/deploy-gateway-agent.yml`
+  # ITSELF. So editing this workflow re-triggers the WHOLE pipeline -- including
+  # the live deploys to ai-lab and to the VPS (kvm4). That coupling is not
+  # hypothetical: on 2026-11-02 PR #3445 changed `pmoves/docker-compose.yml` (a
+  # path-filter match) and re-triggered a pipeline that had been failing on
+  # every push since 2026-09-28, and the operator's own note on that merge was
+  # that the merge "did not cause it ... but it did re-trigger it".
+  #
+  # This job decides, from the push's OWN before/after SHAs, what the push
+  # actually warrants:
+  #   deploy-relevant : pmoves/services/gateway-agent/** , pmoves/docker-compose.yml
+  #   build-relevant  : the above, PLUS this workflow file
+  #
+  # So editing the workflow still RUNS the workflow (validate + build) -- which
+  # is how the env-var fix below gets proven on a real runner -- but a YAML
+  # edit alone can no longer silently deploy to the fleet.
+  #
+  # FAIL CLOSED: if the before-SHA cannot be fetched, this job FAILS. A failed
+  # job produces NO outputs, so every downstream `== 'true'` comparison is
+  # false and nothing builds and nothing deploys.
+  changes:
+    name: Detect deploy-relevant changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.detect.outputs.build }}
+      deploy: ${{ steps.detect.outputs.deploy }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          fetch-depth: 1
+      - name: Detect changed paths
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The FULL 40-char SHA is required. MEASURED 2026-11-05: an
+          # abbreviated SHA fails with "couldn't find remote ref" -- the fetch
+          # is a ref advertisement, not a prefix lookup. `github.event.before`
+          # is always full-length, and the gate
+          # (pmoves/tests/tools/test_deploy_gateway_agent_change_gate.py)
+          # drives this block with both spellings.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No 'before' SHA (manual dispatch, or the branch's first push) -> treat as deploy-relevant."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BEFORE"
+          changed="$(git diff --name-only "$BEFORE" "$AFTER")"
+          echo "Changed paths between $BEFORE and $AFTER:"
+          echo "$changed"
+          deploy=false
+          build=false
+          if printf '%s\n' "$changed" | grep -Eq '^pmoves/services/gateway-agent/|^pmoves/docker-compose\.yml$'; then
+            deploy=true
+            build=true
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^\.github/workflows/deploy-gateway-agent\.yml$'; then
+            build=true
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          echo "→ build=$build deploy=$deploy"
+
+  # ============================================================================
   # AI-Lab Deployment (Local GPU Node)
   # ============================================================================
 
@@ -77,7 +153,11 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    needs: validate
+    # `needs.validate.result == 'success'` is written out EXPLICITLY because a
+    # job-level `if:` that does not contain `success()` runs even when a
+    # dependency FAILED. Without it, a failed validate would still build.
+    needs: [validate, changes]
+    if: needs.validate.result == 'success' && needs.changes.outputs.build == 'true'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash
@@ -102,6 +182,13 @@ jobs:
         env:
           # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for build only
           CHIT_PROD_PASSPHRASE: ci-build-placeholder
+          # `:?` guards of services NOT deployed here: compose interpolates the
+          # WHOLE file, so they still block the build. These three were missing
+          # everywhere -- MEASURED 2026-11-05, the cause of every failure since
+          # 2026-09-28. Gate: pmoves/tests/tools/test_deploy_gateway_agent_env.py
+          CHIT_PASSPHRASE: ci-build-placeholder
+          SECRET_KEY: ci-build-placeholder
+          SUPABASE_JWT_SECRET: ci-build-placeholder
           ANON_KEY: ci-build-placeholder
           JWT_SECRET: ci-build-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-build-placeholder
@@ -153,7 +240,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-    needs: build-ai-lab
+    # A DEPLOY needs both: the image must have been built by a SUCCEEDED
+    # build job, and the push must have been deploy-relevant.
+    needs: [build-ai-lab, changes]
+    if: needs.changes.outputs.deploy == 'true' && needs.build-ai-lab.result == 'success'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash
@@ -177,6 +267,13 @@ jobs:
         env:
           # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for deploy only
           CHIT_PROD_PASSPHRASE: ci-deploy-placeholder
+          # `:?` guards of services NOT deployed here: compose interpolates the
+          # WHOLE file, so they still block the build. These three were missing
+          # everywhere -- MEASURED 2026-11-05, the cause of every failure since
+          # 2026-09-28. Gate: pmoves/tests/tools/test_deploy_gateway_agent_env.py
+          CHIT_PASSPHRASE: ci-deploy-placeholder
+          SECRET_KEY: ci-deploy-placeholder
+          SUPABASE_JWT_SECRET: ci-deploy-placeholder
           ANON_KEY: ci-deploy-placeholder
           JWT_SECRET: ci-deploy-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-deploy-placeholder
@@ -273,7 +370,11 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-    needs: validate
+    # The VPS job carries its OWN build step, so it is gated directly on the
+    # change detection: a push that touched neither the gateway-agent service
+    # nor docker-compose.yml must not put a new image on the VPS.
+    needs: [validate, changes]
+    if: needs.validate.result == 'success' && needs.changes.outputs.deploy == 'true'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash
@@ -298,6 +399,13 @@ jobs:
         env:
           # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for build only
           CHIT_PROD_PASSPHRASE: ci-build-placeholder
+          # `:?` guards of services NOT deployed here: compose interpolates the
+          # WHOLE file, so they still block the build. These three were missing
+          # everywhere -- MEASURED 2026-11-05, the cause of every failure since
+          # 2026-09-28. Gate: pmoves/tests/tools/test_deploy_gateway_agent_env.py
+          CHIT_PASSPHRASE: ci-build-placeholder
+          SECRET_KEY: ci-build-placeholder
+          SUPABASE_JWT_SECRET: ci-build-placeholder
           ANON_KEY: ci-build-placeholder
           JWT_SECRET: ci-build-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-build-placeholder
@@ -329,6 +437,13 @@ jobs:
         env:
           # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for deploy only
           CHIT_PROD_PASSPHRASE: ci-deploy-placeholder
+          # `:?` guards of services NOT deployed here: compose interpolates the
+          # WHOLE file, so they still block the build. These three were missing
+          # everywhere -- MEASURED 2026-11-05, the cause of every failure since
+          # 2026-09-28. Gate: pmoves/tests/tools/test_deploy_gateway_agent_env.py
+          CHIT_PASSPHRASE: ci-deploy-placeholder
+          SECRET_KEY: ci-deploy-placeholder
+          SUPABASE_JWT_SECRET: ci-deploy-placeholder
           ANON_KEY: ci-deploy-placeholder
           JWT_SECRET: ci-deploy-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-deploy-placeholder
@@ -441,7 +556,20 @@ jobs:
     permissions:
       contents: read
     needs: deploy-ai-lab
-    if: failure() || cancelled()
+    # GATED ON THE DEPLOY JOB'S OWN RESULT, NOT ON `failure()`.
+    #
+    # GitHub defines `failure()` as TRUE WHEN ANY ANCESTOR JOB FAILED. The
+    # `changes` job is an ancestor of `deploy-ai-lab`, so a fail-closed
+    # detection failure -- the exact case where nothing was deployed -- would
+    # make `failure()` true and ARM this rollback. The rollback's steps then
+    # stop and remove the CURRENTLY HEALTHY gateway-agent, turning "the gate
+    # refused to deploy" into "the gate tore down the service".
+    #
+    # `needs.deploy-ai-lab.result` is the deploy job's OWN outcome:
+    #   'failure'   -> the deploy ran and failed -> roll back
+    #   'cancelled' -> the deploy was cancelled   -> roll back
+    #   'skipped'   -> nothing was deployed       -> do NOT roll back
+    if: needs.deploy-ai-lab.result == 'failure' || needs.deploy-ai-lab.result == 'cancelled'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash
@@ -464,6 +592,13 @@ jobs:
         env:
           # Required by ${:?} guards in docker-compose.yml — rollback should not be blocked by unrelated services.
           CHIT_PROD_PASSPHRASE: ci-rollback-placeholder
+          # `:?` guards of services NOT deployed here: compose interpolates the
+          # WHOLE file, so they still block the build. These three were missing
+          # everywhere -- MEASURED 2026-11-05, the cause of every failure since
+          # 2026-09-28. Gate: pmoves/tests/tools/test_deploy_gateway_agent_env.py
+          CHIT_PASSPHRASE: ci-rollback-placeholder
+          SECRET_KEY: ci-rollback-placeholder
+          SUPABASE_JWT_SECRET: ci-rollback-placeholder
           ANON_KEY: ci-rollback-placeholder
           JWT_SECRET: ci-rollback-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-rollback-placeholder
@@ -503,7 +638,10 @@ jobs:
     permissions:
       contents: read
     needs: deploy-vps
-    if: failure() || cancelled()
+    # Gated on the deploy job's OWN result -- see the note on
+    # `rollback-ai-lab` above for why `failure()` is the wrong predicate
+    # here.
+    if: needs.deploy-vps.result == 'failure' || needs.deploy-vps.result == 'cancelled'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash
@@ -526,6 +664,13 @@ jobs:
         env:
           # Required by ${:?} guards in docker-compose.yml — rollback should not be blocked by unrelated services.
           CHIT_PROD_PASSPHRASE: ci-rollback-placeholder
+          # `:?` guards of services NOT deployed here: compose interpolates the
+          # WHOLE file, so they still block the build. These three were missing
+          # everywhere -- MEASURED 2026-11-05, the cause of every failure since
+          # 2026-09-28. Gate: pmoves/tests/tools/test_deploy_gateway_agent_env.py
+          CHIT_PASSPHRASE: ci-rollback-placeholder
+          SECRET_KEY: ci-rollback-placeholder
+          SUPABASE_JWT_SECRET: ci-rollback-placeholder
           ANON_KEY: ci-rollback-placeholder
           JWT_SECRET: ci-rollback-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-rollback-placeholder

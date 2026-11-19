@@ -21,6 +21,12 @@ on:
       - "pmoves/config/fork_registry.json"
       - "pmoves/tools/fork_registry_ratchet.py"
       - "pmoves/tools/tests/test_fork_registry_ratchet.py"
+      # The ratchet cross-checks the registry against the workflow's FORKS
+      # list AND the GitHub App token scope, so a change to the workflow is
+      # exactly the change that can break the guarantee. Without this path
+      # the gate did not run when the file it READS changed -- the hole that
+      # let six `sync: true` forks sit in neither list.
+      - ".github/workflows/fork-sync.yml"
       - ".github/workflows/fork-registry-ratchet.yml"
   workflow_dispatch:
 

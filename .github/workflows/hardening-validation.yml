@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload hardening report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: hardening-report
           path: hardening-report.md
@@ -483,7 +483,7 @@ jobs:
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"
 
       - name: Upload summary
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: validation-summary
           path: summary.md

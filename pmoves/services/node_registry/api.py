@@ -32,7 +32,7 @@ class NodeRegistryAPI:
         self,
         registry: NodeRegistry,
         host: str = "0.0.0.0",
-        port: int = 8082,
+        port: int = 8115,
     ):
         """Initialize API server.
 
@@ -523,7 +523,7 @@ class NodeRegistryAPI:
 async def run_api_server(
     registry: NodeRegistry,
     host: str = "0.0.0.0",
-    port: int = 8082,
+    port: int = 8115,
 ):
     """Run the HTTP API server.
 

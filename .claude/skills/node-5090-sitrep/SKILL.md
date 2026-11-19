@@ -83,11 +83,38 @@ fi
 echo "--- WORKTREES ---"
 git worktree list
 echo "--- TTS ENGINES ---"
-curl -sf http://localhost:7860/gradio_api/info >/dev/null 2>&1 && echo "Ultimate-TTS-Studio (:7860): UP" || echo "Ultimate-TTS-Studio (:7860): DOWN"
+# Ultimate-TTS-Studio has NO fixed native port, so it is found, not assumed.
+# The Pinokio launcher (D:\pinokio\api\Ultimate-TTS-Studio-SUP3R-Edition-Pinokio.git\
+# start.js) runs `python launch.py` and captures whatever URL it prints, and
+# app/launch.py calls demo.launch() with no server_port -- so Gradio takes the
+# first free port from 7860 upward. Nothing in the repo declares the native port:
+# pmoves/configs/ports.yaml covers only the Docker UI shell (host 7861), and
+# tts-engine-capabilities.yaml carries no port. Measured 2026-11-06: :7860 refused,
+# and the only /gradio_api/info 200 was :7862 -- published by the Docker container
+# pmoves-ultimate-tts-studio-1 (7862->7860), NOT the native Pinokio studio. So a
+# hardcoded :7860 and a hardcoded :7862 are both wrong: one misses a native studio
+# that landed elsewhere, the other reports the container as the TTS host
+# (docker-compose.yml notes the GHCR image ships without engine packages). The
+# `handle_load_indextts2` endpoint in /gradio_api/info (defined in launch.py) tells
+# UTS apart from other Gradio apps; a port a container publishes is reported
+# separately and never counts as the native studio. UTS_PORT=<n> pins the scan.
+UTS_FOUND=""
+for p in ${UTS_PORT:-} 7860 7861 7862 7863 7864 7865 7866 7867 7868 7869; do
+  curl -sf -m 3 "http://localhost:${p}/gradio_api/info" 2>/dev/null | grep -q handle_load_indextts2 || continue
+  [ -n "$(docker ps -q --filter "publish=${p}" 2>/dev/null)" ] && { echo "Ultimate-TTS-Studio container (:${p}): UP (Docker, not the native Pinokio studio)"; continue; }
+  UTS_FOUND=$p; break
+done
+[ -n "$UTS_FOUND" ] && echo "Ultimate-TTS-Studio (:${UTS_FOUND}): UP" || echo "Ultimate-TTS-Studio (native, 7860-7869): DOWN"
 echo "--- KEY SERVICES ---"
-for port_label in "11434:Ollama" "3030:TensorZero" "8077:PMOVES.YT" "8078:Whisper" "5678:n8n"; do
-  port="${port_label%%:*}"; label="${port_label##*:}"
-  curl -sf "http://localhost:${port}" >/dev/null 2>&1 && echo "${label} (:${port}): UP" || echo "${label} (:${port}): DOWN"
+# port:label:path. Probe a path the service actually serves: a bare-root probe
+# reported TensorZero, PMOVES.YT and Whisper DOWN on every run because their
+# root returns 404 (measured 2026-11-06: :3030/ 404 vs /health 200; :8077/ and
+# :8078/ 404 vs /healthz 200; :8086/ 200 vs /health and /healthz 404).
+for entry in "11434:Ollama:/" "3030:TensorZero:/health" "8077:PMOVES.YT:/healthz" \
+             "8078:Whisper:/healthz" "5678:n8n:/healthz" "8086:Hi-RAG-v2:/"; do
+  IFS=: read -r port label path <<< "$entry"
+  curl -sf -m 5 "http://localhost:${port}${path}" >/dev/null 2>&1 \
+    && echo "${label} (:${port}${path}): UP" || echo "${label} (:${port}${path}): DOWN"
 done
 echo "=== END SITREP ==="
 ```
@@ -102,7 +129,9 @@ Fastest triage: NATS + git + GPU + TTS hub only.
 # NATS_MONITORING_BIND can move the host off loopback). See nats-endpoint.sh.
 NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)
 curl -sf "$NATS_URL/healthz" >/dev/null 2>&1 && echo "NATS: OK ($NATS_URL)" || echo "NATS: DOWN ($NATS_URL)"
-curl -sf http://localhost:7860/gradio_api/info >/dev/null 2>&1 && echo "TTS UP" || echo "TTS DOWN"
+# UTS has no fixed port (see the full sitrep); first native UTS on 7860-7869 wins.
+UTS_FOUND=""; for p in ${UTS_PORT:-} 7860 7861 7862 7863 7864 7865 7866 7867 7868 7869; do curl -sf -m 2 "http://localhost:${p}/gradio_api/info" 2>/dev/null | grep -q handle_load_indextts2 && [ -z "$(docker ps -q --filter "publish=${p}" 2>/dev/null)" ] && { UTS_FOUND=$p; break; }; done
+[ -n "$UTS_FOUND" ] && echo "TTS UP (:$UTS_FOUND)" || echo "TTS DOWN (7860-7869)"
 git log --oneline -1
 nvidia-smi --query-gpu=memory.used,memory.free --format=csv,noheader
 git worktree list | wc -l
@@ -152,7 +181,7 @@ The sitrep produces an audit block for pasting into `AGNOTE4482PHI.t1.md`:
 **Worktrees**: 21 active
 **GPU**: NVIDIA RTX 5090 — 10220MB used / 21968MB free (32GB total)
 **NATS**: OK (http://127.0.0.1:9223)   <- whatever nats-endpoint.sh derives on THIS node
-**TTS**: Ultimate-TTS-Studio UP (:7860)
+**TTS**: Ultimate-TTS-Studio UP (:<found port>)   <- native port the probe FOUND, not fixed; list a container-published UTS separately
 **Containers**: [list]
 **Open PRs**: #2394, #2382, #2381
 

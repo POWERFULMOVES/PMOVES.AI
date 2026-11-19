@@ -2,51 +2,154 @@
 
 **Submodule:** [Pmoves-minimax-cli](https://github.com/POWERFULMOVES/Pmoves-minimax-cli) (POWERFULMOVES fork of MiniMax-AI/cli)
 **Pin:** 24875e0f04220480a7b146fc8db11ca7b0b278aa
-**npm name:** `mmx-cli` (v1.0.19)
-**Install path on operator nodes:** `mmx` (resolved via `bin/mmx` → `dist/mmx.mjs`)
+**npm name:** `mmx-cli` (v1.0.25)
+**Install path on operator nodes:** `mmx` (the package's `mmx` bin entry → `dist/mmx.mjs`)
 
 The Mavis model cascade has two entry points: the MCP server (`pmoves-minimax-mcp`, stdio via `uvx minimax-mcp`, used by WebUI/Agent Zero) and the CLI (`mmx`, used by the sidecar lane — Pinokio on operator devices, headless scripts, and any pipeline that wants to call models without standing up a full MCP client). This doc catalogs the CLI surface.
 
-The upstream MiniMax-AI/cli repo has its own `AGENTS.md` (5471 bytes, build/test/lint rules) and `SDK.md` (4989 bytes, programmatic API surface) and `ERRORS.md` (9996 bytes, error taxonomy). This doc is the Mavis-side summary: what the operator needs to know to drive the CLI from a sidecar or a script.
+The upstream MiniMax-AI/cli repo has its own `AGENTS.md` (build/test/lint rules), `SDK.md` (programmatic API surface) and `ERRORS.md` (error taxonomy). This doc is the Mavis-side summary: what the operator needs to know to drive the CLI from a sidecar or a script.
+
+**The command surface below is measured, not remembered.** It is the installed npm build `mmx-cli` v1.0.25, read out of the binary's own `--help` output by `pmoves/tools/mmx_surface_probe.py`, which writes the snapshot at `pmoves/configs/mmx_surface/cli_surface.json`. `pmoves/tools/mmx_surface_parity.py` holds this doc against that snapshot, so the two cannot drift apart silently again. The error catalogue further down is the submodule's `ERRORS.md` at the pin above — a different artifact from the npm build, and it covers the CLI's error taxonomy rather than its command list.
 
 ## Top-level command tree
 
 ```text
 mmx
+├── agent      setup
 ├── auth       login, logout, refresh, status
-├── config     set, get
+├── config     show, set, export-schema
 ├── file       upload, list, delete
 ├── image      generate
-├── music      generate
 ├── quota      show
-├── search     web, news
-├── speech     synthesize, list-voices, clone
-├── text       chat
-├── video      generate
+├── search     query, web
+├── speech     synthesize, generate, voices
+├── text       chat, repl
+├── video      generate, task get, download
 ├── vision     describe
-├── help       --command <name>
-└── update     self
+└── update     (self-update; no subcommands)
 ```
+
+`mmx help` also exists as a meta-command — it prints MiniMax API documentation links. The CLI does not list it under `Resources:`, so it sits outside the measured surface this doc is gated against.
 
 | Command | Purpose | Example |
 |---------|---------|---------|
-| `mmx auth login` | Authenticate (api-key or OAuth) | `mmx auth login --method api-key --api-key sk-...` |
+| `mmx auth login` | Authenticate (API key or OAuth) | `mmx auth login --api-key sk-...` |
 | `mmx auth status` | Show current auth + quota | `mmx auth status` |
-| `mmx config set api-key` | Set the API key non-interactively | `mmx config set api-key sk-...` |
+| `mmx auth refresh` | Manually refresh the OAuth token | `mmx auth refresh` |
+| `mmx auth logout` | Revoke tokens and clear stored credentials | `mmx auth logout` |
+| `mmx agent setup` | Configure external coding agents (claude-code, codex, opencode, hermes, pi, …) | `mmx agent setup --agent claude-code --api-key sk-...` |
+| `mmx config show` | Show the effective configuration | `mmx config show` |
+| `mmx config set` | Set a config value | `mmx config set --key output --value json` |
+| `mmx config export-schema` | Export command schemas for tool wiring | `mmx config export-schema --command "video generate"` |
 | `mmx text chat` | Single-shot chat | `mmx text chat --model MiniMax-M3 --message "hi"` |
-| `mmx text chat --stream` | Streaming chat | `mmx text chat --model MiniMax-M3 --message "..." --stream` |
-| `mmx image generate` | Text-to-image | `mmx image generate --model image-01 --prompt "a cat" --out-dir ./out` |
+| `mmx text chat --stream` | Streaming chat | `mmx text chat --message "..." --stream` |
+| `mmx text repl` | Interactive multi-turn chat | `mmx text repl --model MiniMax-M3` |
+| `mmx image generate` | Text-to-image | `mmx image generate --prompt "a cat" --out-dir ./out` |
 | `mmx video generate` | Text-to-video (sync) | `mmx video generate --model MiniMax-H3 --prompt "..."` |
 | `mmx video generate --async` | Text-to-video (returns taskId) | `mmx video generate --prompt "..." --async` |
+| `mmx video task get` | Query a video task's status | `mmx video task get --task-id 106916112212032` |
+| `mmx video download` | Download a finished video by file ID | `mmx video download --file-id 176844028768320 --out video.mp4` |
 | `mmx speech synthesize` | TTS | `mmx speech synthesize --voice <id> --text "..." --out ./out.mp3` |
-| `mmx speech list-voices` | List available voices | `mmx speech list-voices` |
-| `mmx speech clone` | Voice clone from a sample | `mmx speech clone --sample ./sample.wav --name my-voice` |
+| `mmx speech generate` | TTS (same invocation as `synthesize`) | `mmx speech generate --text "..." --out ./out.mp3` |
+| `mmx speech voices` | List available system voices | `mmx speech voices --language english` |
 | `mmx vision describe` | Image captioning | `mmx vision describe --image ./cat.png` |
-| `mmx music generate` | Text-to-music | `mmx music generate --prompt "lo-fi beats" --out ./out.mp3` |
+| `mmx search query` | Web search | `mmx search query --q "..."` |
+| `mmx search web` | Web search (same invocation as `query`) | `mmx search web --q "..."` |
 | `mmx quota show` | Show rate-limit status | `mmx quota show` |
-| `mmx search web` | Web search | `mmx search web --query "..."` |
-| `mmx file upload` | Upload a file (for vision, voice-clone, etc.) | `mmx file upload --path ./sample.wav` |
+| `mmx file upload` | Upload a file (for `--file-id` references) | `mmx file upload --file ./sample.wav` |
+| `mmx file list` | List uploaded files | `mmx file list` |
+| `mmx file delete` | Delete an uploaded file | `mmx file delete --file-id 123456789` |
 | `mmx update` | Self-update | `mmx update` |
+
+## Global flags
+
+These are accepted by every command:
+
+- `--api-key` — API key (overrides all other auth)
+- `--region` — API region: `global` (default), `cn`
+- `--base-url` — API base URL (overrides `--region`)
+- `--output` — Output format: `text`, `json`
+- `--quiet` — Suppress non-essential output
+- `--verbose` — Print HTTP request/response details
+- `--timeout` — Request timeout in seconds (default: 300)
+- `--no-color` — Disable ANSI colors and spinners
+- `--dry-run` — Show what would happen without executing
+- `--non-interactive` — Disable interactive prompts (CI/agent mode)
+- `--version` — Print version and exit
+- `--help` — Show help
+
+## Machine-checkable surface
+
+This block is the doc's machine-checkable surface. `pmoves/tools/mmx_surface_parity.py` parses it and compares it against `pmoves/configs/mmx_surface/cli_surface.json`; the gate fails closed, so a missing or unparseable block is a finding rather than a pass. Keep it in step with the tree and the table above — the gate checks those too.
+
+```json
+{
+  "global_flags": [
+    "--api-key",
+    "--base-url",
+    "--dry-run",
+    "--help",
+    "--no-color",
+    "--non-interactive",
+    "--output",
+    "--quiet",
+    "--region",
+    "--timeout",
+    "--verbose",
+    "--version"
+  ],
+  "mmx_version": "1.0.25",
+  "resources": {
+    "agent": [
+      "setup"
+    ],
+    "auth": [
+      "login",
+      "logout",
+      "refresh",
+      "status"
+    ],
+    "config": [
+      "export-schema",
+      "set",
+      "show"
+    ],
+    "file": [
+      "delete",
+      "list",
+      "upload"
+    ],
+    "image": [
+      "generate"
+    ],
+    "quota": [
+      "show"
+    ],
+    "search": [
+      "query",
+      "web"
+    ],
+    "speech": [
+      "generate",
+      "synthesize",
+      "voices"
+    ],
+    "text": [
+      "chat",
+      "repl"
+    ],
+    "update": [],
+    "video": [
+      "download",
+      "generate",
+      "task get"
+    ],
+    "vision": [
+      "describe"
+    ]
+  }
+}
+```
 
 ## SDK surface (programmatic)
 
@@ -99,7 +202,7 @@ The SDK is the right entry point when the sidecar needs to chain model calls (e.
 
 ## Errors (the operator-relevant subset)
 
-The full ERRORS.md has 70+ error scenarios. The five you'll hit most often:
+The full ERRORS.md in the submodule catalogues the complete error taxonomy. The five you'll hit most often:
 
 | Command | Scenario | Message |
 |---------|----------|---------|
@@ -116,11 +219,11 @@ For all other errors, see `Pmoves-minimax-cli/ERRORS.md`. The error handling is 
 The Mavis model cascade calls the CLI from Pinokio apps on operator devices (Pixel phones, Tab Ultras, etc., all on the Tailscale tailnet). The pattern:
 
 1. **Sidecar checks for `mmx` on `$PATH`.** If absent, the app surfaces an actionable error: "Install `mmx-cli` via `npm install -g mmx-cli` or Pinokio's `pmoves-minimax-cli` install recipe."
-2. **Sidecar runs `mmx auth login --method api-key --api-key "$MINIMAX_API_KEY"` non-interactively** at app start if the env var is set. This populates `~/.mmx/config.json` with the per-device key.
+2. **Sidecar runs `mmx auth login --api-key "$MINIMAX_API_KEY"` non-interactively** at app start if the env var is set. This populates the per-device credential store under `~/.mmx/`.
 3. **Sidecar runs `mmx quota show`** at app start to surface rate-limit status to the user.
-4. **Sidecar issues one-shot CLI calls** for each model operation. The CLI writes to a temp directory under `MMX_TMP_DIR` (defaults to `$TMPDIR/mmx-$$`); the sidecar watches the directory and ingests results as they appear.
+4. **Sidecar issues one-shot CLI calls** for each model operation, naming an explicit output path (`--out`, `--out-dir`, `--download`). Without `--download`, `video generate` falls back to the OS temp directory under `mmx-video/`; the sidecar watches that directory and ingests results as they appear.
 
-The CLI is the sidecar's preferred entry point because (a) it doesn't need an MCP client, (b) the per-device `~/.mmx/config.json` is a stable place to keep the API key, and (c) the `mmx` binary is a small dependency that ships in the Pinokio app's portable bundle.
+The CLI is the sidecar's preferred entry point because (a) it doesn't need an MCP client, (b) the per-device `~/.mmx/` store is a stable place to keep the API key, and (c) the `mmx` binary is a small dependency that ships in the Pinokio app's portable bundle.
 
 ## Why not always call the MCP?
 
@@ -139,5 +242,8 @@ If a sidecar app grows an MCP-aware component (e.g. a future Pinokio app that sh
 - Upstream AGENTS.md: `Pmoves-minimax-cli/AGENTS.md` (build/test/lint)
 - Upstream SDK.md: `Pmoves-minimax-cli/SDK.md` (programmatic API)
 - Upstream ERRORS.md: `Pmoves-minimax-cli/ERRORS.md` (full error catalog)
-- npm package: https://www.npmjs.com/package/mmx-cli
+- npm package: https://www.npmjs.com/package/mmx-cli (installed build: `mmx-cli` v1.0.25)
+- Measured surface: `pmoves/configs/mmx_surface/cli_surface.json`
+- Probe: `pmoves/tools/mmx_surface_probe.py` (reads `mmx --version` / `mmx --help` only)
+- Parity gate: `pmoves/tools/mmx_surface_parity.py --check` (CI: `.github/workflows/mmx-surface-parity.yml`)
 - Mavis model cascade context: `pmoves/contracts/schemas/pmoves-bootstrap/example.cgp.yaml` → `services.minimax.cli`

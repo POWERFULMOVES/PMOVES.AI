@@ -92,12 +92,16 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 **Objective:** Configure environment variables and credentials for all 65+ services
 
+> **Run every command in Phases 2 and 3 from the repository root.** The targets live in
+> `pmoves/Makefile` and `pmoves/mk/*.mk`, so each one is written `make -C pmoves <target>`.
+> A bare `make <target>` from the repo root does not reach them.
+
 **Steps:**
 1. **Create Base Environment File**
    ```bash
-   make ensure-env-shared
+   make -C pmoves ensure-env-shared
    ```
-   - Creates `env.shared` from `env.shared.example` if missing
+   - Creates `pmoves/env.shared` from `pmoves/env.shared.example` if missing
    - Validates file format and required variables
    - Warns about missing critical credentials
 
@@ -111,16 +115,19 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
    **Option A - Interactive Bootstrap (Recommended):**
    ```bash
-   make bootstrap
+   make -C pmoves env-setup
    ```
-   - Prompts for each required credential category
-   - Validates input format (API key length, prefix checks)
+   - There is no `bootstrap` make target. `env-setup` (`pmoves/mk/preflight.mk`) is the
+     registry-driven bootstrap: it runs `tools/env_setup_unified.py`, which drives
+     `scripts/bootstrap_env.py`
+   - Without arguments it prompts for each required value; step 3 below runs the same
+     target non-interactively with generated defaults
    - Auto-generates internal secrets (database passwords, JWT tokens)
 
    **Option B - Manual Editing:**
    ```bash
    # Edit env.shared directly
-   nano env.shared
+   nano pmoves/env.shared
 
    # Add your keys (uncomment lines and fill values):
    OPENAI_API_KEY=sk-...
@@ -135,7 +142,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 3. **Auto-Generate Internal Credentials**
    ```bash
-   make env-setup ARGS=--accept-defaults
+   make -C pmoves env-setup ARGS=--accept-defaults
    ```
    - Generates: `POSTGRES_PASSWORD`, `NEO4J_AUTH`, `MEILI_MASTER_KEY`
    - Generates: `SUPABASE_JWT_SECRET`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -145,7 +152,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 4. **Validate Environment Configuration**
    ```bash
-   make env-check
+   make -C pmoves env-check
    ```
    - Checks for placeholder values (`your_*`, `example.com`)
    - Validates credential formats (key length, character sets)
@@ -165,13 +172,15 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 **Steps:**
 1. **Choose Supabase Runtime Mode**
-   - **CLI Mode** (Recommended for development): `SUPABASE_RUNTIME=cli`
+   - **Compose Mode** (the Makefile default, `SUPABASE_RUNTIME ?= compose`; production certification): `SUPABASE_RUNTIME=compose`
+   - **CLI Mode** (development): `SUPABASE_RUNTIME=cli`
    - **Kong Mode** (For API gateway testing): `SUPABASE_RUNTIME=kong`
-   - **Compose Mode** (For production certification): `SUPABASE_RUNTIME=compose`
+
+   Several checks below differ by runtime. Each one says which runtime it applies to.
 
 2. **Start Supabase Services**
    ```bash
-   make up-supabase
+   make -C pmoves up-supabase
    ```
    - CLI Mode: Spawns 13 containers via `supabase start`
    - Kong/Compose Mode: Uses Docker Compose profiles
@@ -180,42 +189,121 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 3. **Verify Supabase Health**
    ```bash
-   # Check container status
-   docker ps --filter "name=supabase"
+   # Check service status and the expected endpoints for the selected runtime
+   make -C pmoves supa-status
 
-   # Check service URLs
-   make supa-status
+   # Compose runtime: containers are named pmoves-supabase-<service>-1
+   docker ps --filter "name=pmoves-supabase-"
+
+   # CLI runtime: containers are named supabase_<service>_<project>
+   docker ps --filter "name=supabase_"
    ```
-   - Expect 13 containers: `db`, `kong`, `auth`, `api`, `realtime`, `storage`, `imgproxy`, `studio`, `etc.`
-   - Verify Kong gateway is accessible: `curl http://localhost:8000/healthz`
-   - Verify Postgres is accepting connections: `docker exec supabase_db pg_isready`
+   - **Compose runtime** — expect 13 containers: `analytics`, `db`, `edge-functions`, `gotrue`,
+     `imgproxy`, `kong`, `meta`, `pooler`, `postgrest`, `realtime`, `storage`, `studio`, `vector`
+     (the service list `supa-status` passes to `docker compose ps`)
+   - **CLI runtime** — expect the 13 containers `supabase start` reports
+   - **Auth health without a key** (compose): GoTrue is published on loopback port 9999 by default.
+     `curl http://127.0.0.1:9999/health` should return 200
+   - **Kong gateway**: Kong requires an `apikey` header on every route, so
+     `curl http://localhost:8000/healthz` and `curl http://localhost:8000/auth/v1/health` both
+     return **401** on a healthy stack. A 401 here means Kong is up. To exercise the routed path,
+     send the anon key from the supabase tier file (`pmoves/env.tier-supabase`) as the header,
+     without echoing it: `curl -H "apikey: <anon key>" http://localhost:8000/auth/v1/health`
+   - **Postgres** (either runtime): resolve the container the same way the bootstrap does, then
+     ask it directly:
+     ```bash
+     docker exec "$(bash pmoves/scripts/supabase/find_db_container.sh running)" pg_isready
+     ```
 
 4. **Apply Database Migrations**
    ```bash
-   make supabase-bootstrap
+   make -C pmoves supabase-bootstrap
    ```
-   - Applies pending SQL migrations from `supabase/migrations/`
-   - Seeds reference data (agent registry, model catalog, etc.)
-   - Records migration history in `public.pmoves_bootstrap_history`
-   - Safe to re-run (idempotent, tracks applied migrations)
+   - Applies pending SQL migrations from `pmoves/supabase/migrations/`, then seeds from
+     `pmoves/supabase/initdb/`. Not `supabase/migrations/` at the repo root
+   - Runs as `supabase_admin` over TCP inside the DB container; the plain `postgres` role is not
+     a superuser and lacks `CREATE` on `public`
+   - Records each applied file in `public.pmoves_bootstrap_history` (`kind` = `migration` or `seed`)
+   - Safe to re-run: files already in the ledger are skipped
+   - `supabase-bootstrap` is the only sanctioned apply path. `supabase-bootstrap-no-start` and
+     `supabase-bootstrap-mark-applied` are currently non-functional: their recipes write
+     `${POSTGRES_DB:-pmoves}` with a single `$` (`pmoves/Makefile` L1305 and L1347), which Make
+     expands to an empty string, so `psql` receives a bare `-d`. The fix is a separate lane
+
+   **4a. Verify the ledger.** This step is not optional. A node can serve traffic for weeks with
+   the bootstrap never having run, and nothing else reports it.
+   ```bash
+   db=$(bash pmoves/scripts/supabase/find_db_container.sh running)
+   docker exec "$db" sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "$POSTGRES_DB" -tAc "$1"' _ "select coalesce(to_regclass('public.pmoves_bootstrap_history')::text, 'MISSING')"
+   docker exec "$db" sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "$POSTGRES_DB" -tAc "$1"' _ "select kind, count(*) from public.pmoves_bootstrap_history group by kind order by kind"
+   ```
+   - The password is read inside the container from its own environment and is never printed
+   - **The database name also comes from the container's environment.** Compose sets the
+     container's `POSTGRES_DB` from `SUPABASE_DB_NAME`, default `postgres`. `supabase-bootstrap`
+     instead takes the name from the invoking shell's `POSTGRES_DB`, default `pmoves`. These
+     must name the same database, or this check reads the wrong one and can report `MISSING`
+     falsely. On node 5090 both resolve to `pmoves` (2026-11-06). If they differ, replace
+     `"$POSTGRES_DB"` with the name bootstrap used
+   - Expect one `migration|<n>` row and one `seed|<n>` row. Compare each count with the number of
+     `.sql` files in `pmoves/supabase/migrations/` and `pmoves/supabase/initdb/`
+   - **If the first command prints `MISSING`, bootstrap has never run on this node.** The second
+     then fails with `relation "public.pmoves_bootstrap_history" does not exist`. Run step 4
 
 5. **Configure Operator Authentication**
    ```bash
-   make auth-bootstrap
+   # Compose runtime: point the auth health check at GoTrue first (see below)
+   AUTH_HEALTH_URL=http://127.0.0.1:9999/health make -C pmoves auth-bootstrap
+
+   # CLI runtime: the default URL is correct
+   make -C pmoves auth-bootstrap
    ```
-   - Validates JWT secret configuration
-   - Creates initial admin user (if using Google OAuth)
-   - Configures RLS policies for security
-   - Sets up API access tokens
+   What it runs, in order:
+   - `secrets-runtime-hydrate` — pulls runtime-emitted labels into `pmoves/env.shared`
+   - `supabase-boot-user` — creates or rotates the default boot user. Runs when
+     `AUTH_BOOTSTRAP_MODE` is `jwt` (the default) or `hybrid`; skipped for `google` and `skip`
+   - `auth-check` — validates the auth configuration and probes auth health
+
+   **Compose runtime: the auth health probe gives a false FAIL unless you set the URL.**
+   `auth-check` takes the first of `AUTH_HEALTH_URL`, `SUPABASE_AUTH_HEALTH_URL`,
+   `SUPABASE_LOCAL_AUTH_HEALTH_URL`, then `<base>/auth/v1/health` where `<base>` is
+   `SUPABASE_CLI_API_URL`, else `API_URL`, taken from the shell or from
+   `pmoves/.supabase.status.env`. With none set it falls back to
+   `http://127.0.0.1:54321/auth/v1/health`, the Supabase CLI port. The Makefile's own default for
+   `SUPABASE_LOCAL_AUTH_HEALTH_URL` is that same CLI URL, and it is not exported to the recipe.
+   `.supabase.status.env` is only written by `supa-status` in CLI mode. So under compose the probe
+   hits a port nothing listens on and reports `auth.health` as failed on a healthy stack.
+   - Point it at GoTrue directly: `AUTH_HEALTH_URL=http://127.0.0.1:9999/health` (returns 200)
+   - Do not point it at the Kong route. The checker sends no `apikey` header, so
+     `http://127.0.0.1:8000/auth/v1/health` reports `http 401` and still fails
+
+6. **Populate the UI tier from the Supabase tier**
+   ```bash
+   make -C pmoves supa-env-fix-tier-ui
+   ```
+   - The secrets funnel does not write `pmoves/env.tier-ui`. This target fills its empty
+     Supabase key fields from `pmoves/env.tier-supabase`
+   - **Symptom when skipped:** `curl http://localhost:4482/api/health` returns **503** with
+     `"database":{"status":"unhealthy","error":"Unauthorized"}`
+   - Then recreate the UI from a shell that is not shadowing those keys. Shell values win over
+     env-file interpolation for the keys the service maps in its `environment:` block through
+     `${...}`. For pmoves-ui that is the public anon key (from the prefixed or un-prefixed anon
+     variable) and the Supabase service URL. The service-role key and JWT secret arrive through
+     `env_file` and are not overridden this way; unsetting them too is harmless. Unset the variables
+     named in Phase 2 step 3 plus the un-prefixed anon alias:
+     ```bash
+     env -u SUPABASE_ANON_KEY -u ANON_KEY -u SUPABASE_SERVICE_ROLE_KEY -u SUPABASE_JWT_SECRET make -C pmoves up-ui
+     ```
 
 **Troubleshooting Common Issues:**
 - **Port 54322 conflict**: `lsof -i :54322 | grep LISTEN` → `supabase stop` in other projects
 - **Kong OOM (out of memory)**: Check `docker events --filter container=kong` → Increase memory limit in `docker-compose.yml`
-- **Migration conflicts**: `make supabase-bootstrap-mark-applied` to mark all as applied (skip SQL execution)
+- **Migration conflicts**: `supabase-bootstrap-mark-applied` would mark all files as applied without executing SQL, but it is currently non-functional (single-`$` expansion at `pmoves/Makefile` L1347, separate lane). Read the failing file's error in the `supabase-bootstrap` output instead
+- **`auth.health` FAIL at `127.0.0.1:54321` under compose**: not an outage. See step 5
+- **pmoves-ui `/api/health` 503 `database: Unauthorized`**: see step 6
 
 **Decision Point:**
-- ✅ All 13 Supabase services healthy → **Proceed to Phase 4**
-- ⚠️  Some services degraded → Check logs: `docker logs supabase_<service>`, address critical issues
+- ✅ All 13 Supabase services healthy and the step 4a ledger present → **Proceed to Phase 4**
+- ⚠️  Some services degraded → Check logs: `docker logs pmoves-supabase-<service>-1` (compose) or `docker logs supabase_<service>_<project>` (CLI), address critical issues
 - ❌ Services failing to start → Check Docker resources, port conflicts, move to Phase 4 with degraded Supabase
 
 ---
