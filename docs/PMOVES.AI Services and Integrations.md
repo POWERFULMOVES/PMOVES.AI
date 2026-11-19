@@ -17,9 +17,9 @@ If a detail here disagrees with those files, prefer the executable config and up
 
 ## Published image inventory
 
-Every image the fleet publishes is declared in `pmoves/images.yaml`. `.github/workflows/build-images.yml` builds each entry and pushes it to `ghcr.io/powerfulmoves/<name>` and `docker.io/powerfulmoves/<name>` (tags `:edge` and `:<sha>`). The **Dockerfile** column below is the path that build actually uses: `build_context` is relative to the repo root, and `dockerfile` is relative to the build context — exactly how `.github/workflows/build-images.yml` resolves them.
+TWO workflows publish images, and **the fleet's published-image set is the UNION of the two** — it is not `pmoves/images.yaml` alone. `.github/workflows/build-images.yml` builds each entry declared in `pmoves/images.yaml` and pushes it to `ghcr.io/powerfulmoves/<name>` and `docker.io/powerfulmoves/<name>` (tags `:edge` and `:<sha>`). The **Dockerfile** column of the first table below is the path that build actually uses: `build_context` is relative to the repo root, and `dockerfile` is relative to the build context — exactly how `.github/workflows/build-images.yml` resolves them.
 
-The *CI image workflow* (`.github/workflows/integrations-ghcr.yml`) is a SECOND builder, driven by `.github/workflows/integrations-ghcr.matrix.json`; it pushes each matrix entry's `image_name` to GHCR. Where the two builders disagree, the **matrix** is the authority for what the CI image workflow publishes.
+The *CI image workflow* (`.github/workflows/integrations-ghcr.yml`) is a SECOND builder, driven by `.github/workflows/integrations-ghcr.matrix.json`; it pushes each matrix entry's `image_name` to GHCR. Where the two builders disagree, the **matrix** is the authority for what the CI image workflow publishes. MEASURED against the live configs: the matrix publishes 15 images, `pmoves/images.yaml` declares 32, and **five of the matrix's images are in no `pmoves/images.yaml` entry** — `pmoves-archon-ui`, `pmoves-firefly-iii`, `pmoves-deepresearch`, `pmoves-supaserch` and `pmoves-a2ui-renderer`. They are listed in the second table below.
 
 | Published image | Registry path | Source | Dockerfile |
 |---|---|---|---|
@@ -57,6 +57,18 @@ The *CI image workflow* (`.github/workflows/integrations-ghcr.yml`) is a SECOND 
 | `pmoves-llama-throughput-lab` | `ghcr.io/powerfulmoves/pmoves-llama-throughput-lab` | submodule `PMOVES-llama-throughput-lab` | `PMOVES-llama-throughput-lab/Dockerfile` |
 
 The `pmoves-yt` row is the one to note: the published image is built from the **fork's** `PMOVES.YT/pmoves_yt_service/Dockerfile` — the same file the CI matrix's `pmoves-yt` entry names and the same file compose builds — never from the orphaned `pmoves/services/pmoves-yt/Dockerfile` (see the PMOVES.YT entry below).
+
+### Images published only by the CI image workflow
+
+These five images are published by `.github/workflows/integrations-ghcr.yml` and are declared in NO `pmoves/images.yaml` entry, so an inventory derived from that file alone misses them. Their **Dockerfile** column is the matrix's own `dockerfile`, resolved against the matrix's `context` — the CI workflow builds `integration-src/<context>` with `file: integration-src/<dockerfile>`. The `archon-ui` entry declares the same `context` + `dockerfile` as the `archon` entry, so both build the `PMOVES-Archon` root `Dockerfile`.
+
+| Published image | Registry path | Source | Dockerfile |
+|---|---|---|---|
+| `pmoves-archon-ui` | `ghcr.io/powerfulmoves/pmoves-archon-ui` | submodule `PMOVES-Archon` | `PMOVES-Archon/Dockerfile` |
+| `pmoves-firefly-iii` | `ghcr.io/powerfulmoves/pmoves-firefly-iii` | in-tree `pmoves` | `pmoves/images/firefly-iii/Dockerfile` |
+| `pmoves-deepresearch` | `ghcr.io/powerfulmoves/pmoves-deepresearch` | in-tree `pmoves` | `pmoves/services/deepresearch/Dockerfile` |
+| `pmoves-supaserch` | `ghcr.io/powerfulmoves/pmoves-supaserch` | in-tree `pmoves` | `pmoves/services/supaserch/Dockerfile` |
+| `pmoves-a2ui-renderer` | `ghcr.io/powerfulmoves/pmoves-a2ui-renderer` | in-tree `pmoves` | `pmoves/services/a2ui-renderer/Dockerfile` |
 
 ## Agent Coordination & Orchestration
 
@@ -156,7 +168,7 @@ What is listed here is the **PMOVES-hosted** subset — the entries the inventor
 
 **flute-voice** / **flute-voice-mcp** – *Voice fabric MCP surfaces.* The flute-gateway service (`pmoves/services/flute-gateway`, port **8055**) serves the same tool set over TWO transports: `flute-voice` is the SSE surface (`http://localhost:8055/sse`) and `flute-voice-mcp` is the streamable-http surface (`http://localhost:8055/mcp`, a stateless JSON-RPC POST with no session state). Both declare the `X-API-Key: ${FLUTE_API_KEY}` header.
 
-**pmoves-docker-gateway-sse** – *Docker MCP Toolkit gateway, SSE surface.* This is an **MCP server entry, not a published container image** — it is in neither `pmoves/images.yaml` nor `.github/workflows/integrations-ghcr.matrix.json`. It points at the **host-side** Docker MCP Toolkit gateway that `pmoves/scripts/mcp-toolkit-gateway-listen.sh` starts (`make -C pmoves mcp-toolkit-gateway-start`), which runs `docker mcp gateway run --profile <profile> --transport sse --port 8090`; the profile is `PMOVES_MCP_PROFILE_ID` when set, else whatever `pmoves/tools/node_gateway_profile.py` resolves for this node (pinned node profile → hardware detection → REFUSE, never a guess), with the listen script's own fallback literal `pmoves_5090_web`. The inventory entry is `transport: sse`, `endpoint: local`, `url: http://localhost:8090/sse`, with `Authorization: Bearer ${CIPHER_API_TOKEN}` and clients `hermes` and `kilocode`. Its stdio sibling `pmoves-docker-gateway` launches the same gateway with `docker mcp gateway run --profile ${PMOVES_MCP_PROFILE_ID}`.
+**pmoves-docker-gateway-sse** – *Docker MCP Toolkit gateway, SSE surface.* This is an **MCP server entry, not a published container image** — it is in neither `pmoves/images.yaml` nor `.github/workflows/integrations-ghcr.matrix.json`. It points at the **host-side** Docker MCP Toolkit gateway that `pmoves/scripts/mcp-toolkit-gateway-listen.sh` starts (`make -C pmoves mcp-toolkit-gateway-start`), which runs `docker mcp gateway run --profile <profile> --transport sse --port 8090`. **Profile selection is literal, not resolved:** the listen script takes the profile from `PMOVES_MCP_PROFILE_ID` and, when that variable is unset, falls back to the literal `pmoves_5090_web`. The listener does not run `pmoves/tools/node_gateway_profile.py` — that resolver (pinned node profile → hardware detection → REFUSE, never a guess) belongs to `pmoves/scripts/mcp-toolkit-connect.sh`, not to this listener. The listener refuses to start when the selected profile is not imported into the Toolkit (`make mcp-toolkit-bootstrap`), so a node that does not serve `pmoves_5090_web` must export `PMOVES_MCP_PROFILE_ID` itself. The inventory entry is `transport: sse`, `endpoint: local`, `url: http://localhost:8090/sse`, with `Authorization: Bearer ${CIPHER_API_TOKEN}` and clients `hermes` and `kilocode`. Its stdio sibling `pmoves-docker-gateway` launches the same gateway with `docker mcp gateway run --profile ${PMOVES_MCP_PROFILE_ID}`.
 
 **composio-local** – *Local Composio MCP proxy.* A PMOVES-operated supergateway proxy re-serving the hosted Composio Connect tools on the node's loopback (`http://127.0.0.1:8190/composio/mcp`, `Authorization: Bearer ${COMPOSIO_MCP_GATEWAY_KEY}`), so headless clients can reach the same 7 `COMPOSIO_*` meta-tools without a Composio consumer key. Kit: `deploy/kvm2/composio-mcp/`; bring-up `make -C pmoves up-composio-mcp`. **Gap:** the inventory's own note records that it is NOT running on any node yet, so clients show this entry as failed to connect until the proxy is up; the hosted `composio` entry is unchanged.
 

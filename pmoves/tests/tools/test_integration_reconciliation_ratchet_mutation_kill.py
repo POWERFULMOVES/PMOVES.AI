@@ -5,7 +5,7 @@ THE DEFECT CLASS
 A documentation index drifts from the executable configs it claims to
 describe. This lane was opened by five MEASURED instances of that drift in
 ``docs/PMOVES.AI Services and Integrations.md`` and the two registries it
-contradicts:
+contradicts, and a later review found two more in the same document:
 
 * **F1** -- the doc declared Archon's path as ``pmoves/services/archon``,
   which does not exist on disk.
@@ -20,6 +20,13 @@ contradicts:
 * **F4** -- ``pmoves-docker-gateway-sse`` was named nowhere in the doc.
 * **F5** -- ``pmoves/integrations/README.md`` listed four of the eight
   directories that are actually on disk.
+* **F6** -- the doc's published-image inventory carried the 32
+  ``pmoves/images.yaml`` entries and claimed that every published image is
+  declared there, while the CI image workflow's matrix publishes FIVE MORE
+  images that no ``pmoves/images.yaml`` entry declares.
+* **F7** -- the doc claimed that an unset ``PMOVES_MCP_PROFILE_ID`` sends
+  the gateway LISTENER through ``node_gateway_profile.py``; the listener
+  assigns a literal fallback and never calls the resolver.
 
 A gate that reads the document can only be load-bearing if a plausible edit
 to the document makes it fail. So this harness puts each defect back, in the
@@ -57,6 +64,18 @@ A MUTATION MUST REVERT THE WIRING
 Each mutation below changes the DOCUMENT or the REGISTRY the gate reads --
 never the gate's own expression. A mutation that edited the gate would prove
 nothing about the document it claims to check.
+
+THE SNAPSHOT IS TAKEN INSIDE THE LOCK
+-------------------------------------
+The harness reads its target to snapshot the pristine bytes. That read
+happens INSIDE the locked region -- after the in-process lock, the
+house-wide cross-process lock and the per-target lock are all held -- and
+NOT before it. Codex P1 on #3487: the read used to happen first, so under
+pytest-xdist (or alongside a second harness) worker B could snapshot worker
+A's MUTATION while it waited for the lock. A restored the file and released
+the lock; B woke up holding the mutation as its "pristine" bytes and
+restored the mutation PERMANENTLY. The backup and the restore must both
+originate from serialized, pristine bytes.
 
 Run it directly to see the mutation kills in action:
 
@@ -119,6 +138,11 @@ class Mutation:
     target_test: str
     rationale: str
     target_file: Path
+    #: A substring of the failure message the named test MUST produce. Empty
+    #: means "any failure of the named test will do". When it is set, the
+    #: harness asserts the message is IN the pytest output -- so a kill
+    #: cannot be claimed by a test that failed for a different reason.
+    expected_message: str = ""
 
 
 MUTATIONS: list[Mutation] = [
@@ -285,6 +309,62 @@ MUTATIONS: list[Mutation] = [
         ),
         target_file=COMPOSE_INTEGRATIONS_IMAGES,
     ),
+    # ------------------------------------------------------------------
+    # F6 -- a matrix-published image has no row in the inventory table
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M8_a_matrix_published_image_has_no_row_in_the_inventory_table",
+        edits=(
+            (
+                "| `pmoves-archon-ui` | `ghcr.io/powerfulmoves/pmoves-archon-ui` "
+                "| submodule `PMOVES-Archon` | `PMOVES-Archon/Dockerfile` |\n",
+                "",
+            ),
+        ),
+        target_test="test_every_published_image_is_listed_in_the_inventory_table",
+        rationale=(
+            "F6: the CI image workflow's matrix publishes five images that no "
+            "`pmoves/images.yaml` entry declares, and the published-image "
+            "inventory carried none of them -- so the doc's claim that the "
+            "table IS the fleet's published-image set was false. The "
+            "mutation drops the row for one of those five, which is the "
+            "exact omission the ratchet now watches for."
+        ),
+        target_file=DOC,
+        expected_message="does not list these published images",
+    ),
+    # ------------------------------------------------------------------
+    # F7 -- the doc claims the LISTENER resolves the profile
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M9_the_doc_claims_the_gateway_listener_resolves_the_profile",
+        edits=(
+            (
+                "**Profile selection is literal, not resolved:** the listen "
+                "script takes the profile from `PMOVES_MCP_PROFILE_ID` and, "
+                "when that variable is unset, falls back to the literal "
+                "`pmoves_5090_web`.",
+                "the profile is `PMOVES_MCP_PROFILE_ID` when set, else "
+                "whatever `pmoves/tools/node_gateway_profile.py` resolves for "
+                "this node (pinned node profile → hardware detection → "
+                "REFUSE, never a guess), with the listen script's own "
+                "fallback literal `pmoves_5090_web`",
+            ),
+        ),
+        target_test=(
+            "test_the_doc_describes_the_gateway_listeners_actual_profile_selection"
+        ),
+        rationale=(
+            "F7: the defect that was found. `mcp-toolkit-gateway-listen.sh` "
+            "assigns `PROFILE_ID=\"${PMOVES_MCP_PROFILE_ID:-pmoves_5090_web}\"` "
+            "and never calls `node_gateway_profile.py` -- that resolver "
+            "belongs to `mcp-toolkit-connect.sh`. The mutation puts the "
+            "resolver claim back, and the gate must notice that the "
+            "listener is not what resolves the profile."
+        ),
+        target_file=DOC,
+        expected_message="attributes profile resolution to the listener",
+    ),
 ]
 
 
@@ -420,6 +500,31 @@ def _write_source(path: Path, text: str, crlf: bool) -> None:
     path.write_bytes(text.encode("utf-8"))
 
 
+@contextlib.contextmanager
+def _locked_snapshot(target: Path):
+    """Acquire EVERY lock, and only THEN snapshot the target.
+
+    THE ORDER MATTERS -- Codex P1 on #3487.
+
+    The snapshot used to be taken BEFORE the locks were acquired, so under
+    pytest-xdist -- or alongside a second harness -- worker B could snapshot
+    worker A's MUTATION while it waited for the lock. A then restored the
+    file and released the lock; B woke up holding the mutation as its
+    "pristine" bytes and restored the mutation PERMANENTLY.
+
+    The backup and the restore must both originate from serialized,
+    pristine bytes, so the read happens INSIDE the locked region.
+
+    Yields ``(text, raw_bytes, uses_crlf)``.
+    """
+    with _MUTATION_LOCK, _file_lock(_LOCK_PATH), mutation_backup.file_lock(
+        mutation_backup.lock_path(REPO_ROOT, target)
+    ):
+        original, crlf = _read_source(target)
+        original_bytes = target.read_bytes()
+        yield original, original_bytes, crlf
+
+
 def test_every_mutation_anchor_is_present() -> None:
     """A drifted anchor must be loud, not silently inert."""
     for mutation in MUTATIONS:
@@ -433,19 +538,120 @@ def test_every_mutation_anchor_is_present() -> None:
         assert mutation.target_test, mutation.name
 
 
+def test_the_snapshot_is_taken_after_the_locks_are_acquired(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """REGRESSION (Codex P1 on #3487): the snapshot must be INSIDE the lock.
+
+    The bug this gates: the harness read its target BEFORE acquiring the
+    cross-process locks, so a second harness could snapshot the FIRST
+    harness's mutation while it waited for the lock -- and then restore
+    that mutation permanently.
+
+    The proof is BEHAVIOURAL, not structural: a simulated sibling harness
+    takes the house-wide lock, mutates the target and restores it. The
+    harness under test must snapshot the PRISTINE bytes, because it has to
+    wait for the lock first. With the old ordering it snapshots the
+    mutation instead, and this test fails.
+    """
+    target = tmp_path / "racy-target.md"
+    target.write_text("PRISTINE LINE\n", encoding="utf-8")
+
+    probe = Mutation(
+        name="probe_the_snapshot_ordering",
+        edits=(("PRISTINE LINE", "MUTATED LINE"),),
+        target_test="test_every_published_image_name_is_named_in_the_services_doc",
+        rationale="probe",
+        target_file=target,
+    )
+
+    mutated = threading.Event()
+    release = threading.Event()
+
+    def sibling_harness() -> None:
+        # A second harness: it holds the house-wide lock for exactly as
+        # long as it holds a mutation, which is the window the bug lived in.
+        with _file_lock(_LOCK_PATH):
+            target.write_text("MUTATED LINE\n", encoding="utf-8")
+            mutated.set()
+            release.wait(2.0)
+            target.write_text("PRISTINE LINE\n", encoding="utf-8")
+
+    worker = threading.Thread(target=sibling_harness, daemon=True)
+    worker.start()
+    assert mutated.wait(30), "the simulated sibling harness never took the lock"
+
+    snapshots: list[str] = []
+    real_read_source = _read_source
+
+    def spy_read_source(path: Path):
+        text, crlf = real_read_source(path)
+        snapshots.append(text)
+        return text, crlf
+
+    monkeypatch.setattr(sys.modules[__name__], "_read_source", spy_read_source)
+    # The GREEN BEFORE phase is batched over the REAL mutations; the probe
+    # must not populate that cache with a fake result.
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_GREEN_BEFORE",
+        [subprocess.CompletedProcess([], 0, "", "")],
+    )
+
+    def fake_run_pytest(node_ids, timeout=_PYTEST_TIMEOUT_SECONDS):
+        # No child pytest for the probe: the RED phase reports the named
+        # test as failed, which is all the case needs to reach its restore.
+        if len(node_ids) == 1:
+            return subprocess.CompletedProcess(
+                node_ids, 1, f"FAILED {node_ids[0]}\n", ""
+            )
+        return subprocess.CompletedProcess(node_ids, 0, "", "")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run_pytest", fake_run_pytest)
+
+    case_error: BaseException | None = None
+    try:
+        _run_mutation_case(probe)
+    except AssertionError as exc:
+        # The case may fail BECAUSE the snapshot was wrong (the mutation
+        # anchor then does not match). The snapshot assertion below is the
+        # one that names the cause, so the case's own error is held back
+        # until after it.
+        case_error = exc
+    finally:
+        release.set()
+        worker.join(30)
+
+    assert snapshots, "the harness never snapshotted the target"
+    assert snapshots[0] == "PRISTINE LINE\n", (
+        "the harness snapshotted a CONCURRENT harness's mutation instead of "
+        f"the pristine bytes: {snapshots[0]!r} -- the snapshot must be taken "
+        "AFTER the locks are acquired (Codex P1 on #3487)"
+    )
+    assert case_error is None, f"the probe case failed: {case_error}"
+    assert target.read_text(encoding="utf-8") == "PRISTINE LINE\n", (
+        "the probe left its target mutated"
+    )
+
+
 @pytest.mark.parametrize("mutation", MUTATIONS, ids=lambda m: m.name)
 def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     """GREEN -> RED, with a byte-exact restore. GREEN is batched (see the
     module docstring): it runs once before any mutation and once after the
     last restore, over every target test."""
+    _run_mutation_case(mutation)
+
+
+def _run_mutation_case(mutation: Mutation) -> None:
+    """The body of one mutation case: GREEN -> RED, then a byte-exact restore.
+
+    The snapshot of the target is taken INSIDE the locked region -- see
+    :func:`_locked_snapshot` for why the order matters.
+    """
     node_id = _node_id(mutation)
     target = mutation.target_file
-    original, crlf = _read_source(target)
-    original_bytes = target.read_bytes()
 
-    with _MUTATION_LOCK, _file_lock(_LOCK_PATH), mutation_backup.file_lock(
-        mutation_backup.lock_path(REPO_ROOT, target)
-    ):
+    with _locked_snapshot(target) as (original, original_bytes, crlf):
         # 1. GREEN BEFORE (batched over every target test)
         before = _green_before()[0]
         assert before.returncode == 0, (
@@ -471,6 +677,13 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
                 f"{mutation.name}: pytest failed, but NOT the named test "
                 f"{mutation.target_test}\n{after.stdout[-4000:]}\n{after.stderr[-2000:]}"
             )
+            if mutation.expected_message:
+                output = after.stdout + after.stderr
+                assert mutation.expected_message in output, (
+                    f"{mutation.name}: the named test failed, but NOT with "
+                    f"the expected message {mutation.expected_message!r}\n"
+                    f"{output[-4000:]}"
+                )
         finally:
             # 3. restore -- byte-exact, line endings included
             _write_source(target, original, crlf)
@@ -504,6 +717,13 @@ def test_the_sources_are_intact_after_the_mutation_suite() -> None:
     )
     assert "pmoves-docker-gateway-sse" in doc, (
         "the pmoves-docker-gateway-sse MCP server is not intact in the doc"
+    )
+    assert "pmoves-archon-ui" in doc, (
+        "a matrix-published image is missing from the published-image "
+        "inventory in the doc"
+    )
+    assert "Profile selection is literal, not resolved" in doc, (
+        "the doc's gateway-listener profile-selection claim is not intact"
     )
 
     orphans = ORPHANS_YAML.read_text(encoding="utf-8")

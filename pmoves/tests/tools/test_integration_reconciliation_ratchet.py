@@ -47,6 +47,33 @@ that is not gated rots back, so each defect now has an assertion here:
 * **F5 -- the integrations inventory.** ``pmoves/integrations/`` holds EIGHT
   directories; the README listed four.
 
+THE TWO DEFECTS THE REVIEW FOUND
+--------------------------------
+A second review of this lane found two more prose-vs-executable contradictions,
+both of which rot back unless they are gated:
+
+* **F6 -- the published-image inventory was incomplete.** The doc claimed
+  "every image the fleet publishes is declared in ``pmoves/images.yaml``",
+  which its own next paragraph contradicted: the CI image workflow is a
+  SECOND publisher, driven by
+  ``.github/workflows/integrations-ghcr.matrix.json``. MEASURED: the matrix
+  publishes 15 images and ``pmoves/images.yaml`` declares 32, and FIVE of
+  the matrix's images are in no ``pmoves/images.yaml`` entry --
+  ``pmoves-archon-ui``, ``pmoves-firefly-iii``, ``pmoves-deepresearch``,
+  ``pmoves-supaserch`` and ``pmoves-a2ui-renderer``. The published-image set
+  is therefore the UNION of the two publishers, and the inventory table must
+  carry all of it.
+* **F7 -- the gateway listener's profile selection was fiction.** The doc
+  claimed that an unset ``PMOVES_MCP_PROFILE_ID`` sends the listener through
+  ``pmoves/tools/node_gateway_profile.py`` (pinned node profile -> hardware
+  detection -> REFUSE, never a guess). MEASURED, the listener assigns the
+  LITERAL fallback
+  ``PROFILE_ID="${PMOVES_MCP_PROFILE_ID:-pmoves_5090_web}"`` and never calls
+  the resolver; the resolver belongs to
+  ``pmoves/scripts/mcp-toolkit-connect.sh``. An operator on a node that does
+  not serve that profile would have believed the listener selects or refuses
+  the right one.
+
 THE SCOPE OF THE MCP ASSERTION -- AND WHY IT IS NARROWER THAN "EVERY KEY"
 -------------------------------------------------------------------------
 Requirement: every name in ``pmoves/config/mcp_inventory.json`` must appear
@@ -76,7 +103,7 @@ in a literal.
 MUTATION-KILL
 -------------
 ``pmoves/tests/tools/test_integration_reconciliation_ratchet_mutation_kill.py``
-is the companion harness. It puts each of the five defects back into the live
+is the companion harness. It puts each of the SEVEN defects back into the live
 tree and requires the NAMED test here to die.
 
 Hermetic: no network, no docker, no NATS, no gh, no credentials.
@@ -125,6 +152,22 @@ YOUTUBE_ORPHAN = "pmoves/services/pmoves-yt/Dockerfile"
 #: The scope rule for the MCP assertion. See the module docstring.
 HOSTED_MCP_TRANSPORTS = ("http", "sse")
 HOSTED_MCP_ENDPOINTS = ("local", "fleet")
+
+#: The host-side MCP Toolkit gateway listener the doc describes. See F7.
+GATEWAY_LISTEN = PMOVES_DIR / "scripts" / "mcp-toolkit-gateway-listen.sh"
+
+#: The profile resolver. The LISTENER does not call it -- the connect script
+#: does. See F7.
+GATEWAY_PROFILE_RESOLVER = "node_gateway_profile.py"
+
+#: How the scripts spell the resolver's path. Used to find its consumer.
+GATEWAY_PROFILE_RESOLVER_PATH = "pmoves/tools/node_gateway_profile.py"
+
+#: ``PROFILE_ID="${PMOVES_MCP_PROFILE_ID:-<default>}"`` -- the listener's own
+#: assignment, which is the ONLY thing that decides the profile it serves.
+_LISTENER_PROFILE_RE = re.compile(
+    r'^PROFILE_ID="\$\{PMOVES_MCP_PROFILE_ID:-([^}]*)\}"', re.MULTILINE
+)
 
 
 # ── readers ─────────────────────────────────────────────────────────────────
@@ -209,11 +252,135 @@ def _mentions_token(text: str, token: str) -> bool:
     return bool(pattern.search(text))
 
 
-def _published_image_names() -> list[str]:
+def _images_yaml_image_names() -> list[str]:
     """Every image name ``pmoves/images.yaml`` declares."""
     data = yaml.safe_load(_read(IMAGES_YAML))
     images = data.get("images", []) if isinstance(data, dict) else []
     return [str(image["name"]) for image in images]
+
+
+def _ci_matrix_image_names() -> list[str]:
+    """Every image name the CI image workflow's matrix publishes.
+
+    The matrix is the SECOND publisher. See F6.
+    """
+    return [
+        str(entry["image_name"])
+        for entry in _ci_matrix()
+        if entry.get("image_name")
+    ]
+
+
+def _published_image_names() -> list[str]:
+    """Every image the fleet publishes -- the UNION of BOTH publishers.
+
+    MEASURED: ``pmoves/images.yaml`` declares 32 images and the CI matrix
+    publishes 15, and five of the matrix's are in no ``images.yaml`` entry.
+    An inventory derived from either file ALONE is incomplete, so the
+    published-image set is derived from both. See F6.
+    """
+    return sorted(set(_images_yaml_image_names()) | set(_ci_matrix_image_names()))
+
+
+def _doc_section(heading: str) -> str:
+    """The doc's section under ``heading`` -- up to the next H2.
+
+    H3 subsections stay INSIDE the section: the published-image inventory
+    carries two tables, and both belong to it.
+    """
+    lines = _doc_text().split("\n")
+    start: int | None = None
+    for index, line in enumerate(lines):
+        if not line.startswith("## "):
+            continue
+        if start is None:
+            if line[3:].strip() == heading:
+                start = index + 1
+        else:
+            return "\n".join(lines[start:index])
+    if start is None:
+        raise AssertionError(f"the doc has no {heading!r} section")
+    return "\n".join(lines[start:])
+
+
+def _inventory_table_image_names() -> list[str]:
+    """The image names the doc's published-image inventory TABLES list.
+
+    A table row is recognised by its FIRST cell being a single backticked
+    token. The header row and the ``|---|`` separator are not.
+    """
+    names: list[str] = []
+    for line in _doc_section("Published image inventory").splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not cells:
+            continue
+        first = cells[0]
+        if first.startswith("`") and first.endswith("`") and first.count("`") == 2:
+            names.append(first[1:-1])
+    return names
+
+
+def _doc_block(prefix: str) -> str:
+    """The doc's paragraph that starts with ``prefix``."""
+    for block in _doc_text().split("\n\n"):
+        if block.startswith(prefix):
+            return block
+    raise AssertionError(f"the doc has no block starting with {prefix!r}")
+
+
+def _sentences(text: str) -> list[str]:
+    """Split prose into sentences.
+
+    A period that is followed by whitespace ends a sentence. A period INSIDE
+    a backticked token (``node_gateway_profile.py``) is followed by a
+    backtick, so it does not.
+    """
+    return [part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()]
+
+
+def _gateway_mcp_key() -> str:
+    """The hosted MCP inventory key for the Docker MCP Toolkit gateway.
+
+    Derived from the live inventory rather than hard-coded, so a rename in
+    the inventory is visible in the diff.
+    """
+    keys = [key for key in _pmoves_hosted_mcp_keys() if "docker-gateway" in key]
+    assert len(keys) == 1, (
+        "expected exactly one hosted MCP inventory key for the Docker MCP "
+        f"Toolkit gateway, found {keys!r} -- update the ratchet"
+    )
+    return keys[0]
+
+
+def _listener_profile_default() -> str:
+    """The literal profile the listener falls back to.
+
+    Read out of the listener's OWN assignment, so the doc's claim is
+    checked against the script rather than against a literal in this file.
+    See F7.
+    """
+    match = _LISTENER_PROFILE_RE.search(_read(GATEWAY_LISTEN))
+    assert match, (
+        "could not parse the listener's PROFILE_ID assignment -- the script "
+        "changed shape and the ratchet must be updated"
+    )
+    return match.group(1)
+
+
+def _resolver_consumers() -> list[str]:
+    """The scripts under ``pmoves/scripts/`` that reference the resolver.
+
+    Derived from the live tree: the resolver is named by exactly one
+    script, and the doc must name THAT one. See F7.
+    """
+    scripts = PMOVES_DIR / "scripts"
+    return sorted(
+        path.name
+        for path in scripts.glob("*.sh")
+        if GATEWAY_PROFILE_RESOLVER_PATH in _read(path)
+    )
 
 
 def _integration_dirs() -> list[str]:
@@ -379,12 +546,17 @@ def test_the_orphan_pmoves_yt_dockerfile_is_named_by_no_compose_build() -> None:
 # ── F3: every published image name is named in the doc ──────────────────────
 
 def test_every_published_image_name_is_named_in_the_services_doc() -> None:
-    """F3 and the whole image inventory.
+    """F3, F6 and the whole image inventory.
 
     ``pmoves/images.yaml`` declares 32 published images. Before this lane
     the doc named FOUR of them, and none of the three jellyfin-ai images --
     so the doc described the Jellyfin-AI stack without naming a single image
     it actually publishes.
+
+    The scope is the UNION of the TWO publishers (F6): the CI image
+    workflow's matrix publishes five images that no ``pmoves/images.yaml``
+    entry declares, and a published image the doc never names is the same
+    defect whichever publisher ships it.
     """
     names = _published_image_names()
     assert names, "pmoves/images.yaml declares no images -- the ratchet is vacuous"
@@ -394,6 +566,110 @@ def test_every_published_image_name_is_named_in_the_services_doc() -> None:
         "the Services and Integrations doc does not name these published "
         "images: " + ", ".join(missing) + " -- add them to the doc"
     )
+
+
+def test_every_published_image_is_listed_in_the_inventory_table() -> None:
+    """F6: the published-image inventory must be COMPLETE.
+
+    The defect this gates: the doc's inventory table carried the 32
+    ``pmoves/images.yaml`` entries and the doc CLAIMED that every published
+    image is declared there -- a claim its own next paragraph contradicted,
+    because the CI image workflow's matrix is a second publisher. MEASURED:
+    five published images (``pmoves-archon-ui``, ``pmoves-firefly-iii``,
+    ``pmoves-deepresearch``, ``pmoves-supaserch``, ``pmoves-a2ui-renderer``)
+    are in no ``pmoves/images.yaml`` entry, so the table was missing five
+    rows of the fleet's published images.
+
+    Naming an image somewhere in the prose is not enough: the inventory
+    table is what an operator reads to learn what the fleet publishes, so
+    every published image needs a ROW.
+    """
+    names = _published_image_names()
+    assert names, (
+        "neither pmoves/images.yaml nor the CI matrix declares an image -- "
+        "the ratchet is vacuous"
+    )
+    rows = _inventory_table_image_names()
+    assert rows, (
+        "the doc's published-image inventory table lists no images -- the "
+        "ratchet would pass vacuously"
+    )
+    missing = [name for name in names if name not in rows]
+    assert not missing, (
+        "the Services and Integrations doc's published-image inventory table "
+        "does not list these published images: "
+        + ", ".join(missing)
+        + " -- add a row for each (the union of pmoves/images.yaml and the "
+        "CI image workflow's matrix)"
+    )
+
+
+def test_the_doc_describes_the_gateway_listeners_actual_profile_selection() -> None:
+    """F7: the doc must describe the profile selection the LISTENER performs.
+
+    The defect this gates: the doc claimed that an unset
+    ``PMOVES_MCP_PROFILE_ID`` sends the LISTENER through
+    ``pmoves/tools/node_gateway_profile.py`` (pinned node profile -> hardware
+    detection -> REFUSE, never a guess). MEASURED, the listener assigns the
+    LITERAL fallback
+    ``PROFILE_ID="${PMOVES_MCP_PROFILE_ID:-pmoves_5090_web}"`` and never
+    calls the resolver -- the resolver belongs to
+    ``pmoves/scripts/mcp-toolkit-connect.sh``. An operator on another node
+    would have believed the listener selects, or refuses to serve, the
+    right profile when it actually serves the 5090 one.
+
+    The rules below are derived from the live script, not from a literal
+    copied into this file:
+
+    * the doc must name the env var the listener reads;
+    * the sentence that names it must also name the literal fallback the
+      listener actually assigns;
+    * no sentence that names the env var may name the resolver, because
+      the listener never calls it;
+    * a sentence that names the resolver must name the script that DOES
+      call it.
+    """
+    script = _read(GATEWAY_LISTEN)
+    default = _listener_profile_default()
+    assert default, "the listener's PROFILE_ID fallback is empty"
+
+    key = _gateway_mcp_key()
+    block = _doc_block(f"**{key}**")
+    sentences = _sentences(block)
+
+    named = [s for s in sentences if "PMOVES_MCP_PROFILE_ID" in s]
+    assert named, (
+        f"the doc's {key} entry does not mention PMOVES_MCP_PROFILE_ID -- it "
+        "must describe how the listener picks its profile"
+    )
+    assert any(default in s for s in named), (
+        "the doc's profile-selection sentence does not name the literal "
+        f"fallback the listener actually uses ({default!r}) -- the listener "
+        f"assigns PROFILE_ID=\"${{PMOVES_MCP_PROFILE_ID:-{default}}}\""
+    )
+
+    consumers = _resolver_consumers()
+    assert consumers, (
+        "no script under pmoves/scripts/ references the profile resolver -- "
+        "the ratchet cannot derive the resolver's consumer"
+    )
+
+    if GATEWAY_PROFILE_RESOLVER not in script:
+        for sentence in named:
+            assert GATEWAY_PROFILE_RESOLVER not in sentence, (
+                "the doc's profile-selection sentence attributes profile "
+                f"resolution to the listener, but {GATEWAY_LISTEN.name} never "
+                f"calls {GATEWAY_PROFILE_RESOLVER} -- the resolver belongs to "
+                + ", ".join(consumers)
+            )
+
+    for sentence in sentences:
+        if GATEWAY_PROFILE_RESOLVER in sentence:
+            assert any(consumer in sentence for consumer in consumers), (
+                f"the doc's {key} entry mentions {GATEWAY_PROFILE_RESOLVER} "
+                "without naming the script that actually calls it: "
+                + ", ".join(consumers)
+            )
 
 
 # ── F4: the MCP roster the doc must carry ───────────────────────────────────
