@@ -16,6 +16,25 @@ scrape_configs:
   #   static_configs:
   #     - targets: ["host.docker.internal:9100"]
 
+  # Glances — HOST-LOCAL exporter, wired per node (pmoves/docs/operations/GLANCES_RUNBOOK.md
+  # section 4.4). Glances is NOT a compose service (runbook F3): each node runs its own
+  # `glances --export prometheus` with `[prometheus] host=localhost port=9091 prefix=glances`,
+  # loopback/tailnet only (section 4.0), and Prometheus reaches it through the Docker host
+  # gateway -- the same mechanism the (disabled) node_exporter job above uses.
+  #
+  # The port MUST match the exporter port the runbook prescribes; `pmoves/tests/tools/
+  # test_prometheus_glances_wiring.py` asserts the two agree and fails closed when they drift.
+  #
+  # CAVEAT: host port 9091 is Headscale's registered slot (pmoves/configs/ports.yaml,
+  # HEADSCALE_9091_PORT, published by pmoves/docker-compose.remote.yml). Do NOT run Glances
+  # on the remote/VPS node that carries that compose -- Prometheus would scrape Headscale's
+  # metrics and label them as Glances. The GPU nodes (5090 / 4090 / SPARK) do not run it.
+  - job_name: glances
+    static_configs:
+      - targets: ["host.docker.internal:9091"]
+        labels:
+          source: glances
+
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]

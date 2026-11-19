@@ -237,17 +237,30 @@ loginctl enable-linger "$USER"     # run without a login session (may need sudo/
 | Linux GPU node (5090, 4090, Spark) | yes | systemd user unit (4.2) | `gpu` extra |
 | VPS / KVM (egress, always-on) | yes | systemd user unit, Tailscale Serve only | fills the missing hardware blocks (handoff T3) |
 
-### 4.4 Exports worth using later (not wired — F12)
+### 4.4 Exports (Prometheus half wired — F12; NATS half still open)
 
 Glances 4.5.7 ships exporters `[gd:gw/index]`; two fit PMOVES:
 
 - **Prometheus** `[gd:gw/prometheus]`: `--export prometheus` with
   `[prometheus] host=localhost port=9091 prefix=glances` serves an exporter for
-  the existing monitoring stack, whose host `node` job is disabled
-  (`pmoves/monitoring/prometheus/prometheus.yml:14-17`). Upstream says use the
-  wildcard bind inside containers — PMOVES keeps loopback/tailnet (4.0).
+  the existing monitoring stack. **Wired** as the `glances` job in
+  `pmoves/monitoring/prometheus/prometheus.yml` (`job_name: glances`,
+  target `host.docker.internal:9091`), alongside the host `node` job
+  (node_exporter) that remains disabled. Prometheus reaches the host-local
+  exporter through the Docker host gateway — the same mechanism the `node` job
+  uses. Upstream says use the wildcard bind inside containers — PMOVES keeps
+  loopback/tailnet (4.0).
+  **Caveat:** host port **9091 is Headscale's registered slot**
+  (`pmoves/configs/ports.yaml`, `HEADSCALE_9091_PORT`, published by
+  `pmoves/docker-compose.remote.yml`). Do **not** run Glances on the remote/VPS
+  node carrying that compose — Prometheus would scrape Headscale's metrics and
+  label them as Glances. The GPU nodes (5090 / 4090 / SPARK) do not run it.
+  `pmoves/tests/tools/test_prometheus_glances_wiring.py` asserts the scrape
+  target's port still equals the exporter port this section prescribes, and
+  that this section's wiring claim still matches the config.
 - **NATS** `[gd:gw/nats]`: `--export nats` with `[nats] host=... prefix=glances`
-  publishes JSON per plugin to `<prefix>.<plugin>` — the PMOVES bus.
+  publishes JSON per plugin to `<prefix>.<plugin>` — the PMOVES bus. **Not
+  wired** (F12, NATS half).
 
 Both need the `export` extra (heavy: pulls every exporter client) or just the
 single client (`prometheus_client`, `nats-py`).
@@ -421,7 +434,7 @@ https://docs.docker.com/desktop/settings-and-maintenance/settings/):
 | F9 | `z890-glances.conf` describes old hardware (GTX 1650, 32 GB, Windows 10) and another user's export paths | `pmoves/config/profiles/hermes/z890-glances.conf:1-53` |
 | F10 | Skill tells agents `pip install glances[web]` then `glances -w` (pip; all interfaces; no password) | `.claude/skills/node-4090-probe/SKILL.md:97` |
 | F11 | `glances-autodetect.sh` installs via apt/pip fallbacks, not uv | `deploy/provision/glances-autodetect.sh:115-150` |
-| F12 | Wire Prometheus and/or NATS export (§4.4), loopback/tailnet only | `pmoves/monitoring/prometheus/prometheus.yml:14-17` |
+| F12 | Wire Prometheus and/or NATS export (§4.4), loopback/tailnet only. **Prometheus half WIRED** — `glances` job in `pmoves/monitoring/prometheus/prometheus.yml`, target `host.docker.internal:9091`; port 9091 is also Headscale's registered slot, so not on the remote/VPS node. **NATS half still open.** | `pmoves/monitoring/prometheus/prometheus.yml` (`job_name: glances`); `pmoves/docs/operations/GLANCES_RUNBOOK.md` §4.4 |
 | F13 | `.wslconfig` example omits `[experimental] autoMemoryReclaim` (Docker's recommended memory lever on WSL) and that changes need a full VM stop | `pmoves/docs/operations/BRING_UP_GUIDE.md:106-112` |
 | F14 | Verify how WSL parses `autoMemoryReclaim=Gradual` (docs list lowercase; unknown -> `dropCache`) | z890 `%USERPROFILE%\.wslconfig` |
 
