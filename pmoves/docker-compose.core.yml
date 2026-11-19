@@ -420,7 +420,7 @@ services:
     environment:
     # Standard key names with legacy fallbacks
     - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
