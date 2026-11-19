@@ -78,9 +78,9 @@ def _run(
         timeout=120,
     )
     argv_file = Path(f"{log}.argv")
-    argv = argv_file.read_text().splitlines() if argv_file.exists() else None
+    argv = argv_file.read_text(encoding="utf-8").splitlines() if argv_file.exists() else None
     cwd_file = Path(f"{log}.cwd")
-    cwd = cwd_file.read_text().strip() if cwd_file.exists() else None
+    cwd = cwd_file.read_text(encoding="utf-8").strip() if cwd_file.exists() else None
     return proc, argv, cwd
 
 
