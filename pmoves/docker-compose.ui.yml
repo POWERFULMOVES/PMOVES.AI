@@ -138,7 +138,7 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_app
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks:

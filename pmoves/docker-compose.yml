@@ -5612,7 +5612,7 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_app
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks:
@@ -6524,12 +6524,12 @@ services:
     profiles: ["container-agent"]
     restart: unless-stopped
     env_file:
-      - env.shared
+    - env.shared
     cap_drop: [ALL]
     cap_add: [NET_RAW]
     security_opt: [no-new-privileges:true]
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+    - "host.docker.internal:host-gateway"
     environment:
       CA_PORT: "8111"
       NODE_NAME: ${NODE_NAME:-pmoves-4090}
@@ -6540,13 +6540,13 @@ services:
       CA_UPSTREAM_SERVICES: '[["host-kong","host.docker.internal",8000,"Host-published Kong (hairpin check)"],["github","github.com",443,"Egress check"]]'
       PMOVES_NETWORKS: "pmoves_bus,pmoves_api,pmoves_data,pmoves_monitoring,pmoves_external"
     ports:
-      - "127.0.0.1:${CONTAINER_AGENT_PORT:-8111}:8111"
+    - "127.0.0.1:${CONTAINER_AGENT_PORT:-8111}:8111"
     networks:
-      - pmoves_bus
-      - pmoves_api
-      - pmoves_data
-      - pmoves_monitoring
-      - pmoves_external
+    - pmoves_bus
+    - pmoves_api
+    - pmoves_data
+    - pmoves_monitoring
+    - pmoves_external
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8111/healthz"]
       interval: 30s
