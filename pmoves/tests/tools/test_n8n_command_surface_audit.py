@@ -91,16 +91,16 @@ _ENV_DEFAULT_RE = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*:-([^}]*)\}")
 #: A service key: two-space indent, at the top of a service block.
 _SERVICE_KEY_RE = re.compile(r"^  ([A-Za-z0-9][A-Za-z0-9_.-]*):[ \t]*(?:#.*)?$", re.M)
 
+#: A top-level compose section: `services:`, `networks:`, `volumes:`, ...
+#: The indent is what separates a service key from a NETWORK or a VOLUME
+#: name, because both take the same `key:` shape.
+_TOP_LEVEL_SECTION_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9_.-]*):[ \t]*(?:#.*)?$", re.M
+)
+
 #: ``docker exec`` with any number of flags before the container name.
 _DOCKER_EXEC_RE = re.compile(
     r"docker\s+exec\s+(?:-{1,2}[^\s]+[ \t]+)*(?P<container>[A-Za-z0-9][A-Za-z0-9_.-]*)"
-)
-
-#: ``docker exec <container> python ...`` -- a python invocation inside a
-#: container.
-_DOCKER_EXEC_PYTHON_RE = re.compile(
-    r"docker\s+exec\s+(?:-{1,2}[^\s]+[ \t]+)*[A-Za-z0-9][A-Za-z0-9_.-]*[ \t]+[^\n]*?"
-    r"\bpython3?\b"
 )
 
 _FROM_IMPORT_RE = re.compile(r"^[ \t]*from[ \t]+(?P<mod>[A-Za-z_][A-Za-z0-9_.]*)[ \t]+import\b", re.M)
@@ -185,6 +185,33 @@ def _declared_container_names() -> set[str]:
     return names
 
 
+def _compose_service_keys(text: str) -> list[str]:
+    """The service keys of a compose file -- the keys under ``services:``.
+
+    SECTION CONTEXT MATTERS. A two-space-indented ``key:`` is a SERVICE only
+    under ``services:``. The same shape under ``networks:`` or ``volumes:``
+    names a NETWORK or a VOLUME, and ``docker exec pmoves-pmoves_api-1`` does
+    not name a container. An allow-list that cannot tell the two apart
+    believes the building's plumbing is a guest.
+
+    So the scan tracks which top-level section it is inside, and a key counts
+    only under ``services:``.
+    """
+    keys: list[str] = []
+    section = ""
+    for line in text.splitlines():
+        top = _TOP_LEVEL_SECTION_RE.match(line)
+        if top:
+            section = top.group("name")
+            continue
+        if section != "services":
+            continue
+        match = _SERVICE_KEY_RE.match(line)
+        if match:
+            keys.append(match.group(1))
+    return keys
+
+
 def _compose_default_container_names() -> set[str]:
     """Compose's DEFAULT container names for services that declare no
     ``container_name:``.
@@ -194,10 +221,13 @@ def _compose_default_container_names() -> set[str]:
     (pmoves/docker-compose.agents.yml:275) -- so a ``docker exec`` naming such
     a container is legitimate and must not be reported. The project name is
     ``pmoves``, the repository's compose directory.
+
+    Only keys that live under ``services:`` are services -- see
+    ``_compose_service_keys`` for why the section context is tracked.
     """
     names: set[str] = set()
     for path in _walk_compose_files():
-        for service in _SERVICE_KEY_RE.findall(_read(path)):
+        for service in _compose_service_keys(_read(path)):
             names.add(f"pmoves-{service}-1")
             names.add(f"pmoves-{service}")
     return names
