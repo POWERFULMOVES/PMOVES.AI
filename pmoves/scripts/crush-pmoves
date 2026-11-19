@@ -120,6 +120,22 @@ echo "[crush-pmoves] ${PM_CARRY_LINE}" >&2
   fi
 } >> "$IDENTITY_FILE"
 
+# COMPOSE SHADOWING WARNING — same delivery path as identity: this file IS the
+# session's context. The 2026-10-13 NATS stale-credential incident class: this
+# launcher exports NATS_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SERVICE_KEY
+# for the MCP roster, and docker compose gives the PROCESS ENV precedence over
+# --env-file. In any long-lived session where env files changed since launch,
+# run compose/make with:
+#   env -u NATS_URL -u SUPABASE_SERVICE_ROLE_KEY -u SUPABASE_SERVICE_KEY make -C pmoves <target>
+{
+  echo ""
+  echo "**COMPOSE ENV SHADOWING.** This session's exported NATS_URL /"
+  echo "SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SERVICE_KEY override env-files in"
+  echo "every compose interpolation (process env beats --env-file). If env files"
+  echo "changed after this session launched, prefix compose/make commands with:"
+  echo "\`env -u NATS_URL -u SUPABASE_SERVICE_ROLE_KEY -u SUPABASE_SERVICE_KEY\`."
+} >> "$IDENTITY_FILE"
+
 echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
 make -C "$REPO_ROOT/pmoves" crush-bootstrap
 
