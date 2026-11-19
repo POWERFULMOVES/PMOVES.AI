@@ -68,7 +68,9 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 **Provenance rule applied here:** every claim below cites the file and line it
 came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `36b28d0f` — #3152;
 `auth.ts` was unchanged across those; then `a0ee2314` — #3189, fork PR #28, which DID change
-`auth.ts`, so the `auth.ts` line numbers below were re-resolved at `a0ee2314`)
+`auth.ts`, so the `auth.ts` line numbers below were re-resolved at `a0ee2314`;
+and then at `3491aec89` (2026-11-19, fork PR #33, `CIPHER_AUTH_REQUIRED`),
+which changed `auth.ts` again, so the numbers below were re-resolved once more)
 or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
 reasoning from THIS runbook, which was itself stale. A runbook with no provenance
@@ -168,16 +170,17 @@ Remedy is a mint through the pipeline, per agent, not a transport change.
 `agent_id` this session's memory writes will actually be filed under. Reads no
 secret, sends nothing over the network, exits `0` only when the carry is intact.
 
-Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`a0ee2314`** (the gitlink on
-`main` since #3189; re-resolved from `975e02e6`), `resolveToken()`:
+Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`3491aec89`** (the gitlink on
+`main` since the 2026-11-19 promotion; re-resolved from `a0ee2314`/`cd426d505`),
+`resolveToken()`:
 
 | line | condition | resulting `agentId` |
 |---|---|---|
-| `:95` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:98` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
-| `:104`–`:105` per-agent mode | bearer is `cipher_<uuid>` | `:150`–`:155` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row (a malformed tail is rejected at `:112` before any lookup; a failed lookup is 503, not a verdict) |
-| `:191`–`:193` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
+| `:114` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:117` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
+| `:123`–`:124` per-agent mode | bearer is `cipher_<uuid>` | `:169`–`:174` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row (a malformed tail is rejected at `:131` before any lookup; a failed lookup is 503, not a verdict) |
+| `:215`–`:222` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
 
-`auth.ts:93` labels the first row "legacy / bootstrap". It is the single-token
+`auth.ts:112` labels the first row "legacy / bootstrap". It is the single-token
 launch path, whose purpose is to hand off to a minted agent — and the handoff is
 that seven-character prefix. **Nothing in this repo checked it.**
 
@@ -215,6 +218,7 @@ still had to be fixed by hand.
 | 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
 | 6 | `a0ee2314` | #3189 pinned fork PR #28 (lookup failure is 503, not revocation; `UUID_RE`; empty `agent_id` fails closed), squash-merged on `PMOVES.AI-Edition-Hardened` (tree identical to reviewed head `151a6bfb`; descends from `36b28d0f`). It **rewrites `resolveToken()`**, so every citation moved: `:44`→`:93`, `:46`→`:95`, `:49`→`:98`, `:54`→`:104`, `:60`→`:105`, `:82`→`:150`, `:84`→`:155`, `:106`→`:191`, `:108`→`:193`. The first bump in this table that actually moved `auth.ts`; the test caught it in CI. |
 | 5 | `36b28d0f` | #3152 pinned fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`), merged as merge commit `36b28d0f` on `PMOVES.AI-Edition-Hardened` (second parent = reviewed head `750878ab`, identical tree). It changes `mcp-sse.ts`/`rest-server.ts`/`app.ts`, not `auth.ts`; all nine citations unchanged. |
+| 7 | `3491aec89` | The 2026-11-19 submodule promotion (fork PR #33, `CIPHER_AUTH_REQUIRED`: a bearer-less request is refused when that knob is set, and dev mode is announced once on stderr) **changes `auth.ts`** (+31/-2), so every citation moved: `:93`→`:112`, `:95`→`:114`, `:98`→`:117`, `:104`→`:123`, `:105`→`:124`, `:150`→`:169`, `:155`→`:174`, `:191`→`:215`, `:193`→`:222`; the `pmoves-auth` write sites moved `:117`→`:136`, `:137`→`:156`, `:145`→`:164`, `:160`→`:179`, `:170`→`:189`, and a **sixth** site was **added** at `:219` (the dev-mode announcement), so `AUTH_EMIT_SITES` grew by one. The test caught it in CI on the promotion PR. |
 
 Re-numbering by hand on each pin bump is not a fix; it is the same manual step
 failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`
