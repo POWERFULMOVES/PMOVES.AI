@@ -9,25 +9,31 @@ List and search n8n workflows.
 ## Instructions
 
 1. Check n8n health at http://localhost:5678
-2. List workflows via n8n API or MCP tool
+2. List workflows via the n8n Public REST API
 3. If search term provided, filter by name/tags
 
+The n8n Public REST API is the live surface here. It is reached from the host at
+`http://localhost:5678/api/v1` with the `X-N8N-API-KEY` header, and a list
+response is `{"data": [...], "nextCursor": null}` — pass `nextCursor` back as
+`?cursor=` to page, and count with `jq '.data | length'`.
+
 ```bash
+# Health
+curl -sf http://localhost:5678/healthz
+
 # List all workflows
 curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
   http://localhost:5678/api/v1/workflows | jq '.data[] | {id, name, active}'
 
-# Or via n8n MCP tool
-docker exec pmoves-n8n-agent-1 python3 -c "
-import asyncio
-from app_n8n_agent import N8nClient
-async def main():
-    client = N8nClient('http://n8n:5678/api/v1', '$N8N_API_KEY')
-    workflows = await client.list_workflows()
-    for wf in workflows[:10]:
-        print(f'{wf[\"id\"]}: {wf[\"name\"]} (active={wf.get(\"active\", False)})')
-asyncio.run(main())
-"
+# Filter server-side by exact name
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  "http://localhost:5678/api/v1/workflows?name=$ARGUMENTS" | jq '.data[] | {id, name, active}'
+
+# Filter by tag (comma-separated), or by active state
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  "http://localhost:5678/api/v1/workflows?tags=production" | jq '.data[] | {id, name, active}'
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  "http://localhost:5678/api/v1/workflows?active=true" | jq '.data[] | {id, name, active}'
 ```
 
 Report:
