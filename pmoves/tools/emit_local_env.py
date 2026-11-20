@@ -40,6 +40,29 @@ from pmoves.tools._secrets_common import (  # noqa: E402
     local_env_path as _default_local_env,
     validate_secret_value,
 )
+# One definition of "this value is a PEM block": the env.shared repair tool's.
+from pmoves.tools.fix_env_shared_multiline import PEM_START_MARKERS  # noqa: E402
+
+
+def collapse_pem(value: str) -> str:
+    """Return a PEM-armoured value as ONE line with literal ``\\n`` escapes.
+
+    Repo convention for PEM secrets in line-based env files (see
+    ``fix_env_shared_multiline.py``; ``gh_app_token._load_private_key``
+    unescapes it). Without this, a bundle PEM with real newlines (GH_APP_SEC,
+    1674 chars, measured on B850) fails the newline rule and never reaches
+    local.env, so ``secrets-local-hydrate KEYS=GH_APP_SEC`` has nothing to
+    hydrate. Only values that start with a PEM BEGIN marker AND contain an
+    END marker are collapsed; any other multi-line value is returned
+    unchanged and still rejected by ``validate_secret_value``.
+    """
+    if (
+        ("\n" in value or "\r" in value)
+        and value.startswith(PEM_START_MARKERS)
+        and "-----END" in value
+    ):
+        return value.replace("\r\n", "\n").replace("\n", "\\n")
+    return value
 
 
 def _masked(value: str) -> str:
@@ -75,9 +98,11 @@ def _reportable_name(name: str) -> str:
 def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[str]]:
     """Filter a decoded secret map to values safe for a line-based env file.
 
-    Drops: placeholder/empty values (never overlay a blank over a real key),
-    invalid env keys, and values that fail ``validate_secret_value`` (multi-line
-    PEM/SSH keys, base64-concat corruption).
+    PEM blocks are first collapsed to one line with literal ``\\n``
+    (``collapse_pem``). Drops: placeholder/empty values (never overlay a blank
+    over a real key), invalid env keys, and values that fail
+    ``validate_secret_value`` (non-PEM multi-line values, base64-concat
+    corruption).
     """
     emit: Dict[str, str] = {}
     skipped: List[str] = []
@@ -94,6 +119,7 @@ def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[s
         if is_placeholder(value):
             skipped.append(key)
             continue
+        value = collapse_pem(value)
         ok, _ = validate_secret_value(key, value)
         if not ok:
             skipped.append(key)

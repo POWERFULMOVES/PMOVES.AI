@@ -109,14 +109,55 @@ def test_is_placeholder_here_suffix_rule(value, expected):
     assert is_placeholder(value) is expected
 
 
-def test_emit_skips_multiline_values(tmp_path):
-    bundle = _make_bundle(tmp_path, {"GOOD": "flatvalue", "HOSTINGER_SSH_PRIVATE_KEY": PEM})
+def test_emit_skips_non_pem_multiline_values(tmp_path):
+    bundle = _make_bundle(tmp_path, {"GOOD": "flatvalue", "NOTES": "line one\nline two"})
     local_env = tmp_path / "local.env"
 
     emitted = emit_local_env.emit(bundle, local_env)
 
     assert emitted == {"GOOD": "flatvalue"}
-    assert "HOSTINGER_SSH_PRIVATE_KEY" not in parse_env_file(local_env)
+    assert "NOTES" not in parse_env_file(local_env)
+
+
+def test_emit_collapses_pem_to_one_line(tmp_path):
+    # The OPENSSH fixture is PEM-armoured, so it is emitted single-line now.
+    bundle = _make_bundle(tmp_path, {"GOOD": "flatvalue", "HOSTINGER_SSH_PRIVATE_KEY": PEM})
+    local_env = tmp_path / "local.env"
+
+    emitted = emit_local_env.emit(bundle, local_env)
+
+    assert emitted["HOSTINGER_SSH_PRIVATE_KEY"] == PEM.replace("\n", "\\n")
+    assert parse_env_file(local_env)["HOSTINGER_SSH_PRIVATE_KEY"] == PEM.replace("\n", "\\n")
+
+
+def test_begin_without_end_is_not_collapsed():
+    emit, skipped = emit_local_env.select_emittable({"HALF": "-----BEGIN X-----\nabc"})
+    assert emit == {} and skipped == ["HALF"]
+
+
+def test_gh_app_sec_pem_round_trips_through_gh_app_token_loader(tmp_path, monkeypatch):
+    # Throwaway RSA key generated here; never a real credential.
+    rsa = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.rsa")
+    serialization = pytest.importorskip("cryptography.hazmat.primitives.serialization")
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    ).decode("ascii")
+    assert "\n" in pem.strip()   # real newlines, as measured in the CI bundle
+
+    bundle = _make_bundle(tmp_path, {"GH_APP_SEC": pem})
+    local_env = tmp_path / "secrets" / "local.env"
+    emitted = emit_local_env.emit(bundle, local_env)
+
+    lines = [ln for ln in local_env.read_text(encoding="utf-8").splitlines() if ln.startswith("GH_APP_SEC=")]
+    assert len(lines) == 1 and "\n" not in emitted["GH_APP_SEC"]
+    stored = parse_env_file(local_env)["GH_APP_SEC"]
+
+    from pmoves.tools import gh_app_token
+    monkeypatch.setenv("GH_APP_SEC", stored)
+    assert gh_app_token._load_private_key() == pem
 
 
 def test_emit_replaces_dropping_stale_keys(tmp_path):
