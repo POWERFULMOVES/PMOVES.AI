@@ -37,6 +37,18 @@ THE INVARIANTS
   4. The initialisation is depth-bounded, with a full-history fallback for a
      pin that is not the branch tip (a promotion lane pins arbitrary
      commits, and a shallow clone cannot fetch an unadvertised one).
+  5. The initialisation is NOT ``--recursive``. ``Pmoves-cipher`` carries a
+     NESTED submodule (``packages/byterover-packages``) whose URL is an SSH
+     path to a THIRD-PARTY repo the runner has no key for, and which this
+     job does not need -- MEASURED: with ``--recursive`` the init loop dies
+     with "Failed to clone 'packages/byterover-packages' a second time,
+     aborting".
+  6. The full-history fallback CLEANS the partial module state before it
+     retries. A failed shallow clone leaves ``.git/modules/<path>``
+     half-built; retrying without removing it fails IDENTICALLY -- MEASURED:
+     the first attempt died with "fatal: Needed a single revision" followed
+     by "fatal: Unable to find current revision in submodule path
+     'PMOVES-Wealth'", and the retry produced the same two lines.
 """
 
 from __future__ import annotations
@@ -87,6 +99,24 @@ def _init_step() -> dict:
 
 
 def _init_script() -> str:
+    """The init step's script, with COMMENT-ONLY lines removed.
+
+    The prose around this step explains WHY the init is non-recursive, and
+    that prose contains the word ``--recursive`` ("NOT --recursive"). A
+    substring assertion over the raw text therefore fails on the very
+    comment that documents the invariant -- which is why the assertions
+    below read the CODE, not the script text. Comment lines are the only
+    thing removed; nothing else about the script is rewritten.
+    """
+    raw = str(_init_step().get("run") or "")
+    code = [
+        line for line in raw.splitlines() if not line.lstrip().startswith("#")
+    ]
+    return "\n".join(code)
+
+
+def _init_script_raw() -> str:
+    """The init step's script verbatim, comments included."""
     return str(_init_step().get("run") or "")
 
 
@@ -135,4 +165,69 @@ def test_the_submodule_init_is_depth_bounded_with_a_full_history_fallback() -> N
         "the initialisation has no full-history fallback -- a promotion lane "
         "pins arbitrary commits, and a shallow clone cannot fetch an "
         "unadvertised one"
+    )
+
+
+def test_the_submodule_init_is_not_recursive() -> None:
+    """``--recursive`` drags in a nested third-party submodule we cannot fetch.
+
+    ``Pmoves-cipher`` pins ``packages/byterover-packages``, whose URL is
+    ``git@github.com:campfirein/byterover-packages.git`` -- an SSH path to a
+    THIRD-PARTY repository the self-hosted runner has no key for. The job
+    verifies the changed submodule's OWN tree and then runs the SUPERPROJECT's
+    ``make smoke test``; the nested package is never read.
+
+    MEASURED locally against a faithful superproject carrying the 13 real
+    pins: with ``--recursive``, the init loop aborts at ``Pmoves-cipher``
+    with "Failed to clone 'packages/byterover-packages' a second time,
+    aborting"; without it, 12 of 13 submodules initialise and the 13th
+    succeeds on the full-history fallback.
+    """
+    script = _init_script()
+    assert "--recursive" not in script, (
+        "the initialisation step uses `--recursive`, which pulls in nested "
+        "third-party submodules (Pmoves-cipher -> packages/byterover-packages, "
+        "an SSH URL to a third-party repo the runner has no key for) and "
+        "aborts the whole init loop"
+    )
+
+
+def test_the_full_history_fallback_cleans_the_partial_module_state() -> None:
+    """The retry must not inherit the failed shallow clone's half-built state.
+
+    A failed ``git submodule update --init --depth 1`` leaves
+    ``.git/modules/<path>`` populated. Retrying the full-history fetch
+    without removing it produces the SAME failure -- MEASURED on
+    ``PMOVES-Wealth``: "fatal: Needed a single revision" then "fatal: Unable
+    to find current revision in submodule path 'PMOVES-Wealth'", on the
+    first attempt and again on the retry.
+
+    So the fallback must deinitialise the module and remove its module
+    directory BEFORE retrying, and the cleanup must come BEFORE the retry --
+    a cleanup that runs afterwards is a cleanup that never runs.
+    """
+    script = _init_script()
+    deinit = "git submodule deinit -f"
+    purge = 'rm -rf ".git/modules/'
+    retry = "git submodule update --init --force"
+
+    assert deinit in script, (
+        "the full-history fallback does not deinitialise the failed module -- "
+        "the retry inherits the partial state and fails identically"
+    )
+    assert purge in script, (
+        "the full-history fallback does not remove the half-built module "
+        "directory under .git/modules -- the retry inherits the partial "
+        "state and fails identically"
+    )
+    assert retry in script, (
+        "the full-history fallback does not retry the submodule update"
+    )
+    assert script.index(deinit) < script.index(retry), (
+        "the partial-state cleanup runs AFTER the retry -- a cleanup that "
+        "runs afterwards is a cleanup that never runs"
+    )
+    assert script.index(purge) < script.index(retry), (
+        "the .git/modules cleanup runs AFTER the retry -- a cleanup that runs "
+        "afterwards is a cleanup that never runs"
     )

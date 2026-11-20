@@ -30,7 +30,11 @@ THE MUTATIONS
       the base-commit diff in step 2;
   M4  the initialisation loses its depth bound (full history for everything);
   M5  the full-history fallback is removed, so a pin that is not the branch
-      tip can never be fetched.
+      tip can never be fetched;
+  M6  the initialisation goes ``--recursive``, pulling in the nested
+      third-party submodule the runner has no key for;
+  M7  the full-history fallback retries WITHOUT cleaning the partial module
+      state, which is the failure mode the fallback was written to fix.
 
 Run it directly to see the mutation kills in action:
 
@@ -55,12 +59,16 @@ NO_RECURSIVE_TEST = "test_the_smoke_job_does_not_check_out_every_submodule_recur
 ONLY_CHANGED_TEST = "test_the_smoke_job_initialises_only_the_changed_submodules"
 FULL_HISTORY_TEST = "test_the_superproject_checkout_keeps_full_history_for_the_base_diff"
 DEPTH_BOUNDED_TEST = "test_the_submodule_init_is_depth_bounded_with_a_full_history_fallback"
+NON_RECURSIVE_INIT_TEST = "test_the_submodule_init_is_not_recursive"
+CLEANUP_TEST = "test_the_full_history_fallback_cleans_the_partial_module_state"
 
 ALL_TARGETS = [
     f"{RATCHET}::{NO_RECURSIVE_TEST}",
     f"{RATCHET}::{ONLY_CHANGED_TEST}",
     f"{RATCHET}::{FULL_HISTORY_TEST}",
     f"{RATCHET}::{DEPTH_BOUNDED_TEST}",
+    f"{RATCHET}::{NON_RECURSIVE_INIT_TEST}",
+    f"{RATCHET}::{CLEANUP_TEST}",
 ]
 
 
@@ -130,12 +138,32 @@ def _mutate_no_fallback(text: str) -> str:
     return text.replace("--force", "--no-checkout")
 
 
+def _mutate_recursive_init(text: str) -> str:
+    """M6: the initialisation goes recursive, dragging in nested submodules."""
+    anchor = 'git submodule update --init --depth 1 "$sub"'
+    assert anchor in text, "mutation anchor not found"
+    return text.replace(
+        anchor, 'git submodule update --init --recursive --depth 1 "$sub"'
+    )
+
+
+def _mutate_no_cleanup(text: str) -> str:
+    """M7: the fallback retries without cleaning the partial module state."""
+    deinit = '              git submodule deinit -f "$sub" 2>/dev/null || true\n'
+    purge = '              rm -rf ".git/modules/$sub"\n'
+    assert deinit in text, "mutation anchor not found (deinit)"
+    assert purge in text, "mutation anchor not found (purge)"
+    return text.replace(deinit, "").replace(purge, "")
+
+
 MUTATIONS = [
     ("M1_recursive_checkout", _mutate_recursive, NO_RECURSIVE_TEST),
     ("M2_no_changed_list", _mutate_no_changed_list, ONLY_CHANGED_TEST),
     ("M3_shallow_superproject", _mutate_shallow_superproject, FULL_HISTORY_TEST),
     ("M4_no_depth_bound", _mutate_no_depth_bound, DEPTH_BOUNDED_TEST),
     ("M5_no_fallback", _mutate_no_fallback, DEPTH_BOUNDED_TEST),
+    ("M6_recursive_init", _mutate_recursive_init, NON_RECURSIVE_INIT_TEST),
+    ("M7_no_partial_state_cleanup", _mutate_no_cleanup, CLEANUP_TEST),
 ]
 
 

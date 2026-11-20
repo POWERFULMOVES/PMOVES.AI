@@ -138,20 +138,39 @@ jobs:
 
           # Only the CHANGED submodules are initialised, and shallowly.
           #
+          # NOT --recursive. Pmoves-cipher carries a NESTED submodule
+          # (packages/byterover-packages) whose URL is an SSH path to a
+          # THIRD-PARTY repo -- git@github.com:campfirein/byterover-packages.git
+          # -- which the runner has no key for, and which this job does not
+          # need: the steps below verify the changed submodule's OWN tree and
+          # then run the SUPERPROJECT's `make smoke test`. MEASURED locally
+          # against a faithful superproject: with --recursive, Pmoves-cipher
+          # fails with "Failed to clone 'packages/byterover-packages' a
+          # second time, aborting" and the whole init loop dies.
+          #
           # Shallow first is safe only when the pinned commit is still the tip
           # of the submodule's branch -- a shallow clone fetches the tip, and
-          # `git submodule update` then refuses an unadvertised (older) pin.
-          # A promotion lane pins arbitrary commits, so a shallow fetch CAN
-          # legitimately fail with "not our ref". That one submodule falls
-          # back to full history; the other twelve stay shallow. A blanket
-          # fallback would pay full history for all of them because of one.
+          # `git submodule update` then cannot resolve an older pin. A
+          # promotion lane pins arbitrary commits, so a shallow fetch CAN
+          # legitimately fail. That one submodule falls back to full history;
+          # the others stay shallow. A blanket fallback would pay full
+          # history for all of them because of one.
+          #
+          # The fallback CLEANS the partial module state first. A failed
+          # shallow clone leaves .git/modules/<path> half-built, and retrying
+          # without removing it fails IDENTICALLY -- MEASURED: the first
+          # attempt died with "fatal: Needed a single revision" followed by
+          # "fatal: Unable to find current revision in submodule path
+          # 'PMOVES-Wealth'", and the retry produced the same two lines.
           IFS=',' read -ra subs <<< "${{ steps.changed.outputs.submodules }}"
           echo "Initializing ${#subs[@]} changed submodule(s), shallow first:"
           for sub in "${subs[@]}"; do
             echo "  $sub"
-            if ! git submodule update --init --recursive --depth 1 "$sub"; then
-              echo "    shallow init failed (pin is not the branch tip) -- full history for $sub"
-              git submodule update --init --recursive --force "$sub"
+            if ! git submodule update --init --depth 1 "$sub"; then
+              echo "    shallow init failed -- cleaning partial state, retrying with full history"
+              git submodule deinit -f "$sub" 2>/dev/null || true
+              rm -rf ".git/modules/$sub"
+              git submodule update --init --force "$sub"
             fi
           done
 
