@@ -1,6 +1,7 @@
 # MCP wiring audit — Step 1 inventory (4090 → SPARK)
 
 **Date:** 2026-08-09
+**Updated:** 2026-11-19 — the `n8n-agent` row and the n8n-lane blocker in the ranked list were re-measured and refreshed; both were stale open-blocker notes for a defect that is now closed. Everything else below is the original 2026-08-09 pass, unchanged.
 **From:** 4090-claude (field)
 **For:** `MCP_WIRING_AUDIT_SPARK_2026-08-09.md` — this is that handoff's Step 1, done so SPARK starts from a matrix with blockers named rather than a blank page.
 **Not a claim.** SPARK still CLAIMs the audit lane; this is input to it.
@@ -62,7 +63,7 @@ It is still absent from every registration surface, so it is **live but unregist
 | `PMOVES-Pipecat` `MCPClient` | consumer-side | n/a | n/a | **unused** — zero hits in `flute_pipecat/` |
 | DoX nested forks (×3) | unknown | unknown | absent | **parked** — subtree has no compose reference; needs an architecture decision first |
 | `PMOVES-BotZ-gateway` (.NET) | n/a | n/a | absent | Microsoft's MCP Gateway product vendored whole. **Not** `pmoves/services/botz-gateway`. Inventory only |
-| `n8n-agent` (`config/mcp/n8n-agent.yaml`) | stdio via `docker exec` | `N8N_API_KEY` | config exists | **describes a container that does not exist** in any compose file |
+| `n8n-agent` (`config/mcp/n8n-agent.yaml`) | stdio via `docker exec` — **retired** | `N8N_API_KEY` | config exists, entry kept visible | **UPDATED 2026-11-19 — marked dead, NOT deleted.** Measured: (a) no compose file defines an `n8n-agent` service, and (b) `app_n8n_agent` is absent from the n8n image (`FROM n8nio/n8n:2.1.0`), so repointing the entry at `pmoves-n8n` would only move the failure to `ModuleNotFoundError`. The entry keeps `id: n8n-agent` (the gateway-agent tool catalogue references that id) and now reports itself failed through `health_check.command`; the `/n8n` slash commands run on the n8n Public REST API instead. |
 
 ---
 
@@ -95,7 +96,7 @@ Any rebuilt TAC or wiring doc should disambiguate these explicitly.
 3. **`PMOVES-jcodemunch-mcp`** — `uvx jcodemunch-mcp` + one entry. No secrets. Confirm first whether the fork exists for a hardening reason or whether upstream suffices.
 4. **`pmoves-e2b-mcp-server`** — one secrets-funnel entry (`E2B_API_KEY`) + one stdio entry.
 5. **`flute-gateway` bridge** — already live and authed; just needs registering. Low risk now that the auth landed.
-6. **n8n lane** — **two independent blockers**: `make -C pmoves n8n-bootstrap` is operator-gated on an owner password reset, *and* `n8n-agent.yaml`'s container does not exist in compose. Neither is SPARK's to clear alone.
+6. **n8n lane** — **one blocker left**: `make -C pmoves n8n-bootstrap` is operator-gated on an owner password reset. The second blocker recorded here on 2026-08-09 — *"`n8n-agent.yaml`'s container does not exist in compose"* — **was cleared on 2026-11-19**: the entry is now marked dead with the measured reason and the exact re-enable steps, the MCP roster is unchanged (`id: n8n-agent` is kept because the gateway-agent tool catalogue references that id), and the `/n8n` slash commands run on the n8n Public REST API, which is live. Re-enabling the stdio server is a separate lane — it needs a compose service built from `PMOVES-BoTZ/features/n8n/Dockerfile`, because `app_n8n_agent.py` exists only there and not in the n8n image.
 7. **DoX subtree + `PMOVES-BotZ-gateway`** — architecture decision before any wiring effort.
 
 Items 1–3 are a single sitting and need nothing from the operator.

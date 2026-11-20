@@ -1194,7 +1194,7 @@ PRE_FIX_BACKEND_FAILURE_LOGS = [
     "pmoves-auth: Supabase token lookup returned 401",
     "pmoves-auth: token resolution failed — TimeoutError: The operation was aborted due to timeout",
 ]
-# Pin a0ee2314 (auth.ts:117/:137/:145/:160/:170), with `${reason}` resolved as
+# Pin 3491aec89 (auth.ts:136/:156/:164/:179/:189), with `${reason}` resolved as
 # the code builds it. test_auth_citations_resolve.py derives these from the
 # pinned SOURCE and checks the same grep against it; this list keeps the
 # printed-command tests readable without a populated submodule.

@@ -2,7 +2,7 @@
 
 **Always-on context for Claude Code CLI (and any coding agent) working in the PMOVES.AI repository.**
 
-> **Read [`BOOTSTRAP.md`](./BOOTSTRAP.md) first. It's the flat foundation (≤5k chars).** This file is scaffolding around that.
+> **Read [`BOOTSTRAP.md`](./BOOTSTRAP.md) first. It's the flat foundation (≤18k chars — measured 15,835 on 2026-11-19, and gated).** This file is scaffolding around that.
 
 ## Architecture Overview
 
@@ -31,7 +31,7 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 ## Context Loading Priority (For ALL Agents)
 
 **Tier 1 — Always Load (Critical System Context):**
-- `.claude/BOOTSTRAP.md` (flat, ≤5k chars)
+- `.claude/BOOTSTRAP.md` (flat, ≤18k chars — gated by `pmoves/tests/tools/test_bootstrap_windows_host_quirks_ratchet.py`, which reads this budget from this file)
 - `.claude/CLAUDE.md` (this file)
 - `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation)
 
