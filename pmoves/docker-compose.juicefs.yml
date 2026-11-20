@@ -81,18 +81,23 @@ services:
     command:
     # Per-host bounded cache on the /data volume: the gateway must never inherit the
     # JuiceFS 100 GiB default (fills a small disk) nor self-disable caching on a
-    # near-full one. Canonical logic lives in scripts/juicefs-cache-bounds.sh; it is
-    # mirrored compactly here because compose renders on the host while this cache
-    # lives inside the container, so the measurement has to run at container start.
+    # near-full one. Runs the CANONICAL helper, bind-mounted read-only, instead of
+    # mirroring its df logic here — the mirror had already drifted into a third copy
+    # of the same fixed-column df bug (it read $4/$2, which are the wrong columns the
+    # moment a Filesystem name contains a space, silently sizing cache off USED space).
+    # Compose renders on the host while this cache lives on the container's /data
+    # volume, so the measurement still has to run at container start; the image can
+    # run the helper unmodified — juicedata/mount:ce-v1.3.0 ships /bin/bash and
+    # /usr/bin/awk. The helper creates its own cache dir, so no mkdir here.
     # Single quotes around the DSN protect the '&' from shell interpretation.
     - |
       set -e
-      D=/data; [ -d "$$D" ] || D=/; D=$${D%/}
-      eval "$$(df -Pk "$$D" | awk 'NR==2{a=$$4;t=$$2;c=int(a/1024*0.5);if(c>102400)c=102400;if(c<512)c=512;r=(t>0?a/t*0.5:0.1);if(r>0.1)r=0.1;if(r<0.01)r=0.01;printf "CS=%d FSR=%.3f",c,r}')"
-      mkdir -p "$$D/jfsCache"
-      echo "[juicefs-gateway] bounded cache: --cache-dir $$D/jfsCache --cache-size $${CS}MiB --free-space-ratio $$FSR"
-      exec juicefs gateway --multi-buckets --keep-etag --cache-dir "$$D/jfsCache" --cache-size "$$CS" --free-space-ratio "$$FSR" '${JUICEFS_META_URL:-postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
+      JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data/jfsCache bash /usr/local/bin/juicefs-cache-bounds.sh)"
+      test -n "$$JFS_CACHE_FLAGS" || { echo 'ERROR: empty cache bounds - refusing unbounded gateway'; exit 1; }
+      echo "[juicefs-gateway] bounded cache: $$JFS_CACHE_FLAGS"
+      exec juicefs gateway --multi-buckets --keep-etag $$JFS_CACHE_FLAGS '${JUICEFS_META_URL:-postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
     volumes:
+    - ./scripts/juicefs-cache-bounds.sh:/usr/local/bin/juicefs-cache-bounds.sh:ro
     - juicefs-data:/data
     networks:
     - pmoves_data
