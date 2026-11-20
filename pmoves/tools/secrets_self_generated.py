@@ -76,6 +76,13 @@ _SUPABASE_JWT_KEYS: dict[str, str] = {
     "SUPABASE_SERVICE_KEY": "service_role",
     "SUPABASE_SERVICE_ROLE_KEY": "service_role",
     "SERVICE_ROLE_KEY": "service_role",
+    # SUPABASE_KEY is the service-role alias read directly by
+    # services/common/supabase.py, flute-gateway persona_selector.py and
+    # docker-compose.cache.yml. It used to arrive from GitHub Prod; since the
+    # 2026-11-20 node-sovereign decision (#3498) only this minter supplies it,
+    # so without this row a fresh node would get no SUPABASE_KEY at all. Not a
+    # donor in _ROLE_DONOR_ORDER: it only ever RECEIVES the role key.
+    "SUPABASE_KEY": "service_role",
 }
 
 # One role, one key. When a label of a role is stale or absent, it ADOPTS a
