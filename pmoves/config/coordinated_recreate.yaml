@@ -1,0 +1,34 @@
+# Roads and probes for `make secret-rotate-coordinated` (tools/coordinated_rotate.py).
+#
+# This is NOT a consumer list. Consumers are discovered from the rendered compose
+# and live probes. This file only says HOW to recreate a service once it has been
+# discovered, and how to prove a given secret is working again.
+
+roads:
+  # Per-stack default road. {service} is the discovered compose service.
+  # A stack with no default and no override is refused at preflight ("no-road").
+  default:
+    main: "recreate-svc SVC={service}"
+  # Services whose sanctioned recreate is NOT recreate-svc. Members of one entry are
+  # recreated in ONE call, at the position of the earliest member in dependency order.
+  overrides:
+    - stack: main
+      services: [agent-zero, archon]
+      # Offline recreate from local images (--pull never), label-verified for archon.
+      target: 'up-a0-archon-scoped SERVICES="{services}"'
+    - stack: yt-cookies
+      services: [yt-cookie-writer, yt-cookie-refresher]
+      target: "up-yt-cookies-recreate"
+    - stack: botz
+      services: [mcp-bridge]
+      target: 'up-botz-mcp-bridge ARGS="--force-recreate --no-deps"'
+
+probes:
+  # How to observe consumers and prove the new value works, per rotated key.
+  # Keys without a probe are verified on container health alone.
+  NATS_PASSWORD:
+    kind: nats
+    # The nats service publishes its monitor (container 8222) on loopback 9223.
+    monitor_url: "http://127.0.0.1:9223"
+    port: 4222
+    user_key: NATS_USER

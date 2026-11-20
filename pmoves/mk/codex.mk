@@ -322,8 +322,11 @@ endif
 
 secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make secrets-rotate KEY=NAME [VALUE=v | export PMOVES_ROTATE_VALUE] [LEN=48]
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
-	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
-	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
+	@echo "→ $(if $(filter 1,$(CLEAR)),Clearing,Rotating) $(KEY) in env.shared (surgical, single-line)"
+	@# CLEAR=1 writes KEY= (bootstrap_env --clear): the deliberate EMPTY state some
+	@# keys need (Supabase ships SUPABASE_SECRET_KEY / SUPABASE_PUBLISHABLE_KEY empty).
+	@# It rides this road so a clear gets the same export + funnel + bundle warning.
+	@$(CODEX_PY) scripts/bootstrap_env.py $(if $(filter 1,$(CLEAR)),--clear "$(KEY)",--rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),))
 	@# Rotation is a LEGITIMATE reason to re-export, so force past the CI-bundle
 	@# guard rather than failing the road -- but say plainly what was replaced.
 	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
@@ -376,6 +379,41 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
+
+.PHONY: secret-rotate-coordinated
+secret-rotate-coordinated: ## Rotate ONE secret AND recreate every consumer together; verify; auto-rollback. KEY= [DRY_RUN=0 CONFIRM='ROTATE <KEY> @ <node>'] [ACK_DRIFT=a,b] [INCLUDE=s] [PIN=svc=img,..] [ACK_BUNDLE_LOCAL=1] [JSON=f]
+	@# Plans by default. The plan is the deliverable; execution needs DRY_RUN=0 plus
+	@# the exact CONFIRM string the plan prints. It composes secrets-rotate (mint +
+	@# funnel), recreate-svc and the per-service roads in config/coordinated_recreate.yaml,
+	@# register-note and sign-trail; see tools/coordinated_rotate.py. Consumers are
+	@# DISCOVERED from these three renders, never listed. READ THE JSON for the exit
+	@# code: make collapses 1/3/5 to 2.
+	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secret-rotate-coordinated KEY=<name> [DRY_RUN=0 CONFIRM='ROTATE <KEY> @ <node>']))
+	@$(CODEX_PY) tools/coordinated_rotate.py --key "$(KEY)" \
+	  --stack 'main=$(DC)' --stack 'yt-cookies=$(COOKIES_DC)' --stack 'botz=$(BOTZ_STACK_DC)' \
+	  --chit-bundle "$(CHIT_EXPORT_PATH)" \
+	  $(if $(filter 0,$(DRY_RUN)),--execute --confirm "$(CONFIRM)") \
+	  $(if $(NODE),--node "$(NODE)") $(if $(OWNER),--owner "$(OWNER)") \
+	  $(if $(ACK_DRIFT),--ack-drift "$(ACK_DRIFT)") $(if $(INCLUDE),--include "$(INCLUDE)") \
+	  $(if $(PIN),--pin "$(PIN)") $(if $(filter 1,$(ACK_BUNDLE_LOCAL)),--ack-bundle-local) \
+	  $(if $(JSON),--json "$(JSON)") $(ARGS)
+
+.PHONY: supabase-key-reconcile
+supabase-key-reconcile: ## Converge Supabase key SOURCES onto what the RUNNING Supabase verifies (no JWT rotation). DRY_RUN=0 CONFIRM='RECONCILE SUPABASE KEYS @ <node>' [RECREATE_KONG=1] [JSON=f]
+	@# Idempotent: a reconciled node plans zero changes and exits 0. It never
+	@# changes the live JWT secret (that would log every user out); it re-labels
+	@# the source keys to values the live stack already accepts, via
+	@# secrets-rotate (CLEAR=1 for dead opaque keys) and merge_shared_to_tiers --only.
+	@$(CODEX_PY) tools/supabase_key_reconcile.py --stack 'main=$(DC)' \
+	  $(if $(filter 0,$(DRY_RUN)),--execute --confirm "$(CONFIRM)") \
+	  $(if $(NODE),--node "$(NODE)") $(if $(filter 1,$(RECREATE_KONG)),--recreate-kong) \
+	  $(if $(JSON),--json "$(JSON)") $(ARGS)
+
+CR_COMMA := ,
+.PHONY: env-tiers-sync-keys
+env-tiers-sync-keys: ## Surgically copy named keys from env.shared into the tier files that carry them (KEYS=A,B). Prints masked classes only.
+	$(if $(strip $(KEYS)),,$(error Usage: make -C pmoves env-tiers-sync-keys KEYS=A,B))
+	@$(CODEX_PY) tools/merge_shared_to_tiers.py $(foreach k,$(subst $(CR_COMMA), ,$(KEYS)),--only $(k))
 
 firefly-automint: ## Auto-mint a Firefly III API PAT and land it as FIREFLY_ACCESS_TOKEN via the canonical secrets flow (secrets-rotate). Firefly disables web /register under remote_user_guard, so this provisions the user via the trusted Remote-User header + mints a passport PAT in-container. Usage: make firefly-automint [FIREFLY_ADMIN_EMAIL=pmoves@pmoves.ai] [FIREFLY_CONTAINER=pmoves-firefly]
 	@bash scripts/firefly_automint.sh
