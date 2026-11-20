@@ -44,12 +44,14 @@ def test_validator_accepts_plus_with_padding(value):
 @pytest.mark.parametrize("value", ["line1\nline2", "line1\rline2", "-----BEGIN\nKEY-----"])
 def test_validator_still_rejects_embedded_newlines(value):
     ok, why = sc.validate_secret_value("PEM", value)
-    assert not ok and "newline" in why
+    assert not ok
+    assert why is not None and "newline" in why
 
 
 def test_validator_still_rejects_concatenated_fragments():
     ok, why = sc.validate_secret_value("API_KEY", CONCATENATED)
-    assert not ok and "concatenated" in why
+    assert not ok
+    assert why is not None and "concatenated" in why
 
 
 def test_report_variant_names_dropped_keys_and_never_values(tmp_path, capsys):
