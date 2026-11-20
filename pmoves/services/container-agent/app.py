@@ -50,8 +50,9 @@ CA_TIMEOUT_S = float(os.environ.get("CA_TIMEOUT_S", "2.0"))
 CA_HEARTBEAT_S = int(os.environ.get("CA_HEARTBEAT_S", "30"))
 CA_REQUIRE_UPSTREAM = os.environ.get("CA_REQUIRE_UPSTREAM", "0") == "1"
 
-# Deliberately empty. The previous default embedded a password in source:
-#   nats://nats:pmoves@nats-leaf:4222
+# Deliberately empty. The previous default embedded a user:password pair in
+# source (removed in #3139); do not quote it here either -- the
+# no-hardcoded-NATS-credentials gate scans comments too.
 # Credentials belong in env/secret stores, never in a repository.
 NATS_URL = os.environ.get("NATS_URL", "").strip()
 
