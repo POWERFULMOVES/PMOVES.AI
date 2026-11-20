@@ -10,6 +10,17 @@ import pytest
 import httpx
 from pmoves.tests.utils.service_catalog import ARCHON
 
+# MEASURED on the b850 runner (2026-11-20): Archon 0.10.1 mounts its API
+# under /api. /api/health returns the JSON health document, and
+# /api/openapi.json returns the OpenAPI spec (title "Archon API"). Every
+# OTHER path -- /healthz, /openapi.json, /metrics, / -- is answered by the
+# UI's SPA catch-all with the HTML page (200 text/html), so a JSON probe of
+# one of them raises JSONDecodeError instead of returning a document.
+#
+# The health path comes from the service catalog (the single source of truth
+# for these probes); the OpenAPI path is the API-prefixed sibling of it.
+ARCHON_OPENAPI_PATH = "/api/openapi.json"
+
 
 # ============================================================================
 # FIXTURES
@@ -21,7 +32,7 @@ async def archon_client():
     timeout = httpx.Timeout(10.0, connect=5.0)
     client = httpx.AsyncClient(base_url=f"http://localhost:{ARCHON.port}", timeout=timeout)
     try:
-        resp = await client.get("/healthz")
+        resp = await client.get(ARCHON.health_path)
         if resp.status_code == 404:
             await client.aclose()
             pytest.skip(
@@ -51,7 +62,7 @@ async def archon_client():
 @pytest.mark.asyncio
 async def test_archon_health_endpoint(archon_client: httpx.AsyncClient):
     """Test Archon health endpoint."""
-    response = await archon_client.get("/healthz")
+    response = await archon_client.get(ARCHON.health_path)
 
     assert response.status_code == 200, f"Health check failed: {response.status_code}"
 
@@ -64,7 +75,7 @@ async def test_archon_health_endpoint(archon_client: httpx.AsyncClient):
 @pytest.mark.asyncio
 async def test_archon_supabase_connected(archon_client: httpx.AsyncClient):
     """Test that Archon reports Supabase connection."""
-    response = await archon_client.get("/healthz")
+    response = await archon_client.get(ARCHON.health_path)
 
     assert response.status_code == 200
     data = response.json()
@@ -108,7 +119,7 @@ async def test_archon_api_accessible(archon_client: httpx.AsyncClient):
 @pytest.mark.asyncio
 async def test_archon_openapi_spec(archon_client: httpx.AsyncClient):
     """Test Archon OpenAPI specification."""
-    response = await archon_client.get("/openapi.json")
+    response = await archon_client.get(ARCHON_OPENAPI_PATH)
 
     # May return OpenAPI spec or 404 if not configured
     assert response.status_code in {200, 404}, (
@@ -131,7 +142,7 @@ async def test_archon_responds_within_timeout(archon_client: httpx.AsyncClient):
     import time
 
     start_time = time.time()
-    response = await archon_client.get("/healthz")
+    response = await archon_client.get(ARCHON.health_path)
     duration_ms = (time.time() - start_time) * 1000
 
     assert response.status_code == 200
@@ -142,7 +153,7 @@ async def test_archon_responds_within_timeout(archon_client: httpx.AsyncClient):
 @pytest.mark.asyncio
 async def test_archon_agent_zero_connection(archon_client: httpx.AsyncClient):
     """Test that Archon can reach Agent Zero (via health check)."""
-    response = await archon_client.get("/healthz")
+    response = await archon_client.get(ARCHON.health_path)
 
     assert response.status_code == 200
     data = response.json()
