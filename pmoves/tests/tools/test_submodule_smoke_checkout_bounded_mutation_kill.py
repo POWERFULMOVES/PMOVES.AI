@@ -34,7 +34,12 @@ THE MUTATIONS
   M6  the initialisation goes ``--recursive``, pulling in the nested
       third-party submodule the runner has no key for;
   M7  the full-history fallback retries WITHOUT cleaning the partial module
-      state, which is the failure mode the fallback was written to fix.
+      state, which is the failure mode the fallback was written to fix;
+  M8  the changed-submodule detection goes back to ``git diff --name-only``,
+      which cannot see the submodules ``.gitmodules`` marks ``ignore = all``;
+  M9  the same detection regression, asserted BEHAVIOURALLY: the workflow's
+      own detection script is run against a real superproject carrying a real
+      ``ignore = all`` submodule, and the submodule must be reported.
 
 Run it directly to see the mutation kills in action:
 
@@ -54,6 +59,7 @@ PMOVES_ROOT = REPO_ROOT / "pmoves"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "submodule-smoke.yml"
 
 RATCHET = "tests/tools/test_submodule_smoke_checkout_bounded_ratchet.py"
+BEHAVIOURAL = "tests/tools/test_submodule_smoke_detection_sees_ignored_submodules.py"
 
 NO_RECURSIVE_TEST = "test_the_smoke_job_does_not_check_out_every_submodule_recursively"
 ONLY_CHANGED_TEST = "test_the_smoke_job_initialises_only_the_changed_submodules"
@@ -61,6 +67,8 @@ FULL_HISTORY_TEST = "test_the_superproject_checkout_keeps_full_history_for_the_b
 DEPTH_BOUNDED_TEST = "test_the_submodule_init_is_depth_bounded_with_a_full_history_fallback"
 NON_RECURSIVE_INIT_TEST = "test_the_submodule_init_is_not_recursive"
 CLEANUP_TEST = "test_the_full_history_fallback_cleans_the_partial_module_state"
+TREE_DETECTION_TEST = "test_the_changed_submodule_detection_reads_both_trees_not_the_diff"
+SEES_IGNORED_TEST = "test_the_detection_sees_a_submodule_marked_ignore_all"
 
 ALL_TARGETS = [
     f"{RATCHET}::{NO_RECURSIVE_TEST}",
@@ -69,6 +77,8 @@ ALL_TARGETS = [
     f"{RATCHET}::{DEPTH_BOUNDED_TEST}",
     f"{RATCHET}::{NON_RECURSIVE_INIT_TEST}",
     f"{RATCHET}::{CLEANUP_TEST}",
+    f"{RATCHET}::{TREE_DETECTION_TEST}",
+    f"{BEHAVIOURAL}::{SEES_IGNORED_TEST}",
 ]
 
 
@@ -156,14 +166,46 @@ def _mutate_no_cleanup(text: str) -> str:
     return text.replace(deinit, "").replace(purge, "")
 
 
+def _mutate_diff_detection(text: str) -> str:
+    """M8/M9: the detection goes back to `git diff --name-only`.
+
+    That is the ORIGINAL defect: `git diff` honours the `ignore` setting in
+    `.gitmodules`, and this repo marks PMOVES-OpenRoom and PMOVES-registry
+    `ignore = all` -- so the diff-based detection cannot see them.
+    """
+    old = r"""          base_links=$(mktemp)
+          head_links=$(mktemp)
+          git ls-tree -r "$base_sha" \
+            | awk -F'\t' '{ split($1, f, " "); if (f[2] == "commit") print $2 "\t" f[3] }' \
+            | LC_ALL=C sort > "$base_links"
+          git ls-tree -r "$head_sha" \
+            | awk -F'\t' '{ split($1, f, " "); if (f[2] == "commit") print $2 "\t" f[3] }' \
+            | LC_ALL=C sort > "$head_links"
+          changed_subs=$(LC_ALL=C join -t $'\t' -a1 -a2 -o 0,1.2,2.2 -e '' \
+            "$base_links" "$head_links" \
+            | awk -F'\t' '$3 != "" && $2 != $3 { print $1 }')
+          rm -f "$base_links" "$head_links"
+"""
+    new = """          changed_subs=$(git diff --name-only "$base_sha" "$head_sha" | while read -r path; do
+            if git ls-tree "$head_sha" "$path" 2>/dev/null | grep -q "^160000"; then
+              echo "$path"
+            fi
+          done)
+"""
+    assert old in text, "mutation anchor not found"
+    return text.replace(old, new)
+
+
 MUTATIONS = [
-    ("M1_recursive_checkout", _mutate_recursive, NO_RECURSIVE_TEST),
-    ("M2_no_changed_list", _mutate_no_changed_list, ONLY_CHANGED_TEST),
-    ("M3_shallow_superproject", _mutate_shallow_superproject, FULL_HISTORY_TEST),
-    ("M4_no_depth_bound", _mutate_no_depth_bound, DEPTH_BOUNDED_TEST),
-    ("M5_no_fallback", _mutate_no_fallback, DEPTH_BOUNDED_TEST),
-    ("M6_recursive_init", _mutate_recursive_init, NON_RECURSIVE_INIT_TEST),
-    ("M7_no_partial_state_cleanup", _mutate_no_cleanup, CLEANUP_TEST),
+    ("M1_recursive_checkout", _mutate_recursive, f"{RATCHET}::{NO_RECURSIVE_TEST}"),
+    ("M2_no_changed_list", _mutate_no_changed_list, f"{RATCHET}::{ONLY_CHANGED_TEST}"),
+    ("M3_shallow_superproject", _mutate_shallow_superproject, f"{RATCHET}::{FULL_HISTORY_TEST}"),
+    ("M4_no_depth_bound", _mutate_no_depth_bound, f"{RATCHET}::{DEPTH_BOUNDED_TEST}"),
+    ("M5_no_fallback", _mutate_no_fallback, f"{RATCHET}::{DEPTH_BOUNDED_TEST}"),
+    ("M6_recursive_init", _mutate_recursive_init, f"{RATCHET}::{NON_RECURSIVE_INIT_TEST}"),
+    ("M7_no_partial_state_cleanup", _mutate_no_cleanup, f"{RATCHET}::{CLEANUP_TEST}"),
+    ("M8_diff_detection", _mutate_diff_detection, f"{RATCHET}::{TREE_DETECTION_TEST}"),
+    ("M9_diff_detection_behaviour", _mutate_diff_detection, f"{BEHAVIOURAL}::{SEES_IGNORED_TEST}"),
 ]
 
 
@@ -179,20 +221,19 @@ def test_mutation_kills_are_proven() -> None:
 
     kills: list[str] = []
     try:
-        for name, mutate, named_test in MUTATIONS:
+        for name, mutate, node in MUTATIONS:
             mutated = mutate(original)
             assert mutated != original, f"{name} produced no mutation"
             _write(mutated)
 
-            node = f"{RATCHET}::{named_test}"
             rc, out = _run_pytest([node])
             failed = _failed_tests(out)
-            assert rc != 0, f"{name}: {named_test} still passed on the mutated tree:\n{out}"
-            assert any(named_test in f for f in failed), (
-                f"{name}: expected {named_test} in pytest's failure summary, "
+            assert rc != 0, f"{name}: {node} still passed on the mutated tree:\n{out}"
+            assert any(node in f for f in failed), (
+                f"{name}: expected {node} in pytest's failure summary, "
                 f"got {sorted(failed)}"
             )
-            kills.append(f"{name} -> {named_test}")
+            kills.append(f"{name} -> {node}")
     finally:
         _write(original)
 

@@ -49,6 +49,11 @@ THE INVARIANTS
      the first attempt died with "fatal: Needed a single revision" followed
      by "fatal: Unable to find current revision in submodule path
      'PMOVES-Wealth'", and the retry produced the same two lines.
+  7. The changed-submodule detection reads the two TREES, not the diff.
+     ``git diff`` honours the ``ignore`` setting in ``.gitmodules``, and this
+     repo sets ``ignore = all`` for PMOVES-OpenRoom and PMOVES-registry --
+     MEASURED on PR #3482: the diff listed 11 of the 13 promoted
+     submodules, and the gate reported those 11.
 """
 
 from __future__ import annotations
@@ -98,21 +103,48 @@ def _init_step() -> dict:
     raise AssertionError("the smoke job has no submodule-initialisation step")
 
 
-def _init_script() -> str:
-    """The init step's script, with COMMENT-ONLY lines removed.
+def _detect_step() -> dict:
+    for step in _steps():
+        name = str(step.get("name") or "")
+        if "identify" in name.lower() and "submodule" in name.lower():
+            return step
+    raise AssertionError("the smoke job has no changed-submodule detection step")
 
-    The prose around this step explains WHY the init is non-recursive, and
-    that prose contains the word ``--recursive`` ("NOT --recursive"). A
-    substring assertion over the raw text therefore fails on the very
-    comment that documents the invariant -- which is why the assertions
-    below read the CODE, not the script text. Comment lines are the only
-    thing removed; nothing else about the script is rewritten.
+
+def _detect_script() -> str:
+    """The detection step's script, with COMMENT-ONLY lines removed.
+
+    The step's own comment explains the defect and quotes
+    ``git diff --name-only`` by name; a substring assertion over the raw
+    text would fail on the comment that documents the invariant.
     """
-    raw = str(_init_step().get("run") or "")
+    return _strip_comments(str(_detect_step().get("run") or ""))
+
+
+def _detect_script_raw() -> str:
+    """The detection step's script verbatim, comments included."""
+    return str(_detect_step().get("run") or "")
+
+
+def _strip_comments(script: str) -> str:
+    """Drop comment-only lines.
+
+    The prose around these steps explains WHY each invariant holds, and that
+    prose quotes the very strings the assertions forbid -- "NOT --recursive",
+    "`git diff --name-only`". A substring assertion over the raw text would
+    therefore fail on the comment that documents the invariant. Only
+    comment-only lines are removed; nothing else about the script is
+    rewritten.
+    """
     code = [
-        line for line in raw.splitlines() if not line.lstrip().startswith("#")
+        line for line in script.splitlines() if not line.lstrip().startswith("#")
     ]
     return "\n".join(code)
+
+
+def _init_script() -> str:
+    """The init step's script, with COMMENT-ONLY lines removed."""
+    return _strip_comments(str(_init_step().get("run") or ""))
 
 
 def _init_script_raw() -> str:
@@ -230,4 +262,38 @@ def test_the_full_history_fallback_cleans_the_partial_module_state() -> None:
     assert script.index(purge) < script.index(retry), (
         "the .git/modules cleanup runs AFTER the retry -- a cleanup that runs "
         "afterwards is a cleanup that never runs"
+    )
+
+
+def test_the_changed_submodule_detection_reads_both_trees_not_the_diff() -> None:
+    """The gate must SEE every gitlink the PR changed.
+
+    ``git diff`` honours the ``ignore`` setting in ``.gitmodules``, and this
+    repo sets ``ignore = all`` for PMOVES-OpenRoom and PMOVES-registry.
+    MEASURED on PR #3482: ``git diff --name-only base..head`` listed only
+    ELEVEN of the THIRTEEN promoted submodules -- the two ``ignore = all``
+    paths were invisible -- and the job's own "Post results as PR comment"
+    step reported those eleven. The gate would have verified 11 of its 13
+    inputs and reported success: a FAIL-OPEN gate.
+
+    ``git ls-tree`` is the authoritative read: no ``.gitmodules`` setting and
+    no diff-side configuration can hide a path from it. And a gitlink is
+    "changed" only when its SHA differs BETWEEN THE TWO TREES, so both trees
+    must be read.
+    """
+    script = _detect_script()
+    assert "git diff --name-only" not in script, (
+        "the changed-submodule detection uses `git diff --name-only`, which "
+        "honours the `ignore` setting in .gitmodules -- MEASURED on PR #3482 "
+        "that listed 11 of the 13 promoted submodules and silently skipped "
+        "PMOVES-OpenRoom and PMOVES-registry, which .gitmodules marks "
+        "`ignore = all`"
+    )
+    assert script.count("git ls-tree") >= 2, (
+        "the detection does not read BOTH trees -- a gitlink counts as changed "
+        "only when its SHA differs between base and head, so one tree is not "
+        "enough"
+    )
+    assert '"$base_sha"' in script and '"$head_sha"' in script, (
+        "the detection does not read both the base and the head tree"
     )

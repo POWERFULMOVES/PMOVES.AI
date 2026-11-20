@@ -113,12 +113,38 @@ jobs:
           echo "Base: $base_sha"
           echo "Head: $head_sha"
 
-          # Find changed submodule paths (gitlink changes show as commit type)
-          changed_subs=$(git diff --name-only "$base_sha" "$head_sha" | while read -r path; do
-            if git ls-tree "$head_sha" "$path" 2>/dev/null | grep -q "^160000"; then
-              echo "$path"
-            fi
-          done)
+          # The changed GITLINKS are derived from the two TREES, not from
+          # `git diff --name-only`.
+          #
+          # MEASURED on PR #3482: `git diff --name-only base..head` listed only
+          # ELEVEN of the THIRTEEN promoted submodules. `.gitmodules` sets
+          # `ignore = all` for PMOVES-OpenRoom and PMOVES-registry, and git's
+          # diff honours that setting -- so those two promoted pins were never
+          # verified by this gate at all. The gate read 11 of its 13 inputs
+          # and would have reported success: a FAIL-OPEN gate.
+          #
+          # `git ls-tree` is the authoritative read. It is unaffected by the
+          # `.gitmodules` ignore rules and by any diff-side configuration, and
+          # it names the gitlinks directly (mode 160000). The two trees are
+          # compared on the PATH, and a path counts as changed when its
+          # gitlink SHA differs -- including a path that is new in head. A path
+          # that exists only in base is a REMOVED submodule: there is nothing
+          # to verify, so it is excluded.
+          #
+          # LC_ALL=C on both sides so the sort order the join relies on is the
+          # same collation the sort produced.
+          base_links=$(mktemp)
+          head_links=$(mktemp)
+          git ls-tree -r "$base_sha" \
+            | awk -F'\t' '{ split($1, f, " "); if (f[2] == "commit") print $2 "\t" f[3] }' \
+            | LC_ALL=C sort > "$base_links"
+          git ls-tree -r "$head_sha" \
+            | awk -F'\t' '{ split($1, f, " "); if (f[2] == "commit") print $2 "\t" f[3] }' \
+            | LC_ALL=C sort > "$head_links"
+          changed_subs=$(LC_ALL=C join -t $'\t' -a1 -a2 -o 0,1.2,2.2 -e '' \
+            "$base_links" "$head_links" \
+            | awk -F'\t' '$3 != "" && $2 != $3 { print $1 }')
+          rm -f "$base_links" "$head_links"
 
           if [[ -z "$changed_subs" ]]; then
             echo "No submodule gitlink changes detected"
