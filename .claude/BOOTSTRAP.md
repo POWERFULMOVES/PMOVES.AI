@@ -130,17 +130,16 @@ The roster the gate reads is `.claude/mcp.json` — the launcher fetches it with
 | `agent-zero` | `TS_Z890` | `url` | DROPPED |
 | `agent-zero` | `AGENT_ZERO_MCP_TOKEN` | `url` | DROPPED |
 | `pmoves-nats-fleet` | `NATS_URL` | `env` | DEGRADED |
-| `pmoves-nats-fleet` | `NATS_CREDS` | `env` | DEGRADED |
 | `pmoves-4090-web` | `MCP_GATEWAY_AUTH_TOKEN` | `headers` | DEGRADED |
 | `supabase-db` | `SUPABASE_DB_URI` | `env` | DEGRADED |
 | `hostinger` | `HOSTINGER_API_TOKEN` | `env` | DEGRADED |
 
 Notes on the rows:
-- `pmoves-nats-fleet` carries `${NATS_CREDS:-}` in `env`, so an unset `NATS_CREDS` is not by itself a finding there — but its `_NATS_CREDS_NOTE` prose quotes a bare `${NATS_CREDS}`, and that IS expanded. The same prose quotes a malformed `${...}`, which the normalizer records as a finding on EVERY launch — so this server is degraded even with every var set.
+- `pmoves-nats-fleet` carries `${NATS_CREDS:-}` in `env`, so an unset `NATS_CREDS` is NOT a finding there — a defaulted reference renders its default. Its `_NATS_CREDS_NOTE` documentation now sits at the SERVER level (a `_`-prefixed key beside `_purpose`), OUTSIDE the fields the gate expands (`url`, `headers`, `env`), so the note is not expanded either. MEASURED 2026-11-19 against the live normalizer: while that note was still inside `env`, the server degraded on EVERY launch — the normalizer expanded the prose and recorded BOTH the malformed `${...}` AND a bare `NATS_CREDS` finding, so it was degraded even with every var set. `NATS_URL` is the reference that flags this server now.
 - `hostinger` reads `HOSTINGER_API_TOKEN`. The sibling server `hostinger-mcp` is the one that reads `HOSTINGER_API_KEY`; they are not interchangeable.
 - `pmoves-4090-web` is in `.claude/mcp.json` only — it has no entry in `pmoves/config/mcp_inventory.json`.
 - `pmoves/env.shared.example` says `TS_Z890` gates THREE servers — `pmoves-cipher`, `agent-zero` and `archon`. The roster today carries only the first two; `archon` is not in `.claude/mcp.json`. Trust the roster, not the env template's comment.
-- The roster yields findings for more servers than these 9 rows on a node whose other credentials are unset (`cloudflare`, `tailscale`, `huggingface`, `pmoves-cipher-local`, `pmoves-minimax-mcp`, `composio-local`, `hostinger-mcp`).
+- The roster yields findings for more servers than these 8 rows on a node whose other credentials are unset (`cloudflare`, `tailscale`, `huggingface`, `pmoves-cipher-local`, `pmoves-minimax-mcp`, `composio-local`, `hostinger-mcp`).
 
 **Fix paths** (operator decides):
 1. Set `TS_Z890` (and the other `TS_<node>` vars) on the host to the Z890 **MagicDNS hostname** (`pmoves-z890`), NOT a raw tailnet IP — `pmoves/env.shared.example` says so explicitly (IPs churn on re-enrolment, and committed IPs are a fleet no-go). `.claude/hooks/damage-control/patterns.yaml` blocks real Tailscale IPs in committed docs, and `make -C pmoves fleet-status` is the hostname-only way to read the fleet.

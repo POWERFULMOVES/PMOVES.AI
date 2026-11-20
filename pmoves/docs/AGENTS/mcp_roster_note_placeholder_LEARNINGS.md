@@ -76,6 +76,7 @@ The launcher had already solved the same problem for its own text-scan by **excl
 | 1.5 | **the-generator-is-not-the-roster** | **`.claude/mcp.json` is generated from the inventory AND MERGED over the tracked file, so the tracked file legitimately carries keys the generator does not describe.** Treating the tracked file as a pure generator output is how a hand-add gets mistaken for drift — in either direction. | MEASURED: the merge drops **0** tracked servers and changes **0** described fields; the tracked file carries 10 hand-added servers (`cloudflare`, `comfy`, `docker`, `hostinger-mcp`, …) the inventory does not describe, and 14 hand-added doc keys. `test_claude_mcp_roster_matches_inventory.py` already encodes the correct contract ("a tracked entry may legitimately carry hand-added keys the inventory does not describe"). | Any "the generated file drifted" claim about a merged artifact. |
 | 1.6 | **an-unbalanced-reference-is-as-unsatisfiable-as-a-malformed-one** | **A reference that opens and never closes (`${BROKEN`) can never resolve either — there is no environment variable for it. Classifying "malformed" by the presence of a CLOSING BRACE leaves a hole in the class the gate exists to close.** Codex finding `4631230891` on this lane's ratchet: the filter required `}`. | MEASURED with the live `expand()`: `expand("${BROKEN", {}, m)` → `m == ['${BROKEN']` — the normalizer records the literal text it could not close and degrades the server. The old filter discarded it, so the ratchet passed while the server was degraded. The discriminator is **"does the recorded miss still look like a reference?"** (starts with `${`), not "is it closed?". | Any reference scanner that separates "unset" from "unsatisfiable". |
 | 1.7 | **an-absent-entry-is-invisible-to-a-field-by-field-comparison** | **A server the generator describes and the roster does not carry has no field to compare — so a comparison that iterates the generated entries and skips the ones it cannot find reports no drift at all.** The missing server is the more dangerous direction, because it is not a wrong value, it is a whole absent service. Codex finding `4631230905`: the branch `continue`d. | MEASURED: the generator emits **14** servers for `claude`/`fleet`; the tracked roster carries **21**; the difference in THIS direction is exactly **3** (`e2b-danger-room`, `flute-voice`, `flute-voice-mcp`), and the other 10 roster servers are hand-added (the opposite direction). A comparison over the generated entries alone cannot see a fourth absence. | Any drift check between a generated artefact and its source. |
+| 1.8 | **a-lane's-fix-can-invalidate-an-already-merged-lane's-published-table** | **A fix that changes a shared artefact changes what a gate reports about it — and a table published by an EARLIER, already-merged lane can become FALSE without anyone touching it.** The row was correct when it was written and wrong the moment this lane landed. | MEASURED with the LIVE normalizer: before this lane's move, `pmoves-nats-fleet` / `NATS_CREDS` in `env` was DEGRADED (the prose quoted a bare `${NATS_CREDS}` AND a malformed `${...}`, so the server degraded on every launch even with every var set); after it, `NATS_CREDS` is CLEAN and only `NATS_URL` flags the server. The `Windows host quirks` section of `.claude/BOOTSTRAP.md` (PR #3485, ALREADY MERGED) published the DEGRADED row, and THAT lane's ratchet failed against this lane's tree. | Any lane that changes a shared artefact another lane's documentation describes. |
 
 ### Bucket 2 — Decisions
 
@@ -87,6 +88,7 @@ The launcher had already solved the same problem for its own text-scan by **excl
 | 2.4 | **do-not-touch-`NATS_CREDS`-either** | `NATS_CREDS` is NOT added to the inventory. | MEASURED: `.kimi/mcp.json`'s `pmoves-nats-fleet` carries env `[NATS_URL]` only — `NATS_CREDS` is a **claude-roster-local** hand-add. And it is **not the defect**: `${NATS_CREDS:-}` has a default, so it expands to empty and records no miss. | Add `NATS_CREDS` to the inventory for symmetry | Changes five other clients' rosters to fix nothing. Scope without a defect. |
 | 2.5 | **assert-the-class-not-the-instance** | The ratchet asserts "no malformed reference in any config value" and "no `_`-prefixed key inside an `env` block" — roster-wide, not "the nats entry must not degrade". | Both rules are currently satisfied by exactly one entry, and both would catch a future instance in a different server. An instance-specific assertion would only ever fire once. | Assert `pmoves-nats-fleet` specifically | The next occurrence lands in a different server and the gate stays green. |
 | 2.6 | **the-behavioural-test-uses-the-live-normalizer** | The degrade test calls `mcp_roster_normalize.normalize()` — the component that produces the verdict — rather than re-deriving the verdict. | A re-implementation of P4/P5 in the test would be a second opinion about the tool's own rules, and would drift from them. | Re-implement the expansion in the test | The test could agree with a broken normalizer. The whole point is to observe the real verdict. |
+| 2.7 | **correct-the-published-truth-do-not-relax-the-merged-lane's-gate** | When a MERGED lane's ratchet fails because another lane changed the shared artefact, the fix is the PUBLISHED STATEMENT, not the gate. The row that became false was removed, the note explaining it was rewritten to what the gate does now, and the footnote's row count was corrected 9 → 8. | The merged lane's gate was RIGHT: it compared a published claim against the LIVE gate, and the claim had become false. Relaxing it would keep a false claim in an always-loaded doc. MEASURED: the bootstrap ratchet 12 passed, the harness **10 of 10 proven kills**, including **M10 — the REVERT of this correction**, which puts the removed row back and requires `test_the_roster_table_matches_the_live_roster_and_the_live_gate` to die naming it. | Relax the merged lane's precondition (e.g. accept a DEFAULTED reference for a row that claims a finding) | The gate can no longer say "this published row is false", and the next drift of the same shape lands in the same blind spot. |
 
 ### Bucket 3 — Operations
 
@@ -181,3 +183,47 @@ This lane touches **one** existing file: `.claude/mcp.json`, and only by **movin
 1. **Three servers the generator declares for `claude` are absent from the fleet roster.** MEASURED: a merge regeneration would add `e2b-danger-room`, `flute-voice` and `flute-voice-mcp` — `git log -S` proves **none of the three was ever in `.claude/mcp.json`**, so this is a roster that was never regenerated, not one that lost them. `e2b-danger-room` explicitly lists `"claude"` in its `clients`; the two `flute-voice` entries have **no** `clients` key, and `supports_client` returns `True` when `clients is None` (`mcp_config_generator.py:83-86`). **They are not added here, for a measured reason:** `e2b-danger-room` is a stdio server whose command is `node ./pmoves-e2b-mcp-server/packages/js/build/index.js` — the path is a gitlink (`pmoves-e2b-mcp-server`, mode 160000) whose `packages/js/build/` is produced by an `npm run build` that **no** file in `pmoves/mk`, `deploy/` or `pmoves/tools` performs, so the entry would launch and fail on every node. `flute-voice`/`flute-voice-mcp` resolve to `http://${TS_Z890}:8055/…` on the fleet endpoint, so they depend on `TS_Z890` resolution and on `FLUTE_API_KEY` (present in `pmoves/env.shared.example:506`). Adding them is a **separate lane** with its own fail-closed analysis; the house convention for a dead wire is to keep it visible with the measured reason (cf. the `_disabled` entries and the `cipher:` entry in `pmoves/config/mcp-gateway/catalog.yaml`). **This record is now ENFORCED, not just written down:** the three reasons live in `GENERATED_NOT_ROSTERED` in the ratchet, and a fourth absence — or one of the three becoming rostered — fails the gate (kills M6 and M7).
 2. **The `_pmoves_roster_verdicts` block has no production reader.** The normalizer writes the degraded list into the roster; `pmoves/scripts/session_check.py` classifies separately. Wiring a reader is a follow-up lane — and it is the reason a prose-degrade can sit unnoticed for as long as it did.
 3. **`pmoves/tools/build_gate.py` ignores `build_context`** (reported by the doc-reconciliation lane). Six `pmoves/images.yaml` entries declare it, so the gate resolves a different Dockerfile than the publisher builds.
+
+---
+
+## Cross-lane reconciliation (2026-11-20) — a merged lane's published table went false
+
+**What happened.** This lane's fix changed the roster, and the roster is what the `Windows host quirks` section of `.claude/BOOTSTRAP.md` describes. That section was landed by **PR #3485, already merged**, and it published a roster table row:
+
+```
+| `pmoves-nats-fleet` | `NATS_CREDS` | `env` | DEGRADED |
+```
+
+That row was **true** when #3485 landed and **false** the moment this lane's note moved out of `env`. #3485's own ratchet — `pmoves/tests/tools/test_bootstrap_windows_host_quirks_ratchet.py` — failed against this lane's tree on PR #3488's CI:
+
+```
+pmoves-nats-fleet/NATS_CREDS: the env reference is DEFAULTED, so an unset value is
+not a finding and there is nothing to WARN about
+```
+
+**That failure is the gate WORKING.** The gate compared a published claim against the live normalizer and found the claim false. A weakened gate would have hidden it.
+
+**MEASURED, with the live normalizer:**
+
+| roster shape | `NATS_URL` | `NATS_CREDS` | what the normalizer records |
+|---|---|---|---|
+| before this lane (the note inside `env`) | DEGRADED | **DEGRADED** | `degraded: ['${...}', 'NATS_CREDS', 'NATS_URL']` |
+| after this lane (the note at server level) | DEGRADED | **CLEAN** | `NATS_CREDS` is `${NATS_CREDS:-}` — defaulted, so it renders its default and records no miss |
+
+So the prose in `env` was doing TWO jobs the normalizer could not distinguish: it documented the placeholder semantics AND it manufactured a bare `${NATS_CREDS}` reference plus a malformed `${...}` reference. Removing the prose from the scanned field removed both findings — which is what the fix was FOR — and left the published row false.
+
+**What was fixed, and what was NOT.**
+
+* **FIXED:** the FALSE row was removed from the published table; the note that explained the prose-driven finding was rewritten to state what the gate does now (a defaulted reference is not a finding; the note is a server-level `_`-prefixed key outside the expanded fields); the footnote's row count was corrected 9 → 8.
+* **NOT FIXED — deliberately:** the merged lane's ratchet was **not** relaxed, **no** precondition was widened, **no** baseline was taken, and **no** ratchet was deleted. The gate was right.
+
+**Two new kills pin the correction** in `pmoves/tests/tools/test_bootstrap_windows_host_quirks_mutation_kill.py`:
+
+| kill | mutation | named test that must die |
+|---|---|---|
+| **M9** | the footnote's row count drifts (`8` → `9`) | `test_the_footnote_states_how_many_rows_it_is_a_superset_of` |
+| **M10** | the REMOVED row is put back — the **REVERT** of this correction | `test_the_roster_table_matches_the_live_roster_and_the_live_gate` |
+
+M9 exists because the footnote's row count had **no** mutation kill before — the exact number this reconciliation moved was unguarded. MEASURED: **10 of 10 proven kills**, GREEN before and after every mutation, the tree restored byte-exactly.
+
+**The rule.** When a lane's fix changes a shared artefact, EVERY lane whose documentation describes that artefact must be re-read — including the ones merged weeks earlier whose authors are not in the room. The gate that catches it belongs to the lane that PUBLISHED the claim, not to the lane that changed the input.

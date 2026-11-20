@@ -13,8 +13,24 @@ roster did not read. A doc that is always loaded is not a doc -- it is
 instructions every cold start acts on -- so a gate that reads it can only be
 load-bearing if a plausible edit to it makes the gate fail.
 
-So this harness puts the defects back, four ways, and requires the NAMED test
+So this harness puts the defects back, ten ways, and requires the NAMED test
 to die each time.
+
+THE CROSS-LANE CLASS
+--------------------
+Two of those ten are not a defect in this section at all -- they are the
+REVERT of a correction another lane forced. The nats-note lane moved the
+`_NATS_CREDS_NOTE` prose out of `pmoves-nats-fleet`'s `env` block -- the
+field the roster gate expands -- so the malformed `${...}` that prose quoted
+stopped being a finding on every launch. That change invalidated a row THIS
+section published, and the row had to go.
+
+The lesson is that a lane's fix can invalidate an ALREADY-MERGED lane's
+published table, and the gate that catches it is the ratchet of the merged
+lane -- not the ratchet of the lane that changed the roster. M9 and M10 keep
+that correction load-bearing: M9 pins the footnote's row count to the table's
+real row count, and M10 puts the removed row back and requires the roster
+test to die.
 
 THE KILL CONTRACT: GREEN, RED, GREEN
 ------------------------------------
@@ -335,6 +351,54 @@ MUTATIONS: list[Mutation] = [
         target_file=CLAUDE_DOC,
         test_file=RATCHET,
         replace_all=True,
+    ),
+    # ------------------------------------------------------------------
+    # A footnote whose row count no longer matches the table
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M9_the_footnote_row_count_drifts_from_the_table",
+        old="than these 8 rows",
+        new="than these 9 rows",
+        target_test="test_the_footnote_states_how_many_rows_it_is_a_superset_of",
+        rationale=(
+            "The footnote claims the table is a superset of N rows. That is a "
+            "claim ABOUT the table, in an always-loaded doc, and the count has "
+            "to move whenever a row moves. The nats-note lane REMOVED a row "
+            "(`pmoves-nats-fleet` / `NATS_CREDS`, no longer a finding once the "
+            "note moved out of `env`), so the count went from 9 to 8 -- and a "
+            "count left at 9 would claim a row the table no longer has, which "
+            "is the same class of lie the section was landed to remove. The "
+            "count is parsed out of the footnote and compared with the table's "
+            "real row count."
+        ),
+        target_file=BOOTSTRAP,
+        test_file=RATCHET,
+    ),
+    # ------------------------------------------------------------------
+    # A finding the live gate no longer produces, published again
+    # ------------------------------------------------------------------
+    Mutation(
+        name="M10_the_section_publishes_a_finding_the_gate_no_longer_produces",
+        old="| `pmoves-nats-fleet` | `NATS_URL` | `env` | DEGRADED |",
+        new=(
+            "| `pmoves-nats-fleet` | `NATS_URL` | `env` | DEGRADED |\n"
+            "| `pmoves-nats-fleet` | `NATS_CREDS` | `env` | DEGRADED |"
+        ),
+        target_test="test_the_roster_table_matches_the_live_roster_and_the_live_gate",
+        rationale=(
+            "This is the REVERT of the cross-lane reconciliation: the row the "
+            "nats-note lane invalidated, put back. MEASURED against the LIVE "
+            "normalizer, `NATS_CREDS` is now CLEAN -- its binding is the "
+            "DEFAULTED `${NATS_CREDS:-}`, and the `_NATS_CREDS_NOTE` prose "
+            "that used to make it a finding now lives at server level, OUTSIDE "
+            "the fields the gate expands. Re-publishing the row tells the "
+            "operator to set a variable that fixes nothing, and the WARN "
+            "never comes back -- the exact failure the roster table exists to "
+            "prevent. The ratchet derives the verdict by CALLING the "
+            "normalizer, so a row the gate no longer produces dies."
+        ),
+        target_file=BOOTSTRAP,
+        test_file=RATCHET,
     ),
 ]
 
