@@ -45,7 +45,7 @@ _Last updated: 2025-12-23_
 | Overlay File | Purpose | Services |
 |--------------|---------|----------|
 | `docker-compose.agents.images.yml` | Pre-built agent images | archon-ui |
-| `docker-compose.n8n.yml` | Workflow automation | n8n, n8n-agent |
+| `docker-compose.n8n.yml` | Workflow automation | n8n, n8n-runners |
 | `docker-compose.voice.yml` | Voice/Pipecat services | vibvoice |
 | `docker-compose.gpu.yml` | GPU-accelerated services | hi-rag-gpu, media-* |
 | `docker-compose.hardened.yml` | Security hardening | (overlay for all) |
