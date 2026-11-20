@@ -610,7 +610,7 @@ Verified 2026-07-14 against live gitlink `6f8150cf` (Phase 5 + Codex P1 fix `dc6
 - **Native MCP-over-SSE** at `:8105/mcp/sse` — Claude Code connects directly (`.claude/mcp.json:4-7`)
 - **Native MCP-over-HTTP** at `:8105/mcp` (POST)
 - **REST `/api/memory` CRUD** — 4 routes (POST, GET/search, GET/:id, DELETE) added by PR #5 (B850-CLAUDE, 2026-07-01), backed by `agent.services.vectorStoreManager` with in-memory auto-fallback
-- **Bearer auth** via `CIPHER_API_TOKEN` (graceful skip if unset = dev mode)
+- **Bearer auth** — per-agent tokens resolved via PostgREST (PRs #26/#28), `CIPHER_API_TOKEN` as legacy bootstrap, `CIPHER_AUTH_REQUIRED` closes dev mode (PR #33)
 - **Health** at `GET /health`
 - **Agent Zero** connects via SSE in dockerized stack (`docker-compose.yml:2618`)
 
@@ -939,7 +939,7 @@ Build a PMOVES additive overlay that exposes the contracts agents depend on, tra
 - [x] `GET /api/memory/search?q=...&limit=...&category=...` — `memory-routes.ts`, lists via `MemoryManager.list()` + post-fetch category filter
 - [x] `GET /api/memory/:id`, `DELETE /api/memory/:id` — CRUD via `MemoryManager`
 - [x] `GET /mcp/sse` + `POST /mcp/messages` — `mcp-sse.ts`, 4 MCP tools over SSE transport
-- [x] Bearer auth middleware (`auth.ts`, `CIPHER_API_TOKEN`, graceful skip if unset = dev mode)
+- [x] Bearer auth middleware (`auth.ts`) — per-agent tokens via PostgREST (`agent_id`/`scopes`/`revoked_at`), `CIPHER_API_TOKEN` bootstrap, `CIPHER_AUTH_REQUIRED` dev-mode close (PRs #26, #28, #33)
 
 ### Phase 3 — NATS event emission (preserve live infrastructure) ✅ DONE
 - [x] Emit `cipher.memory.stored.v1` after `POST /api/memory` success (wired in `memory-routes.ts`)

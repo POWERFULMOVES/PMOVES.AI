@@ -3819,6 +3819,104 @@ agents:
       compose_profile: agents
     description: "Model Context Protocol server for HuggingFace Hub — model discovery, download, metadata, GGUF conversion; exposes SSE MCP and REST API"
 
+  ollama_agent:
+    name: "Ollama Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8204
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # CLI-fluent model steward for the local Ollama fleet: executes
+    # list/pull/rm/show via container dispatch (docker exec <ollama> ollama …),
+    # never via web scraping. Joins the HF agent + researcher patrol: consumes
+    # evaluated-model events, records pull decisions in cipher memory.
+    nats:
+      publishes: ["ollama.model.pulled.v1", "ollama.model.pruned.v1"]
+      subscribes: ["hf.model.evaluated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_operation
+      recovery_strategy: idempotent_replay
+      cipher_categories: [decision, context]
+    topology:
+      node_affinity: [spark, 5090, b850, z890, jetson]
+      team: research
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "Ollama CLI dispatch agent — local model lifecycle (pull/list/rm/show) for GPU/edge nodes; pairs with hf_agent/hf_research_agent as the local-hosting leg of model patrol; pull decisions memorialized in cipher"
+
+  ca_agent:
+    name: "Container Authority Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8205
+    health: null
+    layers: [L0, L2]
+    evolution_stage: stage_1
+    # Docker/CA steward: image builds, registry pushes (GHCR), container
+    # lifecycle through Known Road make targets — raw docker is hook-gated.
+    nats:
+      publishes: ["ops.container.lifecycle.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_operation
+      recovery_strategy: idempotent_replay
+      cipher_categories: [decision]
+    topology:
+      node_affinity: [any]
+      team: infra
+      ci_runner: vps
+      compose_profile: null
+    description: "Container authority agent — docker image build/push/lifecycle via Known Road targets (up-*/build-local-*/ghcr-*); joins the CA (docker) + VPS agent pair for fleet container ops"
+
+  vps_agent:
+    name: "VPS Fleet Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8206
+    health: null
+    layers: [L0, L2]
+    evolution_stage: stage_1
+    # KVM node ops: kvm4-1 (gateway/runner), kvm4-2 (storage), kvm2 (exit
+    # proxy) — deploy, runner health, storage tier, briefs over NATS.
+    nats:
+      publishes: ["ops.vps.node.status.v1"]
+      subscribes: ["agent.handoff.request.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_operation
+      recovery_strategy: idempotent_replay
+      cipher_categories: [context]
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, kvm2]
+      team: infra
+      ci_runner: vps
+      compose_profile: null
+    description: "VPS fleet agent — KVM node operations (kvm4-1 gateway, kvm4-2 storage, kvm2 exit proxy); accepts handoff briefs on agent.handoff.request.v1; pairs with ca_agent for container ops on the VPS tier"
+
   mavis:
     name: "Mavis"
     class: standard
