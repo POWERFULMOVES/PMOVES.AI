@@ -166,3 +166,37 @@ slow_files:
     # test_pytest_ratchet.py fails on a declared path that does not exist,
     # on a declared path that is not a test file, and on a declared entry
     # with no stated reason.
+  pmoves/tests/tools/test_bootstrap_windows_host_quirks_mutation_kill.py: 90
+    # WHY: three phases per mutation -- GREEN before -> RED under the
+    # mutation -> GREEN after the restore -- and every phase that has to
+    # look at a DIFFERENT source spawns a full `python -m pytest` child.
+    # This harness defines 8 mutations, so the RED phase alone is 8 pytest
+    # startups, and the two batched GREEN phases add one child each. Two of
+    # the kills -- the kill-signal predicate and the brace-set extractor --
+    # mutate a COPY of a gate file and run the COPY's own test, so they
+    # add one child each as well.
+    #
+    # MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
+    # ratchet's OWN invocation (pmoves/tools/pytest_ratchet.py:run_pytest,
+    # not a hand-rolled pytest command), TWICE, because one run is not a
+    # measurement of a wall clock:
+    #   the file alone           22.8s / 27.0s   (13 passed in 21.60s / 25.42s)
+    #   its chunk, tools [1]    105.2s / 104.3s (20 files)
+    #
+    # The CHUNK is what binds, not the file. 105.2s is 88% of the 120s
+    # chunk budget on this host, and a CI runner is SLOWER than this host
+    # (the encoding entry above records CI being killed at that same
+    # budget), so on CI the chunk is over the budget. A killed chunk that
+    # holds this harness leaves the tree MUTATED -- this harness mutates
+    # `.claude/BOOTSTRAP.md` and `.claude/CLAUDE.md` by design -- and the
+    # next session then reads the mutation as a defect that does not exist.
+    # The backup in pmoves/tests/mutation_backup.py repairs the tree if it
+    # happens anyway; the allowance stops the kill.
+    #
+    # The 90s allowance buys a chunk budget of 120 + 90 = 210s (2.0x the
+    # measured chunk -- the same ratio as the mmx entry above) and a
+    # per-file budget of 60 + 90 = 150s (at least 5.6x the measured file).
+    # The file is HEALTHY AND SLOW, not broken.
+    #
+    # The mutation count in this block is GATED: the pytest-ratchet's suite
+    # recomputes it by AST from the harness and fails if it drifts.

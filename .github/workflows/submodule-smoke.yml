@@ -78,7 +78,27 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
+          # MEASURED on PR #3482 (the 13-gitlink promotion lane): with
+          # `submodules: recursive` this checkout clones ALL 84 submodules at
+          # FULL history. The timeout log shows 30+ concurrent
+          # `git-remote-https` / `git-submodule` processes still running, in
+          # "Checkout PR branch", when the job's `timeout-minutes: 45` fires
+          # -- twice (runs 44639462331 and 44649240426, both 45.6m, both
+          # cancelled in that step). The job never reached step 2.
+          #
+          # The job does not need them. "Identify changed submodules" diffs
+          # the SUPERPROJECT tree (`git diff base..head` + `git ls-tree`), and
+          # every step after it -- "Verify submodule integrity", "Run strict
+          # smoke tests", "Check critical health endpoints" -- reads only the
+          # CHANGED submodule paths. Cloning 84 repositories at full history
+          # to use 13 of them IS the cost.
+          #
+          # So: check out the superproject only. `fetch-depth: 0` STAYS --
+          # step 2 diffs against the base commit, which a shallow superproject
+          # would not contain. The submodule clones are what get bounded, and
+          # that happens in the next step, which initialises only the changed
+          # paths and shallow.
+          submodules: false
           fetch-depth: 0
 
       - name: Identify changed submodules
@@ -93,12 +113,38 @@ jobs:
           echo "Base: $base_sha"
           echo "Head: $head_sha"
 
-          # Find changed submodule paths (gitlink changes show as commit type)
-          changed_subs=$(git diff --name-only "$base_sha" "$head_sha" | while read -r path; do
-            if git ls-tree "$head_sha" "$path" 2>/dev/null | grep -q "^160000"; then
-              echo "$path"
-            fi
-          done)
+          # The changed GITLINKS are derived from the two TREES, not from
+          # `git diff --name-only`.
+          #
+          # MEASURED on PR #3482: `git diff --name-only base..head` listed only
+          # ELEVEN of the THIRTEEN promoted submodules. `.gitmodules` sets
+          # `ignore = all` for PMOVES-OpenRoom and PMOVES-registry, and git's
+          # diff honours that setting -- so those two promoted pins were never
+          # verified by this gate at all. The gate read 11 of its 13 inputs
+          # and would have reported success: a FAIL-OPEN gate.
+          #
+          # `git ls-tree` is the authoritative read. It is unaffected by the
+          # `.gitmodules` ignore rules and by any diff-side configuration, and
+          # it names the gitlinks directly (mode 160000). The two trees are
+          # compared on the PATH, and a path counts as changed when its
+          # gitlink SHA differs -- including a path that is new in head. A path
+          # that exists only in base is a REMOVED submodule: there is nothing
+          # to verify, so it is excluded.
+          #
+          # LC_ALL=C on both sides so the sort order the join relies on is the
+          # same collation the sort produced.
+          base_links=$(mktemp)
+          head_links=$(mktemp)
+          git ls-tree -r "$base_sha" \
+            | awk -F'\t' '{ split($1, f, " "); if (f[2] == "commit") print $2 "\t" f[3] }' \
+            | LC_ALL=C sort > "$base_links"
+          git ls-tree -r "$head_sha" \
+            | awk -F'\t' '{ split($1, f, " "); if (f[2] == "commit") print $2 "\t" f[3] }' \
+            | LC_ALL=C sort > "$head_links"
+          changed_subs=$(LC_ALL=C join -t $'\t' -a1 -a2 -o 0,1.2,2.2 -e '' \
+            "$base_links" "$head_links" \
+            | awk -F'\t' '$3 != "" && $2 != $3 { print $1 }')
+          rm -f "$base_links" "$head_links"
 
           if [[ -z "$changed_subs" ]]; then
             echo "No submodule gitlink changes detected"
@@ -110,6 +156,49 @@ jobs:
             csv=$(echo "$changed_subs" | tr '\n' ',' | sed 's/,$//')
             echo "submodules=$csv" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Initialize changed submodules
+        if: steps.changed.outputs.submodules != ''
+        run: |
+          set -euo pipefail
+
+          # Only the CHANGED submodules are initialised, and shallowly.
+          #
+          # NOT --recursive. Pmoves-cipher carries a NESTED submodule
+          # (packages/byterover-packages) whose URL is an SSH path to a
+          # THIRD-PARTY repo -- git@github.com:campfirein/byterover-packages.git
+          # -- which the runner has no key for, and which this job does not
+          # need: the steps below verify the changed submodule's OWN tree and
+          # then run the SUPERPROJECT's `make smoke test`. MEASURED locally
+          # against a faithful superproject: with --recursive, Pmoves-cipher
+          # fails with "Failed to clone 'packages/byterover-packages' a
+          # second time, aborting" and the whole init loop dies.
+          #
+          # Shallow first is safe only when the pinned commit is still the tip
+          # of the submodule's branch -- a shallow clone fetches the tip, and
+          # `git submodule update` then cannot resolve an older pin. A
+          # promotion lane pins arbitrary commits, so a shallow fetch CAN
+          # legitimately fail. That one submodule falls back to full history;
+          # the others stay shallow. A blanket fallback would pay full
+          # history for all of them because of one.
+          #
+          # The fallback CLEANS the partial module state first. A failed
+          # shallow clone leaves .git/modules/<path> half-built, and retrying
+          # without removing it fails IDENTICALLY -- MEASURED: the first
+          # attempt died with "fatal: Needed a single revision" followed by
+          # "fatal: Unable to find current revision in submodule path
+          # 'PMOVES-Wealth'", and the retry produced the same two lines.
+          IFS=',' read -ra subs <<< "${{ steps.changed.outputs.submodules }}"
+          echo "Initializing ${#subs[@]} changed submodule(s), shallow first:"
+          for sub in "${subs[@]}"; do
+            echo "  $sub"
+            if ! git submodule update --init --depth 1 "$sub"; then
+              echo "    shallow init failed -- cleaning partial state, retrying with full history"
+              git submodule deinit -f "$sub" 2>/dev/null || true
+              rm -rf ".git/modules/$sub"
+              git submodule update --init --force "$sub"
+            fi
+          done
 
       - name: Verify submodule integrity
         if: steps.changed.outputs.submodules != ''
