@@ -168,7 +168,12 @@ jobs:
           skip_normalized = {s.lower().replace('-', '_') for s in skip}
 
           # Keep resolver guardrails for packages with known bad upstream releases.
-          preserve_specs = {"pyreqwest-impersonate"}
+          # google-genai: flute-gateway pins ==2.10.0; unpinned resolution picks
+          # 3.6.1+, which moved to the httpx2 fork and breaks at import time
+          # (`google/genai/types.py: HttpxClient = httpx.Client` against a
+          # SimpleNamespace shim) — failing every flute-gateway test since the
+          # 3.x line shipped (seen 2026-11-19/20 across multiple branches).
+          preserve_specs = {"pyreqwest-impersonate", "google-genai"}
           preserve_normalized = {s.lower().replace('-', '_') for s in preserve_specs}
 
           # Collect unique package specs. Most entries strip versions to let pip resolve;

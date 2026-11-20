@@ -44,7 +44,7 @@ PROVISIONING_RE = re.compile(
 
 
 def load_playlist(path: Path) -> list[dict]:
-    data = json.loads(gzip.open(path).read() if path.suffix == ".gz" else path.read_text())
+    data = json.loads(gzip.open(path).read() if path.suffix == ".gz" else path.read_text(encoding="utf-8"))
     entries = data.get("entries") or []
     out = []
     for e in entries:
@@ -63,7 +63,7 @@ def load_playlist(path: Path) -> list[dict]:
 
 
 def load_beats() -> list[dict]:
-    groups = json.loads(GROUPS_SUMMARY.read_text())
+    groups = json.loads(GROUPS_SUMMARY.read_text(encoding="utf-8"))
     beats = []
     for g in groups:
         for track in g["tracks"]:
@@ -106,7 +106,7 @@ def main() -> int:
     beats = load_beats()
     ollama_txt: str | None = None
     if args.ollama_list:
-        src = sys.stdin.read() if args.ollama_list == "-" else Path(args.ollama_list).read_text()
+        src = sys.stdin.read() if args.ollama_list == "-" else Path(args.ollama_list).read_text(encoding="utf-8")
         ollama_txt = src
     models = load_models(ollama_txt)
 
@@ -136,7 +136,7 @@ def main() -> int:
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(index, indent=1, ensure_ascii=False) + "\n")
+    args.out.write_text(json.dumps(index, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"three_source_index: {len(videos)} videos ({len(provisioning)} provisioning candidates), "
           f"{len(beats)} beats, {len(models)} models -> {args.out}")
     return 0
