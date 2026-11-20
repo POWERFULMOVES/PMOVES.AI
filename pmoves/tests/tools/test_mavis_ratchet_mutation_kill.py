@@ -764,9 +764,22 @@ def _spawn_pytest_process(args: list[str]) -> subprocess.Popen[str]:
         )
     else:
         kwargs["start_new_session"] = True
+    # NO BYTECODE FROM A MUTATED SOURCE. pytest caches each rewritten test
+    # module in __pycache__ keyed on (int-second mtime, size). A mutation
+    # whose replacement has the SAME LENGTH as its anchor (the upstream-pin
+    # case: 23 chars -> 23 chars), restored within the same second, leaves
+    # the restored file matching the MUTATED pyc's key -- so the restore
+    # check, and every later plain run of the target, executed the mutated
+    # code. Measured 2026-11-19: the restore check failed, and a plain
+    # `pytest test_mavis_cli_timeout.py` then failed against correct source
+    # until the pyc was deleted. Same guard as the mesh-node and
+    # minimax-roster harnesses.
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     return subprocess.Popen(
         args,
         cwd=str(REPO_ROOT),
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

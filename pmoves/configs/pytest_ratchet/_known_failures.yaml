@@ -284,7 +284,6 @@ known_failures:
   - "FAIL|tests.test_multiagent_workflow|test_multiagent_video_to_search_pipeline"
   - "FAIL|tests.test_pmoves_yt|test_yt_download_uses_stubs"
   - "FAIL|tests.test_wger_cgp_validation.TestHealthConstellationExamples|test_workout_constellation_example"
-  - "FAIL|tests.tools.test_google_oauth_flow.TestServiceRoleKey|test_prefers_service_role_key"
   - "FAIL|tools.tests.test_cymatic|test_cymatic_features_shape"
   - "FAIL|tools.tests.test_cymatic|test_glyph_params_driven_by_real_cymatic_features"
   - "FAIL|tools.tests.test_cymatic|test_harmonic_tone_more_harmonic_than_noise"
