@@ -59,16 +59,16 @@ Use the bare name. If the job needs environment-scoped values, set `environment:
 
 ```yaml
 jobs:
-  deploy:
+  integration:
     runs-on: ubuntu-latest
     environment: Prod          # env-scoped secrets resolve from here
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy services
+      - name: Provider integration tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: make deploy
+        run: python -m pytest pmoves/tests -q
 ```
 
 A secret that feeds a node at runtime also needs a row in the `sync-secrets-local.yml` env map (see Overview).
