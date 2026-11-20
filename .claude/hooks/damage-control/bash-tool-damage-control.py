@@ -190,6 +190,19 @@ WRITE_PATTERNS = [
     (r'\btouch\s+(?:' + _ARGS + r'\s)?{path}', "touch"),
     # dd writes exactly the file named by of=.
     (r'\bdd\s+' + _ARGS + r'\bof={path}', "write"),
+    # A tool's OWN output flag writes the file it names, with no redirect, tee or
+    # edit verb in sight: `uv pip compile ... -o <lock>`, `pip-compile
+    # --output-file=<lock>`, `uv export -o`, `curl -o`, `wget -O`, `sort -o`.
+    # Measured 2026-10-01: `uv pip compile ... -o pmoves/services/<svc>/
+    # requirements.lock` overwrote a readOnly lock and nothing refused it.
+    # Keyed on the FLAG, not on a list of tools -- a tool list goes stale the day a
+    # new generator arrives. The flag must stand alone as a token, and the path
+    # must be its value (`-o <p>` or `--flag=<p>`), so `-o` inside another word or
+    # a protected name elsewhere in the command does not match. Depth comes from
+    # path_depth_regex (this template is depth-adjacent). Not covered: a short
+    # flag fused into a cluster (`-qo <p>`) or into its value (`-o<p>`).
+    (r'(?:^|\s)(?:-o|-O|--output|--output-file|--output-document|--outfile|--out-file)'
+     r'(?:\s+|=)[\'"]?{path}', "tool output"),
     # ln and install write their LAST operand; earlier operands are sources, and
     # a bare `ln -s /usr/bin/python3` (one operand) links INTO the cwd.
     # The flag star is POSSESSIVE (`*+`, Py3.11+): on a non-match the plain star
