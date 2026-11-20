@@ -1,345 +1,144 @@
 # GitHub Secrets Guide for PMOVES.AI
 
-> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Secrets & Credentials | See also: [Secrets Pipeline Reference](SECRETS_PIPELINE_REFERENCE.md)
+> **Part of the [PMOVES.AI Integration Layer](../INTEGRATIONS_OVERVIEW.md)** | Category: Secrets & Credentials | See also: [Secrets Pipeline Reference](../SECRETS_PIPELINE_REFERENCE.md)
 
-This guide covers setting up and using GitHub Secrets for PMOVES.AI CI/CD pipelines.
+This guide covers how PMOVES.AI stores secrets in GitHub and how its workflows read them.
+
+> **Correction (2026-11-20).** Earlier revisions of this guide described a `PMOVES_` name prefix (`PMOVES_OPENAI_API_KEY`, `PMOVES_SUPABASE_URL`, ...) and per-environment prefixes (`PMOVES_DEV_*`, `PMOVES_STAGING_*`, `PMOVES_PROD_*`). **No workflow reads any of those names.** Measured at this revision: `.github/workflows/*.yml` references 145 distinct `secrets.<NAME>` values, and none of them starts with `PMOVES_`. Secrets use the **bare name of the env var they feed**, for example `OPENAI_API_KEY` and `SUPABASE_JWT_SECRET`. The secret-to-env map lives in `.github/workflows/sync-secrets-local.yml` (the Supabase rows are at `:222-227`). If you created a secret under a `PMOVES_` name because of the old guide, nothing reads it.
 
 ## Overview
 
-GitHub Secrets allow you to store sensitive information (API keys, passwords, tokens) securely and use them in GitHub Actions workflows.
+GitHub Secrets hold the production values of PMOVES credentials. They reach a node in one of two ways:
 
-## Quick Setup
+- **Runner nodes**: `sync-secrets-local.yml` encodes the mapped secrets into a CHIT bundle and writes `local.env`. Then `make -C pmoves secrets-funnel` overlays `local.env` into `env.shared` through `secrets-local-hydrate`.
+- **Runnerless nodes**: `make -C pmoves secrets-funnel-from-prod` pulls the published bundle and does the same.
 
-### 1. Navigate to Repository Secrets
+Two things follow from this:
 
-1. Go to your repository on GitHub
-2. Click **Settings** tab
-3. In left sidebar, click **Secrets and variables** > **Actions**
-4. Click **New repository secret**
+1. A secret that has **no row** in the `sync-secrets-local.yml` env map never reaches any node, even if it is registered in the CHIT manifest. `pmoves/tools/secrets_bundle_map_gap.py` guards that gap.
+2. Rotating a value in GitHub changes nothing on a node until that node re-funnels. See [`../handoffs/SECRET_ROTATION_RUNBOOK.md`](../handoffs/SECRET_ROTATION_RUNBOOK.md) § "Stale local value".
 
-### 2. Add Required Secrets
+## Limits and scopes
 
-Add secrets with the `PMOVES_` prefix:
+Per GitHub's documentation (<https://docs.github.com/en/actions/reference/security/secrets>):
 
-| Secret Name | Description | Example Value |
-|-------------|-------------|---------------|
-| `PMOVES_OPENAI_API_KEY` | OpenAI API key | `sk-proj-...` |
-| `PMOVES_ANTHROPIC_API_KEY` | Anthropic API key | `sk-ant-...` |
-| `PMOVES_GOOGLE_API_KEY` | Google API key | `AIza...` |
-| `PMOVES_SUPABASE_URL` | Supabase URL | `https://xxx.supabase.co` |
-| `PMOVES_SUPABASE_ANON_KEY` | Supabase anonymous key | `eyJ...` |
+> "You can store up to 1,000 organization secrets, 100 repository secrets, and 100 environment secrets."
 
-### 3. Reference in Workflows
+> "Secrets are limited to 48 KB in size."
 
-In `.github/workflows/deploy.yml`:
+**Repository scope and environment scope do not pool.** Each environment has its own 100-secret cap, separate from the repository's 100. A key that is "in GitHub" might be in the repository scope, in an environment such as `Prod`, or in both.
+
+**Measured 2026-11-20:**
+
+| Scope | Count | State |
+|---|---|---|
+| repository | 90 / 100 | 10 slots left |
+| environment `Prod` | 100 / 100 | **AT CAP**: no new secret can be added |
+| environment `PMOVES` | 1 / 100 | |
+
+Some keys exist as **duplicate copies** in the repository scope and in `env:Prod`. If you rotate only one copy, a workflow that reads the other copy keeps shipping the stale value. Rotate both.
+
+Tooling:
+
+- `make -C pmoves gh-secret-capacity-audit [ENV=Prod]` reconciles the CHIT manifest's `github_secret` targets against the cap. It exits `1` on findings and `3` if it cannot measure. (Through `make`, every nonzero exit shows up as `2`. Call `pmoves/tools/github_secret_capacity_audit.py` directly when you need the real exit code.)
+- `pmoves/tools/push-gh-secrets.sh --env <Env>` pushes to one environment. `--routed` pushes each `github_secret` target of the v2 CHIT manifest to the scope it is routed to. Add `--dry-run` first.
+- **GitHub Apps.** Because the cap rules out one-scope-fits-all, repository and environment secrets are managed through the PMOVES.AI GitHub App (`GH_APP_ID`, `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID`, `GH_APP_SEC`). Mint a token with `make -C pmoves gh-app-token`. `GHCR_APP_*` (`GHCR_APP_CLIENT_ID`, `GHCR_APP_SEC`) is a **different** app, the CI packages app for GHCR, so do not swap the two. `GH_APP_SEC` and `GHCR_APP_SEC` are PEM private keys. See the runbook's GH_APP_SEC subsection for the storage format.
+
+## Supabase keys are per-node
+
+Each node runs **its own** Supabase and Kong, so a Supabase key is only correct on the node that minted it. The workflow already refuses to ship the URL-shaped Supabase values for this reason. `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are deliberately **not mapped** (`sync-secrets-local.yml:365-377`; the anon key is derived per node from `SUPABASE_JWT_SECRET`).
+
+The remaining `SUPABASE_*` rows (`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_REALTIME_*`, `SUPABASE_KEY`) **are** still mapped and delivered fleet-wide. That mapping is under review in [PR #3496](https://github.com/POWERFULMOVES/PMOVES.AI/pull/3496). Until the review settles it:
+
+- Never run a bare `secrets-local-hydrate FORCE=1` on a node whose own Supabase is live. It overwrites that node's keys with another node's and breaks the Kong/cipher pairing.
+- To refresh one rotated key, scope the hydrate: `make -C pmoves secrets-local-hydrate KEYS=<K> FORCE=1`.
+
+## Reference in workflows
+
+Use the bare name. If the job needs environment-scoped values, set `environment:` on the job. GitHub then resolves `secrets.<NAME>` from that environment first and falls back to the repository scope. **Do not encode the environment in the secret name**; environments already scope it.
 
 ```yaml
-name: Deploy PMOVES.AI
-
-on:
-  push:
-    branches: [main]
-
 jobs:
-  deploy:
+  integration:
     runs-on: ubuntu-latest
+    environment: Prod          # env-scoped secrets resolve from here
     steps:
       - uses: actions/checkout@v4
-
-      - name: Deploy services
+      - name: Provider integration tests
         env:
-          OPENAI_API_KEY: ${{ secrets.PMOVES_OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.PMOVES_ANTHROPIC_API_KEY }}
-          SUPABASE_URL: ${{ secrets.PMOVES_SUPABASE_URL }}
-        run: |
-          make deploy
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m pytest pmoves/tests -q
 ```
 
-## Workflow Examples
+A secret that feeds a node at runtime also needs a row in the `sync-secrets-local.yml` env map (see Overview).
 
-### LLM Provider Configuration
+### Skip a step when a secret is absent
+
+`secrets.*` cannot be referenced directly in a step-level `if:`. Map it to an env var and test that:
 
 ```yaml
-name: Test LLM Integration
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
       - name: Test OpenAI
-        if: secrets.PMOVES_OPENAI_API_KEY != ''
         env:
-          OPENAI_API_KEY: ${{ secrets.PMOVES_OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          if [ -z "$OPENAI_API_KEY" ]; then echo "OPENAI_API_KEY not set; skipping"; exit 0; fi
           pytest tests/test_openai.py
-
-      - name: Test Anthropic
-        if: secrets.PMOVES_ANTHROPIC_API_KEY != ''
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.PMOVES_ANTHROPIC_API_KEY }}
-        run: |
-          pytest tests/test_anthropic.py
 ```
 
-### Docker Build with Secrets
+## Secret names reference
 
-```yaml
-name: Build and Push Docker Image
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build image
-        env:
-          # Build-time secrets
-          OPENAI_API_KEY: ${{ secrets.PMOVES_OPENAI_API_KEY }}
-        run: |
-          docker build \
-            --build-arg OPENAI_API_KEY \
-            -t ghcr.io/${{ github.repository }}:latest \
-            .
-
-      - name: Push image
-        run: |
-          docker push ghcr.io/${{ github.repository }}:latest
-```
-
-### Multi-Environment Deployment
-
-```yaml
-name: Deploy
-
-on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        required: true
-        type: choice
-        options:
-          - dev
-          - staging
-          - production
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to ${{ inputs.environment }}
-        env:
-          # Environment-specific secrets
-          OPENAI_API_KEY: ${{ secrets[format('PMOVES_{0}_OPENAI_API_KEY', inputs.environment)] || secrets.PMOVES_OPENAI_API_KEY }}
-        run: |
-          make deploy ENV=${{ inputs.environment }}
-```
-
-## Secret Names Reference
-
-### LLM Providers
+These are the names the workflows actually read, as measured at this revision. To regenerate the full list (145 names):
 
 ```bash
-PMOVES_OPENAI_API_KEY          # OpenAI
-PMOVES_ANTHROPIC_API_KEY       # Anthropic Claude
-PMOVES_GOOGLE_API_KEY          # Google Gemini
-PMOVES_GROQ_API_KEY            # Groq
-PMOVES_OPENROUTER_API_KEY      # OpenRouter
-PMOVES_COHERE_API_KEY          # Cohere
-PMOVES_MISTRAL_API_KEY         # Mistral AI
-PMOVES_DEEPSEEK_API_KEY        # DeepSeek
-PMOVES_TOGETHER_AI_API_KEY     # Together AI
-PMOVES_FIREWORKS_AI_API_KEY    # Fireworks AI
+grep -ho 'secrets\.[A-Z0-9_]*' .github/workflows/*.yml | sort -u
 ```
 
-### Database & Storage
+| Area | Names (bare, as read by workflows) |
+|---|---|
+| LLM providers | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `COHERE_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `TOGETHER_AI_API_KEY`, `FIREWORKS_AI_API_KEY` |
+| Supabase (per-node, see above) | `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_REALTIME_KEY`, `SUPABASE_REALTIME_SECRET`, `SUPABASE_KEY` (`SUPABASE_URL` is intentionally **not** a mapped secret) |
+| GitHub Apps | `GH_APP_ID`, `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID`, `GH_APP_SEC`; `GHCR_APP_CLIENT_ID`, `GHCR_APP_SEC` |
+| Integrations | `DISCORD_WEBHOOK_URL`, `TELEGRAM_BOT_TOKEN`, `JELLYFIN_API_KEY` |
 
-```bash
-PMOVES_SUPABASE_URL            # Supabase URL
-PMOVES_SUPABASE_ANON_KEY       # Supabase anon key
-PMOVES_SUPABASE_SERVICE_KEY    # Supabase service key
-PMOVES_POSTGRES_URL            # PostgreSQL URL
-PMOVES_MONGODB_URI             # MongoDB URI
-PMOVES_REDIS_URL               # Redis URL
-```
+Several names listed in earlier revisions are read by **no** workflow: `POSTGRES_URL`, `MONGODB_URI`, `REDIS_URL`, AWS, GCP, Azure, Sentry, Datadog, New Relic, Honeycomb, Slack, and Spotify. They were illustrative and have been removed. If you need one, add the workflow row and the manifest entry together.
 
-### Cloud Services
+## Organization secrets
 
-```bash
-PMOVES_AWS_ACCESS_KEY_ID       # AWS access key
-PMOVES_AWS_SECRET_ACCESS_KEY   # AWS secret key
-PMOVES_AWS_REGION              # AWS region
-PMOVES_GCP_CREDENTIALS         # GCP credentials (JSON)
-PMOVES_AZURE_CLIENT_ID         # Azure client ID
-PMOVES_AZURE_CLIENT_SECRET     # Azure client secret
-```
+The organization scope has its own cap (1,000). Org secrets are shared across the repositories you select, and workflows read them with the same bare `secrets.<NAME>` syntax. PMOVES.AI does not currently rely on org-scoped secrets for the funnel.
 
-### Monitoring & Observability
+## Best practices
 
-```bash
-PMOVES_SENTRY_DSN              # Sentry DSN
-PMOVES_DATADOG_API_KEY         # Datadog API key
-PMOVES_NEWRELIC_LICENSE_KEY    # New Relic license key
-PMOVES_HONEYCOMB_API_KEY       # Honeycomb API key
-```
-
-### Integration Services
-
-```bash
-PMOVES_DISCORD_WEBHOOK_URL     # Discord webhook
-PMOVES_SLACK_BOT_TOKEN         # Slack bot token
-PMOVES_TELEGRAM_BOT_TOKEN      # Telegram bot token
-PMOVES_JELLYFIN_API_KEY        # Jellyfin API key
-PMOVES_SPOTIFY_CLIENT_ID       # Spotify client ID
-PMOVES_SPOTIFY_CLIENT_SECRET   # Spotify client secret
-```
-
-## Environment-Specific Secrets
-
-For multi-environment setups, prefix with environment:
-
-```bash
-# Development
-PMOVES_DEV_OPENAI_API_KEY
-PMOVES_DEV_SUPABASE_URL
-
-# Staging
-PMOVES_STAGING_OPENAI_API_KEY
-PMOVES_STAGING_SUPABASE_URL
-
-# Production
-PMOVES_PROD_OPENAI_API_KEY
-PMOVES_PROD_SUPABASE_URL
-```
-
-Reference in workflows:
-```yaml
-env:
-  OPENAI_API_KEY: ${{ secrets[format('PMOVES_{0}_OPENAI_API_KEY', github.ref_name)] }}
-```
-
-## Organization Secrets
-
-For shared secrets across repositories:
-
-1. Go to Organization **Settings**
-2. Navigate to **Secrets** > **Actions**
-3. Click **New organization secret**
-
-Set repository access:
-- **All repositories**: All repos can access
-- **Selected repositories**: Only specific repos
-
-Use same as repository secrets:
-```yaml
-env:
-  OPENAI_API_KEY: ${{ secrets.PMOVES_OPENAI_API_KEY }}
-```
-
-## Best Practices
-
-### 1. Naming Convention
-
-Use consistent prefixing:
-- `PMOVES_` prefix for all PMOVES.AI secrets
-- Environment prefix for multi-env: `PMOVES_DEV_`, `PMOVES_PROD_`
-- Service-specific: `PMOVES_OPENAI_API_KEY` (not just `API_KEY`)
-
-### 2. Secret Rotation
-
-Rotate secrets regularly:
-1. Create new secret (e.g., `PMOVES_OPENAI_API_KEY_V2`)
-2. Update workflow to use new secret
-3. Deploy and verify
-4. Delete old secret
-
-### 3. Least Privilege
-
-- Use service accounts with minimal permissions
-- Rotate compromised keys immediately
-- Use different keys for dev/prod
-
-### 4. Validation
-
-Validate secrets in workflow:
-```yaml
-- name: Validate secrets
-  env:
-    OPENAI_API_KEY: ${{ secrets.PMOVES_OPENAI_API_KEY }}
-  run: |
-    if [[ -z "$OPENAI_API_KEY" ]]; then
-      echo "Error: OPENAI_API_KEY not set"
-      exit 1
-    fi
-```
+1. **Naming**: use the bare env-var name the consumer reads. No `PMOVES_` prefix and no environment prefix.
+2. **Rotation**: follow [`SECRET_ROTATION_RUNBOOK.md`](../handoffs/SECRET_ROTATION_RUNBOOK.md). Rotate every scope that holds a copy (repository **and** `env:Prod`), then re-funnel the nodes.
+3. **Capacity**: run `gh-secret-capacity-audit` before adding a secret to `env:Prod`, because it is at cap.
+4. **Least privilege**: use scoped tokens. `make -C pmoves gh-app-token` takes `REPOSITORIES=` and `PERMISSIONS=`, and an over-broad `ALL=1` requires `CONFIRM=1`.
 
 ## Troubleshooting
 
 ### Secret not accessible
+1. Check that the name matches exactly (case-sensitive, bare, no `PMOVES_` prefix).
+2. Check the scope. An `env:Prod` secret is invisible to a job that has no `environment: Prod`.
+3. For runtime delivery, check that the name has a row in the `sync-secrets-local.yml` env map.
 
-**Error**: `The secret 'PMOVES_XXX' is not set`
+### Rotated in GitHub, but the node still has the old value
+The node has not re-funnelled, or `secrets-local-hydrate` skipped the key because `env.shared` already held a non-placeholder value. See [`SECRET_ROTATION_RUNBOOK.md`](../handoffs/SECRET_ROTATION_RUNBOOK.md) § "Stale local value".
 
-**Solutions**:
-1. Verify secret name exactly matches (case-sensitive)
-2. Check secret is set in correct scope (repo/org)
-3. Ensure workflow has access to secret
+### Secret value masked in logs
+This is expected. GitHub masks secret values in workflow logs.
 
-### Secret value truncated
+## Moving values from env.shared into GitHub
 
-**Cause**: GitHub masks secrets in logs
-
-**Solution**: This is expected behavior. Secrets are never shown in logs.
-
-### Secret not updating
-
-**Cause**: Caching or old values
-
-**Solution**:
-1. Verify secret value in GitHub UI
-2. Re-run workflow with fresh token
-3. Check for environment override
-
-## Migration from Files to Secrets
-
-If you currently use `env.shared`:
+Use the push tool rather than hand-copying values. It reads the env file and never echoes values:
 
 ```bash
-# Extract keys to GitHub secrets format
-make secrets-chit-decode < user_keys.yaml | grep -E "^[A-Z]" | while read line; do
-  key=$(echo $line | cut -d= -f1)
-  value=$(echo $line | cut -d= -f2)
-  echo "PMOVES_${key}=${value}"
-done
+pmoves/tools/push-gh-secrets.sh --env Prod --only KEY1,KEY2 --dry-run   # inspect
+pmoves/tools/push-gh-secrets.sh --routed --dry-run                      # manifest-routed scopes
 ```
 
-Add each to GitHub Secrets, then update workflow:
-```yaml
-env:
-  # Load all PMOVES secrets
-  OPENAI_API_KEY: ${{ secrets.PMOVES_OPENAI_API_KEY }}
-  # ... etc
-```
+## See also
 
-## See Also
-
-- `docs/SECRETS_ONBOARDING.md` - General secrets setup
-- `docs/DOCKER_SECRETS_GUIDE.md` - Docker/K8s secrets
-- `docs/CHIT_USER_GUIDE.md` - CHIT encoding for backup
+- [`SECRETS_ONBOARDING.md`](SECRETS_ONBOARDING.md): general secrets setup
+- [`DOCKER_SECRETS_GUIDE.md`](DOCKER_SECRETS_GUIDE.md): Docker/K8s secrets
+- [`../PMOVESCHIT/CHIT_USER_GUIDE.md`](../PMOVESCHIT/CHIT_USER_GUIDE.md): CHIT encoding
+- [`../SECRETS_VAULT_INTEGRATION_RUNBOOK.md`](../SECRETS_VAULT_INTEGRATION_RUNBOOK.md): Vault (runtime secrets; GitHub scope and cap are covered here, not there)
