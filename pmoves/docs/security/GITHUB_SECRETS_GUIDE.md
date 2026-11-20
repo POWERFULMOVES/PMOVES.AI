@@ -4,7 +4,7 @@
 
 This guide covers how PMOVES.AI stores secrets in GitHub and how its workflows read them.
 
-> **Correction (2026-11-20).** Earlier revisions of this guide described a `PMOVES_` name prefix (`PMOVES_OPENAI_API_KEY`, `PMOVES_SUPABASE_URL`, ...) and per-environment prefixes (`PMOVES_DEV_*`, `PMOVES_STAGING_*`, `PMOVES_PROD_*`). **No workflow reads any of those names.** Measured at this revision: `.github/workflows/*.yml` references 145 distinct `secrets.<NAME>` values, and none of them starts with `PMOVES_`. Secrets use the **bare name of the env var they feed**, for example `OPENAI_API_KEY` and `SUPABASE_JWT_SECRET`. The secret-to-env map lives in `.github/workflows/sync-secrets-local.yml` (the Supabase rows are at `:222-227`). If you created a secret under a `PMOVES_` name because of the old guide, nothing reads it.
+> **Correction (2026-11-20).** Earlier revisions of this guide described a `PMOVES_` name prefix (`PMOVES_OPENAI_API_KEY`, `PMOVES_SUPABASE_URL`, ...) and per-environment prefixes (`PMOVES_DEV_*`, `PMOVES_STAGING_*`, `PMOVES_PROD_*`). **No workflow reads any of those names.** Measured at this revision: `.github/workflows/*.yml` references 145 distinct `secrets.<NAME>` values, and none of them starts with `PMOVES_`. Secrets use the **bare name of the env var they feed**, for example `OPENAI_API_KEY` and `SUPABASE_JWT_SECRET`. The secret-to-env map lives in `.github/workflows/sync-secrets-local.yml`. It carries **no** Supabase key rows; see "Supabase keys are per-node" below. If you created a secret under a `PMOVES_` name because of the old guide, nothing reads it.
 
 ## Overview
 
@@ -46,11 +46,18 @@ Tooling:
 
 ## Supabase keys are per-node
 
-Each node runs **its own** Supabase and Kong, so a Supabase key is only correct on the node that minted it. The workflow already refuses to ship the URL-shaped Supabase values for this reason. `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are deliberately **not mapped** (`sync-secrets-local.yml:365-377`; the anon key is derived per node from `SUPABASE_JWT_SECRET`).
+Each node runs **its own** Supabase and Kong, so a Supabase key is only correct on the node that minted it. Operator decision (2026-11-20): every node runs a sovereign PMOVES.AI stack, and **no** Supabase secret ships fleet-wide from GitHub `Prod` ([#3498](https://github.com/POWERFULMOVES/PMOVES.AI/pull/3498)).
 
-The remaining `SUPABASE_*` rows (`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_REALTIME_*`, `SUPABASE_KEY`) **are** still mapped and delivered fleet-wide. That mapping is under review in [PR #3496](https://github.com/POWERFULMOVES/PMOVES.AI/pull/3496). Until the review settles it:
+Not mapped in `sync-secrets-local.yml` (see the NOT-mapped comment block there):
 
-- Never run a bare `secrets-local-hydrate FORCE=1` on a node whose own Supabase is live. It overwrites that node's keys with another node's and breaks the Kong/cipher pairing.
+- URL-shaped values: `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` (#3188).
+- Keys: `SUPABASE_JWT_SECRET`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_KEY`, `SUPABASE_REALTIME_KEY`, `SUPABASE_REALTIME_SECRET`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (#3498, #3188).
+
+Why: the anon and service-role keys are HS256 JWTs signed with the instance's own JWT secret. The upstream self-hosting template says so: `PMOVES-supabase/docker/.env.example` at the pinned commit (`511f6118`) declares `JWT_SECRET` at line 33 under `# Legacy symmetric HS256 key`, and `ANON_KEY` / `SERVICE_ROLE_KEY` at lines 35-36 under `# Legacy API keys (HS256-signed JWTs)`. Supabase's self-hosting guide (<https://supabase.com/docs/guides/self-hosting/docker>, "Configuring and securing Supabase") says "you should **never** start your self-hosted Supabase using these defaults" and that "self-hosted API keys live in your `.env` file". A key signed with another node's secret fails verification on this node's GoTrue and PostgREST.
+
+Each node mints its own: `pmoves/tools/secrets_self_generated.py` derives the anon / service-role keys (and their aliases, including `SUPABASE_KEY`) from the node's JWT secret during `secrets-funnel`, matching `pmoves/scripts/supabase/generate-keys.sh`. `secrets_bundle_map_gap.py` reports a workflow row for any of these names as a finding.
+
+- Never run a bare `secrets-local-hydrate FORCE=1` on a node whose own Supabase is live. It overwrites that node's keys with whatever the bundle carries.
 - To refresh one rotated key, scope the hydrate: `make -C pmoves secrets-local-hydrate KEYS=<K> FORCE=1`.
 
 ## Reference in workflows
@@ -97,7 +104,7 @@ grep -ho 'secrets\.[A-Z0-9_]*' .github/workflows/*.yml | sort -u
 | Area | Names (bare, as read by workflows) |
 |---|---|
 | LLM providers | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `COHERE_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `TOGETHER_AI_API_KEY`, `FIREWORKS_AI_API_KEY` |
-| Supabase (per-node, see above) | `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_REALTIME_KEY`, `SUPABASE_REALTIME_SECRET`, `SUPABASE_KEY` (`SUPABASE_URL` is intentionally **not** a mapped secret) |
+| Supabase | None. Every Supabase key and URL is per-node and minted on the node; see "Supabase keys are per-node" above. |
 | GitHub Apps | `GH_APP_ID`, `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID`, `GH_APP_SEC`; `GHCR_APP_CLIENT_ID`, `GHCR_APP_SEC` |
 | Integrations | `DISCORD_WEBHOOK_URL`, `TELEGRAM_BOT_TOKEN`, `JELLYFIN_API_KEY` |
 
