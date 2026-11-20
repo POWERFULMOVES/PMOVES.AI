@@ -257,3 +257,100 @@ def test_make_recipe_passes_keys_only_when_set(tmp_path, stub_docker_path, cmdli
         assert "--keys" not in args
     else:
         assert args[args.index("--keys") + 1] == expect
+
+
+# ------------------------------------------- validation skips are not success
+#
+# _write_updates drops a value that fails validate_secret_value with only a
+# stderr WARNING. main() used to print "Hydrated N keys" listing that key and
+# exit 0 -- on the GH_APP_SEC rotation path that reported a rotation which
+# never happened.
+
+# '+' with base64 padding. Written QUOTED in local.env it passes the parser's
+# validation (which sees the quotes), is normalised to the bare value, and is
+# then rejected by the write path's validation -- the reachable skip. (Unquoted,
+# the parser itself drops it, and --keys then reports the key as absent.)
+BAD_PLUS = "abcdefgh+ijklmnop+qrstuv=="
+BAD_LINE = '"' + BAD_PLUS + '"'
+# A \n-ESCAPED single-line PEM: the storage form the runbook prescribes.
+GOOD_PEM = (
+    "-----BEGIN RSA PRIVATE KEY-----\\nMIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun"
+    "\\nVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxK\\n-----END RSA PRIVATE KEY-----"
+)
+
+
+def _with_raw_newline(monkeypatch, local: Path, key: str):
+    """Inject a value with a REAL newline for `key` (a line-based file cannot carry one)."""
+    real_parse = slh._parse_env
+
+    def parse(path):
+        values = real_parse(path)
+        if Path(path) == local:
+            values[key] = "-----BEGIN PRIVATE KEY-----\nMIIBOgIBAAJBAKj34\n-----END PRIVATE KEY-----"
+        return values
+
+    monkeypatch.setattr(slh, "_parse_env", parse)
+
+
+@pytest.mark.parametrize("bad", ["plus_padding", "raw_newline"])
+def test_cli_force_keys_validation_skip_is_a_failure_not_a_success(envs, monkeypatch, capsys, bad):
+    local, shared, _ = envs
+    _isolate(monkeypatch)
+    if bad == "plus_padding":
+        local.write_text(f"GH_APP_SEC={BAD_LINE}\n", encoding="utf-8")
+    else:
+        _with_raw_newline(monkeypatch, local, "GH_APP_SEC")
+    rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared),
+                         "--force", "--keys", "GH_APP_SEC"], capsys)
+    assert rc == 1
+    assert re.search(r"NOT hydrated \(failed validation\)[^\n]*GH_APP_SEC", out + err)
+    assert not re.search(r"Hydrated \d+ keys", out), "a skipped key was reported as hydrated"
+    assert _shared_value(shared, "GH_APP_SEC") == STALE
+    assert BAD_PLUS not in out + err
+
+
+def test_cli_force_without_keys_any_skip_exits_1_and_valid_keys_still_land(envs, monkeypatch, capsys):
+    local, shared, _ = envs
+    _isolate(monkeypatch)
+    local.write_text(f"GH_APP_SEC={BAD_LINE}\nEMPTY_IN_SHARED={FRESH}\n", encoding="utf-8")
+    rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared), "--force"], capsys)
+    assert rc == 1
+    assert re.search(r"NOT hydrated \(failed validation\)[^\n]*GH_APP_SEC", out + err)
+    assert _shared_value(shared, "EMPTY_IN_SHARED") == FRESH
+    assert _shared_value(shared, "GH_APP_SEC") == STALE
+
+
+def test_cli_plain_run_lists_skip_but_keeps_exit_0(tmp_path, monkeypatch, capsys):
+    _isolate(monkeypatch)
+    local = tmp_path / "local.env"
+    local.write_text(f"BAD_ONE={BAD_LINE}\nGOOD_ONE={FRESH}\n", encoding="utf-8")
+    shared = tmp_path / "env.shared"
+    shared.write_text("BAD_ONE=\nGOOD_ONE=\n", encoding="utf-8")
+    rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared)], capsys)
+    assert rc == 0
+    assert re.search(r"NOT hydrated \(failed validation\)[^\n]*BAD_ONE", out + err)
+    assert re.search(r"Hydrated 1 keys", out)
+    assert _shared_value(shared, "BAD_ONE") == ""
+
+
+def test_cli_dry_run_reports_would_skip(envs, monkeypatch, capsys):
+    local, shared, _ = envs
+    _isolate(monkeypatch)
+    local.write_text(f"GH_APP_SEC={BAD_LINE}\n", encoding="utf-8")
+    before = shared.read_text(encoding="utf-8")
+    rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared),
+                         "--dry-run", "--force", "--keys", "GH_APP_SEC"], capsys)
+    assert rc == 1
+    assert re.search(r"NOT hydrated \(failed validation\)[^\n]*GH_APP_SEC", out + err)
+    assert shared.read_text(encoding="utf-8") == before
+
+
+def test_cli_escaped_single_line_pem_is_written(envs, monkeypatch, capsys):
+    local, shared, _ = envs
+    _isolate(monkeypatch)
+    local.write_text(f"GH_APP_SEC={GOOD_PEM}\n", encoding="utf-8")
+    rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared),
+                         "--force", "--keys", "GH_APP_SEC"], capsys)
+    assert rc == 0, err
+    assert "NOT hydrated" not in out + err
+    assert _shared_value(shared, "GH_APP_SEC") == GOOD_PEM

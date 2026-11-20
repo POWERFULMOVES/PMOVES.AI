@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, Iterable, List, NamedTuple, Sequence
 
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
@@ -67,8 +67,17 @@ def _masked(value: str) -> str:
     return f"{value[:4]}...{value[-4:]}"
 
 
-def _write_updates(env_path: Path, updates: Dict[str, str]) -> None:
-    """Write updated values back into the env file, preserving structure."""
+def _invalid_keys(updates: Dict[str, str]) -> List[str]:
+    """Names of values validate_secret_value rejects (they will NOT be written)."""
+    return sorted(k for k, v in updates.items() if not validate_secret_value(k, v)[0])
+
+
+def _write_updates(env_path: Path, updates: Dict[str, str]) -> List[str]:
+    """Write updated values back into the env file, preserving structure.
+
+    Returns the NAMES it skipped because validation failed. A skipped key was
+    not written, and callers must not report it as hydrated.
+    """
     lines = env_path.read_text(encoding="utf-8", errors="ignore").splitlines()
 
     # Build index of key -> line number
@@ -81,12 +90,14 @@ def _write_updates(env_path: Path, updates: Dict[str, str]) -> None:
         index[key] = idx
 
     validated_updates = {}
+    skipped: List[str] = []
     for key, value in updates.items():
         # Validate each value before writing
         is_valid, error = validate_secret_value(key, value)
         if not is_valid:
             # Log only key name (CodeQL safe: no value taint, no error message)
             print(f"WARNING: Skipping malformed secret '{key}' (validation failed)", file=sys.stderr)
+            skipped.append(key)
             continue
         validated_updates[key] = value
 
@@ -101,6 +112,16 @@ def _write_updates(env_path: Path, updates: Dict[str, str]) -> None:
     if text and not text.endswith("\n"):
         text += "\n"
     env_path.write_text(text, encoding="utf-8")
+    return sorted(skipped)
+
+
+class HydrateResult(NamedTuple):
+    """written: keys that were (or, under dry_run, would be) written.
+    skipped: keys selected for overlay whose value FAILED validation -- never
+    written, never to be reported as hydrated."""
+
+    written: Dict[str, str]
+    skipped: List[str]
 
 
 def hydrate(
@@ -113,6 +134,32 @@ def hydrate(
     registry_path: Path | None = None,
     keys: Iterable[str] | None = None,
 ) -> Dict[str, str]:
+    """Overlay local.env values into env.shared; returns the keys WRITTEN.
+
+    Thin wrapper over :func:`hydrate_with_report`, which also returns the keys
+    skipped for failing validation.
+    """
+    return hydrate_with_report(
+        local_env_path,
+        env_shared_path,
+        dry_run=dry_run,
+        force=force,
+        cleared_keys_path=cleared_keys_path,
+        registry_path=registry_path,
+        keys=keys,
+    ).written
+
+
+def hydrate_with_report(
+    local_env_path: Path,
+    env_shared_path: Path,
+    *,
+    dry_run: bool = False,
+    force: bool = False,
+    cleared_keys_path: Path | None = None,
+    registry_path: Path | None = None,
+    keys: Iterable[str] | None = None,
+) -> HydrateResult:
     """Overlay local.env values into env.shared for empty/placeholder keys.
 
     When force=True, overwrites ALL matching keys in env.shared with values
@@ -163,10 +210,14 @@ def hydrate(
         if force or is_placeholder(current):
             updates[key] = local_val
 
+    # Validate BEFORE writing so a dry run reports the same skips a real run
+    # would make. _write_updates re-validates (defence in depth) and its own
+    # skip list is unioned in.
+    skipped = set(_invalid_keys(updates))
     if updates and not dry_run:
-        _write_updates(env_shared_path, updates)
-
-    return updates
+        skipped |= set(_write_updates(env_shared_path, updates))
+    written = {k: v for k, v in updates.items() if k not in skipped}
+    return HydrateResult(written, sorted(skipped))
 
 
 def _parse_keys_arg(raw: str) -> List[str]:
@@ -281,9 +332,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     prefix = "[dry-run] " if args.dry_run else ""
     if args.force:
         prefix = "[force] " + prefix
-    updates = hydrate(
+    result = hydrate_with_report(
         local_env, env_shared, dry_run=args.dry_run, force=args.force, keys=requested
     )
+    updates, skipped = result.written, result.skipped
+
+    rc = 0
+    if skipped:
+        verb = "would NOT be hydrated" if args.dry_run else "NOT hydrated"
+        print(
+            f"ERROR: {len(skipped)} key(s) {verb} (failed validation): {', '.join(skipped)}",
+            file=sys.stderr,
+        )
+        print(f"{prefix}NOT hydrated (failed validation): {', '.join(skipped)}")
+        # A forced or explicitly-scoped overwrite that silently does nothing is
+        # the defect: the operator asked for THIS key and did not get it.
+        if args.force or requested is not None:
+            rc = 1
+
+    if not updates and skipped:
+        return rc
 
     if not updates:
         if args.force:
@@ -303,12 +371,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{prefix}Would hydrate {len(updates)} keys from {local_env} -> {env_shared}:")
         for key in sorted(updates):
             print(f"  {key}")
-        return 0
+        return rc
 
     print(f"{prefix}Hydrated {len(updates)} keys from {local_env} -> {env_shared}:")
     for key in sorted(updates):
         print(f"  {key}={_masked(updates[key])}")
-    return 0
+    return rc
 
 
 if __name__ == "__main__":
