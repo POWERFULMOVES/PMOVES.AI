@@ -99,6 +99,15 @@ def test_redact_url_strips_userinfo():
     assert nc_mod._redact_url("nats://nats.example:4222") == "nats://nats.example:4222"
 
 
+def test_redact_url_public_name_and_private_alias_are_one_function():
+    """redact_url is the public name; _redact_url stays as an alias for older imports."""
+    from pmoves.services.common import nats_client as nc_mod
+
+    assert nc_mod._redact_url is nc_mod.redact_url
+    assert "redact_url" in nc_mod.__all__
+    assert nc_mod.redact_url("nats://u:p@nats.example:4222") == "nats://nats.example:4222"
+
+
 @pytest.mark.asyncio
 async def test_create_nats_connection_success():
     """create_nats_connection returns a connected client."""
