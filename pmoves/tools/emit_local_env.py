@@ -77,7 +77,7 @@ def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[s
 
     Drops: placeholder/empty values (never overlay a blank over a real key),
     invalid env keys, and values that fail ``validate_secret_value`` (multi-line
-    PEM/SSH keys, base64-concat corruption, Docker-Compose-hostile ``+``).
+    PEM/SSH keys, base64-concat corruption).
     """
     emit: Dict[str, str] = {}
     skipped: List[str] = []
