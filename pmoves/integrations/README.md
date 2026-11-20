@@ -4,10 +4,18 @@ This directory holds PMOVES-side overlays for integrated services/submodules.
 
 ## Current integrations
 
-- `archon/`
-- `health-wger/`
-- `firefly-iii/` (PMOVES-Wealth integration artifacts currently remain in this folder name)
-- `pr-kits/`
+Every directory actually present under `pmoves/integrations/` is listed here. The
+ratchet `pmoves/tests/tools/test_integration_reconciliation_ratchet.py` fails if a
+directory exists on disk that is not named below.
+
+- `_template/` – the scaffold every new integration is copied from (see "Contract-first onboarding" below)
+- `agent0-plugins/` – local staging lane for PMOVES plugin-index submissions to `agent0ai/a0-plugins` (`catalog/<plugin-name>/plugin.yaml` drafts)
+- `archon/` – git submodule (PMOVES-Archon) mounted here for local integration builds
+- `firefly-iii/` – Firefly III / PMOVES-Wealth integration overlay (PMOVES-Wealth artifacts currently remain in this folder name)
+- `github-runners/` – GitHub runner lane policy (`compose/lane_hosts.json`, `compose/runner_phase_policy.json`)
+- `health-wger/` – Wger health integration overlay
+- `pr-kits/` – reusable PR packaging assets (compose snippets, CI fragments, summary docs); not a runtime overlay
+- `tools/` – integration validation can-openers (`validate-integration.sh`, `validate-submodule.sh`, `submodule-sitrep.sh`)
 
 ## Contract-first onboarding
 
