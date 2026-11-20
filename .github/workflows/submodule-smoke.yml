@@ -78,7 +78,27 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
+          # MEASURED on PR #3482 (the 13-gitlink promotion lane): with
+          # `submodules: recursive` this checkout clones ALL 84 submodules at
+          # FULL history. The timeout log shows 30+ concurrent
+          # `git-remote-https` / `git-submodule` processes still running, in
+          # "Checkout PR branch", when the job's `timeout-minutes: 45` fires
+          # -- twice (runs 44639462331 and 44649240426, both 45.6m, both
+          # cancelled in that step). The job never reached step 2.
+          #
+          # The job does not need them. "Identify changed submodules" diffs
+          # the SUPERPROJECT tree (`git diff base..head` + `git ls-tree`), and
+          # every step after it -- "Verify submodule integrity", "Run strict
+          # smoke tests", "Check critical health endpoints" -- reads only the
+          # CHANGED submodule paths. Cloning 84 repositories at full history
+          # to use 13 of them IS the cost.
+          #
+          # So: check out the superproject only. `fetch-depth: 0` STAYS --
+          # step 2 diffs against the base commit, which a shallow superproject
+          # would not contain. The submodule clones are what get bounded, and
+          # that happens in the next step, which initialises only the changed
+          # paths and shallow.
+          submodules: false
           fetch-depth: 0
 
       - name: Identify changed submodules
@@ -110,6 +130,30 @@ jobs:
             csv=$(echo "$changed_subs" | tr '\n' ',' | sed 's/,$//')
             echo "submodules=$csv" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Initialize changed submodules
+        if: steps.changed.outputs.submodules != ''
+        run: |
+          set -euo pipefail
+
+          # Only the CHANGED submodules are initialised, and shallowly.
+          #
+          # Shallow first is safe only when the pinned commit is still the tip
+          # of the submodule's branch -- a shallow clone fetches the tip, and
+          # `git submodule update` then refuses an unadvertised (older) pin.
+          # A promotion lane pins arbitrary commits, so a shallow fetch CAN
+          # legitimately fail with "not our ref". That one submodule falls
+          # back to full history; the other twelve stay shallow. A blanket
+          # fallback would pay full history for all of them because of one.
+          IFS=',' read -ra subs <<< "${{ steps.changed.outputs.submodules }}"
+          echo "Initializing ${#subs[@]} changed submodule(s), shallow first:"
+          for sub in "${subs[@]}"; do
+            echo "  $sub"
+            if ! git submodule update --init --recursive --depth 1 "$sub"; then
+              echo "    shallow init failed (pin is not the branch tip) -- full history for $sub"
+              git submodule update --init --recursive --force "$sub"
+            fi
+          done
 
       - name: Verify submodule integrity
         if: steps.changed.outputs.submodules != ''
