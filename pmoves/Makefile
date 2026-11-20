@@ -1883,8 +1883,22 @@ up-workers: ## Start worker services (extract, langextract, media)
 	@$(MAKE) --no-print-directory wait-workers
 	@echo "✅ Workers ready"
 
+.PHONY: up-drop-folder-ingest
+# Drop folder -> MinIO -> ingest.file.added.v1 -> watch-folder-router.
+# The host folder is created HERE, as the invoking user, before compose sees it:
+# a bind source compose has to create itself is created root-owned, and the
+# container runs as uid 1000 and could then not move files into .done/.failed.
+# DROP_FOLDER is exported as PMOVES_DROP_FOLDER so the directory made here is
+# the one mounted (shell env outranks the --env-file values in interpolation).
+# Usage: make up-drop-folder-ingest DROP_FOLDER=/media/powerfulmoves/pmoves-archive/drop
+DROP_FOLDER ?= $(or $(PMOVES_DROP_FOLDER),./data/drop)
+up-drop-folder-ingest: ensure-env-shared ## Build+start the drop-folder ingester (DROP_FOLDER=<host dir>, default ./data/drop)
+	@mkdir -p "$(DROP_FOLDER)/.done" "$(DROP_FOLDER)/.failed"
+	@PMOVES_DROP_FOLDER="$(abspath $(DROP_FOLDER))" $(MAKE) --no-print-directory rebuild-svc SVC=drop-folder-ingest
+	@echo "drop folder: $(abspath $(DROP_FOLDER))  (health: docker inspect --format '{{.State.Health.Status}}' pmoves-drop-folder-ingest-1)"
+
 .PHONY: up-agents
-up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
+up-agents:## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@echo "🤖 Starting agent services..."
 	@$(DC) up -d $(AGENT_SERVICES)
 	@$(MAKE) --no-print-directory wait-agents
