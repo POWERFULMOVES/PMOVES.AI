@@ -5,12 +5,27 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 import pmoves.tools.yt_oauth_flow as oauth
 
 
 class TestBuildFlow(unittest.TestCase):
+    # _build_flow is a thin wrapper over google_auth_oauthlib.InstalledAppFlow
+    # and exits when the library is absent, so these assertions cannot be
+    # measured without it. It is a [dev] optional dependency
+    # (pmoves/pyproject.toml) that CI installs via .github/requirements-tests.txt
+    # for merge-gate's pytest_ratchet run, so CI still executes these; only an
+    # interpreter without the dev extra skips them.
+    def setUp(self):
+        pytest.importorskip(
+            "google_auth_oauthlib",
+            reason="google-auth-oauthlib ([dev] extra) not installed; "
+            "_build_flow requires it",
+        )
+
     def test_build_flow_sets_client_and_scopes(self):
         flow = oauth._build_flow(
             "cid", "csec", "https://www.googleapis.com/auth/youtube.readonly"
@@ -68,16 +83,19 @@ class TestClientCreds(unittest.TestCase):
 
 
 class TestServiceRoleKey(unittest.TestCase):
-    def test_prefers_service_role_key(self):
+    def test_prefers_supabase_service_role_key(self):
+        # Precedence was deliberately swapped in f2f6d28c4 (#2333): the
+        # secrets-sync name is refreshed by the funnel every run, while the
+        # legacy SERVICE_ROLE_KEY was observed carrying a key signed by a
+        # retired JWT secret (PostgREST 401 on upsert).
         env = {"SERVICE_ROLE_KEY": "srk", "SUPABASE_SERVICE_ROLE_KEY": "supa-srk"}
         with mock.patch.dict(os.environ, env, clear=True):
-            self.assertEqual(oauth._service_role_key(), "srk")
-
-    def test_falls_back_to_supabase_service_role_key(self):
-        # secrets-sync provides SUPABASE_SERVICE_ROLE_KEY (the GH secret name).
-        env = {"SUPABASE_SERVICE_ROLE_KEY": "supa-srk"}
-        with mock.patch.dict(os.environ, env, clear=True):
             self.assertEqual(oauth._service_role_key(), "supa-srk")
+
+    def test_falls_back_to_legacy_service_role_key(self):
+        env = {"SERVICE_ROLE_KEY": "srk"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(oauth._service_role_key(), "srk")
 
     def test_exits_when_neither_set(self):
         with mock.patch.dict(os.environ, {}, clear=True):
