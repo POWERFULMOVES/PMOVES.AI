@@ -55,6 +55,14 @@ from pathlib import Path
 try:
     from gradio_client import Client
 except ImportError:
+    if __name__ != "__main__":
+        # Collected by pytest (the test_ prefix matches its discovery). Exiting
+        # here raised SystemExit inside collection, which aborts the whole
+        # pytest session: every other file in the same python-tests ratchet
+        # chunk then reported nothing. Skip this module instead.
+        import unittest
+
+        raise unittest.SkipTest("gradio_client not installed")
     print("ERROR: gradio_client required. Install with: pip install gradio_client")
     sys.exit(1)
 
