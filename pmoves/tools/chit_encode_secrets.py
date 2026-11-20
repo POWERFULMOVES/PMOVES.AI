@@ -18,6 +18,7 @@ DEFAULT_ENV_FILE = PMOVES_DIR / "env.shared"
 DEFAULT_OUT = PMOVES_DIR / "data/chit/env.cgp.json"
 
 from pmoves.chit import encode_secret_map
+from pmoves.tools._secrets_common import is_unexpanded_ref
 
 
 def load_env_file(path: Path, keys: set[str] | None = None) -> Dict[str, str]:
@@ -94,6 +95,38 @@ def main() -> None:
     args = parser.parse_args()
 
     secrets = load_env_file(args.env_file, set(args.keys) if args.keys else None)
+
+    # Keep unexpanded `${VAR}` refs out of the bundle. A ref is interpolation
+    # SOURCE text; once it is inside a CGP it is decoupled from the file that
+    # could have expanded it, and it travels as if it were the value -- the Z890
+    # JWT reversion (58 -> 13 chars). secrets_sync refuses refs and placeholders
+    # too; this side stops the poison at the source. Blanks and placeholder
+    # literals are left for secrets_sync to judge: env.shared also carries
+    # non-secret config, and a word like `none` can be a real config value.
+    refs = sorted(key for key, value in secrets.items() if is_unexpanded_ref(value))
+    for key in refs:
+        del secrets[key]
+    if refs:
+        # COUNT ONLY -- same doctrine as emit_local_env.emit(). `refs` holds key
+        # names, and a key name is not a secret, but they are drawn from the
+        # loaded secret map and CodeQL's py/clear-text-logging-sensitive-data
+        # (alert #438 on this line) recognises no barrier between the two. A
+        # count keeps the operator signal without dismissing an alert on a
+        # secrets path. The keys are recoverable from the env file itself: they
+        # are its whole-value `KEY=${OTHER}` / `KEY=$OTHER` lines.
+        print(
+            f"WARNING: excluded {len(refs)} unexpanded ${{VAR}} ref(s) from the "
+            f"CGP (the whole-value KEY=${{OTHER}} lines of {args.env_file}; names "
+            "omitted deliberately). Set real values in the env file before "
+            "exporting.",
+            file=sys.stderr,
+        )
+    if not secrets:
+        raise RuntimeError(
+            f"{args.env_file} held no exportable values (every candidate was an "
+            "unexpanded ${VAR} ref)"
+        )
+
     cgp = encode_secret_map(
         secrets,
         namespace=args.namespace,

@@ -49,7 +49,18 @@ import math
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from pmoves.tools._secrets_common import is_placeholder
+from pmoves.tools._secrets_common import is_placeholder, is_unexpanded_ref
+
+
+def _is_nonvalue(value: Optional[str]) -> bool:
+    """Placeholder OR a whole-value ``${VAR}`` ref -- neither is a derivable secret.
+
+    A ref left in the bundle (SUPABASE_JWT_SECRET=``${JWT_SECRET}``, Z890
+    2026-09-09) is not a value: it must be mirrored over like a blank, and it must
+    never be used as the HMAC key the anon/service_role JWTs are signed with.
+    """
+    return is_placeholder(value) or is_unexpanded_ref(value)
+
 
 # Canonical Supabase JWT claims — MUST match scripts/supabase/generate-keys.sh.
 _JWT_ISS = "supabase-local"
@@ -184,10 +195,15 @@ _VERIFIER_SECRET_ORDER = ("SUPABASE_JWT_SECRET", "JWT_SECRET")
 
 
 def verifier_secret(values: Mapping[str, str]) -> str:
-    """The JWT secret the Supabase verifiers will use, by their own precedence."""
+    """The JWT secret the Supabase verifiers will use, by their own precedence.
+
+    A placeholder or a whole-value ``${VAR}`` ref is skipped (``_is_nonvalue``):
+    SUPABASE_JWT_SECRET=``${JWT_SECRET}`` (Z890 2026-09-09) must fall through to
+    JWT_SECRET's real value, never become the HMAC key itself.
+    """
     for name in _VERIFIER_SECRET_ORDER:
         value = (values.get(name) or "").strip()
-        if value and not is_placeholder(value):
+        if value and not _is_nonvalue(value):
             return value
     return ""
 
@@ -311,11 +327,12 @@ def _claims(value: Optional[str]) -> Optional[Tuple[Dict[str, Any], Dict[str, An
 
 
 def _node_secrets(values: Mapping[str, str]) -> List[str]:
-    """This node's JWT secrets (both names, deduplicated, placeholders dropped)."""
+    """This node's JWT secrets (both names, deduplicated, placeholders and
+    ``${VAR}`` refs dropped)."""
     out: List[str] = []
     for name in _VERIFIER_SECRET_ORDER:
         v = (values.get(name) or "").strip()
-        if v and not is_placeholder(v) and v not in out:
+        if v and not _is_nonvalue(v) and v not in out:
             out.append(v)
     return out
 
@@ -338,7 +355,7 @@ def _is_live_role_key(value: Optional[str], role: str, jwt_secret: str, now: int
     """A value fit to BE the role's key: HS256, the role's own role claim,
     verifies under the verifiers' secret, and its exp is absent or a NumericDate
     in the future (a malformed exp is unknown, so never live)."""
-    if is_placeholder(value) or _hs256_verifies(value, jwt_secret) is not True:
+    if _is_nonvalue(value) or _hs256_verifies(value, jwt_secret) is not True:
         return False
     if (_claims(value) or ({}, {}))[1].get("role") != role:
         return False
@@ -423,7 +440,7 @@ def fill_self_generated(
     node_secrets = _node_secrets(out)
 
     # Mirror JWT_SECRET into SUPABASE_JWT_SECRET if missing (manifest requires both)
-    if not out.get("SUPABASE_JWT_SECRET") or is_placeholder(out.get("SUPABASE_JWT_SECRET")):
+    if not out.get("SUPABASE_JWT_SECRET") or _is_nonvalue(out.get("SUPABASE_JWT_SECRET")):
         out["SUPABASE_JWT_SECRET"] = jwt_secret
 
     verifier_ok, runtime_reason = local_runtime_is_verifier(ctx, local_services)
@@ -444,7 +461,7 @@ def fill_self_generated(
         reported: set = set()
         for label in labels:
             value = out.get(label)
-            if is_placeholder(value):
+            if _is_nonvalue(value):
                 continue
             exp = _jwt_exp_claim(value)
             decoded = _claims(value)
@@ -482,13 +499,13 @@ def fill_self_generated(
                     out[label] = rolling
                     log.append({"label": label, "role": role, "action": "reminted",
                                 "reason": stale[label]})
-                elif is_placeholder(out.get(label)):
+                elif _is_nonvalue(out.get(label)):
                     out[label] = rolling
                     log.append({"label": label, "role": role, "action": "filled",
                                 "reason": "absent"})
         else:
             for label in labels:
-                if is_placeholder(out.get(label)):
+                if _is_nonvalue(out.get(label)):
                     out[label] = donor or derive_supabase_jwt(jwt_secret, role)
                     log.append({"label": label, "role": role, "action": "filled",
                                 "reason": "absent"})
@@ -503,7 +520,7 @@ def fill_self_generated(
             continue
         for label in labels:
             value = out.get(label)
-            if is_placeholder(value) or value == role_key or label in reported:
+            if _is_nonvalue(value) or value == role_key or label in reported:
                 continue
             if _is_live_role_key(value, role, jwt_secret, now) and _minted_by_this_node(value, node_secrets):
                 if verifier_ok:
