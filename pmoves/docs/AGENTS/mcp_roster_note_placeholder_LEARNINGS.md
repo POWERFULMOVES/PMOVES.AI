@@ -77,6 +77,7 @@ The launcher had already solved the same problem for its own text-scan by **excl
 | 1.6 | **an-unbalanced-reference-is-as-unsatisfiable-as-a-malformed-one** | **A reference that opens and never closes (`${BROKEN`) can never resolve either — there is no environment variable for it. Classifying "malformed" by the presence of a CLOSING BRACE leaves a hole in the class the gate exists to close.** Codex finding `4631230891` on this lane's ratchet: the filter required `}`. | MEASURED with the live `expand()`: `expand("${BROKEN", {}, m)` → `m == ['${BROKEN']` — the normalizer records the literal text it could not close and degrades the server. The old filter discarded it, so the ratchet passed while the server was degraded. The discriminator is **"does the recorded miss still look like a reference?"** (starts with `${`), not "is it closed?". | Any reference scanner that separates "unset" from "unsatisfiable". |
 | 1.7 | **an-absent-entry-is-invisible-to-a-field-by-field-comparison** | **A server the generator describes and the roster does not carry has no field to compare — so a comparison that iterates the generated entries and skips the ones it cannot find reports no drift at all.** The missing server is the more dangerous direction, because it is not a wrong value, it is a whole absent service. Codex finding `4631230905`: the branch `continue`d. | MEASURED: the generator emits **14** servers for `claude`/`fleet`; the tracked roster carries **21**; the difference in THIS direction is exactly **3** (`e2b-danger-room`, `flute-voice`, `flute-voice-mcp`), and the other 10 roster servers are hand-added (the opposite direction). A comparison over the generated entries alone cannot see a fourth absence. | Any drift check between a generated artefact and its source. |
 | 1.8 | **a-lane's-fix-can-invalidate-an-already-merged-lane's-published-table** | **A fix that changes a shared artefact changes what a gate reports about it — and a table published by an EARLIER, already-merged lane can become FALSE without anyone touching it.** The row was correct when it was written and wrong the moment this lane landed. | MEASURED with the LIVE normalizer: before this lane's move, `pmoves-nats-fleet` / `NATS_CREDS` in `env` was DEGRADED (the prose quoted a bare `${NATS_CREDS}` AND a malformed `${...}`, so the server degraded on every launch even with every var set); after it, `NATS_CREDS` is CLEAN and only `NATS_URL` flags the server. The `Windows host quirks` section of `.claude/BOOTSTRAP.md` (PR #3485, ALREADY MERGED) published the DEGRADED row, and THAT lane's ratchet failed against this lane's tree. | Any lane that changes a shared artefact another lane's documentation describes. |
+| 1.9 | **a-count-in-a-shared-config-is-a-claim-about-someone-else's-file** | **When a lane adds a mutation to a harness that ANOTHER lane's config describes, the config's stated count becomes a CLAIM about a file this lane owns — and the house already has a gate that checks it.** The count did not drift because anyone was careless; it drifted because the harness GREW. | MEASURED: the shared config `pmoves/configs/pytest_ratchet/_slow_files.yaml` stated that `test_bootstrap_windows_host_quirks_mutation_kill.py` "defines 8 mutations"; the cross-lane reconciliation above added M9 and M10, making it TEN. The gate `test_a_declared_mutation_count_is_the_measured_one` recomputes the count by AST from the harness and failed with `AssertionError: 8 != 10` — out of 153 findings, 152 baselined and 1 new. | Any lane that adds to a harness, a fixture or a registry that another lane's config states a COUNT, a size or a cost for. |
 
 ### Bucket 2 — Decisions
 
@@ -89,6 +90,7 @@ The launcher had already solved the same problem for its own text-scan by **excl
 | 2.5 | **assert-the-class-not-the-instance** | The ratchet asserts "no malformed reference in any config value" and "no `_`-prefixed key inside an `env` block" — roster-wide, not "the nats entry must not degrade". | Both rules are currently satisfied by exactly one entry, and both would catch a future instance in a different server. An instance-specific assertion would only ever fire once. | Assert `pmoves-nats-fleet` specifically | The next occurrence lands in a different server and the gate stays green. |
 | 2.6 | **the-behavioural-test-uses-the-live-normalizer** | The degrade test calls `mcp_roster_normalize.normalize()` — the component that produces the verdict — rather than re-deriving the verdict. | A re-implementation of P4/P5 in the test would be a second opinion about the tool's own rules, and would drift from them. | Re-implement the expansion in the test | The test could agree with a broken normalizer. The whole point is to observe the real verdict. |
 | 2.7 | **correct-the-published-truth-do-not-relax-the-merged-lane's-gate** | When a MERGED lane's ratchet fails because another lane changed the shared artefact, the fix is the PUBLISHED STATEMENT, not the gate. The row that became false was removed, the note explaining it was rewritten to what the gate does now, and the footnote's row count was corrected 9 → 8. | The merged lane's gate was RIGHT: it compared a published claim against the LIVE gate, and the claim had become false. Relaxing it would keep a false claim in an always-loaded doc. MEASURED: the bootstrap ratchet 12 passed, the harness **10 of 10 proven kills**, including **M10 — the REVERT of this correction**, which puts the removed row back and requires `test_the_roster_table_matches_the_live_roster_and_the_live_gate` to die naming it. | Relax the merged lane's precondition (e.g. accept a DEFAULTED reference for a row that claims a finding) | The gate can no longer say "this published row is false", and the next drift of the same shape lands in the same blind spot. |
+| 2.8 | **fix-the-stale-count-and-re-measure-everything-that-moved-with-it** | The declared count was corrected 8 → 10, and every number that moved with it was RE-MEASURED rather than incremented: the file's own runtime, the chunk runtime, the ratio the allowance buys, and the premise about CI being slower. | The block is the basis a future editor re-reads when re-sizing the budget, and its mutation count is GATED. Correcting the digit alone would leave three stale wall-clock numbers and one false premise beside it. MEASURED with the ratchet's OWN invocation, TWICE: file 28.5s / 29.2s (15 passed), chunk 115.2s / 127.2s; CI-side chunk 42.4s from merge-gate run 44700831929. | Just bump the digit 8 → 10 | Three wrong wall-clock numbers and a false "CI is slower" premise survive in the file a future editor sizes the budget from, and the allowance stops being load-bearing for a reason nobody can check. |
 
 ### Bucket 3 — Operations
 
@@ -227,3 +229,41 @@ So the prose in `env` was doing TWO jobs the normalizer could not distinguish: i
 M9 exists because the footnote's row count had **no** mutation kill before — the exact number this reconciliation moved was unguarded. MEASURED: **10 of 10 proven kills**, GREEN before and after every mutation, the tree restored byte-exactly.
 
 **The rule.** When a lane's fix changes a shared artefact, EVERY lane whose documentation describes that artefact must be re-read — including the ones merged weeks earlier whose authors are not in the room. The gate that catches it belongs to the lane that PUBLISHED the claim, not to the lane that changed the input.
+
+---
+
+## The third fix (2026-11-20) — a count in a shared config, one file over
+
+**What happened.** The cross-lane reconciliation above added two kills (M9, M10) to the ALREADY-MERGED lane PR #3485's harness, `pmoves/tests/tools/test_bootstrap_windows_host_quirks_mutation_kill.py`. That harness is described by a **shared** config — `pmoves/configs/pytest_ratchet/_slow_files.yaml` — whose WHY block states in prose how many mutations it defines and what the file therefore costs.
+
+That block still said **8**.
+
+**The house caught it by name.** The merge gate's `python-tests` job on this lane's head reported exactly ONE new finding out of 153 (152 baselined):
+
+```
+FAIL|tests.tools.test_pytest_ratchet.TestDeclaredSlowFiles|test_a_declared_mutation_count_is_the_measured_one
+AssertionError: 8 != 10 : pmoves/tests/tools/test_bootstrap_windows_host_quirks_mutation_kill.py's config reason claims 8 mutations; the file defines 10
+```
+
+That gate is not this lane's. It is the pytest-ratchet's own, and it recomputes the count by AST from the harness — the same gate that already caught the encoding harness claiming "7 mutations" while defining fifteen.
+
+**What was fixed, and what was NOT.**
+
+* **FIXED:** the declared count (8 → 10) and **every number that moved with it**, re-measured rather than incremented.
+* **NOT FIXED — deliberately:** the gate was **not** relaxed, **no** baseline was taken (`make -C pmoves python-tests-baseline` was NOT run — that is the escape hatch that would have recorded the drift as expected), and the 90s allowance was **not** changed.
+
+**Re-measured with the ratchet's OWN invocation** (`pmoves/tools/pytest_ratchet.py:run_pytest`, not a hand-rolled pytest command), TWICE, because one run is not a measurement of a wall clock:
+
+| quantity | before (8 mutations) | after (10 mutations) |
+|---|---|---|
+| the file alone | 22.8s / 27.0s (13 passed) | **28.5s / 29.2s (15 passed in 25.85s / 27.97s)** |
+| its chunk `pmoves/tests/tools [1]` | 105.2s / 104.3s (20 files) | **115.2s / 127.2s (20 files)** |
+| chunk budget with the 90s allowance | 210s | 210s — **unchanged** |
+
+**The CI side was measured, not assumed.** The same merge-gate job stamped `pmoves/tests/tools [1]` at `08:24:10.395Z` and the next group at `08:24:52.753Z` — **42.4s** for the same 20 files on a Linux runner (run 44700831929, job 136168530357). That **CORRECTS** a premise the block had inherited from the encoding entry above: "a CI runner is SLOWER than this host" is true for the encoding harness and **false** for this chunk. Both numbers are now recorded, so the spread is visible rather than assumed.
+
+**Why the 90s allowance stays.** 127.2s is **106%** of the 120s default chunk budget on this host — the chunk is already over budget without the allowance, and a killed chunk that holds this harness leaves `.claude/BOOTSTRAP.md` and `.claude/CLAUDE.md` **MUTATED** on disk. The allowance buys 210s = 1.65x the worst measured chunk (4.96x the CI-measured one) and a 150s per-file budget = 5.1x the measured file.
+
+**MEASURED after the fix:** the pytest-ratchet suite **43 passed**, the bootstrap ratchet **12 passed** (55 together), and this lane's mutation harness **15 passed in 28.50s** — the same wall clock the config now claims, so the claim and the measurement agree.
+
+**The rule.** A lane that adds to a harness, a fixture or a registry must find every SHARED config that states a count, a size or a cost for it, and re-measure the ones it moved. The prose in those files is a basis for a budget, not decoration — and the house already has a gate that checks the counts.
