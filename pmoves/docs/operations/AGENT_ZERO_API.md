@@ -216,13 +216,16 @@ It self-updated from 1.8.0 to 1.9 on 2026-10-21 after an operator-accepted promp
 (electron-updater, `autoDownload=false`). Upstream v1.10 shipped 2026-11-17 and changes
 Host-access defaults for new instances.
 
-**The PMOVES fork has never shipped.** `POWERFULMOVES/PMOVES-a0-launcher` carries three
-merged PRs on top of upstream v1.9: #1 enforces login/password pairing at instance
-creation, #2 adds a registry-qualified backend image repo override, #3 makes the
-digest endpoints registry-aware. The fork has no tags and no releases, so its executables
-workflow (fires on a `v*` tag) has never run, and its `package.json` publish block still
-points at `agent0ai`. There has never been a fork installer to download, and a fork build
-would offer to update itself back to upstream until the publish owner changes.
+**The PMOVES fork is buildable but still unshipped.** `POWERFULMOVES/PMOVES-a0-launcher`
+main (merge `629d289`, 2026-11-19) is upstream v1.10 plus five merged PRs: #1 enforces
+login/password pairing at instance creation, #2 adds a registry-qualified backend image
+repo override, #3 makes the digest endpoints registry-aware, #4 merges upstream v1.10 and
+points the `package.json` publish block, release verification and forge homepage at the
+fork (so a fork build updates from the fork, not back to `agent0ai`), and #5 restores
+the Docker Hub `/token` auth path that #3 broke. The fork still has no tags and no
+releases, so its executables workflow (fires on a `v*` tag) has never run and there is
+still no fork installer to download; pushing a `v*` tag on fork main is the remaining
+operator step before install.
 
 **Fork overrides are environment variables, not Launcher settings (fork build only).** A
 fork build's Electron shell reads them at process start; the installed upstream v1.9
