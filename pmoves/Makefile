@@ -4288,7 +4288,7 @@ up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embeddin
 
 .PHONY: cipher-memory-smoke
 cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if the vector path is dead (requires up-cipher-full)
-	@# This target previously had two defects, both fixed here.
+	@# This target previously had three defects, all fixed here.
 	@#
 	@# 1. Its POST body omitted agentId, which memory-routes.ts requires
 	@#    ("agentId is required for per-agent scope" -> 400). Under `curl -sf`
@@ -4309,34 +4309,17 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 	@#             (memory-routes.ts sets score from the vector hit; the lexical
 	@#             fallback has no score field at all)
 	@# A missing agentId is a 400, so the payload must carry one.
-	@echo "Testing cipher /api/memory POST..."
-	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
-		-H 'Content-Type: application/json' \
-		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"],"agentId":"cipher-memory-smoke"}' 2>&1) \
-		&& echo "  POST OK: $$resp" \
-		|| (echo "  POST FAILED: $$resp" && exit 1); \
-	case "$$resp" in \
-		*'"embedding_id":null'*) \
-			echo "  ✗ POST stored NOTHING in Qdrant — embedding_id is null."; \
-			echo "    sidecar.embed() returned null, so storeVector() never ran and"; \
-			echo "    ensureCollection() never fired. Check that TENSORZERO_URL or"; \
-			echo "    OLLAMA_URL is reachable FROM the cipher container:"; \
-			echo "      docker exec pmoves-cipher-api-1 node -e 'fetch(process.env.TENSORZERO_URL+\"/health\").then(r=>console.log(r.status))'"; \
-			exit 1;; \
-	esac
-	@echo "Testing cipher /api/memory/search..."
-	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
-		&& echo "  SEARCH OK: $$resp" \
-		|| (echo "  SEARCH FAILED: $$resp" && exit 1); \
-	case "$$resp" in \
-		*'"score"'*) ;; \
-		*) \
-			echo "  ✗ SEARCH returned lexical-fallback results, not vector hits (no score field)."; \
-			echo "    Either the query embedding failed or Qdrant returned no points."; \
-			echo "    Provision the collection with: make -C pmoves qdrant-provision-cipher"; \
-			exit 1;; \
-	esac
-	@echo "✔ Cipher memory pipeline smoke passed (vector path live)"
+	@#
+	@# 3. Under token enforcement it could not pass at all: it sent no
+	@#    Authorization header (401), and agentId "cipher-memory-smoke" is an
+	@#    identity no bearer resolves to (403 from assertAgentId). Both read as
+	@#    `POST FAILED:` with an empty message, the same symptom as defect 1.
+	@#
+	@# The recipe is now tools/cipher_roundtrip_probe.py: it takes the bearer
+	@# from the env the session sees (cipher_preflight.layered_environ), writes
+	@# as the agentId auth.ts accepts for it, reads the record back by id, finds
+	@# it by search, deletes it, and --require-vector keeps checks 1 and 2.
+	@$(PYTHON) tools/cipher_roundtrip_probe.py --require-vector
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
@@ -6230,17 +6213,8 @@ stage-data-check: stage-data ## Fail if committed website/stage/data drifted fro
 	@echo "✅ website/stage/data matches room manifests"
 
 .PHONY: kimi
-kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
-	@if [ ! -f "$(CURDIR)/../.kimi/config.toml" ]; then \
-	  echo "[!] Kimi config not found: $(CURDIR)/../.kimi/config.toml"; exit 1; \
-	fi
-	@if [ -f "$(CURDIR)/../.kimi/mcp.json" ]; then \
-	  kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"; \
-	else \
-	  echo "[!] Warning: $(CURDIR)/../.kimi/mcp.json not found; launching Kimi without MCP config."; \
-	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
-	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
-	fi
+kimi: ## Launch Kimi with PMOVES project context (same as kimi-pmoves)
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
 
 .PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token cipher-identity
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
@@ -6249,8 +6223,8 @@ claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
 	@bash $(CURDIR)/scripts/kimi-pmoves.sh
 
-kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
-	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+kilo-pmoves: ## Launch the Kilo CLI with PMOVES project config (kilo.json)
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh

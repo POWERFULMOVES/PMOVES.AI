@@ -45,6 +45,28 @@ by that twice in one week:
     retrieval-path fixes, squash-merged). It touches `hirag-client.ts`,
     `mcp-sse.ts`, `embedding.ts` and tests, not `auth.ts` (byte-identical at
     both, `git diff --quiet`); all citations re-verified, only PIN moved.
+  * 2026-11-19 bumped the pin -- `cd426d505` -> `3491aec89` (fork PR #33,
+    `CIPHER_AUTH_REQUIRED`: a bearer-less request is REFUSED when that knob is
+    set, and dev mode is announced once on stderr). It touches `auth.ts`
+    (+31/-2), so every citation moved AND one `pmoves-auth` write site was
+    ADDED:
+
+        Single-token mode               93  ->  112
+        !token.startsWith('cipher_')    95  ->  114
+        agentId: 'bootstrap'            98  ->  117
+        Per-agent token mode           104  ->  123
+        token.slice(7)                 105  ->  124
+        records.length === 0           150  ->  169
+        const record = records[0]      155  ->  174
+        !legacyToken && skipIfUnset    191  ->  215
+        req.agentId = undefined        193  ->  222
+
+    and the `pmoves-auth` write sites moved
+
+        117 -> 136, 137 -> 156, 145 -> 164, 160 -> 179, 170 -> 189
+
+    with a SIXTH site ADDED at 219 (the dev-mode announcement). The bump was
+    caught by this test in CI on the promotion PR that moved the gitlink.
 
 Re-numbering by hand each time is not a fix; it is the same manual step failing
 again on a schedule. This test makes the citation machine-checkable in three
@@ -73,42 +95,43 @@ AUTH_TS = REPO_ROOT / SUBMODULE / "src" / "pmoves" / "auth.ts"
 
 # The commit these line numbers were read at. Advancing the gitlink without
 # updating this constant is the drift this file exists to catch.
-PIN = "cd426d5053608e530f3061ffb790b330f5aeae4b"
+PIN = "3491aec89acfebcf4fdd6535266b3064fac1c072"
 
 # line -> a fragment that must appear on it. Keep in sync with the tables in
 # TAC_CIPHER.md, cipher_identity.py and the cipher-memory SKILL.
 CITATIONS = {
-    93: "Single-token mode",
-    95: "!token.startsWith('cipher_')",
-    98: "agentId: 'bootstrap'",
-    104: "Per-agent token mode",
-    105: "token.slice(7)",
-    150: "records.length === 0",
-    155: "const record = records[0]",
-    191: "!legacyToken && skipIfUnset",
-    193: "req.agentId = undefined",
+    112: "Single-token mode",
+    114: "!token.startsWith('cipher_')",
+    117: "agentId: 'bootstrap'",
+    123: "Per-agent token mode",
+    124: "token.slice(7)",
+    169: "records.length === 0",
+    174: "const record = records[0]",
+    215: "!legacyToken && skipIfUnset",
+    222: "req.agentId = undefined",
 }
 
-# Every `pmoves-auth:` stderr line resolveToken() emits at PIN. These are what
+# Every `pmoves-auth:` stderr line the auth module emits at PIN. These are what
 # the preflight / launcher rule-out (`grep pmoves-auth`) must catch, and each
 # of them answered with a revocation-shaped 401 before fork PR #28.
 AUTH_EMIT_SITES = {
-    117: "SUPABASE_SERVICE_KEY not set",   # `pmoves-auth: ${reason} — cannot resolve …`
-    137: "token lookup returned HTTP",     # `pmoves-auth: Supabase ${reason}`
-    145: "a non-array body",               # `pmoves-auth: Supabase ${reason}`
-    160: "a row with no agent_id",         # `pmoves-auth: Supabase ${reason}`
-    170: "token resolution failed",        # `pmoves-auth: token resolution failed — ${error}`
+    136: "SUPABASE_SERVICE_KEY not set",   # `pmoves-auth: ${reason} — cannot resolve …`
+    156: "token lookup returned HTTP",     # `pmoves-auth: Supabase ${reason}`
+    164: "a non-array body",               # `pmoves-auth: Supabase ${reason}`
+    179: "a row with no agent_id",         # `pmoves-auth: Supabase ${reason}`
+    189: "token resolution failed",        # `pmoves-auth: token resolution failed — ${error}`
+    219: "serving unauthenticated requests",  # NEW at this pin: the dev-mode announcement
 }
 
 # Files that quote the numbers above, and the substrings that must be present.
 # A doc citing `:79` after the pin moved to c88b009a2 is pointing a reviewer at
 # the wrong statement — which is exactly how the first round went wrong.
 DOC_CITATIONS = {
-    Path("pmoves") / "docs" / "TAC" / "TAC_CIPHER.md": ["`:95`", "`:98`", "`:150`", "`:191`"],
-    Path("pmoves") / "tools" / "cipher_identity.py": ["auth.ts:95", "auth.ts:98", "auth.ts:93-102", "auth.ts:191-194"],
-    Path("pmoves") / "tests" / "tools" / "test_cipher_identity.py": ["auth.ts:95", "auth.ts:98", "auth.ts:105", "auth.ts:191"],
-    Path("pmoves") / "docs" / "PMOVESCHIT" / "CHIT_FORKS.md": ["auth.ts:95,98"],
-    Path(".claude") / "skills" / "pmoves-cipher-memory" / "SKILL.md": ["auth.ts:95", "`a0ee2314`"],
+    Path("pmoves") / "docs" / "TAC" / "TAC_CIPHER.md": ["`:114`", "`:117`", "`:169`", "`:215`"],
+    Path("pmoves") / "tools" / "cipher_identity.py": ["auth.ts:114", "auth.ts:117", "auth.ts:112-121", "auth.ts:215-223"],
+    Path("pmoves") / "tests" / "tools" / "test_cipher_identity.py": ["auth.ts:114", "auth.ts:117", "auth.ts:124", "auth.ts:215"],
+    Path("pmoves") / "docs" / "PMOVESCHIT" / "CHIT_FORKS.md": ["auth.ts:114,117"],
+    Path(".claude") / "skills" / "pmoves-cipher-memory" / "SKILL.md": ["auth.ts:114", "`3491aec89`", ":123-195", ":112-121", ":215-223"],
 }
 
 # Exact citation text that was correct at an EARLIER pin. TAC_CIPHER.md's pin
@@ -118,14 +141,20 @@ STALE_MARKERS = {
     Path("pmoves") / "docs" / "TAC" / "TAC_CIPHER.md": [
         "`:79`", "`:103`",                                   # e24f1323
         "| `:46` `if", "`:54`–`:60` per-agent", "`:82`–`:84`", "`:106`–`:108` |",  # 975e02e6..36b28d0f
+        "| `:95` `if", "`:104`–`:105` per-agent", "`:150`–`:155` the", "`:191`–`:193` |",  # cd426d505
     ],
     Path("pmoves") / "tools" / "cipher_identity.py": [
         "auth.ts:46", "auth.ts:49", "auth.ts:44-52", "auth.ts:54-91", "auth.ts:106-109",
+        "auth.ts:93-102", "auth.ts:104-176", "auth.ts:191-194",  # cd426d505
     ],
     Path("pmoves") / "tests" / "tools" / "test_cipher_identity.py": [
         "auth.ts:46", "auth.ts:49", "auth.ts:60", "auth.ts:106",
+        "auth.ts:93-102", "auth.ts:104-176", "auth.ts:191-194",  # cd426d505
     ],
     Path("pmoves") / "docs" / "PMOVESCHIT" / "CHIT_FORKS.md": ["file: Pmoves-cipher/src/pmoves/auth.ts:46,49"],
+    Path(".claude") / "skills" / "pmoves-cipher-memory" / "SKILL.md": [
+        ":44-52", ":54-91", ":106-109",  # the pre-#3189 numbers
+    ],
 }
 
 

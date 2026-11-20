@@ -141,3 +141,17 @@ upstream_version: "v1.14"  # optional, auto-detects if empty
 | `Dockerfile.multiarch` | `AGENT_ZERO_UPSTREAM_VERSION` marker — comparable version pin when the ref is a rolling branch |
 | `upstream-constraints.txt` | Transitive dep pins for Stage 1 install |
 | `Dockerfile.multiarch` | `AGENT_ZERO_REF` ARG (bumped by workflow) |
+
+---
+
+## Launcher instances and provenance
+
+Measured 2026-11-18 on node 5090. Detail: [`AGENT_ZERO_API.md` § Launcher instances and provenance](../../docs/operations/AGENT_ZERO_API.md#launcher-instances-and-provenance).
+
+- **Three shapes.** This compose service (`pmoves-agent-zero-1`, usr dir `pmoves/data/agent-zero/usr`); Agent Zero Launcher instances (`a0-inst-<name>`, usr dir `~/agent-zero/<instance>/usr`); and compose service `agent-zero-darkxside-inst` (container `pmoves-agent-zero-darkxside-inst`, `pmoves/docker-compose.agent-zero-instances.yml`), which runs on the DARKXSIDE Launcher instance's usr dir via `A0INST_USR_DIR`. Config written into the repo's usr dir reaches only the first.
+- **Launcher is upstream.** The installed Launcher is `agent0ai/a0-launcher` v1.9; all three 5090 instances run `agent0ai/agent-zero:latest` (v2.14), not the GHCR `pmoves-agent-zero` image.
+- **Fork buildable, not yet shipped.** `POWERFULMOVES/PMOVES-a0-launcher` main (`629d289`, 2026-11-19) is upstream v1.10 plus five merged PRs, with the publish block pointing at the fork since PR #4; it still has no `v*` tag or release, so there is no fork installer yet.
+- **Overrides are env vars (fork build only).** `A0_BACKEND_IMAGE_REPO`, `A0_LAUNCHER_GITHUB_REPO`, `A0_LAUNCHER_LOCAL_REPO` + `A0_LAUNCHER_USE_LOCAL_CONTENT` are read at Electron start; the installed upstream Launcher may ignore them. Shell-session variables never reach a Start-menu launch; set them with `setx` (user scope) to persist.
+- **Presets.** `make -C pmoves a0-model-sync-check` exited 1 on 2026-11-18 only because it ran from the node's stale `main` checkout, which predates PR #3396; from `origin/main` on 2026-11-19 it exits 2 UNDECIDED (`registry_unreachable`), because the node's database lacks the `pmoves_core.v_service_models` view (registry migration not applied on 5090). A sync with `OUT=` at a Launcher usr dir or `INSTANCE=darkxside-inst` archives the live file, replaces only generator-owned presets (Default, TensorZero, Registry, Fallback-N; this instance has only Default among them), and carries hand-kept presets over. The new Default routes chat to the TensorZero gateway's compose-network name, which a Launcher instance may not resolve.
+- **Container-local fixes vanish on image replacement.** The DARKXSIDE `signal_bridge` `autostart=false` edit lives only in that container.
+- **Startup gap.** Chat loading blocks uvicorn for 6-8 minutes on a heavy instance; restarting resets the clock.
