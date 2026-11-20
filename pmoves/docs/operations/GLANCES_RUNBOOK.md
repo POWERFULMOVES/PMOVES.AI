@@ -170,7 +170,10 @@ reconnaissance gold. Upstream's own Docker example publishes 61208-61209 on all
 interfaces without a password `[gd:docker]` — **do not copy it**.
 
 1. **Bind loopback:** `-B localhost` (verified on z890 with 4.5.7: listens on the
-   IPv4 + IPv6 loopback only).
+   IPv4 + IPv6 loopback only). This rule governs the WEB server. The Prometheus
+   EXPORTER is a separate listener and binds the Docker bridge gateway instead
+   — see §4.4 for why a loopback listener is unreachable from the monitoring
+   container, and for what the exporter's address does and does not expose.
 2. **Password, saved once, interactively:**
    `glances -C <conf> -w -B localhost --password`. Enter + confirm the password,
    then **answer `Yes`** to `Do you want to save the password in <file>? [Yes/No]`
@@ -237,17 +240,64 @@ loginctl enable-linger "$USER"     # run without a login session (may need sudo/
 | Linux GPU node (5090, 4090, Spark) | yes | systemd user unit (4.2) | `gpu` extra |
 | VPS / KVM (egress, always-on) | yes | systemd user unit, Tailscale Serve only | fills the missing hardware blocks (handoff T3) |
 
-### 4.4 Exports worth using later (not wired — F12)
+### 4.4 Exports (F12)
 
 Glances 4.5.7 ships exporters `[gd:gw/index]`; two fit PMOVES:
 
 - **Prometheus** `[gd:gw/prometheus]`: `--export prometheus` with
-  `[prometheus] host=localhost port=9091 prefix=glances` serves an exporter for
-  the existing monitoring stack, whose host `node` job is disabled
-  (`pmoves/monitoring/prometheus/prometheus.yml:14-17`). Upstream says use the
-  wildcard bind inside containers — PMOVES keeps loopback/tailnet (4.0).
+  `[prometheus] host=172.17.0.1 port=9092 prefix=glances` serves an exporter for
+  the existing monitoring stack.
+
+  **Prometheus half: WIRED** — as the `glances` job in
+  `pmoves/monitoring/prometheus/prometheus.yml` (`job_name: glances`, target
+  `host.docker.internal:9092`), alongside the host `node` job (node_exporter)
+  that remains disabled.
+
+  **THE BIND ADDRESS — the bridge gateway, never loopback.**
+  `host.docker.internal` resolves in the monitoring stack to the Docker host
+  gateway (`extra_hosts: ["host.docker.internal:host-gateway"]`,
+  `pmoves/monitoring/docker-compose.monitoring.yml:35-36`), which on native
+  Linux is the DEFAULT BRIDGE's gateway — `172.17.0.1` by default. A listener
+  bound to `localhost` sits on the host's loopback, and a container cannot
+  reach a host loopback listener through that gateway: the connection is
+  refused and the job stays DOWN. So the EXPORTER binds the gateway address,
+  discovered per node:
+
+      GW=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+
+  and `host=$GW` goes in the `[prometheus]` section. The literal written here
+  is Docker's default; the gate reads it.
+
+  **This does not weaken 4.0.** Rule 1's `-B localhost --port 61208` governs
+  the WEB server and is unchanged: loopback, password-protected. The exporter
+  is a separate listener, on the bridge gateway only — a local Docker bridge
+  address, not the LAN, not the WAN and not the tailnet (rule 3). It is
+  reachable from containers on this host, which is exactly the audience that
+  needs it, and from nothing else.
+
+  **THE PORT — 9092.** **AVOIDED PORT: 9091** — `headscale` owns that slot in
+  the port registry (`pmoves/configs/ports.yaml`, `HEADSCALE_9091_PORT`,
+  published by `pmoves/docker-compose.remote.yml`). A scrape of
+  `host.docker.internal:9091` on the remote/VPS node carrying that compose
+  reaches HEADSCALE, not Glances, and Prometheus ingests Headscale's series
+  under `job="glances"` / `source="glances"` — telemetry that is confidently
+  mislabelled. Glances therefore uses **9092**, MEASURED free: no service in
+  the port registry owns it, and no compose file in the repo (88 scanned)
+  publishes it. With a dedicated port the remote/VPS node has nothing on 9092,
+  so the `glances` job is DOWN there and says so, instead of ingesting another
+  service's metrics under the wrong name.
+
+  `pmoves/tests/tools/test_prometheus_glances_wiring.py` asserts each of those
+  properties, and fails closed on each: the scrape target's port equals the
+  exporter port this section prescribes; the prescribed port is owned by NO
+  service in the port registry, so it can never drift back onto another
+  service's slot; the prescribed bind address is neither loopback nor the
+  wildcard, so the target can never be unreachable by construction; and the
+  wiring claims below still match the config.
 - **NATS** `[gd:gw/nats]`: `--export nats` with `[nats] host=... prefix=glances`
   publishes JSON per plugin to `<prefix>.<plugin>` — the PMOVES bus.
+
+  **NATS half: NOT WIRED** (F12, NATS half).
 
 Both need the `export` extra (heavy: pulls every exporter client) or just the
 single client (`prometheus_client`, `nats-py`).
@@ -421,7 +471,7 @@ https://docs.docker.com/desktop/settings-and-maintenance/settings/):
 | F9 | `z890-glances.conf` describes old hardware (GTX 1650, 32 GB, Windows 10) and another user's export paths | `pmoves/config/profiles/hermes/z890-glances.conf:1-53` |
 | F10 | Skill tells agents `pip install glances[web]` then `glances -w` (pip; all interfaces; no password) | `.claude/skills/node-4090-probe/SKILL.md:97` |
 | F11 | `glances-autodetect.sh` installs via apt/pip fallbacks, not uv | `deploy/provision/glances-autodetect.sh:115-150` |
-| F12 | Wire Prometheus and/or NATS export (§4.4), loopback/tailnet only | `pmoves/monitoring/prometheus/prometheus.yml:14-17` |
+| F12 | Wire Prometheus and/or NATS export (§4.4), bridge-gateway/tailnet only. **Prometheus half WIRED** — `glances` job in `pmoves/monitoring/prometheus/prometheus.yml`, target `host.docker.internal:9092`; the exporter binds the Docker bridge gateway, NOT loopback (a container cannot reach a host loopback listener through the gateway), on port 9092, which no service in the port registry owns — 9091 is Headscale's registered slot and is avoided. **NATS half still open.** | `pmoves/monitoring/prometheus/prometheus.yml` (`job_name: glances`); `pmoves/docs/operations/GLANCES_RUNBOOK.md` §4.4 |
 | F13 | `.wslconfig` example omits `[experimental] autoMemoryReclaim` (Docker's recommended memory lever on WSL) and that changes need a full VM stop | `pmoves/docs/operations/BRING_UP_GUIDE.md:106-112` |
 | F14 | Verify how WSL parses `autoMemoryReclaim=Gradual` (docs list lowercase; unknown -> `dropCache`) | z890 `%USERPROFILE%\.wslconfig` |
 

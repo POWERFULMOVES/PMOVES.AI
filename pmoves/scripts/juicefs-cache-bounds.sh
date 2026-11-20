@@ -59,8 +59,29 @@ if [ -z "$CACHE_DIR" ]; then
   info "No JFS_CACHE_DIR set — surveying host mounts for the largest-free one..."
   best_mount=""
   best_avail=0
-  # df -Pk: portable POSIX columns (KiB). Field 6 = mountpoint, field 4 = avail.
-  while read -r _fs _size _used avail _pct mnt; do
+  # df -Pk: portable POSIX columns (KiB). Positional $4/$6 are NOT safe here — a
+  # Filesystem name can contain spaces and shifts every field after it. Measured
+  # on a Git-Bash host, where "/" is reported as "C:/Program Files/Git":
+  #
+  #   $ df -Pk | tail -n +2 | while read -r _fs _size _used avail _pct mnt; do ...
+  #     avail=[1937292876] mnt=[97% /]      <- avail is USED; mnt is not a path
+  #
+  # `avail` read the Used column and `mnt` became "97% /", which fails the -d test
+  # below — so the survey SILENTLY DROPPED the largest-free mount rather than
+  # erroring, and settled for a smaller one.
+  #
+  # Anchor on Capacity rather than counting from either end: it is the only field
+  # with a fixed shape (digits + '%') and it is immediately preceded by exactly
+  # three numeric fields (size, used, avail). Scanning right-to-left for that
+  # signature pins the layout however many words the Filesystem takes, and —
+  # unlike counting back from NF — it keeps a mountpoint that itself contains
+  # spaces intact, which is the behaviour today on rows whose device has none.
+  # Deciding whether such a mount may be *used* is the JFS_CACHE_DIR whitespace
+  # contract, deliberately left alone here. Rows matching nothing (a '- - - -'
+  # backend) drop out, which is what the survey wants.
+  #
+  # Tab-delimited so a spaced mountpoint survives the read.
+  while IFS="$(printf '\t')" read -r avail mnt; do
     case "$mnt" in
       /dev|/dev/*|/proc|/proc/*|/sys|/sys/*|/run|/run/*|/boot|/boot/*) continue ;;
     esac
@@ -69,7 +90,15 @@ if [ -z "$CACHE_DIR" ]; then
     if [ "$avail" -gt "$best_avail" ]; then
       best_avail="$avail"; best_mount="$mnt"
     fi
-  done < <(df -Pk 2>/dev/null | tail -n +2)
+  done < <(df -Pk 2>/dev/null | awk 'NR>1 {
+      pct = 0
+      for (i = NF; i >= 5; i--)
+        if ($i ~ /^[0-9]+%$/ && $(i-1) ~ /^[0-9]+$/ && $(i-2) ~ /^[0-9]+$/ && $(i-3) ~ /^[0-9]+$/) { pct = i; break }
+      if (pct == 0 || pct == NF) next
+      mnt = $(pct+1)
+      for (j = pct+2; j <= NF; j++) mnt = mnt " " $j
+      printf "%s\t%s\n", $(pct-1), mnt
+    }')
 
   if [ -z "$best_mount" ]; then
     warn "Could not identify a writable mount; falling back to \$HOME."
