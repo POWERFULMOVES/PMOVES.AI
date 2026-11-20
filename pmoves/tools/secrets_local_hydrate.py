@@ -318,6 +318,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     env_shared = args.env_shared.expanduser().resolve()
 
     if not local_env.exists():
+        if requested is not None:
+            # A scoped run is an explicit rotation ask. Reporting success when
+            # the source file is absent would claim a delivery that never
+            # happened (the same fake-success shape as a validation skip).
+            print(
+                f"ERROR: --keys requested but {local_env} does not exist; "
+                "no requested credential was delivered",
+                file=sys.stderr,
+            )
+            return 1
         print(f"ℹ local.env not found at {local_env} — skipping hydration")
         print("  (Optional: run sync-secrets-local.yml workflow or provide --local-env path)")
         return 0

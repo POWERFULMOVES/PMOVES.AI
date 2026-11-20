@@ -179,6 +179,31 @@ def test_cli_empty_keys_list_is_refused_not_treated_as_all(envs, monkeypatch, ca
     assert shared.read_text(encoding="utf-8") == before
 
 
+def test_cli_scoped_run_with_missing_local_env_fails_not_succeeds(tmp_path, monkeypatch, capsys):
+    # A scoped --force --keys K is an explicit rotation ask; a missing local.env
+    # must not be reported as a successful no-op rotation.
+    _isolate(monkeypatch)
+    shared = tmp_path / "env.shared"
+    shared.write_text(f"GH_APP_SEC={STALE}\n", encoding="utf-8")
+    rc, out, err = _run(["--local-env", str(tmp_path / "absent.env"),
+                         "--env-shared", str(shared),
+                         "--force", "--keys", "GH_APP_SEC"], capsys)
+    assert rc == 1
+    assert "does not exist" in err
+    assert _shared_value(shared, "GH_APP_SEC") == STALE
+
+
+def test_cli_unscoped_missing_local_env_keeps_optional_file_success(tmp_path, monkeypatch, capsys):
+    # The optional-file behaviour survives for unscoped runs (hydrate is a
+    # best-effort step in the funnel; only the explicit ask is fail-closed).
+    _isolate(monkeypatch)
+    shared = tmp_path / "env.shared"
+    shared.write_text("A=1\n", encoding="utf-8")
+    rc, out, err = _run(["--local-env", str(tmp_path / "absent.env"),
+                         "--env-shared", str(shared)], capsys)
+    assert rc == 0
+
+
 @pytest.mark.parametrize("guard", ["cleared", "pinned"])
 def test_cli_says_why_a_protected_key_was_skipped(envs, monkeypatch, capsys, guard):
     local, shared, _ = envs
@@ -228,6 +253,10 @@ def test_make_target_documents_keys():
         ([], None, None),                                    # unset -> no --keys
         (["KEYS=GH_APP_SEC"], None, "GH_APP_SEC"),           # command line -> passed
         (["KEYS=A,B"], None, "A,B"),
+        # Explicitly EMPTY KEYS= must still reach the tool as --keys "" (which
+        # the tool refuses). Dropping the flag here -- the old $(strip) guard --
+        # turned "rotate nothing" into an unscoped --force over every key.
+        (["KEYS="], None, ""),
         # A stray exported KEYS (generic name) must NOT silently scope the
         # funnel's hydrate step; only an explicit make argument counts.
         ([], "LEAKED_FROM_SHELL", None),
@@ -255,6 +284,8 @@ def test_make_recipe_passes_keys_only_when_set(tmp_path, stub_docker_path, cmdli
     args = proc.stdout.split()
     if expect is None:
         assert "--keys" not in args
+    elif expect == "":
+        assert "--keys" in args and args.index("--keys") == len(args) - 1
     else:
         assert args[args.index("--keys") + 1] == expect
 
