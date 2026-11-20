@@ -283,10 +283,22 @@ def _field_references(cfg: dict) -> Dict[str, Dict[str, bool]]:
     """{field: {var: is_required}} for one roster server.
 
     A variable is required if ANY occurrence of it in that field is a bare
-    reference. `pmoves-nats-fleet` proves why the "any" matters: it carries
-    the DEFAULTED form `${NATS_CREDS:-}` as the value, and the BARE form
-    `${NATS_CREDS}` inside a sibling `_`-prefixed note. The default alone
-    would not be a finding; the bare reference is.
+    reference -- because the LIVE normalizer expands EVERY value in the
+    block, not only the value bound to the key that names the variable.
+
+    MEASURED 2026-11-19 against the live normalizer: with the
+    `_NATS_CREDS_NOTE` prose inside `env`, `pmoves-nats-fleet` yielded
+    `degraded: [... ['${...}', 'NATS_CREDS', 'NATS_URL']]` -- the prose
+    contributed BOTH the malformed `${...}` AND a bare `NATS_CREDS` finding,
+    even though the value bound to `NATS_CREDS` was the DEFAULTED
+    `${NATS_CREDS:-}`. With that note moved to a server-level `_`-prefixed
+    key -- outside the fields the gate expands -- `NATS_CREDS` is CLEAN and
+    only `NATS_URL` flags the server.
+
+    So the "any" is not a shortcut, it is what the gate does: a prose
+    occurrence IS a finding. That is exactly why documentation belongs
+    outside the expanded fields, and why the published table must not carry
+    a row for a variable the gate no longer flags.
     """
     out: Dict[str, Dict[str, bool]] = {field: {} for field in GATE_FIELDS}
 
