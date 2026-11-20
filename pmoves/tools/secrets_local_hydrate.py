@@ -9,6 +9,13 @@ placeholder values, preserving any values already set.
 
 Intended to run **before** ``chit-export`` so the CHIT bundle contains real
 credentials that flow through the rest of the secrets-funnel pipeline.
+
+``--keys K1,K2`` restricts the run to an allowlist of key names, with or without
+``--force``. That is how ONE rotated GitHub secret is pushed over its stale
+local value without force-overwriting node-specific keys (SUPABASE_* and the
+like) that this node pairs with its running services::
+
+    make -C pmoves secrets-local-hydrate FORCE=1 KEYS=GH_APP_SEC
 """
 
 from __future__ import annotations
@@ -16,7 +23,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Sequence
+from typing import Dict, Iterable, List, Sequence
 
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
@@ -104,6 +111,7 @@ def hydrate(
     force: bool = False,
     cleared_keys_path: Path | None = None,
     registry_path: Path | None = None,
+    keys: Iterable[str] | None = None,
 ) -> Dict[str, str]:
     """Overlay local.env values into env.shared for empty/placeholder keys.
 
@@ -123,14 +131,26 @@ def hydrate(
 
     Registry-PINNED keys (bootstrap/registry.json ``"pinned": true``) are never
     overlaid either, for the same reason -- see ``_pinned_keys``.
+
+    ``keys`` is an allowlist: when given, every key outside it is ignored, with
+    or without force. It narrows; it never widens -- a cleared or pinned key
+    named in ``keys`` is still skipped. ``keys=None`` means "all keys" (the
+    pre-existing behaviour); an empty iterable means "no keys".
+
+    A key whose local value already equals its env.shared value is not
+    reported: under force it would be a no-op write, and the return value is
+    the set of keys that would actually change.
     """
     local_values = _parse_env(local_env_path)
     shared_values = _parse_env(env_shared_path)
     cleared = set(read_cleared_keys(cleared_keys_path))
     pinned = _pinned_keys(registry_path)
+    allow = None if keys is None else set(keys)
 
     updates: Dict[str, str] = {}
     for key, local_val in sorted(local_values.items()):
+        if allow is not None and key not in allow:
+            continue  # Outside the --keys allowlist
         if key in cleared:
             continue  # Deliberately empty — see secrets_cleared.yaml
         if key in pinned:
@@ -138,6 +158,8 @@ def hydrate(
         if is_placeholder(local_val):
             continue  # Don't overlay empty local values
         current = shared_values.get(key, "")
+        if local_val == current:
+            continue  # Already current -- nothing would change
         if force or is_placeholder(current):
             updates[key] = local_val
 
@@ -145,6 +167,56 @@ def hydrate(
         _write_updates(env_shared_path, updates)
 
     return updates
+
+
+def _parse_keys_arg(raw: str) -> List[str]:
+    """``"A, B,,C"`` -> ``["A", "B", "C"]`` (order kept, duplicates dropped)."""
+    seen: List[str] = []
+    for part in raw.split(","):
+        name = part.strip()
+        if name and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def _report_keys_scope(requested: List[str], local_env: Path) -> bool:
+    """Explain the --keys scope on stderr (NAMES only). False = nothing usable.
+
+    Returns False when none of the requested keys has a real value in
+    local.env, which the caller turns into a nonzero exit: a scoped run that
+    can touch nothing is almost certainly a typo or a missing delivery.
+    """
+    local_values = _parse_env(local_env)
+    cleared = set(read_cleared_keys())
+    pinned = _pinned_keys()
+
+    absent = [k for k in requested if is_placeholder(local_values.get(k))]
+    present = [k for k in requested if k not in absent]
+    print(f"--keys scope: {', '.join(requested)}", file=sys.stderr)
+    if absent:
+        print(
+            f"WARNING: --keys requested with no real value in {local_env}: {', '.join(absent)}",
+            file=sys.stderr,
+        )
+    for key in requested:
+        if key in cleared:
+            print(
+                f"NOTE: {key} is listed in secrets_cleared.yaml -- never overlaid, "
+                "even when named in --keys",
+                file=sys.stderr,
+            )
+        elif key in pinned:
+            print(
+                f"NOTE: {key} is registry-PINNED -- never overlaid, even when named in --keys",
+                file=sys.stderr,
+            )
+    if not present:
+        print(
+            f"ERROR: none of the --keys requested exist in {local_env}; nothing to hydrate",
+            file=sys.stderr,
+        )
+        return False
+    return True
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -171,7 +243,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Overwrite existing non-placeholder values (use after rotating GH Secrets)",
     )
+    parser.add_argument(
+        "--keys",
+        default=None,
+        metavar="K1,K2",
+        help=(
+            "Comma-separated allowlist: only these keys are considered (with or "
+            "without --force). Cleared and registry-pinned keys are still never "
+            "overlaid. Exits 1 if none of them exist in local.env."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    requested: List[str] | None = None
+    if args.keys is not None:
+        requested = _parse_keys_arg(args.keys)
+        if not requested:
+            # An empty allowlist must never fall back to "all keys" -- that is
+            # the exact clobber --keys exists to prevent.
+            parser.error("--keys was given but names no keys")
 
     local_env = args.local_env or _default_local_env()
     env_shared = args.env_shared.expanduser().resolve()
@@ -185,10 +275,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"⚠ env.shared not found at {env_shared}")
         return 1
 
+    if requested is not None and not _report_keys_scope(requested, local_env):
+        return 1
+
     prefix = "[dry-run] " if args.dry_run else ""
     if args.force:
         prefix = "[force] " + prefix
-    updates = hydrate(local_env, env_shared, dry_run=args.dry_run, force=args.force)
+    updates = hydrate(
+        local_env, env_shared, dry_run=args.dry_run, force=args.force, keys=requested
+    )
 
     if not updates:
         if args.force:
@@ -200,6 +295,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if real_count == 0:
                     print(f"WARNING: --force specified but all {len(local_values)} keys in {local_env} are placeholders", file=sys.stderr)
         print("No keys needed hydration — env.shared already has real values.")
+        return 0
+
+    if args.dry_run:
+        # Names only: a dry run is for deciding, and a masked fragment is still
+        # part of the secret.
+        print(f"{prefix}Would hydrate {len(updates)} keys from {local_env} -> {env_shared}:")
+        for key in sorted(updates):
+            print(f"  {key}")
         return 0
 
     print(f"{prefix}Hydrated {len(updates)} keys from {local_env} -> {env_shared}:")

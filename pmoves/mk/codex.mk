@@ -132,8 +132,11 @@ chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
-secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale)
-	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force)
+secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale; KEYS=A,B limits it to those keys, e.g. FORCE=1 KEYS=GH_APP_SEC rotates one key without clobbering node-specific ones)
+	@# KEYS is honoured only from the make command line (incl. a parent make's
+	@# command line, via MAKEFLAGS). A generically-named KEYS exported in the
+	@# shell must not silently narrow the funnel's hydrate step.
+	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force) $(if $(and $(filter command line,$(origin KEYS)),$(strip $(KEYS))),--keys "$(KEYS)")
 
 secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supabase/container) into env.shared
 	-@$(MAKE) --no-print-directory supa-status
