@@ -42,7 +42,11 @@ will drift as rows are appended; search the register for the branch name instead
    (`fix/...`, `ci/...`, `ops/...` etc.) in any row as a lane. Write other branches
    in plain text if you must mention them.
 3. **One worktree per body.** Create your own worktree for each lane
-   (`git worktree add -b <branch> ../pmoves-<name> origin/main`). Never work in the
+   (`git worktree add -b <branch> ../pmoves-<name> origin/main`). **Exception: a
+   lane whose work already lives on an open PR (lane 3, #3230) starts from that
+   PR's head instead** -- `git fetch origin fix/tailnet-acl-drift-gate` then
+   `git worktree add ../pmoves-tailnet-acl FETCH_HEAD -b fix/tailnet-acl-drift-gate`
+   -- so pushes update the PR rather than diverging from it. Never work in the
    shared main checkout: another body's `git checkout` there removes tracked edits
    while `git status` still reads clean.
 4. **Checkpoint first.** Push a scaffold commit in the first minutes of a lane and
@@ -174,7 +178,9 @@ Post that classification ON #3230 as a comment.
 One of:
 
 - #3230 landed through the guarded closeout
-  (`make -C pmoves pr-closeout`, see the `pmoves-pr-merge` skill), or
+  (`make -C pmoves pr-closeout-audit PR=3230 EXPECTED_HEAD=<full-head-sha>`, then
+  `make -C pmoves pr-closeout-merge PR=3230 EXPECTED_HEAD=<full-head-sha>
+  CONFIRM='MERGE #3230 @ <full-head-sha>'`; see the `pmoves-pr-merge` skill), or
 - #3230 closed, with the reason recorded on the PR.
 
 ### Out of scope
