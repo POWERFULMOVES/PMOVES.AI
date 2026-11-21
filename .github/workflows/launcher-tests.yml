@@ -1,0 +1,145 @@
+name: Launcher Provision Tests
+
+# Runs every deploy/provision/tests/test-*.sh on pull requests.
+#
+# These tests guard the operator-facing launchers (claude-pmoves,
+# crush-pmoves, hermes-pmoves, kilo/kimi-pmoves, hostinger-verify, CA-bundle
+# handling, rdna4 post-install): the scripts a fresh node runs before any
+# agent session exists. They were executable-by-hand only — nothing in CI
+# referenced them (measured 2026-11-20: zero workflows under
+# .github/workflows/ reference deploy/provision/tests), so the bug classes
+# they pin (#2538 symlink-root, cipher-token clobbering, auth sanitization)
+# could regress on main undetected.
+#
+# Fail-closed rules (the brief for this lane):
+#   - any test failure fails the job;
+#   - ZERO discovered tests is a FAILURE, not a pass — an empty glob means
+#     the harness stopped seeing the tests, which is never good news;
+#   - exclusions are NAMED below with reasons, and a stale exclusion (one
+#     that names a file that no longer exists) also fails, so an exclusion
+#     cannot outlive its cause;
+#   - pass/fail counts go to the job summary.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "deploy/provision/**"
+      - "pmoves/scripts/**"
+      - ".github/workflows/launcher-tests.yml"
+  workflow_dispatch:
+    inputs:
+      test-glob:
+        description: "Glob used to discover tests (demo/diagnosis only; the PR gate always uses the default)"
+        required: false
+        default: "deploy/provision/tests/test-*.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  launcher-tests:
+    name: launcher tests
+    runs-on: ubuntu-24.04
+    env:
+      # Named exclusions, one per line: <filename>|<reason>. A stale entry
+      # (file gone) fails the job — exclusions are debt, and debt is visible.
+      EXCLUDED_TESTS: |
+        test-launcher-cipher-token-survives.sh|Hangs at the kilo/kimi launcher pairs (never reaches exec within 120s locally on knuckles, 2026-11-21); the launcher pre-exec path needs bounding before this can gate CI. Re-include after that lands.
+      PER_TEST_TIMEOUT_SECS: "300"
+      TESTS_LIST: ${{ runner.temp }}/launcher-tests.txt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Discover tests
+        id: discover
+        run: |
+          set -euo pipefail
+          GLOB="${{ github.event.inputs.test-glob || 'deploy/provision/tests/test-*.sh' }}"
+          shopt -s nullglob
+          : > "$TESTS_LIST"
+          # shellcheck disable=SC2086 # GLOB is a controlled single word
+          for t in $GLOB; do echo "$t" >> "$TESTS_LIST"; done
+          shopt -u nullglob
+          count=$(wc -l < "$TESTS_LIST")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "discovered $count test(s) via $GLOB"
+
+      - name: Verify exclusions still name real tests
+        run: |
+          set -euo pipefail
+          trimmed="${EXCLUDED_TESTS//[$' \t\r\n']/}"
+          [ -z "$trimmed" ] && { echo "no exclusions configured"; exit 0; }
+          while IFS='|' read -r fname reason; do
+            [ -z "$fname" ] && continue
+            if [ ! -f "deploy/provision/tests/$fname" ]; then
+              echo "::error title=Stale exclusion::$fname no longer exists — remove the exclusion so it cannot outlive its cause."
+              exit 1
+            fi
+            echo "EXCLUDED $fname — $reason"
+          done <<< "$EXCLUDED_TESTS"
+
+      - name: Run tests
+        id: run
+        if: steps.discover.outputs.count != '0'
+        run: |
+          set -uo pipefail
+          pass=0; fail=0; timeouts=0
+          excluded_cut=$(awk -F'|' 'NF && $1 != "" {print $1}' <<< "$EXCLUDED_TESTS")
+          {
+            echo "## Launcher provision tests"
+            echo
+            echo "| test | result |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r t; do
+            base="$(basename "$t")"
+            if grep -qxF "$base" <<< "$excluded_cut"; then
+              echo "| $base | EXCLUDED (named in workflow) |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            log="$(mktemp)"
+            timeout "${PER_TEST_TIMEOUT_SECS}s" bash "$t" >"$log" 2>&1
+            rc=$?
+            case $rc in
+              0) pass=$((pass+1)); echo "| $base | PASS |" >> "$GITHUB_STEP_SUMMARY" ;;
+              124) timeouts=$((timeouts+1)); echo "| $base | TIMEOUT (${PER_TEST_TIMEOUT_SECS}s) |" >> "$GITHUB_STEP_SUMMARY"
+                   echo "::error title=Launcher test timed out::$base" ;;
+              *)  fail=$((fail+1)); echo "| $base | FAIL (rc=$rc) |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "::error title=Launcher test failed::$base (rc=$rc)"
+                  sed 's/^/  /' "$log" | tail -15 ;;
+            esac
+            rm -f "$log"
+          done < "$TESTS_LIST"
+          {
+            echo "pass=$pass"
+            echo "fail=$fail"
+            echo "timeouts=$timeouts"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fail on zero discovered tests
+        if: steps.discover.outputs.count == '0'
+        run: |
+          echo "::error title=No launcher tests discovered::The glob matched nothing. An empty discovery set is a failure, not a pass."
+          exit 1
+
+      - name: Verdict
+        if: steps.discover.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          p="${{ steps.run.outputs.pass }}"
+          f="${{ steps.run.outputs.fail }}"
+          ti="${{ steps.run.outputs.timeouts }}"
+          echo "launcher tests: ${p} passed, ${f} failed, ${ti} timed out" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$f" -ne 0 ] || [ "$ti" -ne 0 ]; then
+            echo "::error title=Launcher tests failed::${f} failed, ${ti} timed out"
+            exit 1
+          fi
