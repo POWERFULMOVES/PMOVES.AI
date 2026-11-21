@@ -279,6 +279,9 @@ class MCPSpec:
     required_commands: List[str] = field(default_factory=list)
     required_env: Optional[str] = None
     required_envs: List[str] = field(default_factory=list)
+    required_container: Optional[str] = None
+    required_docker_subcommand: Optional[str] = None
+    npm_global_entry: Optional[Tuple[str, str]] = None
 
     def missing_envs(self, env_cache: Dict[Path, Dict[str, str]]) -> List[str]:
         keys = list(self.required_envs)
@@ -434,14 +437,19 @@ MCP_SPECS: List[MCPSpec] = [
         key="tailscale",
         config={
             "type": "stdio",
-            "command": "npx",
-            "args": [
-                "-y",
-                "tailscale-mcp@2026.4.10-1",
-            ],
+            "command": "node",
+            "args": [],
             "timeout": 60,
         },
-        required_commands=["npx"],
+        # tailscale-mcp@2026.4.10-1 (the latest release) ships dist/index.js
+        # with a JSDoc header and NO shebang: exec'ing the bin falls back to
+        # /bin/sh and dies on the first JS line, so `npx -y` can never start
+        # it on Linux (measured 2026-11-20 on knuckles; npm's global bin link
+        # is a plain symlink to the same file, so it cannot start it either).
+        # The gate rewrites this entry to `node <entry file>` when the package
+        # is installed under the fnm default alias, else disables it with the
+        # install hint.
+        npm_global_entry=("tailscale-mcp", "dist/index.js"),
         required_envs=["TAILSCALE_API_KEY", "TAILSCALE_TAILNET"],
     ),
     MCPSpec(
@@ -459,6 +467,13 @@ MCP_SPECS: List[MCPSpec] = [
             "timeout": 60,
         },
         required_commands=["docker"],
+        # `docker mcp` is a CLI plugin (ships with Docker Desktop), not part
+        # of the docker CLI itself. On nodes without it the command dies with
+        # "unknown command" and the MCP entry EOFs at connect (measured
+        # 2026-11-20 on knuckles, where the gateway runs containerized on
+        # :8189 instead). The profile default matches mcp-toolkit-connect;
+        # override per node with PMOVES_MCP_PROFILE.
+        required_docker_subcommand="mcp",
     ),
     MCPSpec(
         key="docker",
@@ -489,6 +504,11 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_commands=["docker"],
         required_env="HOSTINGER_API_TOKEN",
+        # The token lives in the funnel and exists on every node, but the
+        # container does not; `docker exec` then dies instantly and the entry
+        # EOFs at connect (measured 2026-11-20 on knuckles, which has no
+        # pmz-hostinger container). Gate on the thing being enabled.
+        required_container="pmz-hostinger",
     ),
 ]
 
@@ -625,6 +645,138 @@ def guard_unresolvable_ts(mcp_config, env=None):
     for note in notes:
         print(f"[crush-config] {note}", file=sys.stderr)
     return notes
+
+
+def _stable_which(cmd: str) -> str:
+    """Resolve a bare command name to a path that survives shell churn.
+
+    fnm hands every shell its own multishell bin dir under
+    /run/user/<uid>/fnm_multishells/, and that directory dies with its shell.
+    A stored bare command is resolved against whatever PATH the launching
+    shell had, so an stdio MCP entry generated from one shell can EOF forever
+    once that shell is gone (measured 2026-11-20 on knuckles: the huggingface
+    entry, whose npx is perfectly healthy from a live shell). Prefer stable
+    homes before trusting PATH.
+    """
+    if os.sep in cmd or (os.altsep and os.altsep in cmd):
+        return cmd
+    home = Path.home()
+    for stable in (
+        home / ".local" / "share" / "fnm" / "aliases" / "default" / "bin" / cmd,
+        home / ".local" / "bin" / cmd,
+    ):
+        if stable.is_file():
+            return str(stable)
+    return shutil.which(cmd) or cmd
+
+
+def _docker_probe(argv: List[str]) -> bool:
+    """True when `docker <argv...>` exits 0. Never raises."""
+    try:
+        proc = subprocess.run(["docker", *argv], capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0
+
+
+def _docker_container_exists(name: str) -> bool:
+    return _docker_probe(["inspect", name])
+
+
+_DOCKER_CLI_PLUGIN_DIRS = (
+    Path("/usr/local/lib/docker/cli-plugins"),
+    Path("/usr/local/libexec/docker/cli-plugins"),
+    Path("/usr/libexec/docker/cli-plugins"),
+)
+
+
+def _docker_subcommand_available(sub: str) -> bool:
+    # Docker discovers CLI plugins as `docker-<sub>` executables on PATH and
+    # in the configured cli-plugins dirs. `docker <sub> --help` is useless as
+    # a probe: for an unknown subcommand the CLI prints its own top-level help
+    # and exits 0 (measured: `docker mcp --help` on a node without the
+    # plugin), so only the plugin binary's presence is meaningful here.
+    if shutil.which(f"docker-{sub}"):
+        return True
+    for plugin_dir in (Path.home() / ".docker" / "cli-plugins", *_DOCKER_CLI_PLUGIN_DIRS):
+        if (plugin_dir / f"docker-{sub}").is_file():
+            return True
+    return False
+
+
+def _npm_global_entry_path(package: str, entry_rel: str) -> Optional[Path]:
+    """Entry file of an npm package installed globally under the fnm default alias."""
+    entry = (
+        Path.home()
+        / ".local"
+        / "share"
+        / "fnm"
+        / "aliases"
+        / "default"
+        / "lib"
+        / "node_modules"
+        / package
+        / entry_rel
+    )
+    return entry if entry.is_file() else None
+
+
+def _apply_mcp_gates(
+    spec: MCPSpec, config: Dict[str, object], env_cache: Dict[Path, Dict[str, str]]
+) -> Tuple[bool, Optional[str]]:
+    """Enablement gates for one MCPSpec. Returns (disabled, note).
+
+    The older gates (required_commands, required_envs) check the CLIENT side:
+    a binary on PATH, a var in env. The gates added 2026-11-20 check the thing
+    being enabled: a docker container that must exist, a docker CLI plugin
+    that must be installed, an npm package whose bin must be exec'able. Each
+    new gate disables with a named reason instead of an entry that EOFs at
+    connect. Mutates config (npm entry rewrite, absolute command resolution)
+    only when the spec stays enabled.
+    """
+    disabled = bool(config.pop("disabled", False))
+    note: Optional[str] = None
+    if spec.npm_global_entry is not None:
+        package, entry_rel = spec.npm_global_entry
+        entry = _npm_global_entry_path(package, entry_rel)
+        if entry is None:
+            disabled = True
+            note = (
+                f"{spec.key}: disabled — {package} is not installed under the "
+                f"fnm default alias (npm i -g {package}); its published bin "
+                "has no shebang, so npx cannot exec it on Linux"
+            )
+        else:
+            config["command"] = _stable_which("node")
+            config["args"] = [str(entry)]
+    if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
+        disabled = True
+    if spec.missing_envs(env_cache):
+        disabled = True
+    if spec.required_container is not None and not _docker_container_exists(spec.required_container):
+        disabled = True
+        note = note or (
+            f"{spec.key}: disabled — docker container {spec.required_container} "
+            "does not exist on this node; the entry would EOF at connect"
+        )
+    if spec.required_docker_subcommand is not None and not _docker_subcommand_available(
+        spec.required_docker_subcommand
+    ):
+        disabled = True
+        note = note or (
+            f"{spec.key}: disabled — docker {spec.required_docker_subcommand} CLI "
+            "plugin is not installed on this node"
+        )
+    command = config.get("command")
+    if (
+        not disabled
+        and config.get("type") == "stdio"
+        and isinstance(command, str)
+        and os.sep not in command
+        and not (os.altsep and os.altsep in command)
+    ):
+        config["command"] = _stable_which(command)
+    return disabled, note
 
 
 def _load_model_suit(spec_id: str) -> Optional[Dict[str, object]]:
@@ -837,6 +989,7 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     models_config = _select_models(available_specs, provider_models, node)
 
     mcp_config: Dict[str, Dict[str, object]] = {}
+    gate_notes: List[str] = []
     for spec in MCP_SPECS:
         config = dict(spec.config)
         if node == "spark":
@@ -850,14 +1003,22 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
             port = "8093" if node == "spark" else "8081"
             config["url"] = f"http://localhost:{port}/mcp/t-${{AGENT_ZERO_MCP_TOKEN}}/sse"
             config["type"] = "sse"
-        disabled = config.pop("disabled", False)
-        if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
-            disabled = True
-        if spec.missing_envs(env_cache):
-            disabled = True
+        if spec.key == "pmoves-docker-gateway" and isinstance(config.get("args"), list):
+            args = config["args"]
+            if "--profile" in args:
+                # Profiles live in the Docker MCP Toolkit catalog, not in this
+                # file; the default matches mcp-toolkit-connect. Override per
+                # node with PMOVES_MCP_PROFILE instead of editing the roster.
+                idx = args.index("--profile")
+                args[idx + 1] = os.environ.get("PMOVES_MCP_PROFILE", str(args[idx + 1]))
+        disabled, note = _apply_mcp_gates(spec, config, env_cache)
+        if note:
+            gate_notes.append(note)
         if disabled:
             config["disabled"] = True
         mcp_config[spec.key] = config
+    for gate_note in gate_notes:
+        print(f"[crush-config] {gate_note}", file=sys.stderr)
 
     # Pair-review finding: ${TS_*} in a url with no resolution is the silent-404
     # class this roster shares with Claude's; guard it the same way (drop with a
