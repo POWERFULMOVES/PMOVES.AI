@@ -347,7 +347,7 @@ def test_healthz_reports_200_when_inner_runtime_is_running(
 
 def test_healthz_never_returns_nats_credentials(monkeypatch, load_service_module):
     """/healthz is unauthenticated and tailnet-served; NATS_URL userinfo must not leak."""
-    monkeypatch.setenv("NATS_URL", "nats://svc-user:s3cret-pass@nats:4222")
+    monkeypatch.setenv("NATS_URL", "nats://svc-user:s3cr3t@nats:4222")
     module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module.service_config = module.load_service_config()
     module = _prepare_agent_zero(module, monkeypatch)
@@ -355,14 +355,14 @@ def test_healthz_never_returns_nats_credentials(monkeypatch, load_service_module
 
     with TestClient(module.app) as client:
         response = client.get("/healthz")
-    assert "s3cret-pass" not in response.text
+    assert "s3cr3t" not in response.text
     assert "svc-user" not in response.text
     assert response.json()["nats"]["url"] == "nats://nats:4222"
 
 
 def test_config_environment_never_returns_nats_credentials(monkeypatch, load_service_module):
     """/config/environment is unauthenticated too; it echoed NATS_URL verbatim."""
-    monkeypatch.setenv("NATS_URL", "nats://svc-user:s3cret-pass@nats:4222")
+    monkeypatch.setenv("NATS_URL", "nats://svc-user:s3cr3t@nats:4222")
     module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module.service_config = module.load_service_config()
     module = _prepare_agent_zero(module, monkeypatch)
@@ -370,6 +370,6 @@ def test_config_environment_never_returns_nats_credentials(monkeypatch, load_ser
 
     with TestClient(module.app) as client:
         response = client.get("/config/environment")
-    assert "s3cret-pass" not in response.text and "svc-user" not in response.text
+    assert "s3cr3t" not in response.text and "svc-user" not in response.text
     assert response.json()["nats_url"] == "nats://nats:4222"
     assert module.service_config.nats_url.startswith("nats://svc-user:")  # runtime keeps it

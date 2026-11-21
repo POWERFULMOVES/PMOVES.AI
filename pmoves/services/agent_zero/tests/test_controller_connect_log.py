@@ -23,7 +23,7 @@ controller_mod = importlib.import_module("services.agent_zero.controller")
 AgentZeroController = controller_mod.AgentZeroController
 ControllerSettings = controller_mod.ControllerSettings
 
-CREDENTIALED_URL = "nats://svc-user:s3cret-pass@nats:4222"
+CREDENTIALED_URL = "nats://svc-user:s3cr3t@nats:4222"
 
 
 class _StopAfterConnect(Exception):
@@ -52,7 +52,7 @@ async def test_controller_connect_log_has_no_nats_userinfo(monkeypatch, caplog):
 
     connect_lines = [r.getMessage() for r in caplog.records if "Connecting to NATS" in r.getMessage()]
     assert connect_lines == ["Connecting to NATS at nats://nats:4222"]
-    assert "s3cret-pass" not in caplog.text
+    assert "s3cr3t" not in caplog.text
     assert "svc-user" not in caplog.text
     # Redaction is for the log only: the client still connects with the credentials.
     assert _FakeNATS.servers_seen == [[CREDENTIALED_URL]]
