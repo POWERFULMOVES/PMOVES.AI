@@ -297,12 +297,24 @@ def test_make_recipe_passes_keys_only_when_set(tmp_path, stub_docker_path, cmdli
 # exit 0 -- on the GH_APP_SEC rotation path that reported a rotation which
 # never happened.
 
-# '+' with base64 padding. Written QUOTED in local.env it passes the parser's
-# validation (which sees the quotes), is normalised to the bare value, and is
-# then rejected by the write path's validation -- the reachable skip. (Unquoted,
-# the parser itself drops it, and --keys then reports the key as absent.)
-BAD_PLUS = "abcdefgh+ijklmnop+qrstuv=="
-BAD_LINE = '"' + BAD_PLUS + '"'
+# A value the WRITE path's validation rejects (concatenated API key + base64
+# fragment; fabricated). These tests used a quoted '+'-with-padding value until
+# #3498 removed that rule as false (docker compose passes such values
+# unchanged, measured). No single-line file value now passes the parser and
+# fails the writer, so -- like the raw-newline case -- the bad value is injected
+# after parsing, for every key whose file value is the BAD_LINE sentinel.
+BAD_PLUS = "fakekey" + "x" * 63 + "==" + "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo"
+BAD_LINE = "bad-value-injected-after-parse"
+
+
+def _inject_bad(monkeypatch):
+    real_parse = slh._parse_env
+
+    def parse(path):
+        values = real_parse(path)
+        return {k: (BAD_PLUS if v == BAD_LINE else v) for k, v in values.items()}
+
+    monkeypatch.setattr(slh, "_parse_env", parse)
 # A \n-ESCAPED single-line PEM: the storage form the runbook prescribes.
 GOOD_PEM = (
     "-----BEGIN RSA PRIVATE KEY-----\\nMIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun"
@@ -323,12 +335,13 @@ def _with_raw_newline(monkeypatch, local: Path, key: str):
     monkeypatch.setattr(slh, "_parse_env", parse)
 
 
-@pytest.mark.parametrize("bad", ["plus_padding", "raw_newline"])
+@pytest.mark.parametrize("bad", ["concatenated", "raw_newline"])
 def test_cli_force_keys_validation_skip_is_a_failure_not_a_success(envs, monkeypatch, capsys, bad):
     local, shared, _ = envs
     _isolate(monkeypatch)
-    if bad == "plus_padding":
+    if bad == "concatenated":
         local.write_text(f"GH_APP_SEC={BAD_LINE}\n", encoding="utf-8")
+        _inject_bad(monkeypatch)
     else:
         _with_raw_newline(monkeypatch, local, "GH_APP_SEC")
     rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared),
@@ -344,6 +357,7 @@ def test_cli_force_without_keys_any_skip_exits_1_and_valid_keys_still_land(envs,
     local, shared, _ = envs
     _isolate(monkeypatch)
     local.write_text(f"GH_APP_SEC={BAD_LINE}\nEMPTY_IN_SHARED={FRESH}\n", encoding="utf-8")
+    _inject_bad(monkeypatch)
     rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared), "--force"], capsys)
     assert rc == 1
     assert re.search(r"NOT hydrated \(failed validation\)[^\n]*GH_APP_SEC", out + err)
@@ -355,6 +369,7 @@ def test_cli_plain_run_lists_skip_but_keeps_exit_0(tmp_path, monkeypatch, capsys
     _isolate(monkeypatch)
     local = tmp_path / "local.env"
     local.write_text(f"BAD_ONE={BAD_LINE}\nGOOD_ONE={FRESH}\n", encoding="utf-8")
+    _inject_bad(monkeypatch)
     shared = tmp_path / "env.shared"
     shared.write_text("BAD_ONE=\nGOOD_ONE=\n", encoding="utf-8")
     rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared)], capsys)
@@ -368,6 +383,7 @@ def test_cli_dry_run_reports_would_skip(envs, monkeypatch, capsys):
     local, shared, _ = envs
     _isolate(monkeypatch)
     local.write_text(f"GH_APP_SEC={BAD_LINE}\n", encoding="utf-8")
+    _inject_bad(monkeypatch)
     before = shared.read_text(encoding="utf-8")
     rc, out, err = _run(["--local-env", str(local), "--env-shared", str(shared),
                          "--dry-run", "--force", "--keys", "GH_APP_SEC"], capsys)

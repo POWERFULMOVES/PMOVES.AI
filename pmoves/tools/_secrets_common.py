@@ -12,7 +12,7 @@ import re
 import sys
 import urllib.parse
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -227,8 +227,15 @@ def validate_secret_value(key: str, value: str) -> tuple[bool, str | None]:
 
     Checks for:
     - Actual newlines (literal \\n is allowed for JWTs/multiline configs)
-    - Special characters that break Docker Compose parsing (+ in unquoted values)
     - Suspicious patterns (base64 fragments concatenated to API keys)
+
+    There is deliberately NO rule against '+' with '=' padding. An earlier rule
+    rejected any unquoted value containing '+' and ending in '=', claiming it
+    "will break Docker Compose parsing". Measured 2026-11-20 (B850): a throwaway
+    compose file with ``PW=Ab+cd/ef12345678=`` in both ``env_file`` and
+    ``--env-file`` rendered the value unchanged through ``env_file`` AND
+    ``${PW}`` interpolation (``docker compose config``). The rule only dropped
+    legitimate base64 passwords (WGER_ADMIN_PASSWORD on B850).
     """
     if not value:
         return True, None
@@ -248,23 +255,33 @@ def validate_secret_value(key: str, value: str) -> tuple[bool, str | None]:
             if re.search(r'[A-Za-z0-9_-]{20,}[=]{1,2}[A-Za-z0-9+/=]{10,}', value):
                 return False, "appears to be multiple values concatenated (API key + base64 fragment)"
 
-    # Check for unquoted special characters that break Docker Compose
-    # Docker Compose treats + as an operator in unquoted values
-    # This only matters if the value isn't properly quoted
-    if "+" in value and not (value.startswith('"') or value.startswith("'")):
-        # Allow + in specific contexts (bearer tokens, some API keys)
-        # But reject if it looks like base64 (has padding =)
-        if "=" in value and value.endswith("="):
-            return False, "contains '+' character with base64 padding - will break Docker Compose parsing"
-
     return True, None
 
 
 def parse_env_file(path: Path) -> Dict[str, str]:
-    """Parse KEY=VALUE lines from a dotenv file, skipping comments and blanks."""
+    """Parse KEY=VALUE lines from a dotenv file, skipping comments and blanks.
+
+    Values that fail ``validate_secret_value`` are dropped (a key-name-only
+    WARNING goes to stderr). A caller that must know WHICH keys were dropped
+    should call ``parse_env_file_with_report`` instead.
+    """
+    values, _skipped = parse_env_file_with_report(path)
+    return values
+
+
+def parse_env_file_with_report(path: Path) -> Tuple[Dict[str, str], List[str]]:
+    """Like ``parse_env_file``, but also return the keys it dropped.
+
+    Returns ``(values, skipped_keys)``. ``skipped_keys`` lists, in file order,
+    the KEY NAMES whose value failed ``validate_secret_value``; values are never
+    reported. Lines whose left side is not a valid key are not reported: that
+    branch exists to discard base64 fragments, so the "key" there may be part
+    of a secret.
+    """
     values: Dict[str, str] = {}
+    skipped: List[str] = []
     if not path.exists():
-        return values
+        return values, skipped
     for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -296,9 +313,10 @@ def parse_env_file(path: Path) -> Dict[str, str]:
         if not is_valid:
             # Log only key name (CodeQL safe: no value taint, no error message)
             print(f"WARNING: Skipping malformed secret '{key}' (validation failed)", file=sys.stderr)
+            skipped.append(key)
             continue
 
         # Strip/normalize value before storage (regression prevention from PR #1356)
         value = normalize_env_value(value)
         values[key] = value
-    return values
+    return values, skipped

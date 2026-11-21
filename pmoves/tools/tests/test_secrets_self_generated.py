@@ -663,9 +663,11 @@ def test_stale_and_absent_labels_adopt_the_live_verifying_sibling():
     out = fill_self_generated(secrets, events=events, local_services=_SERVICES)
     # every service_role label ends on the ONE key that already verifies
     assert out["SUPABASE_SERVICE_ROLE_KEY"] == out["SERVICE_ROLE_KEY"] == out["SUPABASE_SERVICE_KEY"] == good
+    assert out["SUPABASE_KEY"] == good   # #3498: the alias takes the same role key
     got = {(e["label"], e["action"], e["reason"]) for e in events if e["role"] == "service_role"}
     assert got == {("SERVICE_ROLE_KEY", "reminted", "signed_with_other_secret"),
-                   ("SUPABASE_SERVICE_ROLE_KEY", "filled", "absent")}   # SERVICE_KEY untouched
+                   ("SUPABASE_SERVICE_ROLE_KEY", "filled", "absent"),
+                   ("SUPABASE_KEY", "filled", "absent")}   # SERVICE_KEY untouched
 
 
 def test_knuckles_shape_after_the_funnel_passes_both_gates():
@@ -898,3 +900,24 @@ def test_cipher_check_treats_nonfinite_null_or_bool_exp_as_unmeasured(kind):
     assert v["facets"]["exp_in_past"] is None        # neither 'live' nor 'expired'
     assert v["exit"] == 3 and "expired" not in [f["code"] for f in v["findings"]]
     assert not ck._live_service_role(tok, _VERIFIER, int(time.time()))
+
+
+# --- SUPABASE_KEY alias (#3498: no longer shipped from GitHub Prod) ---
+
+
+def test_fill_mints_supabase_key_as_service_role_alias_on_a_fresh_node():
+    # A fresh node has only its JWT secret. SUPABASE_KEY must come out as the
+    # SAME service-role key as its siblings, not a second service key.
+    out = fill_self_generated({"JWT_SECRET": _SECRET})
+    assert out["SUPABASE_KEY"] == out["SUPABASE_SERVICE_ROLE_KEY"] == out["SERVICE_ROLE_KEY"]
+    payload = out["SUPABASE_KEY"].split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    assert claims["role"] == "service_role"
+    assert "SUPABASE_KEY" in SELF_GENERATED
+
+
+def test_fill_adopts_live_service_role_key_into_absent_supabase_key():
+    now = int(time.time())
+    live = derive_supabase_jwt(_SECRET, "service_role", iat=now, exp=now + 86400)
+    out = fill_self_generated({"JWT_SECRET": _SECRET, "SUPABASE_SERVICE_ROLE_KEY": live})
+    assert out["SUPABASE_KEY"] == live
