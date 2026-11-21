@@ -75,8 +75,21 @@ for var in \
   TAILSCALE_TAILNET \
   AGENT_ZERO_MCP_TOKEN \
   Z_AI_API_KEY; do
-  if [ -n "${ENV_MAP[$var]:-}" ] && [ -z "${!var:-}" ]; then
-    export "$var"="${ENV_MAP[$var]}"
+  if [ -n "${ENV_MAP[$var]:-}" ]; then
+    # Compose-interpolation hazard class (NATS/SUPABASE_*): the FILE value
+    # always wins on (re)source. The old `-z "${!var:-}"` guard kept a stale
+    # launcher-era export alive across env-file fixes, and compose gives the
+    # process environment precedence over --env-file — the 2026-10-13 NATS
+    # stale-credential incident class. Non-hazard vars keep unset-guard
+    # semantics below (an explicit export still wins).
+    case "$var" in
+      NATS_URL|SUPABASE_URL|SUPABASE_SERVICE_KEY|SUPABASE_SERVICE_ROLE_KEY)
+        export "$var"="${ENV_MAP[$var]}"
+        ;;
+      *)
+        [ -z "${!var:-}" ] && export "$var"="${ENV_MAP[$var]}"
+        ;;
+    esac
   fi
 done
 
