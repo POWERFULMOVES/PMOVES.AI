@@ -28,6 +28,7 @@ its own lane; this guard is deliberately conservative until then.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -39,6 +40,17 @@ except ImportError:  # pragma: no cover - yaml is a hard dependency elsewhere
     raise SystemExit(4)
 
 DEFAULT_MANIFEST = Path(__file__).resolve().parents[1] / "chit" / "secrets_manifest.yaml"
+
+# Manifest ids are identifiers, never values, but a linter (and a log reader) cannot
+# tell the difference -- CodeQL flags any manifest-derived string that reaches a log
+# sink as potential clear-text secret disclosure. Strip to a safe identifier charset
+# before logging: this satisfies the rule on its merits and removes log-injection.
+_UNSAFE_ID_CHARS = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def safe_id(value: object, limit: int = 64) -> str:
+    """Reduce a manifest identifier to [A-Za-z0-9_.-] for safe logging."""
+    return _UNSAFE_ID_CHARS.sub("", str(value))[:limit]
 
 # Entries whose value must be a JWT (or the key that signs them).
 JWT_MINTED_IDS = frozenset({
@@ -143,15 +155,15 @@ def check(key: str, manifest: Path = DEFAULT_MANIFEST) -> int:
 
     reason = refuse_reason(chosen)
     if reason:
-        print(f"REFUSED: secrets-rotate cannot mint {key}.", file=sys.stderr)
-        print(f"  entry:  {chosen.get('id')}", file=sys.stderr)
+        print(f"REFUSED: secrets-rotate cannot mint {safe_id(key)}.", file=sys.stderr)
+        print(f"  entry:  {safe_id(chosen.get('id'))}", file=sys.stderr)
         if len(matches) > 1:
-            others = ", ".join(str(e.get("id")) for e in matches if e is not chosen)
+            others = ", ".join(safe_id(e.get("id")) for e in matches if e is not chosen)
             print(f"  also declared by: {others}", file=sys.stderr)
         if key.strip().upper() in SIGNING_LABELS and str(chosen.get("id", "")) not in SIGNING_SECRET_IDS:
             print(
-                f"  note: {key} is declared as an alias of {chosen.get('id')}, while the "
-                "canonical supabase_jwt_secret entry does not list it as an alias. "
+                f"  note: {safe_id(key)} is declared as an alias of {safe_id(chosen.get('id'))}, "
+                "while the canonical supabase_jwt_secret entry does not list it as an alias. "
                 "That aliasing looks inverted - flag it, do not silently 'fix' the value.",
                 file=sys.stderr,
             )
