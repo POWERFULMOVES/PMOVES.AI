@@ -287,5 +287,32 @@ class RunbookStructuralTests(unittest.TestCase):
         self.assertIn("pmoves/tools/jwt_rotate.py", self.text)
 
 
+class ExclusionTests(unittest.TestCase):
+    """is_excluded() must decide on the path RELATIVE to the survey root.
+
+    2026-11-21 (4090-Claw): the previous implementation substring-matched the
+    absolute path for "worktrees". That made the survey return ZERO consumers
+    whenever the repo itself lived in a git worktree -- i.e. exactly the layout
+    this fleet uses (210 worktrees on the 4090 alone). A rotation run from a
+    worktree would have reported an empty blast radius and skipped every service.
+    """
+
+    ROOT = Path("/repo/.worktrees/pr3346/pmoves")
+
+    def test_root_inside_worktree_is_not_excluded(self):
+        self.assertFalse(jwt_rotate.is_excluded(self.ROOT / "docker-compose.yml", self.ROOT))
+
+    def test_nested_worktrees_dir_is_still_excluded(self):
+        nested = self.ROOT / ".worktrees" / "other" / "docker-compose.yml"
+        self.assertTrue(jwt_rotate.is_excluded(nested, self.ROOT))
+
+    def test_node_modules_git_and_supabase_submodule_excluded(self):
+        self.assertTrue(jwt_rotate.is_excluded(self.ROOT / "node_modules" / "a.yml", self.ROOT))
+        self.assertTrue(jwt_rotate.is_excluded(self.ROOT / ".git" / "config.yaml", self.ROOT))
+        self.assertTrue(
+            jwt_rotate.is_excluded(self.ROOT / "PMOVES-supabase" / "docker-compose.yml", self.ROOT)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
