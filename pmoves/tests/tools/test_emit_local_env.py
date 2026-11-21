@@ -155,6 +155,9 @@ def test_gh_app_sec_pem_round_trips_through_gh_app_token_loader(tmp_path, monkey
     assert len(lines) == 1 and "\n" not in emitted["GH_APP_SEC"]
     stored = parse_env_file(local_env)["GH_APP_SEC"]
 
+    # gh_app_token raises SystemExit(2) at import without PyJWT, which the
+    # python-tests job does not install (same guard as test_gh_app_installation_audit).
+    pytest.importorskip("jwt")
     from pmoves.tools import gh_app_token
     monkeypatch.setenv("GH_APP_SEC", stored)
     assert gh_app_token._load_private_key() == pem
