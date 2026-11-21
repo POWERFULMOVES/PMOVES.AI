@@ -32,6 +32,9 @@ What is asserted
    provisioner, so a fresh node gets the collection without a manual step.
 4. `cipher-memory-smoke` asserts on `embedding_id` and `score` rather than on
    curl's exit status alone — otherwise it passes with the vector path dead.
+   When the recipe delegates to `tools/cipher_roundtrip_probe.py`, it must pass
+   `--require-vector` and the probe must carry those checks. Comment lines in
+   the recipe do not count.
 5. Non-vacuity: `embedding.ts` still gates `storeVector` behind `embed()`, and
    still writes the named vectors this provisioner creates. If the sidecar is
    ever changed to provision eagerly, assertions 1-3 stop guarding anything and
@@ -116,10 +119,30 @@ def test_cipher_bringup_roads_provision_the_collection():
         )
 
 
+ROUNDTRIP_PROBE = PMOVES / "tools" / "cipher_roundtrip_probe.py"
+
+
+def _executable(recipe: str) -> str:
+    """Drop `@#` comment lines: prose about a check is not the check."""
+    return "\n".join(
+        line for line in recipe.splitlines() if not line.lstrip("\t @-+").startswith("#")
+    )
+
+
 def test_smoke_fails_when_the_vector_path_is_dead():
-    recipe = _recipe("cipher-memory-smoke")
+    recipe = _executable(_recipe("cipher-memory-smoke"))
     # Both endpoints answer 2xx off the lexical fallback with Qdrant absent, so
     # exit-status-only assertions pass on a dead pipeline.
+    if ROUNDTRIP_PROBE.name in recipe:
+        # The recipe delegates to the authenticated round-trip probe. The two
+        # vector checks then live in the probe and are only armed by the flag;
+        # its behaviour is covered by tests/tools/test_cipher_roundtrip_probe.py
+        # (test_require_vector_fails_on_the_lexical_fallback_only).
+        assert "--require-vector" in recipe, (
+            "cipher-memory-smoke must run cipher_roundtrip_probe.py with "
+            "--require-vector, or a lexical-fallback round trip passes"
+        )
+        recipe = ROUNDTRIP_PROBE.read_text(encoding="utf-8")
     assert "embedding_id" in recipe, (
         "cipher-memory-smoke must assert POST returned a non-null embedding_id"
     )

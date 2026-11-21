@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
-from services.common.env import get_secret
+from services.common.env import get_secret, supabase_service_key
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlsplit, urlunsplit
@@ -99,7 +99,25 @@ except Exception as e:
 
 # Supabase connection for persona lookups
 _SUPABASE_URL = os.getenv("SUPABASE_URL", os.getenv("SUPA_REST_URL", ""))
-_SUPABASE_KEY = get_secret("SUPABASE_KEY", get_secret("ANON_KEY", ""))
+
+
+def _resolve_supabase_key() -> str:
+    """Service-role key first (as main.py does), anon key only as a last resort.
+
+    Order: SUPABASE_SERVICE_ROLE_KEY -> SUPABASE_SERVICE_KEY -> SUPABASE_KEY ->
+    ANON_KEY. Falling back to anon is logged, so persona lookups running with
+    anon rights are visible instead of degrading silently (#3498).
+    """
+    key = supabase_service_key()
+    if key:
+        return key
+    anon = get_secret("ANON_KEY", "") or ""
+    if anon:
+        logger.warning("persona_selector: no Supabase service key set; falling back to ANON_KEY")
+    return anon
+
+
+_SUPABASE_KEY = _resolve_supabase_key()
 
 # Default engine when nothing else matches
 _DEFAULT_ENGINE = "kitten_tts"

@@ -256,7 +256,12 @@ SUPABASE_REALTIME_DISABLED = SUPABASE_REALTIME_URL.lower() in {"", "disabled", "
 if SUPABASE_REALTIME_DISABLED:
     SUPABASE_REALTIME_URL = ""
 # For backend realtime subscriptions, we need a JWT (not sb_secret_ format)
-_jwt_service_key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
+# Canonical SUPABASE_SERVICE_ROLE_KEY first; SUPABASE_KEY is a read-fallback (#3498).
+_jwt_service_key = (
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SUPABASE_KEY")
+)
 _explicit_realtime_key = os.environ.get("SUPABASE_REALTIME_KEY") or os.environ.get("REALTIME_ANON_KEY")
 
 

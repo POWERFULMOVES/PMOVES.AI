@@ -408,8 +408,6 @@ known_gaps:
   - "GHOST_TARGET|pmoves/docs/pmoves-model-management-starter/README.md|smoke-archon"
   - "GHOST_TARGET|pmoves/docs/pmoves-model-management-starter/README.md|yt-emit-smoke"
   - "GHOST_TARGET|pmoves/docs/security/DOCKER_SECRETS_GUIDE.md|secrets-chit-encode"
-  - "GHOST_TARGET|pmoves/docs/security/GITHUB_SECRETS_GUIDE.md|deploy"
-  - "GHOST_TARGET|pmoves/docs/security/GITHUB_SECRETS_GUIDE.md|secrets-chit-decode"
   - "GHOST_TARGET|pmoves/docs/security/SECRETS_ONBOARDING.md|health"
   - "GHOST_TARGET|pmoves/docs/security/SECRETS_ONBOARDING.md|secrets-chit-decode"
   - "GHOST_TARGET|pmoves/docs/security/SECRETS_ONBOARDING.md|secrets-chit-encode"
