@@ -51,6 +51,24 @@ pmoves_wrappers:
     windows_shim: pmoves/scripts/windows/hermes-pmoves.bat
     drives: hermes (Hermes Agent)
     purpose: "One-shot Hermes bootstrap+launch (profile + MCP + CHIT)"
+  minimax-pmoves:
+    # This family's launcher is GENERATOR-MANAGED in deploy/provision/, not a
+    # hand-written pmoves/scripts/ wrapper -- so `script:` points at the
+    # emitted artifact rather than at a pmoves/scripts/ path that was never
+    # created. The previous values (pmoves/scripts/minimax-pmoves.sh and
+    # pmoves/scripts/windows/minimax-pmoves.bat) named files that do not
+    # exist: a phantom path that resolved to nothing for every consumer,
+    # while every sibling entry resolved to a real file.
+    #
+    # NOTE: install_tools.py's WRAPPERS list does not include this family, so
+    # `make -C pmoves install-tools` does NOT install it. That is a known gap
+    # rather than an accident -- this family is installed by
+    # deploy/provision/install-minimax-pmoves-command.sh, which is the
+    # generator-managed installer that also writes the profile function.
+    script: deploy/provision/minimax-pmoves.sh
+    windows_shim: deploy/provision/minimax-pmoves.cmd
+    drives: minimax (MiniMax Code / Mavis desktop client)
+    purpose: "MiniMax Code with the pmoves.bootstrap/v1 client profile (roster + service tags + routing + constraints)"
 
 host_clis:
   # name -> { purpose, required, install hints, check command }
@@ -146,7 +164,10 @@ host_clis:
     check: "kilo --version"
   brv:
     purpose: "ByteRover CLI (byterover-cli, upstream of the Pmoves-cipher fork) — context-tree memory (brv-query/brv-curate). claude-pmoves warns when absent (pmoves/scripts/pm-brv-check.sh). Runbook: docs/TAC/TAC_CIPHER.md"
-    required: false
+    # REQUIRED (operator, 2026-11-03): cipher memory is a prerequisite of every
+    # harness session, so brv is installed before anything else is built on a
+    # node. `make -C pmoves cli-check` now exits 1 without it.
+    required: true
     install:
       # Keep linux identical to PM_BRV_INSTALL_HINT in pmoves/scripts/pm-brv-check.sh
       # (pinned by pmoves/tests/test_pm_brv_check.py). Requires node >= 20.
@@ -155,14 +176,15 @@ host_clis:
     check: "brv --version"
   node:
     purpose: "Node.js — web toolchains (jest/eslint run via package.json scripts, not global). Windows: nvm4w manages versions"
-    required: false
+    required: true  # brv needs node >= 20 + npm
+    min_major: 20   # enforced by cli-check (install_tools.check_host_clis)
     install:
       windows: "winget install CoreyButler.NVMforWindows  # then: nvm install lts"
       linux: "curl -fsSL https://fnm.vercel.app/install | bash  # or nvm"
     check: "node --version"
   npm:
     purpose: "npm — package management for JS toolchains; global installs discouraged, prefer package.json+npx"
-    required: false
+    required: true  # brv needs node >= 20 + npm
     install:
       windows: "ships with node (nvm4w)"
       linux: "ships with node"

@@ -85,11 +85,30 @@ class TestNatsClientNoHardcodedDefault(unittest.TestCase):
     """Verify nats_client.py no longer has hardcoded NATS credentials."""
 
     def test_default_nats_url_is_empty(self):
-        from pmoves.services.common.nats_client import DEFAULT_NATS_URL
-        # When NATS_URL env is not set, default should be empty string
-        # (we can't control env in this test, but the MODULE-LEVEL default
-        #  was already evaluated at import time)
-        assert "pmoves" not in DEFAULT_NATS_URL or DEFAULT_NATS_URL == ""
+        # DEFAULT_NATS_URL is evaluated at import time from os.getenv, so
+        # importing it in-process measures the CALLER'S shell, not the code:
+        # an operator shell that exports a credentialed NATS_URL (normal on
+        # fleet nodes) failed this test against correct code. Import it in a
+        # child interpreter with NATS_URL removed so the hardcoded fallback --
+        # the thing this test guards -- is what gets measured.
+        import subprocess
+
+        env = {k: v for k, v in os.environ.items() if k != "NATS_URL"}
+        env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from pmoves.services.common.nats_client import DEFAULT_NATS_URL;"
+                "print(repr(DEFAULT_NATS_URL))",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "''")
 
 
 if __name__ == "__main__":

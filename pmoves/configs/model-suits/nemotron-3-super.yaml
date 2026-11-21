@@ -12,7 +12,7 @@ provider_display: "Ollama on DGX Spark (NVIDIA NIM)"
 distillation_stage: model_fine_tune
 
 model_config:
-  model_name: "nemotron-3-super:q4"
+  model_name: "nemotron-3-super:120b"  # registry: same weights as 120b-a12b-q4_K_M (digest 0fc53cc990a2); "q4" was never a tag
   endpoint: http://pmoves-dgx-spark:11434/v1  # TODO: replace pmoves-dgx-spark with actual hostname for this deployment
   api_key_env: null
   context_window: 32768

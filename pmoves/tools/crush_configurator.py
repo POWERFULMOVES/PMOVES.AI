@@ -28,6 +28,18 @@ except ImportError:  # loaded by file path (spec_from_file_location), not as a p
     BashNotFoundError = _bash_resolver.BashNotFoundError
     resolve_bash = _bash_resolver.resolve_bash
 
+try:
+    from pmoves.tools import node_gateway_profile as _ngp
+except ImportError:
+    import importlib.util as _ilu2
+
+    _spec2 = _ilu2.spec_from_file_location(
+        "_pmoves_node_gateway_profile",
+        Path(__file__).resolve().parent / "node_gateway_profile.py",
+    )
+    _ngp = _ilu2.module_from_spec(_spec2)
+    _spec2.loader.exec_module(_ngp)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_CANDIDATES = [
     PROJECT_ROOT / ".env.generated",
@@ -279,6 +291,9 @@ class MCPSpec:
     required_commands: List[str] = field(default_factory=list)
     required_env: Optional[str] = None
     required_envs: List[str] = field(default_factory=list)
+    required_container: Optional[str] = None
+    required_docker_subcommand: Optional[str] = None
+    npm_global_entry: Optional[Tuple[str, str]] = None
 
     def missing_envs(self, env_cache: Dict[Path, Dict[str, str]]) -> List[str]:
         keys = list(self.required_envs)
@@ -310,11 +325,16 @@ MCP_SPECS: List[MCPSpec] = [
     # the shim 401s any non-empty token, so cipher never connected). #2729 fixed
     # both for claude/kilo through the inventory; crush was missed because nothing
     # linked it. test_crush_cipher_matches_inventory.py now fails if they diverge.
+    # TRANSPORT 2026-10-10 (5090): both cipher entries are streamable-http
+    # (type http, POST /mcp) -- the legacy SSE pair 400s "stream is not readable"
+    # on any container built before fork PR #27 (pin a0ee2314), while POST /mcp
+    # works on pre- and post-pin builds (measured on 5090; see .claude/mcp.json
+    # pmoves-cipher _note TRANSPORT). Mirrored in the inventory the same day.
     MCPSpec(
         key="pmoves-cipher",
         config={
-            "type": "sse",
-            "url": "http://${TS_Z890}:8105/mcp/sse",
+            "type": "http",
+            "url": "http://${TS_Z890}:8105/mcp",
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
@@ -342,8 +362,8 @@ MCP_SPECS: List[MCPSpec] = [
     MCPSpec(
         key="pmoves-cipher-local",
         config={
-            "type": "sse",
-            "url": "http://localhost:8105/mcp/sse",
+            "type": "http",
+            "url": "http://localhost:8105/mcp",
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
@@ -429,14 +449,19 @@ MCP_SPECS: List[MCPSpec] = [
         key="tailscale",
         config={
             "type": "stdio",
-            "command": "npx",
-            "args": [
-                "-y",
-                "tailscale-mcp@2026.4.10-1",
-            ],
+            "command": "node",
+            "args": [],
             "timeout": 60,
         },
-        required_commands=["npx"],
+        # tailscale-mcp@2026.4.10-1 (the latest release) ships dist/index.js
+        # with a JSDoc header and NO shebang: exec'ing the bin falls back to
+        # /bin/sh and dies on the first JS line, so `npx -y` can never start
+        # it on Linux (measured 2026-11-20 on knuckles; npm's global bin link
+        # is a plain symlink to the same file, so it cannot start it either).
+        # The gate rewrites this entry to `node <entry file>` when the package
+        # is installed under the fnm default alias, else disables it with the
+        # install hint.
+        npm_global_entry=("tailscale-mcp", "dist/index.js"),
         required_envs=["TAILSCALE_API_KEY", "TAILSCALE_TAILNET"],
     ),
     MCPSpec(
@@ -454,6 +479,13 @@ MCP_SPECS: List[MCPSpec] = [
             "timeout": 60,
         },
         required_commands=["docker"],
+        # `docker mcp` is a CLI plugin (ships with Docker Desktop), not part
+        # of the docker CLI itself. On nodes without it the command dies with
+        # "unknown command" and the MCP entry EOFs at connect (measured
+        # 2026-11-20 on knuckles, where the gateway runs containerized on
+        # :8189 instead). The profile is resolved per node through
+        # node_gateway_profile (PMOVES_MCP_PROFILE_ID), never a second name.
+        required_docker_subcommand="mcp",
     ),
     MCPSpec(
         key="docker",
@@ -484,6 +516,11 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_commands=["docker"],
         required_env="HOSTINGER_API_TOKEN",
+        # The token lives in the funnel and exists on every node, but the
+        # container does not; `docker exec` then dies instantly and the entry
+        # EOFs at connect (measured 2026-11-20 on knuckles, which has no
+        # pmz-hostinger container). Gate on the thing being enabled.
+        required_container="pmz-hostinger",
     ),
 ]
 
@@ -532,7 +569,7 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
 # ---------------------------------------------------------------------------
 # Pair-review finding (2026-08-26): the same unresolvable-${TS_*} bug that
 # PR #2769 killed for Claude's roster was still live here. `pmoves-cipher`
-# emits http://${TS_Z890}:8105/mcp/sse; on a node without the tailscale CLI,
+# emits http://${TS_Z890}:8105/mcp; on a node without the tailscale CLI,
 # Crush receives the literal string as a hostname -- a silent 404 in the exact
 # harness whose cipher fix (#2762) had just deliberately dropped required_env.
 # #2762 removed the token gate; this restores a *narrower* one for the hostname.
@@ -620,6 +657,200 @@ def guard_unresolvable_ts(mcp_config, env=None):
     for note in notes:
         print(f"[crush-config] {note}", file=sys.stderr)
     return notes
+
+
+def _stable_which(cmd: str) -> str:
+    """Resolve a bare command name to a path that survives shell churn.
+
+    fnm hands every shell its own multishell bin dir under
+    /run/user/<uid>/fnm_multishells/, and that directory dies with its shell.
+    A stored bare command is resolved against whatever PATH the launching
+    shell had, so an stdio MCP entry generated from one shell can EOF forever
+    once that shell is gone (measured 2026-11-20 on knuckles: the huggingface
+    entry, whose npx is perfectly healthy from a live shell). Prefer stable
+    homes before trusting PATH.
+    """
+    if os.sep in cmd or (os.altsep and os.altsep in cmd):
+        return cmd
+    home = Path.home()
+    for stable in (
+        home / ".local" / "share" / "fnm" / "aliases" / "default" / "bin" / cmd,
+        home / ".local" / "bin" / cmd,
+    ):
+        if stable.is_file():
+            return str(stable)
+    return shutil.which(cmd) or cmd
+
+
+def _docker_probe(argv: List[str]) -> bool:
+    """True when `docker <argv...>` exits 0. Never raises."""
+    try:
+        proc = subprocess.run(["docker", *argv], capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0
+
+
+def _docker_probe_output(argv: List[str]) -> Optional[str]:
+    """Stripped stdout of `docker <argv...>` on exit 0, else None. Never raises."""
+    try:
+        proc = subprocess.run(["docker", *argv], capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or ""
+
+
+def _docker_container_exists(name: str) -> bool:
+    # `docker inspect` succeeds for STOPPED containers too, but `docker exec`
+    # (what the entry actually runs) only works while the primary process is
+    # running — so gate on State.Running, not on existence.
+    return _docker_probe_output(["inspect", "-f", "{{.State.Running}}", name]) == "true"
+
+
+_DOCKER_CLI_PLUGIN_SYSTEM_DIRS = (
+    Path("/usr/local/lib/docker/cli-plugins"),
+    Path("/usr/local/libexec/docker/cli-plugins"),
+    Path("/usr/lib/docker/cli-plugins"),
+    Path("/usr/libexec/docker/cli-plugins"),
+)
+
+
+def _docker_cli_plugin_dirs() -> List[Path]:
+    """Docker's own CLI-plugin discovery set: the config dir, dirs configured
+    via cliPluginsExtraDirs in ~/.docker/config.json, and the four system dirs
+    (cli-plugins/manager/manager_unix.go upstream). NOT arbitrary PATH entries
+    — `docker <sub>` does not search PATH for docker-<sub> binaries, so a PATH
+    hit proves nothing about whether the command will work."""
+    dirs = [Path.home() / ".docker" / "cli-plugins"]
+    try:
+        config = json.loads((Path.home() / ".docker" / "config.json").read_text(encoding="utf-8"))
+        for extra in config.get("cliPluginsExtraDirs") or []:
+            if isinstance(extra, str):
+                dirs.append(Path(extra))
+    except (OSError, ValueError):
+        pass
+    dirs.extend(_DOCKER_CLI_PLUGIN_SYSTEM_DIRS)
+    return dirs
+
+
+def _docker_subcommand_available(sub: str) -> bool:
+    # `docker <sub> --help` is useless as a probe: for an unknown subcommand the
+    # CLI prints its own top-level help and exits 0 (measured: `docker mcp
+    # --help` on a node without the plugin). Only the plugin binary's presence
+    # in docker's own discovery set is meaningful here.
+    for plugin_dir in _docker_cli_plugin_dirs():
+        if (plugin_dir / f"docker-{sub}").is_file():
+            return True
+    return False
+
+
+_NPM_ROOT_CACHE: Optional[Path] = None
+
+
+def _npm_global_root() -> Optional[Path]:
+    """Active global npm root (`npm root -g`), or None. Cached per process."""
+    global _NPM_ROOT_CACHE
+    if _NPM_ROOT_CACHE is None:
+        try:
+            proc = subprocess.run(
+                ["npm", "root", "-g"], capture_output=True, text=True, timeout=20
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if proc.returncode != 0:
+            return None
+        root = proc.stdout.strip().splitlines()
+        if not root or not root[-1]:
+            return None
+        _NPM_ROOT_CACHE = Path(root[-1])
+    return _NPM_ROOT_CACHE
+
+
+def _npm_global_entry_path(package: str, entry_rel: str) -> Optional[Path]:
+    """Entry file of a globally-installed npm package.
+
+    Prefers the fnm default alias (a stable path that survives shell churn),
+    then falls back to the ACTIVE global npm root so nodes using system npm,
+    nvm, or Volta still find a valid install."""
+    candidates = [
+        Path.home()
+        / ".local"
+        / "share"
+        / "fnm"
+        / "aliases"
+        / "default"
+        / "lib"
+        / "node_modules"
+        / package
+        / entry_rel,
+    ]
+    root = _npm_global_root()
+    if root is not None:
+        candidates.append(root / package / entry_rel)
+    for entry in candidates:
+        if entry.is_file():
+            return entry
+    return None
+
+
+def _apply_mcp_gates(
+    spec: MCPSpec, config: Dict[str, object], env_cache: Dict[Path, Dict[str, str]]
+) -> Tuple[bool, Optional[str]]:
+    """Enablement gates for one MCPSpec. Returns (disabled, note).
+
+    The older gates (required_commands, required_envs) check the CLIENT side:
+    a binary on PATH, a var in env. The gates added 2026-11-20 check the thing
+    being enabled: a docker container that must exist, a docker CLI plugin
+    that must be installed, an npm package whose bin must be exec'able. Each
+    new gate disables with a named reason instead of an entry that EOFs at
+    connect. Mutates config (npm entry rewrite, absolute command resolution)
+    only when the spec stays enabled.
+    """
+    disabled = bool(config.pop("disabled", False))
+    note: Optional[str] = None
+    if spec.npm_global_entry is not None:
+        package, entry_rel = spec.npm_global_entry
+        entry = _npm_global_entry_path(package, entry_rel)
+        if entry is None:
+            disabled = True
+            note = (
+                f"{spec.key}: disabled — {package} is not installed under the "
+                f"fnm default alias (npm i -g {package}); its published bin "
+                "has no shebang, so npx cannot exec it on Linux"
+            )
+        else:
+            config["command"] = _stable_which("node")
+            config["args"] = [str(entry)]
+    if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
+        disabled = True
+    if spec.missing_envs(env_cache):
+        disabled = True
+    if spec.required_container is not None and not _docker_container_exists(spec.required_container):
+        disabled = True
+        note = note or (
+            f"{spec.key}: disabled — docker container {spec.required_container} "
+            "does not exist on this node; the entry would EOF at connect"
+        )
+    if spec.required_docker_subcommand is not None and not _docker_subcommand_available(
+        spec.required_docker_subcommand
+    ):
+        disabled = True
+        note = note or (
+            f"{spec.key}: disabled — docker {spec.required_docker_subcommand} CLI "
+            "plugin is not installed on this node"
+        )
+    command = config.get("command")
+    if (
+        not disabled
+        and config.get("type") == "stdio"
+        and isinstance(command, str)
+        and os.sep not in command
+        and not (os.altsep and os.altsep in command)
+    ):
+        config["command"] = _stable_which(command)
+    return disabled, note
 
 
 def _load_model_suit(spec_id: str) -> Optional[Dict[str, object]]:
@@ -832,11 +1063,12 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     models_config = _select_models(available_specs, provider_models, node)
 
     mcp_config: Dict[str, Dict[str, object]] = {}
+    gate_notes: List[str] = []
     for spec in MCP_SPECS:
         config = dict(spec.config)
         if node == "spark":
             if spec.key in ("pmoves-cipher", "pmoves-cipher-local"):
-                config["url"] = "http://localhost:8105/mcp/sse"
+                config["url"] = "http://localhost:8105/mcp"
             elif spec.key == "agent-zero":
                 config["url"] = "http://localhost:8093/mcp"
         # Normalize agent-zero to SSE with token auth on every node (Spark uses :8093,
@@ -845,14 +1077,31 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
             port = "8093" if node == "spark" else "8081"
             config["url"] = f"http://localhost:{port}/mcp/t-${{AGENT_ZERO_MCP_TOKEN}}/sse"
             config["type"] = "sse"
-        disabled = config.pop("disabled", False)
-        if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
-            disabled = True
-        if spec.missing_envs(env_cache):
-            disabled = True
+        if spec.key == "pmoves-docker-gateway" and isinstance(config.get("args"), list):
+            args = config["args"]
+            if "--profile" in args:
+                # The gateway profile is node-specific and the fleet already
+                # has ONE resolver: node_gateway_profile.resolve() (env
+                # override PMOVES_MCP_PROFILE_ID -> pinned profile -> hardware
+                # detection -> refuse). Reuse it; do not mint a second variable
+                # name. When it cannot resolve, the roster literal stands
+                # (pre-change behavior) rather than guessing.
+                profile, reason = _ngp.resolve()
+                if profile:
+                    idx = args.index("--profile")
+                    args[idx + 1] = profile
+                    if profile not in gate_notes:
+                        gate_notes.append(
+                            f"pmoves-docker-gateway: profile {profile} via node_gateway_profile ({reason})"
+                        )
+        disabled, note = _apply_mcp_gates(spec, config, env_cache)
+        if note:
+            gate_notes.append(note)
         if disabled:
             config["disabled"] = True
         mcp_config[spec.key] = config
+    for gate_note in gate_notes:
+        print(f"[crush-config] {gate_note}", file=sys.stderr)
 
     # Pair-review finding: ${TS_*} in a url with no resolution is the silent-404
     # class this roster shares with Claude's; guard it the same way (drop with a

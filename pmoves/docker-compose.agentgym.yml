@@ -91,7 +91,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
 
     ports:
-      - "8114:8114"
+      - "${AGENTGYM_RL_COORDINATOR_PORT:-8114}:8114"
 
     volumes:
       # AgentGym-RL framework (read-only)
@@ -199,7 +199,7 @@ services:
       - REWARD_EFFICIENCY_WEIGHT=${AGENTGYM_EFFICIENCY_WEIGHT:-0.1}
 
     ports:
-      - "36000:36000"
+      - "${AGENTGYM_ENV_PMOVES_PORT:-36000}:36000"
 
     volumes:
       # Environment code (for live development)

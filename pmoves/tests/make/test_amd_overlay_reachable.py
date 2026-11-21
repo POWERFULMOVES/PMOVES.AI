@@ -25,7 +25,8 @@ What is asserted
 2. Each of those targets has an `-amd` sibling that recurses into it with
    `WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"`.
 3. `AMD_OVERLAY` names a compose file that exists and actually neutralises
-   every path by which the base asks for an NVIDIA GPU for ffmpeg-whisper.
+   every path by which the base asks for an NVIDIA GPU, for each service in
+   AMD_NEUTRALISED_SERVICES (ffmpeg-whisper and media-audio, #3358).
    Two spellings exist: the `deploy.resources.reservations.devices` reservation
    and the service-level `runtime: nvidia` that ee1573f55b (#3363) moved the
    service to. `devices: !reset []` alone stopped being enough at that commit:
@@ -137,15 +138,27 @@ def _amd_overlay_path() -> Path:
     return PMOVES / match.group(1)
 
 
-def _whisper_service(*compose_files: Path) -> dict:
-    """Shallow merge of the ffmpeg-whisper service across compose files, in order."""
+# Every service the AMD overlay is responsible for neutralising. Each must keep
+# requesting an NVIDIA GPU in the base (non-vacuity) and the overlay must reset
+# every path it uses. Not "every NVIDIA service in the base": pmoves-ollama,
+# nvidia-nim, hi-rag-gateway-v2-gpu etc. are NVIDIA-only by design and have no
+# CPU path for this overlay to fall back to.
+AMD_NEUTRALISED_SERVICES = ("ffmpeg-whisper", "media-audio")
+
+
+def _service(name: str, *compose_files: Path) -> dict:
+    """Shallow merge of one service across compose files, in order."""
     merged: dict = {}
     for path in compose_files:
         doc = yaml.load(path.read_text(encoding="utf-8"), Loader=_TolerantLoader) or {}
-        service = (doc.get("services") or {}).get("ffmpeg-whisper")
+        service = (doc.get("services") or {}).get(name)
         if service:
             merged.update(service)
     return merged
+
+
+def _whisper_service(*compose_files: Path) -> dict:
+    return _service("ffmpeg-whisper", *compose_files)
 
 
 def test_scanner_finds_whisper_bringup_targets():
@@ -187,9 +200,13 @@ def test_base_compose_really_requests_an_nvidia_gpu():
     """Non-vacuity guard for the whole file: if the base stopped requesting an
     NVIDIA GPU by any path, the overlay would be pointless and every wiring
     assertion below would be protecting a no-op."""
-    base = _whisper_service(PMOVES / "docker-compose.yml")
-    assert _nvidia_paths(base), (
-        "docker-compose.yml no longer requests an NVIDIA GPU for ffmpeg-whisper "
+    vacuous = [
+        name
+        for name in AMD_NEUTRALISED_SERVICES
+        if not _nvidia_paths(_service(name, PMOVES / "docker-compose.yml"))
+    ]
+    assert not vacuous, (
+        f"docker-compose.yml no longer requests an NVIDIA GPU for {vacuous} "
         "(neither `runtime: nvidia` nor an nvidia devices reservation)"
     )
 
@@ -200,24 +217,26 @@ def test_amd_overlay_file_exists_and_neutralises_every_gpu_path_the_base_uses():
     reset `devices` kept passing the old fixed check while doing nothing."""
     overlay = _amd_overlay_path()
     assert overlay.is_file(), f"AMD_OVERLAY points at a missing file: {overlay}"
-    base_paths = _nvidia_paths(_whisper_service(PMOVES / "docker-compose.yml"))
-    service = _whisper_service(overlay)
-    reservations = service.get("deploy", {}).get("resources", {}).get("reservations", {})
-    devices = reservations.get("devices")
-    runtime = service.get("runtime")
     unhandled = []
-    if "devices" in base_paths and not (_is_reset(devices) and devices.get("value") == []):
-        unhandled.append(
-            f"devices reservation (overlay has {devices!r}; need `devices: !reset []` -- "
-            "a plain `[]` MERGES into the base list and leaves the nvidia entry in place)"
-        )
-    if "runtime" in base_paths and not (
-        _is_reset(runtime) or (isinstance(runtime, str) and runtime != "nvidia")
-    ):
-        unhandled.append(
-            f"runtime (overlay has {runtime!r}; need `runtime: !reset null` or an "
-            "explicit non-nvidia runtime)"
-        )
+    for name in AMD_NEUTRALISED_SERVICES:
+        base_paths = _nvidia_paths(_service(name, PMOVES / "docker-compose.yml"))
+        service = _service(name, overlay)
+        reservations = service.get("deploy", {}).get("resources", {}).get("reservations", {})
+        devices = reservations.get("devices")
+        runtime = service.get("runtime")
+        if "devices" in base_paths and not (_is_reset(devices) and devices.get("value") == []):
+            unhandled.append(
+                f"{name}: devices reservation (overlay has {devices!r}; need "
+                "`devices: !reset []` -- a plain `[]` MERGES into the base list and "
+                "leaves the nvidia entry in place)"
+            )
+        if "runtime" in base_paths and not (
+            _is_reset(runtime) or (isinstance(runtime, str) and runtime != "nvidia")
+        ):
+            unhandled.append(
+                f"{name}: runtime (overlay has {runtime!r}; need `runtime: !reset null` "
+                "or an explicit non-nvidia runtime)"
+            )
     assert not unhandled, (
         "the overlay leaves the base's NVIDIA request in place on AMD nodes: "
         + "; ".join(unhandled)

@@ -1,6 +1,63 @@
+# n8n-agent -- RETIRED stdio server, kept visible on purpose.
+#
+# MEASURED 2026-11-19 against origin/main @ 5dc385b9fa7:
+#
+#   1. THE CONTAINER DOES NOT EXIST. `git grep -nE "^\s+n8n-agent:" -- pmoves/`
+#      exits 1 -- no compose file in this repo defines an `n8n-agent` service.
+#      The live n8n services are `n8n` and `n8n-runners`
+#      (pmoves/compose/docker-compose.core.yml:4 and :53) plus `n8n-db`
+#      (pmoves/docker-compose.n8n.postgres.yml:2), with container names
+#      `pmoves-n8n` (pmoves/docker-compose.n8n.yml:21), `pmoves-n8n-runners`
+#      (pmoves/docker-compose.n8n.yml:71) and `pmoves-n8n-db`
+#      (pmoves/docker-compose.n8n.postgres.yml:4). The container name this file
+#      used to declare, `docker-compose-n8n-agent-1`, is created by nothing.
+#
+#   2. THE MODULE IS NOT IN THE IMAGE EITHER. `app_n8n_agent.py` exists in the
+#      PMOVES-BoTZ submodule at features/n8n/app_n8n_agent.py, but the n8n image
+#      is built from PMOVES-n8n/compose/n8n/Dockerfile, whose entire content is
+#      `FROM n8nio/n8n:2.1.0` -- a stock image carrying no PMOVES python
+#      module. Repointing this entry at `pmoves-n8n` would therefore only move
+#      the failure from "no such container" to "ModuleNotFoundError: No module
+#      named 'app_n8n_agent'". That is why the entry is marked dead rather than
+#      repointed, and why the /n8n slash commands use the REST API instead.
+#
+#   3. NO COMPOSE SERVICE BUILDS THE AGENT. `git grep -n "features/n8n"` over
+#      the compose files returns no build context, so nothing runs
+#      `app_n8n_agent.py` in any container.
+#
+# WHAT IS STILL LIVE: the n8n instance serves the n8n Public REST API
+# (`N8N_API_URL`, default http://n8n:5678/api/v1, and `N8N_API_KEY`). The
+# /n8n slash commands in .claude/commands/n8n/ use that API directly.
+#
+# WHY THIS ENTRY IS NOT DELETED: the registry key `id: n8n-agent` is what
+# pmoves/services/gateway-agent/app.py:333 and :340, plus
+# pmoves/services/gateway-agent/README.md:63 and :143, reference as an MCP
+# SERVER ID (not a container), and deleting the entry changes the MCP roster,
+# which is a separate lane. The id stays.
+#
+# HOW THIS ENTRY REPORTS ITSELF: pmoves/tools/mcp_utils.py:load_mcp_tools()
+# reads only `id`, `name`, `required_commands`, `setup_instructions` and
+# `health_check` from this file, and pmoves/tools/mini_cli.py's `mcp health`
+# EXECUTES `health_check.command` and reports ok/failed (exit 1 on failure).
+# The health check below is therefore the mechanism that marks this entry
+# dead: it asks the n8n container for the retired module and exits non-zero
+# while that module is absent, so `pmoves mini mcp health` reports
+# `n8n-agent: failed`. It becomes `ok` exactly when the entry is re-enabled.
+# No field was invented for this: every key used here is read by the loader.
+#
+# TO RE-ENABLE (all four steps):
+#   1. Add a compose service that builds PMOVES-BoTZ/features/n8n/Dockerfile
+#      (python:3.11-slim, `COPY app_n8n_agent.py .`,
+#      CMD ["python", "app_n8n_agent.py"]) and give it a container_name.
+#   2. Point `health_check.command` and the `command`/`args` block below at
+#      THAT container name.
+#   3. Ensure N8N_API_KEY and TENSORZERO_* reach that container's environment.
+#   4. Uncomment the `transport`/`command`/`args` block below.
+# Deleting this file is NOT a re-enable -- the gateway-agent tool catalogue
+# references the id.
+
 id: n8n-agent
-name: n8n Workflow Agent
-description: Full n8n workflow control with cipher-memory integration for skills storage, documentation, and intelligent workflow suggestions.
+name: n8n Workflow Agent (RETIRED - dead stdio server; use the n8n Public REST API)
 required_commands:
   - docker
 environment:
@@ -9,20 +66,27 @@ environment:
   - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
   - TENSORZERO_MODEL=${TENSORZERO_MODEL:-qwen2_5_14b}
 setup_instructions:
-  - Start n8n-agent container (docker compose -f base.yml up -d n8n-agent)
+  - RETIRED 2026-11-19: the declared stdio server cannot start -- there is no n8n-agent compose service, and the n8n image (FROM n8nio/n8n:2.1.0) contains no app_n8n_agent module.
+  - While retired, reach n8n through the Public REST API instead: base http://localhost:5678/api/v1 with the X-N8N-API-KEY header (see .claude/commands/n8n/).
+  - Re-enable step 1: add a compose service that builds PMOVES-BoTZ/features/n8n/Dockerfile and give it a container_name.
+  - Re-enable step 2: point health_check.command and the command/args block below at that container name.
+  - Re-enable step 3: ensure N8N_API_KEY and TENSORZERO_* reach that container's environment.
+  - Re-enable step 4: uncomment the transport/command/args block below.
   - Ensure N8N_API_KEY is set in environment (regenerate in n8n UI if needed)
   - Ensure n8n service is running and accessible
 health_check:
-  command: ["docker", "exec", "docker-compose-n8n-agent-1", "python", "-c", "print('ok')"]
-transport: stdio
-command: docker
-args:
-  - exec
-  - -i
-  - docker-compose-n8n-agent-1
-  - python
-  - app_n8n_agent.py
+  command: ["docker", "exec", "pmoves-n8n", "python3", "-c", "import app_n8n_agent"]
+# transport: stdio
+# command: docker
+# args:
+#   - exec
+#   - -i
+#   - <the re-enabled agent container name>
+#   - python
+#   - app_n8n_agent.py
 tools:
+  # The tool surface this entry WOULD expose once re-enabled. Nothing serves
+  # these today.
   - n8n_list_workflows
   - n8n_get_workflow
   - n8n_execute_workflow

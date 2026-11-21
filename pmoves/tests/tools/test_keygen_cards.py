@@ -31,7 +31,7 @@ cards:
 @pytest.fixture()
 def cards_file(tmp_path, monkeypatch):
     p = tmp_path / "signing_identity_cards.yaml"
-    p.write_text(CARD_SAMPLE)
+    p.write_text(CARD_SAMPLE, encoding="utf-8")
     monkeypatch.setattr(kc, "CARDS_PATH", p)
     return p
 
@@ -49,10 +49,10 @@ class TestAudit:
         assert "pending-ml (1): crush" in out
 
     def test_audit_reports_complete(self, cards_file, capsys):
-        data = yaml.safe_load(cards_file.read_text())
+        data = yaml.safe_load(cards_file.read_text(encoding="utf-8"))
         data["cards"][0]["ml"]["ssh_fingerprint"] = "SHA256:x"
         data["cards"][0]["ml"]["ssh_allowed_signers_line"] = "crush ssh-ed25519 AAA x"
-        cards_file.write_text(yaml.safe_dump(data))
+        cards_file.write_text(yaml.safe_dump(data), encoding="utf-8")
         assert kc.cmd_audit(_args()) == 0
         assert "complete (1): crush" in capsys.readouterr().out
 
@@ -63,7 +63,7 @@ class TestGenerate:
 
     def test_existing_key_refused(self, cards_file, tmp_path, monkeypatch):
         monkeypatch.setattr(kc, "DEFAULT_KEY_DIR", tmp_path)
-        (tmp_path / "crush-signing").write_text("x")
+        (tmp_path / "crush-signing").write_text("x", encoding="utf-8")
         assert kc.cmd_generate(_args(agent="crush", dry_run=True)) == 1
 
 

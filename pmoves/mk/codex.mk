@@ -132,8 +132,14 @@ chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
-secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale)
-	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force)
+secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale; KEYS=A,B limits it to those keys, e.g. FORCE=1 KEYS=GH_APP_SEC rotates one key without clobbering node-specific ones)
+	@# KEYS is honoured only from the make command line (incl. a parent make's
+	@# command line, via MAKEFLAGS). A generically-named KEYS exported in the
+	@# shell must not silently narrow the funnel's hydrate step. An explicitly
+	@# EMPTY KEYS= is passed through as --keys "" so the tool refuses it; the
+	@# old $(strip $(KEYS)) guard dropped the flag instead, turning "rotate
+	@# nothing" into an unscoped --force over every matching key.
+	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force) $(if $(filter command line,$(origin KEYS)),--keys "$(KEYS)")
 
 secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supabase/container) into env.shared
 	-@$(MAKE) --no-print-directory supa-status
@@ -174,6 +180,8 @@ secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-sh
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/emit_local_env.py --cgp "$(CHIT_EXPORT_PATH)"
 	@$(MAKE) --no-print-directory secrets-local-hydrate FORCE=1
+	@# A FORCE overlay rewrites whatever keys the bundle carries; re-pin after it.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
 	@echo "✔ env.shared force-refreshed from prod bundle — prod-managed keys (incl. rotations) now current"
 	@echo "  Note: local.env is the prod-secrets overlay; keep genuinely node-local overrides in env.shared, not local.env."
 
@@ -208,8 +216,17 @@ secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files fro
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
 .PHONY: env-shared-repair
-env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing (idempotent, writes .bak on change)
+env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing; reset registry-pinned host-leak guards (SSL_CERT_FILE, *_PROXY, ...) to their defaults (idempotent)
 	@$(CODEX_PY) tools/fix_env_shared_multiline.py
+	@# The leak guards are declared "Always empty" in bootstrap/registry.json but
+	@# were only applied at first bootstrap; a host value written later survived
+	@# every funnel (Z890 2026-11-06: a dead miniconda SSL_CERT_FILE broke TLS
+	@# in every launcher session). Key NAMES only are printed.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
+
+.PHONY: env-shared-pinned-check
+env-shared-pinned-check: ## Report registry-pinned host-leak guards in env.shared that drifted from their defaults (writes nothing; exit 1 on drift)
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned-check
 
 # ORDER IS LOAD-BEARING: credential_urlencoder.py must run AFTER
 # secrets-funnel-sync, not before it.
@@ -319,6 +336,9 @@ secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT ex
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
+	@# Re-pin after BOTH hydrates and before chit-export seals the bundle. Hydrate
+	@# skips pinned keys itself; this is the backstop for any other overlay.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
 	@# ORDER IS LOAD-BEARING: must precede secrets-funnel-sync, because that
 	@# target's chit-export prerequisite encodes env.shared into the CGP bundle.
 	@# Mint after this point and the bundle is already sealed without the value.

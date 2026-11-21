@@ -28,8 +28,8 @@ services:
       - ./configs/nats-leaf-z890.conf:/etc/nats/leaf.conf:ro
       - nats-leaf-data:/data
     ports:
-      - "127.0.0.1:4222:4222"
-      - "127.0.0.1:8222:8222"
+      - "127.0.0.1:${NATS_LEAF_4222_PORT:-4222}:4222"
+      - "127.0.0.1:${NATS_LEAF_8222_PORT:-8222}:8222"
     networks:
       - z890_net
     healthcheck:
@@ -62,7 +62,7 @@ services:
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-      - "127.0.0.1:8111:8111"
+      - "127.0.0.1:${CONTAINER_AGENT_PORT:-8111}:8111"
     networks:
       - z890_net
     depends_on:

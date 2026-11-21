@@ -58,7 +58,20 @@ AGENT_ZERO = ServiceDefinition(
 ARCHON = ServiceDefinition(
     name="archon",
     port=8091,
-    health_path="/healthz",
+    # MEASURED on the b850 runner (2026-11-20): Archon 0.10.1 does NOT serve
+    # /healthz. Its UI catch-all answers that path with the SPA HTML page, so
+    # a JSON health probe against it raises JSONDecodeError -- which is what
+    # `pytest tests/smoke/ -m smoke` reported for four archon tests plus
+    # test_service_health_endpoint[archon].
+    #
+    # The health path is /api/health: `pmoves/scripts/smoke-tests.sh` has
+    # probed that path since Archon 0.6.0 retired the Python :8091/:8051
+    # service, and it returns the expected JSON ({"status":"ok", ...}) on both
+    # the legacy 8091 and the unified 3090 host ports.
+    #
+    # The host port stays 8091: pmoves/configs/ports.yaml records archon's
+    # ARCHON_API_PORT slot as container_port 3090 -> host_port 8091.
+    health_path="/api/health",
     health_type=HealthCheckType.STANDARD,
     expected_fields=["status"],
     profile="agents",
@@ -192,7 +205,12 @@ HIRAG_V1 = ServiceDefinition(
 
 HIRAG_V1_GPU = ServiceDefinition(
     name="hi-rag-gateway-gpu",
-    port=8110,
+    # 8187 is the host port compose publishes
+    # (${HIRAG_V1_GPU_HOST_PORT:-8187}:8086). This said 8110, which is
+    # neither that host port nor the container port -- it is stale. Found by
+    # pmoves/tools/port_registry_ratchet.py, which cross-checks this catalog
+    # against pmoves/configs/ports.yaml.
+    port=8187,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
     expected_fields=["status"],
@@ -611,7 +629,11 @@ CADVISOR = ServiceDefinition(
 
 PMOVES_UI = ServiceDefinition(
     name="pmoves-ui",
-    port=3000,
+    # MEASURED against pmoves/configs/ports.yaml (the house port registry,
+    # slot PMOVES_UI_PORT): container_port 3000, host_port 4482. This entry
+    # carried the CONTAINER port, so every catalog-driven probe of pmoves-ui
+    # aimed at a host port nothing publishes.
+    port=4482,
     health_path="/",
     health_type=HealthCheckType.STANDARD,
     expected_status=200,
