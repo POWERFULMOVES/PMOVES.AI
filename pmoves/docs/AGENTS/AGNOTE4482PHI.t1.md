@@ -3669,3 +3669,9 @@ VILLAGE RULE: delivery delegated to a delivery-agent body; control and memory ar
 - Scope: RELEASE rows for lanes 1 (ci/launcher-tests-in-ci), 4 (ops/kvm-runner-maintenance-followups), 5 (fix/knuckles-python-ca-bundle), 6 (fix/crush-mcp-entry-gates), each citing its PR/run evidence. Lane 3 (chore/stale-pr-landing-train-2026-10-01) remains claimed, operator-blocked, with its NOTE row and PR-3230 postings. Not signed for: lane 2 (test/e2e-reconcile-open-jev), still open and claimed.
 
 <!-- GRAPHITI_MARK: CRUSH-GLM52::B850-HANDOFF-LANES-ACK::2026-11-21 -->
+- `2026-11-21T17:28:53Z` RELEASE `Z890-CLAUDE` branch: `fix/env-shared-pinned-leak-guards` · scope: Merged as #3459 (2026-11-06). Late release; lane was left open past TTL.
+- `2026-11-21T17:29:03Z` RELEASE `Z890-CLAUDE` branch: `fix/launcher-env-allowlist-revival` · scope: Merged as #3464 (2026-11-08). Late release; lane was left open past TTL.
+- `2026-11-21T17:29:13Z` RELEASE `Z890-CLAUDE` branch: `fix/cipher-fleet-wiring-revival` · scope: Merged as #3463 (2026-11-19) via guarded closeout, 5/5 required green, 0 threads.
+- `2026-11-21T17:29:22Z` RELEASE `Z890-CLAUDE` branch: `fix/funnel-nonvalue-guard-revival` · scope: Merged as #3465 (2026-11-20, 708178bfa) via guarded closeout, 5/5 required green, 0 threads.
+- `2026-11-21T17:29:32Z` CLAIM `Z890-CLAUDE` branch: `fix/a0-healthz-redact-nats-url` · **TTL 48h (expires `2026-11-23T17:29:32Z`)** · scope: Land #3388: rebase onto main, fix the 2 failing required checks, independent review, guarded closeout. A0 /healthz + NATS connect log stop exposing NATS credentials. #3244 (userinfo redaction) stays with B850-CLAUDE NATS-rotation lane.
+- `2026-11-21T17:29:42Z` CLAIM `Z890-CLAUDE` branch: `fix/extract-worker-qdrant-auth` · **TTL 48h (expires `2026-11-23T17:29:42Z`)** · scope: Land #3368: resolve merge conflicts with main (checks were 5/5 green), independent review, guarded closeout. extract-worker authenticates to Qdrant.
