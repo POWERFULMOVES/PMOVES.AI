@@ -111,6 +111,75 @@ def is_placeholder(value: str | None) -> bool:
     return False
 
 
+# Whole-value unexpanded variable references. A bare `$VAR` is matched by this
+# regex; a braced `${...}` expansion is matched by _is_braced_expansion, a
+# brace-balanced scan, because a regex like `\$\{NAME(:-[^}]*)?\}` stops at the
+# FIRST `}` and so misses nested defaults -- env.shared.example ships
+# SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}.
+_BARE_REF_RE = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*")
+_PARAM_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# POSIX/compose parameter-expansion operators that may follow the name.
+_PARAM_OPERATORS = (":-", ":=", ":+", ":?", "-", "=", "+", "?")
+
+
+def _is_braced_expansion(value: str) -> bool:
+    """True if *value* is exactly ONE ``${NAME}`` / ``${NAME<op>word}`` expansion.
+
+    The braces must balance and the ``}`` matching the opening ``${`` must be the
+    LAST character, so ``${A:-${B}}`` and ``${A:+${B}}`` are refs while
+    ``${A}${B}`` and ``${A}-suffix`` are not (the opening brace closes early).
+    The *word* after the operator is not interpreted -- whatever it holds, the
+    value is still a pointer, not a secret.
+    """
+    if not value.startswith("${"):
+        return False
+    depth = 0
+    for i, ch in enumerate(value):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                if i != len(value) - 1:
+                    return False
+                break
+    else:
+        return False  # unbalanced: never closed
+    body = value[2:-1]
+    name = _PARAM_NAME_RE.match(body)
+    if name is None:
+        return False
+    rest = body[name.end():]
+    return rest == "" or rest.startswith(_PARAM_OPERATORS)
+
+
+def is_unexpanded_ref(value: str | None) -> bool:
+    """Return True if the WHOLE value is an unexpanded ``${VAR}``/``$VAR`` reference.
+
+    Semantics: whole-value only. ``$VAR``, ``${VAR}`` and one braced expansion
+    with any operator and any (nested) word -- ``${A:-${B}}``, ``${A:+${B}}``,
+    ``${A-x}`` -- are refs. A value that merely CONTAINS ``${`` or ``$NAME``
+    (``prefix${A}``, ``sk-live-$OTHER``, ``${A}${B}``) is NOT: a real secret may
+    legitimately contain ``$`` and ``{``, and refusing it would drop a value.
+
+    Deliberately not folded into ``is_placeholder``. env.shared legitimately
+    carries refs for non-secret interpolation keys, and ``is_placeholder`` also
+    drives brand_defaults' config defaults and local.env hydration -- folding refs
+    in there would overwrite a deliberate ``KEY=${OTHER}`` with a default. Only
+    the secrets funnel (chit-export, secrets_sync, self-generated fill) treats a
+    ref as a non-value, because a secret is a value, and a ref is a pointer to one.
+
+    Measured on Z890, 2026-09-09: env.shared held SUPABASE_JWT_SECRET=``${JWT_SECRET}``
+    (13 chars) where a fresh 58-char value belonged; chit-export carried it into
+    the CGP, secrets_sync accepted it as non-empty, and the merge write-back spread
+    it across every tier file.
+    """
+    if value is None:
+        return False
+    value = normalize_env_value(value)
+    return bool(_BARE_REF_RE.fullmatch(value)) or _is_braced_expansion(value)
+
+
 # ---------------------------------------------------------------------------
 # Config Path Resolution
 # ---------------------------------------------------------------------------
