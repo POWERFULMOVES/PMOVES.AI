@@ -40,6 +40,10 @@ Options:
     --clip-report   Copy the run summary to the system clipboard via pterm
 """
 
+# Annotations stay lazy so `Client` may be None (gradio_client missing) without
+# `Client | None` raising TypeError when the defs below are evaluated.
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -52,11 +56,25 @@ import urllib.request
 import wave
 from pathlib import Path
 
+# This is a script, but its `test_` name means pytest collects it too. It used to
+# call sys.exit(1) right here when gradio_client was missing, which pytest
+# reports as an INTERNALERROR for the WHOLE session: every other file in the same
+# python-tests ratchet chunk lost its results, passes and failures alike.
+# So: when pytest is the importer, skip this module; when run as a script, main()
+# prints the same message and exits 1, exactly as before.
+if __name__ != "__main__" and "pytest" in sys.modules:
+    import pytest
+
+    pytest.importorskip("gradio_client", reason="gradio_client not installed")
+
 try:
     from gradio_client import Client
 except ImportError:
-    print("ERROR: gradio_client required. Install with: pip install gradio_client")
-    sys.exit(1)
+    Client = None
+
+GRADIO_CLIENT_MISSING = (
+    "ERROR: gradio_client required. Install with: pip install gradio_client"
+)
 
 
 # Configuration
@@ -793,6 +811,11 @@ def pterm_clipboard_write(text: str) -> bool:
 
 def main():
     """Main test runner."""
+    if Client is None:
+        # Checked before argparse, so even --help exits 1 without it, as the
+        # old import-time exit did.
+        print(GRADIO_CLIENT_MISSING)
+        return 1
     parser = argparse.ArgumentParser(description="Test all 14 TTS engines")
     parser.add_argument("--no-play", action="store_true", help="Skip audio playback")
     parser.add_argument("--engine", type=str, help="Test only specified engine (e.g., kitten_tts)")

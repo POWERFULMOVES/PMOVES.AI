@@ -444,6 +444,37 @@ def write_baseline(findings: List[dict]) -> None:
     BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# pytest exit codes meaning the session ABORTED. A JUnit report may still be
+# written, but it covers only what ran before the abort, which can be nothing.
+#
+# Measured 2026-11-21: pmoves/tools/test_all_tts_engines.py called sys.exit(1)
+# at import. pytest turned that into an INTERNALERROR (exit 3) for the whole
+# session, and the report held one pseudo-testcase, `ERROR|pytest|internal`.
+# That single key was baselined, so the chunk's 19 other files went unmeasured
+# behind it: their results were never reported, and the 11 semantic-cache errors
+# looked "fixed" the moment a new test file elsewhere moved them into that
+# chunk. One generic key would cover any number of wiped chunks, so an aborted
+# unit is UNMEASURED and fails the gate whatever the baseline says.
+ABORTED_EXIT_CODES = {2: "interrupted", 3: "internal error", 4: "usage error"}
+# Aborts that ONE file can cause for the whole chunk (plus timeouts, -1). For
+# these, per-file isolation narrows the loss to the file at fault. A usage error
+# (4) fails identically per file, so isolating it would learn nothing.
+ISOLATABLE_EXIT_CODES = {-1, 2, 3}
+UNMEASURED = "UNMEASURED"
+
+
+def _unmeasured(label: str, files: List[Path], rc: int) -> dict:
+    """A unit that produced no usable report. It is never baselinable."""
+    why = "timeout" if rc == -1 else ABORTED_EXIT_CODES.get(rc, "no report")
+    return {
+        "kind": UNMEASURED,
+        "where": label,
+        "name": "<pytest-harness>",
+        "detail": "exit %d (%s); unmeasured: %s" % (
+            rc, why, ", ".join(str(f).replace(chr(92), "/") for f in files)),
+    }
+
+
 def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
                             index: int) -> tuple[List[dict], List[str]]:
     """Run a group; if it times out, re-run it one file at a time.
@@ -459,26 +490,38 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
     The per-file budget is FALLBACK_FILE_TIMEOUT plus the file's own declared
     allowance, so a file that is merely SLOW is measured in the isolation pass
     too, and not lost there as well.
+
+    A chunk whose session ABORTED (ABORTED_EXIT_CODES) is not trusted even if
+    it wrote a report. A session abort one file can cause is isolated per file
+    like a timeout. Whatever still aborts, or produced no report for any reason
+    other than a timeout, comes back as an UNMEASURED finding. Only a hang
+    that survives isolation stays a baselinable dead label, which is the
+    existing design: it names the one file that hangs.
     """
     junit = tmp / f"report-{index}.xml"
     rc, output = run_pytest(gfiles, junit)
-    if junit.is_file():
+    if junit.is_file() and rc not in ABORTED_EXIT_CODES:
         return parse_junit(junit), []
 
-    if rc != -1 or len(gfiles) <= 1:
-        # Not a timeout (unimportable conftest, usage error, crash), or nothing
-        # left to split. Per-file isolation cannot help either case.
-        sys.stderr.write("--- no report for %s (exit %d) ---%s%s%s" % (
+    if rc not in ISOLATABLE_EXIT_CODES or len(gfiles) <= 1:
+        # Unimportable conftest, usage error or crash (per-file isolation
+        # cannot help), or nothing left to split.
+        sys.stderr.write("--- no usable report for %s (exit %d) ---%s%s%s" % (
             group, rc, chr(10), output[-1500:], chr(10)))
-        return [], [group]
+        if rc == -1:
+            return [], [group]
+        return [_unmeasured(group, gfiles, rc)], []
 
     # The pass budget is allowance-aware: see fallback_budget_seconds(). A
     # declared-slow file can consume more than the flat default on its own,
     # so the pass must be able to afford it.
     pass_budget = fallback_budget_seconds(gfiles)
     sys.stderr.write(
-        "--- %s timed out; isolating %d files (budget %ds) ---%s" % (
-            group, len(gfiles), pass_budget, chr(10)))
+        "--- %s %s; isolating %d files (budget %ds) ---%s" % (
+            group,
+            "timed out" if rc == -1 else "aborted (exit %d: %s)" % (
+                rc, ABORTED_EXIT_CODES[rc]),
+            len(gfiles), pass_budget, chr(10)))
 
     findings: List[dict] = []
     dead: List[str] = []
@@ -497,13 +540,16 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
         start = time.monotonic()
         frc, foutput = run_pytest([f], sub, timeout=file_timeout_seconds(f))
         spent += time.monotonic() - start
-        if sub.is_file():
+        if sub.is_file() and frc not in ABORTED_EXIT_CODES:
             findings.extend(parse_junit(sub))
             continue
         label = str(f).replace(chr(92), "/")
-        sys.stderr.write("---   no report for %s (exit %d) ---%s%s%s" % (
+        sys.stderr.write("---   no usable report for %s (exit %d) ---%s%s%s" % (
             label, frc, chr(10), foutput[-600:], chr(10)))
-        dead.append(label)
+        if frc == -1:
+            dead.append(label)
+        else:
+            findings.append(_unmeasured(label, [f], frc))
     return findings, dead
 
 
@@ -555,7 +601,27 @@ def main() -> int:
         (" (%d produced no report)" % dead_groups) if dead_groups else "",
         chr(10)))
 
+    # Pulled out BEFORE the baseline comparison: an unmeasured unit is not a
+    # finding that can be accepted, it is the absence of a measurement.
+    unmeasured = [f for f in findings if f["kind"] == UNMEASURED]
+    findings = [f for f in findings if f["kind"] != UNMEASURED]
+
+    if unmeasured:
+        print(f"UNMEASURED — {len(unmeasured)} unit(s) produced no usable report."
+              " This fails the gate whatever the baseline says:")
+        for f in unmeasured:
+            print(f"  {f['where']}")
+            print(f"        {f['detail']}")
+        print("\nA session abort (INTERNALERROR, interrupt, usage error) or a"
+              " missing report hides every result in the unit. Fix the file at"
+              " fault -- e.g. an import-time sys.exit() -- rather than baselining.")
+
     if args.write_baseline:
+        if unmeasured:
+            # Recording now would bake the silence into the baseline, which is
+            # the exact failure UNMEASURED exists to stop.
+            print("Baseline NOT written: units above are unmeasured.")
+            return 1
         write_baseline(findings)
         n = len({_key(f) for f in findings})
         print(f"Baseline written: {n} entries -> {BASELINE.relative_to(REPO_ROOT)}")
@@ -576,8 +642,9 @@ def main() -> int:
             "baselined": len(findings) - len(new),
             "new": new,
             "stale_baseline": stale,
+            "unmeasured": unmeasured,
         }, indent=2))
-        return 1 if (new or stale) else 0
+        return 1 if (new or stale or unmeasured) else 0
 
     by_kind: Dict[str, int] = {}
     for f in findings:
@@ -615,7 +682,7 @@ def main() -> int:
         print("\nThese were fixed. Drop them so the same breakage cannot return silently:")
         print("  make -C pmoves python-tests-baseline   (CI only — see note above)")
 
-    if not new and not stale:
+    if not new and not stale and not unmeasured:
         print("PASS — no failures outside the baseline, no stale entries.")
         return 0
     return 1

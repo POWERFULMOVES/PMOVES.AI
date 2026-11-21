@@ -148,7 +148,6 @@ known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_youtube_info"
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_n8n_workflow|test_workflow"
   - "ERROR|pmoves/tests/integration/test_voice_relay_e2e.py|<pytest-harness>"
-  - "ERROR|pytest|internal"
   - "ERROR|services.channel-monitor.tests.test_monitor|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_app|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_embedder|<collection-error>"

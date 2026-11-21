@@ -589,13 +589,19 @@ def test_no_fallback_when_the_chunk_reports(monkeypatch, tmp_path):
 
 def test_non_timeout_failure_is_not_retried(monkeypatch, tmp_path):
     """An unimportable conftest fails identically per file — isolating it would
-    burn the budget to learn nothing, so the group is reported as-is."""
+    burn the budget to learn nothing, so the group is reported as-is: as
+    UNMEASURED (never baselinable), not as a dead label."""
+    calls = []
+
     def broken(files, junit, timeout=None):
+        calls.append(files)
         return 4, "conftest ImportError"
     monkeypatch.setattr(pytest_ratchet, "run_pytest", broken)
     findings, dead = pytest_ratchet.run_chunk_with_fallback(
         "grp", [Path("a.py"), Path("b.py")], tmp_path, 1)
-    assert dead == ["grp"] and findings == []
+    assert dead == [] and len(calls) == 1
+    assert [f["kind"] for f in findings] == [pytest_ratchet.UNMEASURED]
+    assert "a.py" in findings[0]["detail"] and "b.py" in findings[0]["detail"]
 
 
 def test_single_file_group_is_not_retried(monkeypatch, tmp_path):
@@ -613,3 +619,152 @@ def test_budget_exhaustion_reports_the_rest_as_unmeasured(monkeypatch, tmp_path)
     findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "b.py"], fake)
     assert set(dead) == {"a.py", "b.py"}
     assert len(fake.calls) == 1        # chunk only; no file ever ran
+
+
+# ── an ABORTED chunk is unmeasured, not "clean" ─────────────────────────────
+#
+# Measured 2026-11-21: pmoves/tools/test_all_tts_engines.py called sys.exit(1)
+# at import. pytest turned that into an INTERNALERROR (exit 3) for the whole
+# session, and its JUnit report held one pseudo-testcase, `ERROR|pytest|internal`.
+# That key was baselined, so a whole 20-file chunk sat unmeasured behind it, and
+# 11 baselined semantic-cache errors read as "stale" (fixed) as soon as an
+# unrelated PR moved them into that chunk.
+
+INTERNAL = {"kind": "ERROR", "where": "pytest", "name": "internal", "detail": ""}
+
+
+class _AbortingRun:
+    """Writes a report for every unit; units containing `bad` exit 3 (INTERNALERROR)."""
+
+    def __init__(self, bad, rc=3):
+        self.bad, self.rc, self.calls = set(bad), rc, []
+
+    def __call__(self, files, junit, timeout=None):
+        names = [str(f) for f in files]
+        self.calls.append(names)
+        junit.write_text("<testsuites/>", encoding="utf-8")
+        return (self.rc, "INTERNALERROR> SystemExit: 1") if self.bad & set(names) else (0, "")
+
+
+def test_aborted_chunk_is_isolated_per_file(monkeypatch, tmp_path):
+    """The abort is one file's fault; the other files must still report."""
+    fake = _AbortingRun(bad=["exits.py"])
+    finding = {"kind": "FAIL", "where": "x", "name": "y", "detail": ""}
+    findings, dead = _run_fallback(monkeypatch, tmp_path,
+                                   ["a.py", "exits.py", "c.py"], fake, parsed=[finding])
+    assert len(fake.calls) == 1 + 3
+    assert dead == []
+    # a.py and c.py report; exits.py is unmeasured and named
+    assert findings.count(finding) == 2
+    um = [f for f in findings if f["kind"] == pytest_ratchet.UNMEASURED]
+    assert [f["where"] for f in um] == ["exits.py"]
+    assert "internal error" in um[0]["detail"]
+
+
+def test_aborted_report_is_not_trusted(monkeypatch, tmp_path):
+    """The `pytest|internal` pseudo-testcase from an aborted report must never
+    reach the findings, where one baseline key could absorb any number of
+    wiped chunks."""
+    fake = _AbortingRun(bad=["exits.py"])
+    findings, _ = _run_fallback(monkeypatch, tmp_path, ["exits.py"], fake,
+                                parsed=[INTERNAL])
+    assert INTERNAL not in findings
+    assert [f["kind"] for f in findings] == [pytest_ratchet.UNMEASURED]
+
+
+def test_aborted_single_file_is_unmeasured_not_dead(monkeypatch, tmp_path):
+    fake = _AbortingRun(bad=["only.py"])
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["only.py"], fake)
+    assert dead == [] and len(fake.calls) == 1
+    assert findings[0]["kind"] == pytest_ratchet.UNMEASURED
+    assert findings[0]["where"] == "grp" and "only.py" in findings[0]["detail"]
+
+
+def test_every_aborted_exit_code_is_distrusted(monkeypatch, tmp_path):
+    for rc in pytest_ratchet.ABORTED_EXIT_CODES:
+        fake = _AbortingRun(bad=["x.py"], rc=rc)
+        findings, _ = _run_fallback(monkeypatch, tmp_path, ["x.py"], fake,
+                                    parsed=[INTERNAL])
+        assert [f["kind"] for f in findings] == [pytest_ratchet.UNMEASURED], rc
+
+
+def test_a_healthy_report_is_still_trusted(monkeypatch, tmp_path):
+    """Exit 1 (tests failed) and 5 (nothing collected) are complete reports."""
+    for rc in (0, 1, 5):
+        def run(files, junit, timeout=None, rc=rc):
+            junit.write_text("<testsuites/>", encoding="utf-8")
+            return rc, ""
+        findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "b.py"], run,
+                                       parsed=[F_FAIL])
+        assert (findings, dead) == ([F_FAIL], []), rc
+
+
+def _main(monkeypatch, capsys, chunk_findings, baseline, argv=()):
+    monkeypatch.setattr(pytest_ratchet, "discover_test_files", lambda: [Path("a.py")])
+    monkeypatch.setattr(pytest_ratchet, "group_files", lambda files: {"grp": files})
+    monkeypatch.setattr(pytest_ratchet, "run_chunk_with_fallback",
+                        lambda *a: (list(chunk_findings), []))
+    monkeypatch.setattr(pytest_ratchet, "load_baseline", lambda: set(baseline))
+    written = []
+    monkeypatch.setattr(pytest_ratchet, "write_baseline", written.append)
+    monkeypatch.setattr(sys, "argv", ["pytest_ratchet.py", *argv])
+    rc = pytest_ratchet.main()
+    return rc, capsys.readouterr().out, written
+
+
+UM = {"kind": "UNMEASURED", "where": "pmoves [4]", "name": "<pytest-harness>",
+      "detail": "exit 3 (internal error); unmeasured: a.py"}
+
+
+def test_unmeasured_fails_the_gate_even_if_baselined(monkeypatch, capsys):
+    rc, out, _ = _main(monkeypatch, capsys, [UM, F_FAIL],
+                       {pytest_ratchet._key(UM), pytest_ratchet._key(F_FAIL)})
+    assert rc == 1
+    assert "UNMEASURED" in out and "pmoves [4]" in out and "a.py" in out
+    assert "PASS" not in out
+
+
+def test_unmeasured_is_not_counted_as_a_finding(monkeypatch, capsys):
+    """Otherwise it would also show as NEW and invite a re-baseline."""
+    rc, out, _ = _main(monkeypatch, capsys, [UM], set())
+    assert rc == 1
+    assert "0 total" in out and "NEW failures" not in out
+
+
+def test_unmeasured_fails_json_mode(monkeypatch, capsys):
+    import json
+    rc, out, _ = _main(monkeypatch, capsys, [UM], set(), argv=["--json"])
+    payload = json.loads(out[out.index("{"):])
+    assert rc == 1 and payload["unmeasured"] == [UM] and payload["new"] == []
+
+
+def test_baseline_is_not_written_while_units_are_unmeasured(monkeypatch, capsys):
+    rc, out, written = _main(monkeypatch, capsys, [UM, F_FAIL], set(),
+                             argv=["--write-baseline"])
+    assert rc == 1 and written == []
+
+
+def test_clean_run_still_passes(monkeypatch, capsys):
+    rc, out, _ = _main(monkeypatch, capsys, [F_FAIL], {pytest_ratchet._key(F_FAIL)})
+    assert rc == 0 and "PASS" in out
+
+
+def test_committed_baseline_does_not_absorb_internal_errors():
+    """`ERROR|pytest|internal` can only come from an aborted report, which is no
+    longer trusted; keeping it baselined would be a promise to stay blind."""
+    assert "ERROR|pytest|internal" not in pytest_ratchet.load_baseline()
+
+
+def test_tts_engine_script_does_not_exit_at_import():
+    """pytest collects this script by its test_ name. A module-level sys.exit()
+    aborts the whole pytest session, wiping its chunk-mates' results."""
+    src = (Path(__file__).resolve().parents[3] / "pmoves" / "tools"
+           / "test_all_tts_engines.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    main_guard = [n for n in tree.body if isinstance(n, ast.If)
+                  and "__main__" in ast.unparse(n.test) and "!=" not in ast.unparse(n.test)]
+    module_level = [n for n in tree.body if n not in main_guard
+                    and not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+    exits = [ast.unparse(c) for n in module_level for c in ast.walk(n)
+             if isinstance(c, ast.Call) and ast.unparse(c.func) in ("sys.exit", "exit", "quit")]
+    assert exits == []
