@@ -1710,8 +1710,33 @@ nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Ro
 	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
 
 .PHONY: nats-agent-inbox
-nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
-	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
+nats-agent-inbox: ## Foreground inbox subscriber + legacy broadcast tap (AGENT=<agent_id> required); prefer agent-inbox-install
+	@bash -c 'agent="$${AGENT:-}"; . ./scripts/with-env.sh >/dev/null; set +e; exec uv run --quiet --script tools/nats_agent_inbox.py subscribe --agent-id "$$agent" --broadcast'
+
+# ----------------------------------------------------------------------------
+# Agent inbox Known Road (durable, per-identity; JetStream stream AGENT_INBOX)
+#   Subject: pmoves.agent.inbox.<agent_id>.v1   (.claude/context/nats-subjects.md)
+#   Road:    .claude/PATTERNS.md § Agent inbox
+#   Exit codes from the tool are 0 ok / 1 refused / 3 could-not-measure, but
+#   make collapses every nonzero exit to 2 -- call
+#   `uv run --script tools/nats_agent_inbox.py ...` directly to tell 1 from 3.
+# ----------------------------------------------------------------------------
+.PHONY: agent-inbox-send agent-inbox-read agent-inbox-install agent-inbox-ensure agent-inbox-status
+agent-inbox-send: ## Send a durable message: TO=<agent_id> FROM=<agent_id> BODY_FILE=<path>; waits for the JetStream ack
+	@bash -c 'to="$${TO:-}"; from="$${FROM:-}"; body="$${BODY_FILE:-}"; . ./scripts/with-env.sh >/dev/null; set +e; exec uv run --quiet --script tools/nats_agent_inbox.py send --to "$$to" --from "$$from" --body-file "$$body"'
+
+agent-inbox-read: ## Print inbox messages newer than the cursor, then advance it: AGENT=<agent_id> (run at turn start)
+	@python3 tools/nats_agent_inbox.py read --agent-id "$${AGENT:-}"
+
+agent-inbox-install: ## Install + enable the systemd --user inbox unit: AGENT=<agent_id> [AGENT_INBOX_ENV_DIR=<abs pmoves dir>]
+	@bash scripts/fleet/agent_inbox_install.sh "$${AGENT:-}"
+
+agent-inbox-ensure: ## Create-only: AGENT_INBOX stream (+ consumer for AGENT=<agent_id> if given); never updates/deletes
+	@bash -c 'agent="$${AGENT:-}"; . ./scripts/with-env.sh >/dev/null; set +e; if [ -n "$$agent" ]; then exec uv run --quiet --script tools/nats_agent_inbox.py ensure --agent-id "$$agent"; else exec uv run --quiet --script tools/nats_agent_inbox.py ensure; fi'
+
+agent-inbox-status: ## Show installed inbox units and their JetStream consumers (no secrets)
+	@systemctl --user list-units --all --no-legend 'pmoves-agent-inbox@*' 2>/dev/null || echo "no systemd --user manager"
+	@curl -fsS 'http://127.0.0.1:9223/jsz?consumers=1&config=1' | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(s["name"], c["name"], "pending=%s" % c.get("num_pending"), "ack_pending=%s" % c.get("num_ack_pending")) for a in d.get("account_details", []) for s in a.get("stream_detail", []) if s["name"] == "AGENT_INBOX" for c in (s.get("consumer_detail") or [])]' || echo "JetStream monitoring (:9223) unreachable"
 
 # ----------------------------------------------------------------------------
 # Lane 5 (2026-08-01): JetStream stream management
