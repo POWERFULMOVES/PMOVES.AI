@@ -36,11 +36,17 @@
 #    to shrink when someone does the work instead of quietly keeping credit for a
 #    failure that no longer happens.)
 #
-#   ERROR|... |<pytest-harness>  (3 entries)
-#     A chunk that produced no JUnit report: a conftest that cannot be imported
-#     (deepresearch, graph-linker) or one that exceeds the per-chunk timeout
-#     (pmoves/tests [1]). Recorded so a hang or an unimportable conftest is a
-#     visible, ratchetable finding instead of silence.
+#   ERROR|<file>|<pytest-harness>
+#     A single file observed to HANG when run on its own. This is the only
+#     no-report case that can be baselined, because the label names the file.
+#     (This entry once also covered unimportable conftests -- deepresearch,
+#     graph-linker -- and whole timed-out chunks. Since 2026-11-21 an
+#     unimportable conftest (pytest exit 4), a session abort (INTERNALERROR,
+#     interrupt, pytest.exit, signal death) and files the isolation pass never
+#     reached are UNMEASURED instead. UNMEASURED fails the gate whatever this
+#     file says, and pytest_ratchet refuses to --write-baseline while any unit
+#     is unmeasured. The old `ERROR|pytest|internal` entry is gone for the same
+#     reason: it let one baselined key hide a whole 20-file chunk.)
 #
 #
 # ── The `pmoves/tests [1]` blind spot, and what was behind it ───────────────

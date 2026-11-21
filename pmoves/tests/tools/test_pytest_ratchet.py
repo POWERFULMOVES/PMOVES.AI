@@ -339,7 +339,7 @@ class TestDeclaredSlowFiles(unittest.TestCase):
         def fake_run(files, junit, timeout=None):
             calls.append(([str(f) for f in files], timeout))
             if len(files) > 1:
-                return -1, "TIMEOUT"
+                return pytest_ratchet.TIMEOUT_RC, "TIMEOUT"
             junit.write_text("<testsuites/>", encoding="utf-8")
             return 0, ""
 
@@ -392,7 +392,7 @@ class TestDeclaredSlowFiles(unittest.TestCase):
             calls.append(([str(f) for f in files], timeout))
             if len(files) > 1:
                 # The CHUNK times out, so the isolation pass runs.
-                return -1, "TIMEOUT"
+                return pytest_ratchet.TIMEOUT_RC, "TIMEOUT"
             junit.write_text("<testsuites/>", encoding="utf-8")
             return 0, ""
 
@@ -521,11 +521,11 @@ class _FakeRun:
         self.calls.append(([str(f) for f in files], timeout))
         if len(files) > 1:
             if self.chunk_times_out:
-                return -1, "TIMEOUT"
+                return pytest_ratchet.TIMEOUT_RC, "TIMEOUT"
             junit.write_text("<testsuites/>", encoding="utf-8")
             return 0, ""
         if str(files[0]) in self.hangs:
-            return -1, "TIMEOUT"
+            return pytest_ratchet.TIMEOUT_RC, "TIMEOUT"
         junit.write_text("<testsuites/>", encoding="utf-8")
         return 0, ""
 
@@ -617,7 +617,11 @@ def test_budget_exhaustion_reports_the_rest_as_unmeasured(monkeypatch, tmp_path)
     monkeypatch.setattr(pytest_ratchet, "FALLBACK_BUDGET_SECONDS", 0)
     fake = _FakeRun(hangs=[])
     findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "b.py"], fake)
-    assert set(dead) == {"a.py", "b.py"}
+    # Never run alone, so never OBSERVED to hang: UNMEASURED, not a baselinable
+    # dead label (which --write-baseline would have accepted as a "hang").
+    assert dead == []
+    assert {f["where"] for f in findings} == {"a.py", "b.py"}
+    assert {f["kind"] for f in findings} == {pytest_ratchet.UNMEASURED}
     assert len(fake.calls) == 1        # chunk only; no file ever ran
 
 
@@ -634,16 +638,25 @@ INTERNAL = {"kind": "ERROR", "where": "pytest", "name": "internal", "detail": ""
 
 
 class _AbortingRun:
-    """Writes a report for every unit; units containing `bad` exit 3 (INTERNALERROR)."""
+    """Units containing a `bad` file return `rc` and `output`, with a report only
+    if `report`; every other unit completes cleanly. `timeouts` time out alone."""
 
-    def __init__(self, bad, rc=3):
-        self.bad, self.rc, self.calls = set(bad), rc, []
+    def __init__(self, bad, rc=3, output="INTERNALERROR> SystemExit: 1",
+                 report=True, timeouts=()):
+        self.bad, self.rc, self.output, self.report = set(bad), rc, output, report
+        self.timeouts, self.calls = set(timeouts), []
 
     def __call__(self, files, junit, timeout=None):
         names = [str(f) for f in files]
         self.calls.append(names)
+        if len(names) == 1 and names[0] in self.timeouts:
+            return pytest_ratchet.TIMEOUT_RC, "TIMEOUT"
+        if self.bad & set(names):
+            if self.report:
+                junit.write_text("<testsuites/>", encoding="utf-8")
+            return self.rc, self.output
         junit.write_text("<testsuites/>", encoding="utf-8")
-        return (self.rc, "INTERNALERROR> SystemExit: 1") if self.bad & set(names) else (0, "")
+        return 0, ""
 
 
 def test_aborted_chunk_is_isolated_per_file(monkeypatch, tmp_path):
@@ -681,7 +694,7 @@ def test_aborted_single_file_is_unmeasured_not_dead(monkeypatch, tmp_path):
 
 
 def test_every_aborted_exit_code_is_distrusted(monkeypatch, tmp_path):
-    for rc in pytest_ratchet.ABORTED_EXIT_CODES:
+    for rc in pytest_ratchet.PYTEST_EXIT_CODES:
         fake = _AbortingRun(bad=["x.py"], rc=rc)
         findings, _ = _run_fallback(monkeypatch, tmp_path, ["x.py"], fake,
                                     parsed=[INTERNAL])
@@ -768,3 +781,124 @@ def test_tts_engine_script_does_not_exit_at_import():
     exits = [ast.unparse(c) for n in module_level for c in ast.walk(n)
              if isinstance(c, ast.Call) and ast.unparse(c.func) in ("sys.exit", "exit", "quit")]
     assert exits == []
+
+
+# ── trust is an allowlist; review follow-ups on #3511 ───────────────────────
+
+PYTEST_EXIT_BANNER = (
+    "no tests ran in 0.13s\n"
+    "!!!!!!!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: bail !!!!!!!!!!!!!!!!!!!!!!!!!\n"
+)  # measured: what `pytest.exit("bail", returncode=0)` inside a test prints
+
+
+def _kinds_by_where(findings):
+    return {f["where"]: f["kind"] for f in findings}
+
+
+def test_multi_file_interrupt_is_isolated_per_file(monkeypatch, tmp_path):
+    fake = _AbortingRun(bad=["b.py"], rc=2, output="!!!! KeyboardInterrupt !!!!")
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "b.py", "c.py"],
+                                   fake, parsed=[F_FAIL])
+    assert len(fake.calls) == 1 + 3 and dead == []
+    assert findings.count(F_FAIL) == 2
+    assert _kinds_by_where(findings)["b.py"] == pytest_ratchet.UNMEASURED
+
+
+def test_no_report_is_isolated_and_named_whatever_the_exit_code(monkeypatch, tmp_path):
+    """rc 0/1 without a report, and a native crash (-11 = SIGSEGV), must name the
+    file at fault -- not red the gate with an anonymous chunk."""
+    for rc in (0, 1, -11):
+        fake = _AbortingRun(bad=["crash.py"], rc=rc, output="", report=False)
+        findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "crash.py"], fake)
+        assert len(fake.calls) == 1 + 2, rc
+        assert dead == [], rc
+        um = [f for f in findings if f["kind"] == pytest_ratchet.UNMEASURED]
+        assert [f["where"] for f in um] == ["crash.py"], rc
+
+
+def test_pytest_exit_with_returncode_0_is_not_a_pass(monkeypatch, tmp_path):
+    """`pytest.exit(returncode=0)` gives exit 0 and a truncated report (tests="0")."""
+    fake = _AbortingRun(bad=["bails.py"], rc=0, output=PYTEST_EXIT_BANNER)
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "bails.py"], fake)
+    assert dead == []
+    assert _kinds_by_where(findings) == {"bails.py": pytest_ratchet.UNMEASURED}
+
+
+def test_an_undefined_exit_code_is_not_trusted_even_with_a_report(monkeypatch, tmp_path):
+    fake = _AbortingRun(bad=["odd.py"], rc=7, output="")
+    findings, _ = _run_fallback(monkeypatch, tmp_path, ["odd.py"], fake, parsed=[F_FAIL])
+    assert [f["kind"] for f in findings] == [pytest_ratchet.UNMEASURED]
+
+
+def test_the_complete_exit_codes_are_exactly_0_1_5():
+    assert pytest_ratchet.COMPLETE_EXIT_CODES == {0, 1, 5}
+
+
+def test_abort_banner_detection(tmp_path):
+    junit = tmp_path / "r.xml"
+    junit.write_text("<testsuites/>", encoding="utf-8")
+    ok = pytest_ratchet.report_is_complete
+    assert ok(junit, 0, "3 passed in 0.1s")
+    assert ok(junit, 1, "FAILED a.py::t - assert False\n1 failed")
+    assert not ok(junit, 0, PYTEST_EXIT_BANNER)
+    assert not ok(junit, 1, "!!!!!!!! KeyboardInterrupt !!!!!!!!")
+    assert not ok(junit, 1, "!!!!! Interrupted: 1 error during collection !!!!!")
+    assert not ok(junit, 1, "INTERNALERROR> Traceback")
+    assert not ok(tmp_path / "missing.xml", 0, "")
+
+
+def test_a_timeout_during_abort_isolation_is_an_observed_hang(monkeypatch, tmp_path):
+    """Seen hanging ON ITS OWN, so it names the file: still baselinable."""
+    fake = _AbortingRun(bad=["exits.py"], timeouts=["hang.py"])
+    findings, dead = _run_fallback(monkeypatch, tmp_path,
+                                   ["a.py", "exits.py", "hang.py"], fake)
+    assert dead == ["hang.py"]
+    assert _kinds_by_where(findings) == {"exits.py": pytest_ratchet.UNMEASURED}
+
+
+def test_budget_exhaustion_after_an_abort_is_unmeasured(monkeypatch, tmp_path):
+    monkeypatch.setattr(pytest_ratchet, "FALLBACK_BUDGET_SECONDS", 0)
+    fake = _AbortingRun(bad=["exits.py"])
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "exits.py"], fake)
+    assert dead == []
+    assert _kinds_by_where(findings) == {"a.py": pytest_ratchet.UNMEASURED,
+                                         "exits.py": pytest_ratchet.UNMEASURED}
+    assert all("budget" in f["detail"] for f in findings)
+
+
+def test_the_timeout_sentinel_is_not_a_signal_death(monkeypatch, tmp_path):
+    """-1 is SIGHUP on POSIX. A process killed that way did not time out, so it
+    must not become a baselinable 'hang'."""
+    assert pytest_ratchet.TIMEOUT_RC != -1
+    assert pytest_ratchet.TIMEOUT_RC < -255
+    fake = _AbortingRun(bad=["only.py"], rc=-1, output="", report=False)
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["only.py"], fake)
+    assert dead == []
+    assert [f["kind"] for f in findings] == [pytest_ratchet.UNMEASURED]
+    assert "signal 1" in findings[0]["detail"]
+
+
+def _load_tts_script(monkeypatch, gradio):
+    import importlib.util
+    path = (Path(__file__).resolve().parents[3] / "pmoves" / "tools"
+            / "test_all_tts_engines.py")
+    monkeypatch.setitem(sys.modules, "gradio_client", gradio)
+    spec = importlib.util.spec_from_file_location("_tts_script_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_tts_script_is_skipped_under_pytest_without_gradio(monkeypatch):
+    import pytest
+    with pytest.raises(pytest.skip.Exception):
+        _load_tts_script(monkeypatch, None)     # None in sys.modules = not importable
+
+
+def test_tts_script_main_exits_1_when_gradio_client_is_missing(monkeypatch, capsys):
+    import types
+    module = _load_tts_script(monkeypatch, types.SimpleNamespace(Client=object))
+    monkeypatch.setattr(module, "Client", None)
+    monkeypatch.setattr(sys, "argv", ["test_all_tts_engines.py", "--help"])
+    assert module.main() == 1
+    assert "gradio_client required" in capsys.readouterr().out
