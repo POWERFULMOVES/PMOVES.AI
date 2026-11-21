@@ -314,5 +314,50 @@ class ExclusionTests(unittest.TestCase):
         )
 
 
+class AliasIntegrityTests(unittest.TestCase):
+    """check_alias_integrity() is pure -- these are fixture cases, never the live env.
+
+    The live observation (2026-11-21, 4090) is that env.shared carried two
+    different JWT secrets and the running Kong container a third. That is exposed
+    as `jwt_rotate check-aliases`, not as a repo test that reads the machine: a
+    check that is red on the day it lands gets muted, which is exactly how two
+    Supabase secret alerts ended up closed as false positives.
+    """
+
+    def test_equal_aliases_pass(self):
+        env = {"JWT_SECRET": "abc", "SUPABASE_JWT_SECRET": "abc"}
+        self.assertEqual(jwt_rotate.check_alias_integrity(env), [])
+
+    def test_divergent_aliases_reported(self):
+        env = {"JWT_SECRET": "abc", "SUPABASE_JWT_SECRET": "def"}
+        problems = jwt_rotate.check_alias_integrity(env)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("differ", problems[0])
+
+    def test_container_mismatch_reported_for_each_key(self):
+        env = {"JWT_SECRET": "abc", "SUPABASE_JWT_SECRET": "abc"}
+        problems = jwt_rotate.check_alias_integrity(env, container_secret="zzz")
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(all("live container" in p for p in problems))
+
+    def test_container_match_adds_nothing(self):
+        env = {"JWT_SECRET": "abc", "SUPABASE_JWT_SECRET": "abc"}
+        self.assertEqual(jwt_rotate.check_alias_integrity(env, container_secret="abc"), [])
+
+    def test_incomplete_group_reported(self):
+        env = {"JWT_SECRET": "abc"}
+        problems = jwt_rotate.check_alias_integrity(env)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("incomplete", problems[0])
+
+    def test_empty_env_reports_nothing(self):
+        self.assertEqual(jwt_rotate.check_alias_integrity({}), [])
+
+    def test_alias_group_constant_is_the_manifest_pair(self):
+        self.assertEqual(
+            set(jwt_rotate.JWT_ALIAS_GROUP), {"JWT_SECRET", "SUPABASE_JWT_SECRET"}
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

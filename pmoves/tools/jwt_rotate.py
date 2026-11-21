@@ -362,6 +362,64 @@ def enumerate_consumers(root: Path = PMOVES_DIR) -> List[Dict[str, Any]]:
     return out
 
 
+
+# ---------------------------------------------------------------------------
+# Alias integrity -- does the runtime agree with the manifest?
+# ---------------------------------------------------------------------------
+# secrets_manifest.yaml declares JWT_SECRET and SUPABASE_JWT_SECRET as aliases of
+# one canonical value. Measured on the 4090, 2026-11-21: env.shared carried two
+# DIFFERENT values (58 and 55 chars) and the live Kong container held a third
+# (64 chars). BoTZ and the A2A gateway validate tokens against SUPABASE_JWT_SECRET
+# while Supabase signs with JWT_SECRET, so that divergence rejects every token --
+# and it surfaces as a generic 401 with three plausible causes.
+#
+# This is exposed as a COMMAND rather than a test that reads the live environment,
+# deliberately: a check that goes red the moment it lands teaches people to skip it
+# (this repo already has that failure mode -- two Supabase secret alerts were closed
+# as false positives and a live service_role key stayed in a public file).
+JWT_ALIAS_GROUP = ("JWT_SECRET", "SUPABASE_JWT_SECRET")
+
+
+def check_alias_integrity(
+    env: Dict[str, str], container_secret: Optional[str] = None
+) -> List[str]:
+    """Return a list of human-readable divergences; empty means consistent."""
+    problems: List[str] = []
+    present = {k: env.get(k, "") for k in JWT_ALIAS_GROUP if env.get(k, "")}
+
+    if len(present) == len(JWT_ALIAS_GROUP):
+        if present["JWT_SECRET"] != present["SUPABASE_JWT_SECRET"]:
+            problems.append(
+                "JWT_SECRET and SUPABASE_JWT_SECRET differ in the env file; "
+                "secrets_manifest.yaml declares them aliases of one canonical value"
+            )
+    elif present:
+        missing = [k for k in JWT_ALIAS_GROUP if k not in present]
+        problems.append(f"alias group incomplete: missing {', '.join(missing)}")
+
+    if container_secret:
+        for key, value in present.items():
+            if value != container_secret:
+                problems.append(
+                    f"{key} does not match the live container JWT_SECRET "
+                    f"(env len={len(value)}, container len={len(container_secret)})"
+                )
+    return problems
+
+
+def read_container_jwt_secret(container: str) -> Optional[str]:
+    """Read JWT_SECRET from a running container; None if unavailable."""
+    try:
+        r = subprocess.run(
+            ["docker", "exec", container, "printenv", "JWT_SECRET"],
+            capture_output=True, text=True, timeout=20, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = r.stdout.strip()
+    return value or None
+
+
 # ---------------------------------------------------------------------------
 # Verification -- the new + old keys against the live postgrest endpoint
 # ---------------------------------------------------------------------------
@@ -419,6 +477,15 @@ def _build_argparser() -> argparse.ArgumentParser:
     p_verify.add_argument("--new-anon", default=os.environ.get("NEW_ANON_KEY", ""))
     p_verify.add_argument("--old-anon", default=os.environ.get("OLD_ANON_KEY", ""))
 
+    p_alias = sub.add_parser(
+        "check-aliases",
+        help="Report JWT_SECRET / SUPABASE_JWT_SECRET divergence, and compare to the live container.",
+    )
+    p_alias.add_argument("--env", type=Path, default=REPO_ROOT_DEFAULT / "pmoves" / "env.shared",
+                         help="env file to inspect (default: pmoves/env.shared)")
+    p_alias.add_argument("--container", default="pmoves-supabase-kong-1",
+                         help="container to read JWT_SECRET from (empty string to skip)")
+
     p_rollback = sub.add_parser("rollback", help="Restore env.tier-supabase from a backup file.")
     p_rollback.add_argument("backup_file", type=Path)
 
@@ -435,6 +502,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         os.umask(0o077)
     except OSError:
         pass
+
+    if args.command == "check-aliases":
+        env_path: Path = args.env
+        if not env_path.exists():
+            print(f"error: {env_path} not found", file=sys.stderr)
+            return 1
+        env_values = read_env(env_path)
+        container_secret = (
+            read_container_jwt_secret(args.container) if args.container else None
+        )
+        problems = check_alias_integrity(env_values, container_secret)
+        if not problems:
+            print("alias integrity: OK")
+            return 0
+        print("alias integrity: DIVERGENT", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
 
     if args.command == "backup":
         if not tier_supabase.exists():
