@@ -28,6 +28,18 @@ except ImportError:  # loaded by file path (spec_from_file_location), not as a p
     BashNotFoundError = _bash_resolver.BashNotFoundError
     resolve_bash = _bash_resolver.resolve_bash
 
+try:
+    from pmoves.tools import node_gateway_profile as _ngp
+except ImportError:
+    import importlib.util as _ilu2
+
+    _spec2 = _ilu2.spec_from_file_location(
+        "_pmoves_node_gateway_profile",
+        Path(__file__).resolve().parent / "node_gateway_profile.py",
+    )
+    _ngp = _ilu2.module_from_spec(_spec2)
+    _spec2.loader.exec_module(_ngp)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_CANDIDATES = [
     PROJECT_ROOT / ".env.generated",
@@ -471,8 +483,8 @@ MCP_SPECS: List[MCPSpec] = [
         # of the docker CLI itself. On nodes without it the command dies with
         # "unknown command" and the MCP entry EOFs at connect (measured
         # 2026-11-20 on knuckles, where the gateway runs containerized on
-        # :8189 instead). The profile default matches mcp-toolkit-connect;
-        # override per node with PMOVES_MCP_PROFILE.
+        # :8189 instead). The profile is resolved per node through
+        # node_gateway_profile (PMOVES_MCP_PROFILE_ID), never a second name.
         required_docker_subcommand="mcp",
     ),
     MCPSpec(
@@ -679,34 +691,90 @@ def _docker_probe(argv: List[str]) -> bool:
     return proc.returncode == 0
 
 
+def _docker_probe_output(argv: List[str]) -> Optional[str]:
+    """Stripped stdout of `docker <argv...>` on exit 0, else None. Never raises."""
+    try:
+        proc = subprocess.run(["docker", *argv], capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or ""
+
+
 def _docker_container_exists(name: str) -> bool:
-    return _docker_probe(["inspect", name])
+    # `docker inspect` succeeds for STOPPED containers too, but `docker exec`
+    # (what the entry actually runs) only works while the primary process is
+    # running — so gate on State.Running, not on existence.
+    return _docker_probe_output(["inspect", "-f", "{{.State.Running}}", name]) == "true"
 
 
-_DOCKER_CLI_PLUGIN_DIRS = (
+_DOCKER_CLI_PLUGIN_SYSTEM_DIRS = (
     Path("/usr/local/lib/docker/cli-plugins"),
     Path("/usr/local/libexec/docker/cli-plugins"),
+    Path("/usr/lib/docker/cli-plugins"),
     Path("/usr/libexec/docker/cli-plugins"),
 )
 
 
+def _docker_cli_plugin_dirs() -> List[Path]:
+    """Docker's own CLI-plugin discovery set: the config dir, dirs configured
+    via cliPluginsExtraDirs in ~/.docker/config.json, and the four system dirs
+    (cli-plugins/manager/manager_unix.go upstream). NOT arbitrary PATH entries
+    — `docker <sub>` does not search PATH for docker-<sub> binaries, so a PATH
+    hit proves nothing about whether the command will work."""
+    dirs = [Path.home() / ".docker" / "cli-plugins"]
+    try:
+        config = json.loads((Path.home() / ".docker" / "config.json").read_text(encoding="utf-8"))
+        for extra in config.get("cliPluginsExtraDirs") or []:
+            if isinstance(extra, str):
+                dirs.append(Path(extra))
+    except (OSError, ValueError):
+        pass
+    dirs.extend(_DOCKER_CLI_PLUGIN_SYSTEM_DIRS)
+    return dirs
+
+
 def _docker_subcommand_available(sub: str) -> bool:
-    # Docker discovers CLI plugins as `docker-<sub>` executables on PATH and
-    # in the configured cli-plugins dirs. `docker <sub> --help` is useless as
-    # a probe: for an unknown subcommand the CLI prints its own top-level help
-    # and exits 0 (measured: `docker mcp --help` on a node without the
-    # plugin), so only the plugin binary's presence is meaningful here.
-    if shutil.which(f"docker-{sub}"):
-        return True
-    for plugin_dir in (Path.home() / ".docker" / "cli-plugins", *_DOCKER_CLI_PLUGIN_DIRS):
+    # `docker <sub> --help` is useless as a probe: for an unknown subcommand the
+    # CLI prints its own top-level help and exits 0 (measured: `docker mcp
+    # --help` on a node without the plugin). Only the plugin binary's presence
+    # in docker's own discovery set is meaningful here.
+    for plugin_dir in _docker_cli_plugin_dirs():
         if (plugin_dir / f"docker-{sub}").is_file():
             return True
     return False
 
 
+_NPM_ROOT_CACHE: Optional[Path] = None
+
+
+def _npm_global_root() -> Optional[Path]:
+    """Active global npm root (`npm root -g`), or None. Cached per process."""
+    global _NPM_ROOT_CACHE
+    if _NPM_ROOT_CACHE is None:
+        try:
+            proc = subprocess.run(
+                ["npm", "root", "-g"], capture_output=True, text=True, timeout=20
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if proc.returncode != 0:
+            return None
+        root = proc.stdout.strip().splitlines()
+        if not root or not root[-1]:
+            return None
+        _NPM_ROOT_CACHE = Path(root[-1])
+    return _NPM_ROOT_CACHE
+
+
 def _npm_global_entry_path(package: str, entry_rel: str) -> Optional[Path]:
-    """Entry file of an npm package installed globally under the fnm default alias."""
-    entry = (
+    """Entry file of a globally-installed npm package.
+
+    Prefers the fnm default alias (a stable path that survives shell churn),
+    then falls back to the ACTIVE global npm root so nodes using system npm,
+    nvm, or Volta still find a valid install."""
+    candidates = [
         Path.home()
         / ".local"
         / "share"
@@ -716,9 +784,15 @@ def _npm_global_entry_path(package: str, entry_rel: str) -> Optional[Path]:
         / "lib"
         / "node_modules"
         / package
-        / entry_rel
-    )
-    return entry if entry.is_file() else None
+        / entry_rel,
+    ]
+    root = _npm_global_root()
+    if root is not None:
+        candidates.append(root / package / entry_rel)
+    for entry in candidates:
+        if entry.is_file():
+            return entry
+    return None
 
 
 def _apply_mcp_gates(
@@ -1006,11 +1080,20 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         if spec.key == "pmoves-docker-gateway" and isinstance(config.get("args"), list):
             args = config["args"]
             if "--profile" in args:
-                # Profiles live in the Docker MCP Toolkit catalog, not in this
-                # file; the default matches mcp-toolkit-connect. Override per
-                # node with PMOVES_MCP_PROFILE instead of editing the roster.
-                idx = args.index("--profile")
-                args[idx + 1] = os.environ.get("PMOVES_MCP_PROFILE", str(args[idx + 1]))
+                # The gateway profile is node-specific and the fleet already
+                # has ONE resolver: node_gateway_profile.resolve() (env
+                # override PMOVES_MCP_PROFILE_ID -> pinned profile -> hardware
+                # detection -> refuse). Reuse it; do not mint a second variable
+                # name. When it cannot resolve, the roster literal stands
+                # (pre-change behavior) rather than guessing.
+                profile, reason = _ngp.resolve()
+                if profile:
+                    idx = args.index("--profile")
+                    args[idx + 1] = profile
+                    if profile not in gate_notes:
+                        gate_notes.append(
+                            f"pmoves-docker-gateway: profile {profile} via node_gateway_profile ({reason})"
+                        )
         disabled, note = _apply_mcp_gates(spec, config, env_cache)
         if note:
             gate_notes.append(note)

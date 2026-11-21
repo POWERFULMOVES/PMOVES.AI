@@ -80,13 +80,51 @@ def test_docker_subcommand_gate_disables_without_plugin(monkeypatch):
 def test_docker_subcommand_probe_discovers_cli_plugin_binary(monkeypatch, tmp_path):
     # `docker mcp --help` exits 0 even WITHOUT the plugin (the CLI prints its
     # own top-level help), so the probe must look for the docker-mcp plugin
-    # binary, not run the command.
-    monkeypatch.setattr(cc.shutil, "which", lambda name: None)
-    monkeypatch.setattr(cc, "_DOCKER_CLI_PLUGIN_DIRS", (tmp_path / "cliplugins",))
+    # binary in docker's own discovery set, not run the command.
     monkeypatch.setenv("HOME", str(tmp_path))
+    system_dir = tmp_path / "lib/docker/cli-plugins"
+    monkeypatch.setattr(cc, "_DOCKER_CLI_PLUGIN_SYSTEM_DIRS", (system_dir,))
     assert cc._docker_subcommand_available("mcp") is False
-    _make_executable(tmp_path / "cliplugins" / "docker-mcp")
+    _make_executable(system_dir / "docker-mcp")
     assert cc._docker_subcommand_available("mcp") is True
+
+
+def test_docker_subcommand_probe_reads_extra_dirs_from_docker_config(monkeypatch, tmp_path):
+    # cliPluginsExtraDirs in ~/.docker/config.json is part of docker's own
+    # discovery; a plugin installed there must enable the entry.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(cc, "_DOCKER_CLI_PLUGIN_SYSTEM_DIRS", ())
+    extra = tmp_path / "extra-plugins"
+    docker_dir = tmp_path / ".docker"
+    docker_dir.mkdir()
+    (docker_dir / "config.json").write_text(
+        '{"cliPluginsExtraDirs": ["%s"]}' % extra, encoding="utf-8"
+    )
+    assert cc._docker_subcommand_available("mcp") is False
+    _make_executable(extra / "docker-mcp")
+    assert cc._docker_subcommand_available("mcp") is True
+
+
+def test_container_gate_requires_running_not_existing(monkeypatch):
+    # `docker inspect` succeeds for STOPPED containers; exec does not. The
+    # gate must read State.Running.
+    monkeypatch.setattr(cc, "_docker_probe_output", lambda argv: "false")
+    assert cc._docker_container_exists("pmz-hostinger") is False
+    monkeypatch.setattr(cc, "_docker_probe_output", lambda argv: "true")
+    assert cc._docker_container_exists("pmz-hostinger") is True
+    monkeypatch.setattr(cc, "_docker_probe_output", lambda argv: None)
+    assert cc._docker_container_exists("pmz-hostinger") is False
+
+
+def test_npm_entry_falls_back_to_active_npm_root(monkeypatch, tmp_path):
+    # fnm-less nodes (system npm, nvm, Volta) must still find a valid global
+    # install via `npm root -g`.
+    monkeypatch.setenv("HOME", str(tmp_path))  # no fnm alias under this HOME
+    root = tmp_path / "npm-global/lib/node_modules"
+    entry = root / "tailscale-mcp" / "dist" / "index.js"
+    _make_executable(entry)
+    monkeypatch.setattr(cc, "_npm_global_root", lambda: root)
+    assert cc._npm_global_entry_path("tailscale-mcp", "dist/index.js") == entry
 
 
 def test_npm_entry_gate_rewrites_to_node_with_absolute_entry(monkeypatch):
