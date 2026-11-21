@@ -37,14 +37,16 @@ tool="$code_dir/tools/nats_agent_inbox.py"
 
 # Prove the unit's env source yields NATS_URL, in a clean env (systemd does not
 # inherit this shell's exports). Shape only.
+# NOTE: `. with-env.sh` inherits the caller's positional params and its tail
+# runs `exec "$@"`, so every bash -c below clears them (`set --`) before sourcing.
 nats_state="$(env -i HOME="$HOME" PATH="/usr/local/bin:/usr/bin:/bin" bash -c \
-  '. "$1/scripts/with-env.sh" >/dev/null 2>&1; set +e; [ -n "${NATS_URL:-}" ] && echo set || echo unset' _ "$env_dir")"
+  'd="$1"; set --; . "$d/scripts/with-env.sh" >/dev/null 2>&1; set +e; [ -n "${NATS_URL:-}" ] && echo set || echo unset' _ "$env_dir")"
 [ "$nats_state" = "set" ] || die 3 "with-env.sh under $env_dir does not provide NATS_URL; the unit could not connect"
 
 echo "agent-inbox-install: agent=$agent code_dir=$code_dir env_dir=$env_dir"
 
 # Create-only stream + consumer. Exit code passes through (0 / 1 / 3).
-bash -c '. "$1/scripts/with-env.sh" >/dev/null; set +e; "$2" run --quiet --script "$3" ensure --agent-id "$4"' \
+bash -c 'd="$1" uv="$2" t="$3" a="$4"; set --; . "$d/scripts/with-env.sh" >/dev/null; set +e; "$uv" run --quiet --script "$t" ensure --agent-id "$a"' \
   _ "$env_dir" "$uv_bin" "$tool" "$agent"
 rc=$?
 [ "$rc" -eq 0 ] || die "$rc" "ensure stream/consumer failed (exit $rc); unit not installed"
