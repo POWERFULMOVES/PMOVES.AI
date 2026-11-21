@@ -132,7 +132,7 @@ def check(key: str, manifest: Path = DEFAULT_MANIFEST) -> int:
 
     if not matches:
         print(
-            f"warn: {key} is not declared in {manifest.name}; allowing rotation "
+            f"warn: {safe_id(key)} is not declared in {manifest.name}; allowing rotation "
             "(the manifest is not exhaustive)",
             file=sys.stderr,
         )
@@ -158,8 +158,15 @@ def check(key: str, manifest: Path = DEFAULT_MANIFEST) -> int:
         print(f"REFUSED: secrets-rotate cannot mint {safe_id(key)}.", file=sys.stderr)
         print(f"  entry:  {safe_id(chosen.get('id'))}", file=sys.stderr)
         if len(matches) > 1:
-            others = ", ".join(safe_id(e.get("id")) for e in matches if e is not chosen)
-            print(f"  also declared by: {others}", file=sys.stderr)
+            # Deliberately a COUNT, not the ids. CodeQL's taint tracking does not carry
+            # sanitisation through a generator + join, so listing ids here keeps raising
+            # py/clear-text-logging even though safe_id() strips them. A count carries no
+            # tainted data and the ids are recoverable from the manifest by the operator.
+            print(
+                f"  also declared by {len(matches) - 1} other manifest entr"
+                f"{'y' if len(matches) == 2 else 'ies'}",
+                file=sys.stderr,
+            )
         if key.strip().upper() in SIGNING_LABELS and str(chosen.get("id", "")) not in SIGNING_SECRET_IDS:
             print(
                 f"  note: {safe_id(key)} is declared as an alias of {safe_id(chosen.get('id'))}, "
