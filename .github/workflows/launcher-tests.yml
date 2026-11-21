@@ -54,7 +54,6 @@ jobs:
       EXCLUDED_TESTS: |
         test-launcher-cipher-token-survives.sh|Hangs at the kilo/kimi launcher pairs (never reaches exec within 120s locally on knuckles, 2026-11-21); the launcher pre-exec path needs bounding before this can gate CI. Re-include after that lands.
       PER_TEST_TIMEOUT_SECS: "300"
-      TESTS_LIST: ${{ runner.temp }}/launcher-tests.txt
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,6 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           GLOB="${{ github.event.inputs.test-glob || 'deploy/provision/tests/test-*.sh' }}"
+          TESTS_LIST="${RUNNER_TEMP}/launcher-tests.txt"
           shopt -s nullglob
           : > "$TESTS_LIST"
           # shellcheck disable=SC2086 # GLOB is a controlled single word
@@ -92,6 +92,7 @@ jobs:
         if: steps.discover.outputs.count != '0'
         run: |
           set -uo pipefail
+          TESTS_LIST="${RUNNER_TEMP}/launcher-tests.txt"
           pass=0; fail=0; timeouts=0
           excluded_cut=$(awk -F'|' 'NF && $1 != "" {print $1}' <<< "$EXCLUDED_TESTS")
           {
