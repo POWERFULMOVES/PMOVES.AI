@@ -1785,6 +1785,12 @@ nats server report connections
 **`pmoves.task.cancel.v1`** — Task cancellation request (Agent Zero → working agent)
 **`pmoves.a2a.request.v1`** — Agent-to-Agent direct request
 **`pmoves.a2a.response.v1`** — Agent-to-Agent direct response
+**`pmoves.agent.inbox.<agent_id>.v1`** — Directed, durable per-identity agent inbox (any agent → one named live peer, any node)
+- **Stream:** JetStream `AGENT_INBOX`, subjects `pmoves.agent.inbox.*.v1`, file storage, max age 14d, size-capped. Messages sent while the recipient is offline are kept and delivered when its inbox comes back.
+- **Consumer:** one durable pull consumer per recipient, `inbox-<agent_id>`, explicit ack, filtered to that recipient's subject. Stream and consumers are create-only (never updated, deleted or purged).
+- **Naming:** `<agent_id>` sits before the version, matching `mesh.agent.<node>.capabilities.v1` and `branch.<branch>.trail.v1`. It must be a single subject token (`[A-Za-z0-9_-]`, no dots), the signing-card `agent_id` (e.g. `b850-claude`, `crush`).
+- **Payload:** `{"from", "to", "ts", "id", "reply_to", "body"}`; `reply_to` is the sender's inbox subject. JetStream dedup uses `Nats-Msg-Id = id`.
+- **Tooling:** `pmoves/tools/nats_agent_inbox.py`; Known Road in `.claude/PATTERNS.md` § Agent inbox (`make -C pmoves agent-inbox-send|agent-inbox-read|agent-inbox-install`).
 **`pmoves.skill.invoke.v1`** — Skill invocation request (any agent → skill executor)
 **`pmoves.skill.result.v1`** — Skill execution result (skill executor → requester)
 **`pmoves.config.update.v1`** — Configuration change broadcast (admin/UI → all agents)

@@ -318,6 +318,76 @@ If the roster, the agent definition and the service are all healthy and calls
 still fail, the cause is the token. A 403 whose error names the token's agent
 means your `agentId` disagrees with your token: go back to step 2.
 
+## Known Road — Agent inbox (message a live peer agent on any node)
+
+A durable, per-identity inbox over NATS JetStream. One agent sends; the named
+peer gets it on its next turn, even if its inbox was down when you sent.
+RUN on B850/Knuckles 2026-11-21 for `b850-claude` and `crush`.
+
+- **Subject:** `pmoves.agent.inbox.<agent_id>.v1` (registered in
+  `.claude/context/nats-subjects.md`). `<agent_id>` is the **signing-card
+  spelling** (`b850-claude`, `crush`, `z890-claude`…), one subject token,
+  lower-cased by the tool.
+- **Durability:** stream `AGENT_INBOX` (`pmoves.agent.inbox.*.v1`, file
+  storage, limits retention, 14 days, 512 MiB) and one durable pull consumer
+  `inbox-<agent_id>` per recipient. Both are **create-only**: the tool never
+  updates, deletes or purges a stream or consumer. If one exists with the
+  wrong subjects or filter, it refuses (exit 1) and tells you.
+- **Tool:** `pmoves/tools/nats_agent_inbox.py` (`subscribe | send | read |
+  ensure | render-unit`). Exit codes: 0 ok, 1 refused, 3 could not measure.
+  `make` collapses 1 and 3 to 2, so call
+  `uv run --script pmoves/tools/nats_agent_inbox.py …` directly when you
+  need the difference.
+
+```bash
+# Send (waits for the JetStream publish ack; prints {"status":"acked","seq":N,...})
+make -C pmoves agent-inbox-send TO=crush FROM=b850-claude BODY_FILE=/path/to/msg.txt
+
+# Read at the start of a turn (prints messages newer than your cursor, then advances it)
+make -C pmoves agent-inbox-read AGENT=b850-claude
+
+# Install on a node (systemd --user unit pmoves-agent-inbox@<id>.service, enabled + started)
+make -C pmoves agent-inbox-install AGENT=<agent_id>
+
+# State: units + per-consumer pending counts (reads :9223 monitoring, no secrets)
+make -C pmoves agent-inbox-status
+```
+
+Envelope: `{from, to, ts, id, reply_to, body}`. `reply_to` defaults to the
+sender's own inbox subject, so replying is a `send` with `TO=<from>`. `id`
+also goes in the `Nats-Msg-Id` header (2-minute JetStream dedup). Delivery is
+at-least-once: the subscriber writes to
+`~/.local/state/pmoves/agent-inbox/<id>.jsonl` and only then acks. `read`
+skips a message id it has already shown.
+
+**Install on a new node (SPARK, 4090, 5090, Z890 next).**
+
+1. Pull main and run `make -C pmoves agent-inbox-install AGENT=<card id>`
+   from the **main checkout**. The unit runs the tool from the checkout it was
+   installed from. If you install from a worktree, the unit points at that
+   worktree; re-run from main once the change merges. Env always comes from
+   the main checkout's `scripts/with-env.sh` (worktrees carry no env files);
+   override with `AGENT_INBOX_ENV_DIR=<abs path to pmoves/>`.
+2. The installer refuses (exit 3) if `with-env.sh` cannot supply `NATS_URL`
+   in a clean environment, because systemd does not inherit your shell.
+3. `Linger=no` means user units stop when your last login session ends. The
+   installer warns about it and does not change it. To keep the inbox up
+   without a session, the operator runs `loginctl enable-linger <user>`.
+4. Windows/macOS: no installer yet. Run
+   `uv run --script pmoves/tools/nats_agent_inbox.py subscribe --agent-id <id>`
+   under the platform's service manager.
+
+**When NATS is down** (`send` exits 3 with `cannot connect` / `no publish
+ack`): store a Cipher memory with tag `to:<agent_id>` (plus `from:<you>`),
+using your own `agentId` (see the Cipher road above). The recipient checks
+`pmoves_cipher_search` for `to:<its id>` at turn start. When NATS is back,
+re-send through the inbox, because Cipher is not a delivery guarantee.
+
+**Pitfall, found building this:** sourcing `with-env.sh` inside
+`bash -c '…' _ arg1 …` passes `arg1…` through to it, and its last line is
+`exec "$@"`. It then execs your first argument instead of returning. Clear the
+positional params (`set --`) before you source it.
+
 ## Known Roads — Protected-File Edits via `KNOWN_ROAD`
 
 The Make-target Known Roads above cover dangerous *Bash commands*. Protected *file edits* — paths in `readOnlyPaths` (`pmoves/docker-compose*.yml`, migrations, contract schemas) — have their own Known Road: the **`KNOWN_ROAD` environment variable**, enforced by `.claude/hooks/damage-control/known_roads.py`.

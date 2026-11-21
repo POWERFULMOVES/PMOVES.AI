@@ -1,0 +1,31 @@
+# PMOVES durable agent inbox -- systemd --user template; instance name = agent_id.
+#
+# Rendered and installed by:  make -C pmoves agent-inbox-install AGENT=<agent_id>
+# (do not copy this file by hand: the @...@ placeholders are filled at install).
+#
+#   @PMOVES_CODE_DIR@  pmoves/ dir holding tools/nats_agent_inbox.py
+#   @PMOVES_ENV_DIR@   pmoves/ dir whose scripts/with-env.sh loads NATS_URL
+#                      (the main checkout; a worktree has no env files)
+#   @UV_BIN@           absolute path to uv
+#
+# The subscriber pulls the durable JetStream consumer inbox-%i on stream
+# AGENT_INBOX and appends to ~/.local/state/pmoves/agent-inbox/%i.jsonl.
+# Messages sent while this unit is stopped are retained by the stream (14d)
+# and delivered on the next start.
+[Unit]
+Description=PMOVES agent inbox for %i (durable JetStream consumer)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@PMOVES_CODE_DIR@
+# with-env.sh enables errexit in the shell that sources it; the exec replaces
+# that shell, so the tool's own exit code (0 / 1 / 3) reaches systemd intact.
+ExecStart=/bin/bash -c '. "@PMOVES_ENV_DIR@/scripts/with-env.sh" >/dev/null && exec "@UV_BIN@" run --quiet --script "@PMOVES_CODE_DIR@/tools/nats_agent_inbox.py" subscribe --agent-id "%i"'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
