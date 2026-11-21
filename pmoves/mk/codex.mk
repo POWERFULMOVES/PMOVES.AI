@@ -359,6 +359,11 @@ endif
 
 secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make secrets-rotate KEY=NAME [VALUE=v | export PMOVES_ROTATE_VALUE] [LEN=48]
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
+	@# Refuse keys that must be signed JWTs rather than random strings.
+	@# secrets-rotate mints a random_urlsafe value; for anon/service_role that is
+	@# not a JWT (every client 401s) and for JWT_SECRET it invalidates every token
+	@# already issued. Decision comes from the manifest, not a parallel list.
+	@$(CODEX_PY) tools/secrets_rotate_guard.py --key "$(KEY)"
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
 	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
 	@# NATS_URL embeds the NATS credential; keep it in step (no-op for other keys).
