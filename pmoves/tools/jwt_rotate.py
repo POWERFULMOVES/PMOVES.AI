@@ -540,7 +540,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
         new = keygen()
         if args.dry_run:
-            print(json.dumps(new, indent=2))
+            # Do NOT print the values. `json.dumps(new)` used to dump all three freshly
+            # generated secrets (JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY) to stdout, where
+            # they land in terminal scrollback, CI logs and any transcript of the run.
+            # CodeQL flagged it (py/clear-text-logging); it is a real disclosure, not a
+            # false positive. An operator who needs the values reads them from the file
+            # the non-dry-run path writes.
+            print("# dry-run: generated values are NOT printed (they are secrets).")
+            for name in new:
+                print(f"  {name}: {len(new[name])} chars")
             print("# dry-run: no backup taken, no file written")
             return 0
         backup = backup_env(tier_supabase)
@@ -555,10 +563,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Print the operator-actionable summary
         print(f"rotated: {tier_supabase}")
         print(f"backup:  {backup}")
-        print(f"new keys:")
+        print("new keys (values written to the file, not echoed here):")
         for k, v in new.items():
-            short = v[:8] + "..." + v[-4:]
-            print(f"  {k}={short}")
+            # First-8 + last-4 is still secret material; a truncated credential in a log
+            # is a credential. Print the shape only.
+            print(f"  {k}: {len(v)} chars")
         # Enumerate consumers
         consumers = enumerate_consumers(repo_root / "pmoves")
         supabase_subset = [c for c in consumers
