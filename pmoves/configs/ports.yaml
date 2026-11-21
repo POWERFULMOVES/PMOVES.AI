@@ -387,6 +387,8 @@ services:
       CONTAINER_AGENT_PORT:
         bind_var: null
         compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
         - docker-compose.z890.yml
         container_port: 8111
         host_port: 8111

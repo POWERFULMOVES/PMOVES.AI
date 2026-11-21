@@ -556,7 +556,7 @@ services:
     # Credentials come from NATS_USER/NATS_PASSWORD, which the funnel writes into
     # env.shared / env.tier-agent.
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       nats:
         condition: service_healthy
@@ -569,6 +569,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Discord webhook API
+    - pmoves_api  # 4090-Claw 2026-11-17: gateway tier (supabase-kong:8000) per DOCKER_NETWORK_HARDENING.md
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
       interval: 30s
@@ -926,6 +927,14 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+  # ---------------------------------------------------------------------------
+  # Container Agent (CA) - per-node Docker networking diagnostics sidecar.
+  # 4090-Claw 2026-11-17: probe targets are env-driven so one image serves every
+  # node; the previous revision hardcoded the 5090/z890 layout in source.
+  # Endpoints: /healthz /config /diagnostic /metrics /analyze
+  # /analyze uses Ollama Cloud when OLLAMA_CLOUD_BASE_URL + OLLAMA_CLOUD_API_KEY
+  # are set, and returns 503 with an explicit reason otherwise.
+  # ---------------------------------------------------------------------------
   github-runner-ctl:
     build: ./services/github-runner-ctl
     restart: unless-stopped
