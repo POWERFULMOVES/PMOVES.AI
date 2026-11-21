@@ -26,10 +26,12 @@ on:
       - main
       - PMOVES.AI-Edition-Hardened
       - PMOVES.AI-Edition-Hardened-Integrations
-    paths:
-      - "deploy/provision/**"
-      - "pmoves/scripts/**"
-      - ".github/workflows/launcher-tests.yml"
+    # Deliberately NO paths filter: the tests read files all over the repo
+    # (test-pm-ca-bundle.sh checks pmoves/Makefile, the launcher generator,
+    # scripts/security/post-merge-verify.sh, ...), any listed dependency set
+    # goes stale the moment a test reads a new file, and a path filter is an
+    # exclusion nobody can see — the same reason stale named exclusions fail
+    # below. The job runs in ~15s; run it on every PR.
   workflow_dispatch:
     inputs:
       test-glob:
