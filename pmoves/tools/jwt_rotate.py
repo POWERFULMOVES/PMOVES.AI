@@ -255,11 +255,26 @@ JWT_ENV_FILES = (
 )
 
 
-def is_excluded(path: Path) -> bool:
-    s = str(path)
-    if "pmoves-supabase" in s or "node_modules" in s or ".git/" in s or "worktrees" in s:
+def is_excluded(path: Path, root: Path | None = None) -> bool:
+    """True if `path` should be skipped when surveying compose files.
+
+    2026-11-21 (4090-Claw): this used to substring-match the ABSOLUTE path for
+    "worktrees", which silently excluded every file when the repo itself lives in
+    a git worktree (path like `.worktrees/pr3346/pmoves/...`). The survey then
+    returned zero consumers and the rotation tool would have reported an empty
+    blast radius -- on a fleet that runs 210 worktrees. Exclusion is now decided
+    on the path RELATIVE to the survey root, so a nested `.worktrees/` directory is
+    still skipped while the survey root may itself be one.
+    """
+    root = root or PMOVES_DIR
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        rel = Path(path.name)
+    parts = {p.lower() for p in rel.parts}
+    if parts & {"node_modules", ".git", ".worktrees"}:
         return True
-    return False
+    return "pmoves-supabase" in rel.as_posix().lower()
 
 
 def walk_compose_files(root: Path = PMOVES_DIR) -> List[Path]:
@@ -267,7 +282,7 @@ def walk_compose_files(root: Path = PMOVES_DIR) -> List[Path]:
     if not root.exists():
         return out
     for p in list(root.rglob("*.yml")) + list(root.rglob("*.yaml")):
-        if is_excluded(p):
+        if is_excluded(p, root):
             continue
         out.append(p)
     return sorted(set(out))
