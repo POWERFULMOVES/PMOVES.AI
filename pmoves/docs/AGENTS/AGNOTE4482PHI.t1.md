@@ -3670,3 +3670,4 @@ VILLAGE RULE: delivery delegated to a delivery-agent body; control and memory ar
 - Scope: RELEASE rows for lanes 1 (ci/launcher-tests-in-ci), 4 (ops/kvm-runner-maintenance-followups), 5 (fix/knuckles-python-ca-bundle), 6 (fix/crush-mcp-entry-gates), each citing its PR/run evidence. Lane 3 (chore/stale-pr-landing-train-2026-10-01) remains claimed, operator-blocked, with its NOTE row and PR-3230 postings. Not signed for: lane 2 (test/e2e-reconcile-open-jev), still open and claimed.
 
 <!-- GRAPHITI_MARK: CRUSH-GLM52::B850-HANDOFF-LANES-ACK::2026-11-21 -->
+- `2026-11-22T00:05:45Z` CLAIM `pmoves-hermes-elder` branch: `docs/register-wave-zero-1106` · **TTL 48h (expires `2026-11-24T00:05:45Z`)** · scope: WAVE-ZERO lane renewal - merge campaign in progress (board #409-#419); automated renewal via cron
