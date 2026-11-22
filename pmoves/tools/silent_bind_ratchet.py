@@ -86,6 +86,31 @@ network, which is a normal bridge -- so it is NOT a gap unless that file
 declares its ``default:`` network with ``internal: true``. Scoring an empty
 network set as a gap is vacuous truth, and it is not what Docker does.
 
+THE BASE REVISION
+-----------------
+The baseline may only SHRINK. That is NOT enforceable by comparing the
+baseline with the gaps measured in the SAME checkout: a change that
+introduces a new internal-only published port AND adds the matching
+baseline entry compares clean, because the entry and the gap arrive
+together.
+
+So the gate can measure the BASE revision too, and does when it is given
+one (``--base-ref``). The base revision's compose files are materialized
+into a temporary tree and measured with the SAME code, so the comparison is
+between two MEASUREMENTS rather than between two intentions. A baseline
+entry whose (file, service) pair is not a gap AT THE BASE is a
+BASELINE_ADDITION.
+
+This is the house's own shape for the same question: the damage-control
+differential sweep (``.claude/hooks/damage-control/sweep_differential.py``)
+materializes the base version of the thing under test and diffs the two
+verdicts, and the workflow that drives it resolves the base SHA from
+``github.event.pull_request.base.sha`` over a full-history checkout.
+
+Without ``--base-ref`` the addition rule is NOT enforced, and the tool says
+so on every run. A gate that silently does less than it claims is worse
+than one that is explicit about the smaller thing it does.
+
 FINDINGS
 --------
   UNACTIVATABLE_PORT  a service publishes a host port but joins only
@@ -94,6 +119,9 @@ FINDINGS
                        fixed but the record was left behind).
   UNREASONED_GAP      a recorded gap whose reason is missing or is still the
                        "REVIEW THIS" placeholder.
+  BASELINE_ADDITION   a baseline entry for a gap that did NOT exist at the
+                       base revision -- the escape hatch this gate exists to
+                       close.
   INSTRUMENT_ERROR    a compose file that cannot be read or parsed.
 
 FAIL CLOSED
@@ -113,16 +141,21 @@ rather than an assertion.
 
 Usage:
     python pmoves/tools/silent_bind_ratchet.py --check
+    python pmoves/tools/silent_bind_ratchet.py --check --base-ref <git-ref>
     python pmoves/tools/silent_bind_ratchet.py --write-baseline --yes
     python pmoves/tools/silent_bind_ratchet.py --check --json
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import yaml
 
@@ -137,6 +170,7 @@ CANONICAL_NETWORK_FILES = ("docker-compose.yml", "docker-compose.base.yml")
 UNACTIVATABLE_PORT = "UNACTIVATABLE_PORT"
 STALE_GAP = "STALE_GAP"
 UNREASONED_GAP = "UNREASONED_GAP"
+BASELINE_ADDITION = "BASELINE_ADDITION"
 INSTRUMENT_ERROR = "INSTRUMENT_ERROR"
 
 PLACEHOLDER_REASON = "REVIEW THIS"
@@ -283,14 +317,37 @@ def _default_network_is_internal(doc: dict) -> Optional[bool]:
     return None
 
 
-def scan_file(path: Path, canon: Dict[str, Optional[bool]]) -> Tuple[List[dict], List[dict]]:
+def _rel_path(path: Path, root: Optional[Path]) -> str:
+    """The file's path RELATIVE to the pmoves/ root, POSIX style.
+
+    Two different files in the house scope share the name
+    ``docker-compose.core.yml``: ``pmoves/docker-compose.core.yml`` (the main
+    stack's core overlay, 85 KB) and ``pmoves/compose/docker-compose.core.yml``
+    (the separate n8n stack, 2.5 KB). Keying the baseline on the bare
+    filename lets those two collide, so the key carries the path relative to
+    the root instead.
+
+    For the 73 currently measured gaps this changes nothing: every one of them
+    lives in a top-level file, where the relative path IS the bare filename.
+    It removes the collision rather than introducing a churn.
+    """
+    if root is None:
+        return path.name
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.name
+
+
+def scan_file(path: Path, canon: Dict[str, Optional[bool]], root: Optional[Path] = None) -> Tuple[List[dict], List[dict]]:
     """Return (gaps, errors) for one compose file."""
     gaps: List[dict] = []
     errors: List[dict] = []
+    rel = _rel_path(path, root)
     try:
         doc = load_doc(path)
     except Exception as exc:
-        errors.append({"kind": INSTRUMENT_ERROR, "file": path.name, "detail": str(exc)})
+        errors.append({"kind": INSTRUMENT_ERROR, "file": rel, "detail": str(exc)})
         return gaps, errors
 
     default_internal = _default_network_is_internal(doc)
@@ -315,12 +372,78 @@ def scan_file(path: Path, canon: Dict[str, Optional[bool]]) -> Tuple[List[dict],
         if all(v is True for v in flags.values()):
             gaps.append({
                 "kind": UNACTIVATABLE_PORT,
-                "file": path.name,
+                "file": rel,
                 "service": sname,
                 "networks": nets,
                 "ports": ports,
             })
     return gaps, errors
+
+
+def measure(root: Path) -> Tuple[List[dict], List[dict], Dict[str, Optional[bool]]]:
+    """Measure one pmoves/ tree. Returns (gaps, errors, canonical networks).
+
+    The SAME function measures the working tree and the base revision's
+    materialized tree, so the baseline-addition rule compares two
+    measurements instead of two intentions.
+    """
+    files = compose_files(root)
+    canon = canonical_networks(files)
+    gaps: List[dict] = []
+    errors: List[dict] = []
+    for f in files:
+        g, e = scan_file(f, canon, root)
+        gaps.extend(g)
+        errors.extend(e)
+    return gaps, errors, canon
+
+
+# --------------------------------------------------------------------------
+# base revision
+# --------------------------------------------------------------------------
+def _git(repo: Path, args: List[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(repo)] + args, capture_output=True)
+
+
+@contextlib.contextmanager
+def base_tree(ref: str, repo: Path) -> Iterator[Path]:
+    """Materialize the base revision's in-scope compose files.
+
+    Yields the path of a temporary directory that plays the role of pmoves/.
+    Any failure raises, and the caller turns that into exit 3 -- a gate that
+    cannot read its base cannot judge the baseline, and must say so rather
+    than report a clean tree.
+
+    The blobs are read with ``git cat-file blob`` rather than ``git show``
+    because ``git show`` applies the repository's end-of-line conversion on
+    the way out, while ``cat-file`` hands back the bytes that are actually
+    stored. The measurement must see the committed content.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix="silent-bind-base-"))
+    try:
+        listing = _git(repo, ["ls-tree", "-r", "--name-only", ref, "--", "pmoves/"])
+        if listing.returncode != 0:
+            raise RuntimeError(
+                f"cannot list {ref} in {repo}: "
+                f"{listing.stderr.decode('utf-8', 'replace').strip()}")
+        names = [
+            n for n in listing.stdout.decode("utf-8", "replace").splitlines()
+            if n.endswith(".yml")
+            and (n.startswith("pmoves/docker-compose") or n.startswith("pmoves/compose/"))
+        ]
+        base_root = tmp / "pmoves"
+        for name in names:
+            blob = _git(repo, ["cat-file", "blob", f"{ref}:{name}"])
+            if blob.returncode != 0:
+                raise RuntimeError(
+                    f"cannot read {ref}:{name}: "
+                    f"{blob.stderr.decode('utf-8', 'replace').strip()}")
+            out = base_root / Path(name).relative_to("pmoves")
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(blob.stdout)
+        yield base_root
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def load_baseline(path: Optional[Path] = None) -> Dict[Tuple[str, str], str]:
@@ -379,15 +502,10 @@ def _out_of_scope_count(pmoves_dir: Optional[Path] = None) -> int:
     return len(all_compose - scoped)
 
 
-def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None) -> Tuple[int, dict]:
-    files = compose_files(pmoves_dir)
-    canon = canonical_networks(files)
-    gaps: List[dict] = []
-    errors: List[dict] = []
-    for f in files:
-        g, e = scan_file(f, canon)
-        gaps.extend(g)
-        errors.extend(e)
+def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None,
+              base_ref: Optional[str] = None, repo: Optional[Path] = None) -> Tuple[int, dict]:
+    root = PMOVES if pmoves_dir is None else Path(pmoves_dir)
+    gaps, errors, canon = measure(root)
 
     baseline = load_baseline(path)
     measured = {(g["file"], g["service"]): g for g in gaps}
@@ -407,13 +525,51 @@ def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None) ->
             findings.append(dict(measured[key],
                                  detail="recorded without a reviewed reason"))
 
+    # The baseline-addition rule. Only enforceable against a base revision:
+    # without one there is nothing to compare the entry against, and the run
+    # says so rather than implying the rule was applied.
+    base_gaps_measured: Optional[int] = None
+    additions: List[dict] = []
+    if base_ref:
+        git_repo = REPO_ROOT if repo is None else Path(repo)
+        base_keys: Optional[set] = None
+        try:
+            with base_tree(base_ref, git_repo) as base_root:
+                b_gaps, b_errors, _ = measure(base_root)
+                base_gaps_measured = len(b_gaps)
+                base_keys = {(g["file"], g["service"]) for g in b_gaps}
+                for e in b_errors:
+                    errors.append({
+                        "kind": INSTRUMENT_ERROR,
+                        "file": f"base:{base_ref}:{e['file']}",
+                        "detail": e["detail"],
+                    })
+        except Exception as exc:
+            errors.append({
+                "kind": INSTRUMENT_ERROR,
+                "file": f"base:{base_ref}",
+                "detail": str(exc),
+            })
+        if base_keys is not None:
+            for key in sorted(baseline):
+                if key not in base_keys:
+                    additions.append({
+                        "kind": BASELINE_ADDITION, "file": key[0], "service": key[1],
+                        "networks": [], "ports": None,
+                        "detail": "recorded for a gap that did not exist at the base revision",
+                    })
+            findings.extend(additions)
+
     report = {
-        "files_in_scope": len(files),
-        "files_out_of_scope": _out_of_scope_count(pmoves_dir),
+        "files_in_scope": len(compose_files(root)),
+        "files_out_of_scope": _out_of_scope_count(root),
         "canonical_networks": {k: v for k, v in sorted(canon.items())},
         "gaps_measured": len(gaps),
         "gap_services": len({g["service"] for g in gaps}),
         "baseline_entries": len(baseline),
+        "base_ref": base_ref,
+        "base_gaps_measured": base_gaps_measured,
+        "baseline_additions": len(additions),
         "findings": findings,
         "instrument_errors": errors,
     }
@@ -437,23 +593,25 @@ def main() -> int:
                     help="scan this directory instead of the repo's pmoves/")
     ap.add_argument("--baseline", default=None,
                     help="use this baseline file instead of the repo's")
+    ap.add_argument("--base-ref", default=None,
+                    help="git ref of the base revision; enables the "
+                         "baseline-addition rule (a baseline entry for a gap "
+                         "that did not exist at the base)")
+    ap.add_argument("--repo", default=None,
+                    help="git repository to read the base revision from "
+                         "(default: this repository)")
     args = ap.parse_args()
 
     pmoves_dir = Path(args.pmoves_dir) if args.pmoves_dir else None
     baseline_path = Path(args.baseline) if args.baseline else None
+    repo_path = Path(args.repo) if args.repo else None
 
     if args.write_baseline:
         if not args.yes:
             print("refusing to write without --yes", file=sys.stderr)
             return 2
-        files = compose_files(pmoves_dir)
-        canon = canonical_networks(files)
-        gaps: List[dict] = []
-        errors: List[dict] = []
-        for f in files:
-            g, e = scan_file(f, canon)
-            gaps.extend(g)
-            errors.extend(e)
+        root = PMOVES if pmoves_dir is None else pmoves_dir
+        gaps, errors, _ = measure(root)
         if errors:
             print("INSTRUMENT ERROR -- refusing to write a baseline from a partial read:",
                   file=sys.stderr)
@@ -466,7 +624,7 @@ def main() -> int:
               "written before the gate is meaningful.")
         return 0
 
-    rc, report = run_check(baseline_path, pmoves_dir)
+    rc, report = run_check(baseline_path, pmoves_dir, args.base_ref, repo_path)
     if args.json:
         print(json.dumps(report, indent=2, default=str))
         return rc
@@ -475,6 +633,13 @@ def main() -> int:
     print(f"silent-bind gaps measured: {report['gaps_measured']} "
           f"across {report['gap_services']} service(s)")
     print(f"baseline entries: {report['baseline_entries']}")
+    if report.get("base_ref"):
+        print(f"base revision: {report['base_ref']} "
+              f"({report['base_gaps_measured']} gap(s) measured there) "
+              f"-- the baseline-addition rule IS enforced")
+    else:
+        print("base revision: NOT SUPPLIED -- the baseline-addition rule is "
+              "NOT enforced in this run")
     for e in report["instrument_errors"]:
         print(f"  INSTRUMENT ERROR {e['file']}: {e['detail']}")
     for f in report["findings"]:

@@ -54,6 +54,13 @@ not allowed to become a gate that cannot fail.
        REVIEWED reason, not "REVIEW THIS")
   M7   the instrument-error rule is removed (an unreadable compose file
        would be skipped instead of failing the gate closed)
+  M8   the BASELINE-ADDITION rule is removed (without the base-revision
+       comparison, a change that adds a new gap AND the matching baseline
+       entry compares clean -- the escape hatch the gate exists to close)
+  M9   the silent-bind map is no longer built in the PARENT shell at a call
+       site (command substitution runs in a subshell, so the cache would be
+       rebuilt for every refused probe -- the timeout it was written to
+       prevent)
 
 Run it directly to see the mutation kills in action:
 
@@ -81,7 +88,9 @@ from pmoves.tests import mutation_backup
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RATCHET = REPO_ROOT / "pmoves" / "tools" / "silent_bind_ratchet.py"
+SMOKE = REPO_ROOT / "pmoves" / "scripts" / "smoke-tests.sh"
 TEST_FILE = REPO_ROOT / "pmoves" / "tools" / "tests" / "test_silent_bind_ratchet.py"
+CACHE_TEST_FILE = REPO_ROOT / "pmoves" / "tools" / "tests" / "test_smoke_silent_bind_cache.py"
 
 _PYTEST_TIMEOUT_SECONDS = 300.0
 
@@ -99,6 +108,13 @@ class Mutation:
     new: str
     target_test: str
     rationale: str
+    #: The file the named test lives in. A mutation may kill a test in
+    #: another file -- the shell cache mutation is pinned by the shell test,
+    #: not by the ratchet test.
+    test_file: Path = None  # type: ignore[assignment]
+
+    def resolved_test_file(self) -> Path:
+        return self.test_file if self.test_file is not None else TEST_FILE
 
 
 MUTATIONS: list[Mutation] = [
@@ -202,7 +218,7 @@ MUTATIONS: list[Mutation] = [
         name="M7_instrument_error_rule_removed",
         target=RATCHET,
         old="""    except Exception as exc:
-        errors.append({"kind": INSTRUMENT_ERROR, "file": path.name, "detail": str(exc)})
+        errors.append({"kind": INSTRUMENT_ERROR, "file": rel, "detail": str(exc)})
         return gaps, errors""",
         new="""    except Exception:
         return gaps, errors""",
@@ -212,6 +228,40 @@ MUTATIONS: list[Mutation] = [
             "the parse error makes an unreadable compose file look like a "
             "clean one -- and the gate's whole job is to report the one "
             "thing a clean file looks like."
+        ),
+    ),
+    Mutation(
+        name="M8_baseline_addition_rule_removed",
+        target=RATCHET,
+        old="""            for key in sorted(baseline):
+                if key not in base_keys:""",
+        new="""            for key in sorted(baseline):
+                if False:""",
+        target_test="test_baseline_addition_relative_to_the_base_is_rejected",
+        rationale=(
+            "The baseline may only SHRINK. Without the base-revision "
+            "comparison, a change that introduces a new internal-only "
+            "published port AND adds the matching baseline entry compares "
+            "CLEAN -- the entry and the gap arrive together, so the same "
+            "checkout cannot tell them apart. The comparison has to be "
+            "against the BASE revision's measurement."
+        ),
+    ),
+    Mutation(
+        name="M9_silent_bind_cache_init_removed_at_a_call_site",
+        target=SMOKE,
+        old="""            _silent_bind_map_init
+            _owner="$(_silent_bind_owner "$_port")\"""",
+        new="""            _owner="$(_silent_bind_owner "$_port")\"""",
+        target_test="test_every_call_site_initializes_the_map_before_the_substitution",
+        test_file=CACHE_TEST_FILE,
+        rationale=(
+            "Command substitution runs in a SUBshell. The lookup builds the "
+            "map inside that subshell, the assignment is discarded when the "
+            "substitution ends, and the next refused probe rebuilds the map "
+            "from scratch -- `docker ps` plus a batched `docker inspect` per "
+            "probe, which is the timeout the cache was written to prevent. "
+            "The build has to happen in the PARENT shell."
         ),
     ),
 ]
@@ -316,16 +366,18 @@ def test_every_mutation_anchor_is_present():
         )
         assert mutation.old != mutation.new, mutation.name
         assert mutation.target_test, mutation.name
-        assert mutation.target_test in TEST_FILE.read_text(encoding="utf-8"), (
+        test_file = mutation.resolved_test_file()
+        assert mutation.target_test in test_file.read_text(encoding="utf-8"), (
             f"mutation {mutation.name}: the named test {mutation.target_test} "
-            "does not exist in the ratchet test file"
+            f"does not exist in {test_file.name}"
         )
 
 
 @pytest.mark.parametrize("mutation", MUTATIONS, ids=lambda m: m.name)
 def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     """GREEN -> RED -> GREEN, with a byte-exact restore."""
-    node_id = f"{TEST_FILE.relative_to(REPO_ROOT).as_posix()}::{mutation.target_test}"
+    node_id = (f"{mutation.resolved_test_file().relative_to(REPO_ROOT).as_posix()}"
+               f"::{mutation.target_test}")
     original = mutation.target.read_text(encoding="utf-8")
     original_bytes = mutation.target.read_bytes()
 

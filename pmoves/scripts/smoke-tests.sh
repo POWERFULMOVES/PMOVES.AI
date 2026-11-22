@@ -209,6 +209,10 @@ test_http_endpoint() {
         # The TCP path already separates the two causes; this path did not.
         _port="$(_http_port "$url")"
         if [ -n "$_port" ]; then
+            # Build the map in the PARENT shell: the lookup below runs in a
+            # command-substitution subshell, and an assignment made there
+            # would be discarded when the substitution ends.
+            _silent_bind_map_init
             _owner="$(_silent_bind_owner "$_port")"
             if [ -n "$_owner" ]; then
                 print_fail "$name — SILENT BIND: $_owner requested :$_port, Docker never activated it"
@@ -233,24 +237,51 @@ test_http_endpoint() {
 # first version inspected every container per failed probe -- 63 exec calls per
 # test on this node -- which pushed the suite past its timeout. Build once, then
 # it is a variable lookup.
+#
+# The build and the lookup are SEPARATE functions, and the separation is
+# load-bearing. A caller reads the owner with command substitution:
+#
+#     _owner="$(_silent_bind_owner "$_port")"
+#
+# and command substitution runs in a SUBSHELL. If the map were built inside
+# the lookup function, the assignment would land in that subshell and be
+# thrown away when the substitution ended -- so every refused probe would
+# re-run `docker ps` AND `docker inspect` from scratch, which is exactly the
+# timeout the cache was written to prevent. The build therefore happens in
+# the PARENT shell, via _silent_bind_map_init, and the lookup only reads.
 _SILENT_BIND_MAP=""
+_silent_bind_map_init() {
+    if [ -n "$_SILENT_BIND_MAP" ]; then
+        return 0
+    fi
+    local proj ids
+    proj="${COMPOSE_PROJECT_NAME:-pmoves}"
+    ids="$(docker ps --filter "label=com.docker.compose.project=$proj" -q 2>/dev/null)"
+    if [ -z "$ids" ]; then
+        _SILENT_BIND_MAP="none"
+        return 0
+    fi
+    # One inspect for the whole project: "<name> <requested> <active>"
+    _SILENT_BIND_MAP="$(docker inspect $ids --format \
+        '{{.Name}}|{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}},{{end}}{{end}}|{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}},{{end}}{{end}}{{end}}' \
+        2>/dev/null)"
+    if [ -z "$_SILENT_BIND_MAP" ]; then
+        _SILENT_BIND_MAP="none"
+    fi
+    return 0
+}
 _silent_bind_owner() {
     local want="$1"
+    # The map is normally already built by the caller, in the parent shell.
+    # Init here too so the function is safe to call on its own -- but the
+    # assignment it makes in that case dies with this subshell, which is why
+    # the callers call _silent_bind_map_init FIRST.
     if [ -z "$_SILENT_BIND_MAP" ]; then
-        local proj ids
-        proj="${COMPOSE_PROJECT_NAME:-pmoves}"
-        ids="$(docker ps --filter "label=com.docker.compose.project=$proj" -q 2>/dev/null)"
-        if [ -z "$ids" ]; then
-            _SILENT_BIND_MAP="none"
-        else
-            # One inspect for the whole project: "<name> <requested> <active>"
-            _SILENT_BIND_MAP="$(docker inspect $ids --format \
-'{{.Name}}|{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}},{{end}}{{end}}|{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}},{{end}}{{end}}{{end}}' \
-                2>/dev/null)"
-            [ -z "$_SILENT_BIND_MAP" ] && _SILENT_BIND_MAP="none"
-        fi
+        _silent_bind_map_init
     fi
-    [ "$_SILENT_BIND_MAP" = "none" ] && return 0
+    if [ "$_SILENT_BIND_MAP" = "none" ]; then
+        return 0
+    fi
     printf '%s\n' "$_SILENT_BIND_MAP" | while IFS='|' read -r cname req act; do
         case ",$req" in *",$want,"*) ;; *) continue ;; esac
         case ",$act" in *",$want,"*) continue ;; esac   # active: not a silent bind
@@ -293,6 +324,10 @@ test_tcp_connectivity() {
         # Neo4j, and because that side service requests no host ports the real
         # silent bind falls back to a warning and the suite exits 0. Same defect
         # published-port.sh already solved with compose labels.
+        # Build the map in the PARENT shell: the lookup below runs in a
+        # command-substitution subshell, and an assignment made there would
+        # be discarded when the substitution ends.
+        _silent_bind_map_init
         _owner="$(_silent_bind_owner "$port")"
         if [ -n "$_owner" ]; then
             print_fail "$name — SILENT BIND: $_owner requested :$port, Docker never activated it"

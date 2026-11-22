@@ -63,7 +63,8 @@ def _tree(tmp_path: Path, files: dict) -> Path:
     return pmoves
 
 
-def _run(pmoves: Path, baseline: Path | None = None):
+def _run(pmoves: Path, baseline: Path | None = None, repo: Path | None = None,
+         base_ref: str | None = None):
     cmd = [PYTHON, str(RATCHET), "--check", "--json",
            "--pmoves-dir", str(pmoves)]
     if baseline is not None:
@@ -75,8 +76,70 @@ def _run(pmoves: Path, baseline: Path | None = None):
         empty = pmoves.parent / "empty_baseline.yaml"
         empty.write_text("known_gaps: []\n", encoding="utf-8", newline="\n")
         cmd += ["--baseline", str(empty)]
+    if repo is not None:
+        cmd += ["--repo", str(repo)]
+    if base_ref is not None:
+        cmd += ["--base-ref", base_ref]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     return proc
+
+
+def _git(repo: Path, *args: str) -> str:
+    proc = subprocess.run(["git", "-C", str(repo), *args],
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, f"git {' '.join(args)} failed:\n{proc.stderr}"
+    return proc.stdout.strip()
+
+
+def _base_repo(tmp_path: Path, base_files: dict, head_files: dict) -> tuple[Path, str]:
+    """A git repo with a base commit and a head commit.
+
+    Returns (repo, base_sha). The repo is a real git repository so the gate
+    can materialize the base revision's compose files exactly as it does in
+    CI -- no network, no clone, no fetch.
+    """
+    repo = tmp_path / "repo"
+    (repo / "pmoves").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    _git(repo, "config", "user.email", "gate@example.invalid")
+    _git(repo, "config", "user.name", "Silent Bind Gate")
+    _git(repo, "config", "commit.gpgsign", "false")
+
+    for name, text in base_files.items():
+        _write(repo / "pmoves" / name, text)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    base_sha = _git(repo, "rev-parse", "HEAD")
+
+    for name, text in head_files.items():
+        _write(repo / "pmoves" / name, text)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "head")
+    return repo, base_sha
+
+
+QDRANT = """
+services:
+  qdrant:
+    ports:
+      - "6333:6333"
+    networks:
+      - pmoves_api
+"""
+
+QDRANT_AND_NEWCOMER = """
+services:
+  qdrant:
+    ports:
+      - "6333:6333"
+    networks:
+      - pmoves_api
+  newcomer:
+    ports:
+      - "9999:9999"
+    networks:
+      - pmoves_api
+"""
 
 
 def _report(proc) -> dict:
@@ -409,3 +472,134 @@ def test_house_precedent_service_is_clean():
     rep = json.loads(proc.stdout)
     reported = {(f["file"], f["service"]) for f in rep["findings"]}
     assert ("docker-compose.yml", "supabase-edge-runtime") not in reported
+
+
+# --------------------------------------------------------------------------
+# Case 11 -- the baseline may only SHRINK, measured against the base
+# --------------------------------------------------------------------------
+def test_baseline_addition_relative_to_the_base_is_rejected(tmp_path):
+    """Case 11a -- the escape hatch this gate exists to close.
+
+    A change that introduces a new internal-only published port AND adds the
+    matching baseline entry compares CLEAN against the same checkout: the
+    entry and the gap arrive together. So the gate measures the BASE
+    revision too, and an entry for a gap that did not exist there is a
+    BASELINE_ADDITION.
+    """
+    repo, base_sha = _base_repo(
+        tmp_path,
+        base_files={"docker-compose.yml": CANONICAL + QDRANT},
+        head_files={"docker-compose.yml": CANONICAL + QDRANT_AND_NEWCOMER},
+    )
+    baseline = tmp_path / "baseline.yaml"
+    _write(baseline, """
+known_gaps:
+  - file: docker-compose.yml
+    service: qdrant
+    reason: measured at the base revision
+  - file: docker-compose.yml
+    service: newcomer
+    reason: introduced by this change, so it looks fine
+""")
+    proc = _run(repo / "pmoves", baseline, repo=repo, base_ref=base_sha)
+    rep = _report(proc)
+    assert rep["base_gaps_measured"] == 1, rep
+    additions = [f for f in rep["findings"] if f["kind"] == "BASELINE_ADDITION"]
+    assert len(additions) == 1, rep["findings"]
+    assert additions[0]["service"] == "newcomer"
+    # The gap that DID exist at the base is not an addition.
+    assert not any(f["kind"] == "BASELINE_ADDITION" and f["service"] == "qdrant"
+                   for f in rep["findings"])
+    assert proc.returncode == 1
+
+
+def test_a_baseline_entry_for_a_base_gap_is_allowed(tmp_path):
+    """Case 11b -- the rule must not block the legitimate case: a gap that
+    already existed at the base revision may be recorded."""
+    repo, base_sha = _base_repo(
+        tmp_path,
+        base_files={"docker-compose.yml": CANONICAL + QDRANT},
+        head_files={"docker-compose.yml": CANONICAL + QDRANT_AND_NEWCOMER},
+    )
+    baseline = tmp_path / "baseline.yaml"
+    _write(baseline, """
+known_gaps:
+  - file: docker-compose.yml
+    service: qdrant
+    reason: measured at the base revision
+""")
+    proc = _run(repo / "pmoves", baseline, repo=repo, base_ref=base_sha)
+    rep = _report(proc)
+    # The newcomer is unrecorded, so it is a plain NEW finding -- and it is
+    # NOT also a baseline addition.
+    assert any(f["detail"] == "not in the baseline" for f in rep["findings"])
+    assert not any(f["kind"] == "BASELINE_ADDITION" for f in rep["findings"])
+
+
+def test_an_unreadable_base_revision_fails_closed(tmp_path):
+    """Case 11c -- a gate that cannot read its base cannot judge the
+    baseline, and must say so (exit 3) rather than report a clean tree."""
+    repo, _ = _base_repo(
+        tmp_path,
+        base_files={"docker-compose.yml": CANONICAL + QDRANT},
+        head_files={"docker-compose.yml": CANONICAL + QDRANT_AND_NEWCOMER},
+    )
+    baseline = tmp_path / "baseline.yaml"
+    _write(baseline, """
+known_gaps:
+  - file: docker-compose.yml
+    service: qdrant
+    reason: measured at the base revision
+""")
+    proc = _run(repo / "pmoves", baseline, repo=repo,
+                base_ref="0000000000000000000000000000000000000000")
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    rep = _report(proc)
+    assert rep["instrument_errors"], rep
+    assert "base:" in rep["instrument_errors"][0]["file"]
+
+
+def test_without_a_base_revision_the_rule_is_not_claimed(tmp_path):
+    """Case 11d -- without a base revision there is nothing to compare
+    against. The tool must say the rule is NOT enforced rather than imply
+    it ran."""
+    pmoves = _tree(tmp_path, {
+        "docker-compose.yml": CANONICAL + QDRANT,
+    })
+    proc = subprocess.run(
+        [PYTHON, str(RATCHET), "--check",
+         "--pmoves-dir", str(pmoves),
+         "--baseline", str(pmoves.parent / "empty.yaml")],
+        capture_output=True, text=True)
+    assert "NOT enforced" in proc.stdout, proc.stdout
+
+
+def test_same_filename_in_two_scope_directories_does_not_collide(tmp_path):
+    """Case 12 -- two files in the house scope share the name
+    docker-compose.core.yml: pmoves/docker-compose.core.yml and
+    pmoves/compose/docker-compose.core.yml. Keying the baseline on the bare
+    filename lets them collide."""
+    pmoves = _tree(tmp_path, {
+        "docker-compose.yml": CANONICAL + QDRANT,
+        "docker-compose.core.yml": CANONICAL + """
+services:
+  top-level:
+    ports:
+      - "9999:9999"
+    networks:
+      - pmoves_api
+""",
+        "compose/docker-compose.core.yml": CANONICAL + """
+services:
+  nested:
+    ports:
+      - "9998:9998"
+    networks:
+      - pmoves_api
+""",
+    })
+    rep = _report(_run(pmoves))
+    assert rep["gaps_measured"] == 3, rep
+    files = {f["file"] for f in rep["findings"]}
+    assert "docker-compose.core.yml" in files, files
+    assert "compose/docker-compose.core.yml" in files, files
