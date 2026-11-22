@@ -39,6 +39,77 @@ def root(tmp_path, monkeypatch):
     return tmp_path
 
 
+# --- SQL fallback targets the container's database, not a hard-coded one ----
+#
+# The fallback used to run `psql -U postgres -d postgres`. The compose stack's
+# database is named by POSTGRES_DB (pmoves), and `postgres` is a near-empty
+# sibling on the same server, so the fallback could never see
+# pmoves_core.v_service_models and --check reported UNDECIDED on every node.
+
+class _FakeRun:
+    """Records subprocess.run calls; answers the identity probe and psql."""
+
+    def __init__(self, probe_stdout="pmoves\npmoves\n", probe_rc=0):
+        self.calls = []
+        self.probe_stdout = probe_stdout
+        self.probe_rc = probe_rc
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(list(cmd))
+        if cmd[:2] == ["docker", "ps"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="pmoves-supabase-db-1\n", stderr="")
+        if "sh" in cmd and "-c" in cmd and "psql" not in cmd:
+            return subprocess.CompletedProcess(cmd, self.probe_rc, stdout=self.probe_stdout, stderr="")
+        if "psql" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        raise AssertionError(f"unexpected subprocess call: {cmd}")
+
+
+def _psql_call(fake):
+    return next(c for c in fake.calls if "psql" in c)
+
+
+def test_sql_fallback_uses_the_containers_postgres_db(monkeypatch):
+    for var in ("MODEL_SYNC_DB_USER", "MODEL_SYNC_DB_NAME", "MODEL_SYNC_DB_CONTAINER"):
+        monkeypatch.delenv(var, raising=False)
+    fake = _FakeRun(probe_stdout="pmoves\npmoves\n")
+    monkeypatch.setattr(ms.subprocess, "run", fake)
+    assert ms._db_json_query("select 1;") == []
+    psql = _psql_call(fake)
+    assert psql[psql.index("-U") + 1] == "pmoves"
+    assert psql[psql.index("-d") + 1] == "pmoves"
+    # loopback TCP, not the unix socket: peer auth rejects the pmoves role
+    assert psql[psql.index("-h") + 1] == "127.0.0.1"
+    # the probe reads the container's env, not the host's
+    probe = next(c for c in fake.calls if "sh" in c)
+    assert probe[:3] == ["docker", "exec", "pmoves-supabase-db-1"]
+    assert "POSTGRES_DB" in probe[-1] and "POSTGRES_USER" in probe[-1]
+
+
+def test_sql_fallback_env_overrides_win(monkeypatch):
+    monkeypatch.setenv("MODEL_SYNC_DB_USER", "svc")
+    monkeypatch.setenv("MODEL_SYNC_DB_NAME", "pmoves_test")
+    monkeypatch.delenv("MODEL_SYNC_DB_CONTAINER", raising=False)
+    fake = _FakeRun()
+    monkeypatch.setattr(ms.subprocess, "run", fake)
+    ms._db_json_query("select 1;")
+    psql = _psql_call(fake)
+    assert psql[psql.index("-U") + 1] == "svc"
+    assert psql[psql.index("-d") + 1] == "pmoves_test"
+    assert not any("sh" in c and "psql" not in c for c in fake.calls), "no probe when both overrides are set"
+
+
+def test_sql_fallback_probe_failure_falls_back_to_postgres(monkeypatch):
+    for var in ("MODEL_SYNC_DB_USER", "MODEL_SYNC_DB_NAME", "MODEL_SYNC_DB_CONTAINER"):
+        monkeypatch.delenv(var, raising=False)
+    fake = _FakeRun(probe_stdout="", probe_rc=1)
+    monkeypatch.setattr(ms.subprocess, "run", fake)
+    ms._db_json_query("select 1;")
+    psql = _psql_call(fake)
+    assert psql[psql.index("-U") + 1] == "postgres"
+    assert psql[psql.index("-d") + 1] == "postgres"
+
+
 @pytest.fixture
 def out(root):
     d = root / "usr" / "plugins" / "_model_config"
