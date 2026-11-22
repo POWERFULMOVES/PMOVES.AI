@@ -747,8 +747,60 @@ def test_unmeasured_is_not_counted_as_a_finding(monkeypatch, capsys):
 def test_unmeasured_fails_json_mode(monkeypatch, capsys):
     import json
     rc, out, _ = _main(monkeypatch, capsys, [UM], set(), argv=["--json"])
-    payload = json.loads(out[out.index("{"):])
+    payload = json.loads(out)          # the WHOLE stdout, no slicing
     assert rc == 1 and payload["unmeasured"] == [UM] and payload["new"] == []
+
+
+def test_json_stdout_is_pure_json_when_units_are_unmeasured(monkeypatch, capsys):
+    """--json must stay machine-parseable: the UNMEASURED preamble goes to stderr."""
+    import json
+    monkeypatch.setattr(pytest_ratchet, "discover_test_files", lambda: [Path("a.py")])
+    monkeypatch.setattr(pytest_ratchet, "group_files", lambda files: {"grp": files})
+    monkeypatch.setattr(pytest_ratchet, "run_chunk_with_fallback",
+                        lambda *a: ([UM, F_FAIL], []))
+    monkeypatch.setattr(pytest_ratchet, "load_baseline", lambda: set())
+    monkeypatch.setattr(sys, "argv", ["pytest_ratchet.py", "--json"])
+    rc = pytest_ratchet.main()
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert captured.out.lstrip().startswith("{") and captured.out.rstrip().endswith("}")
+    json.loads(captured.out)
+    assert "UNMEASURED" in captured.err
+
+
+# A unit going UNMEASURED takes its baselined failures out of `live` without
+# fixing them. Calling them stale would tell the operator to delete real entries.
+F_HIDDEN = {"kind": "ERROR", "where": "services.semantic-cache.tests.test_cache.T",
+            "name": "test_x", "detail": ""}
+
+
+def test_unmeasured_unit_does_not_make_its_baselined_keys_stale(monkeypatch, capsys):
+    baseline = {pytest_ratchet._key(F_FAIL), pytest_ratchet._key(F_HIDDEN)}
+    rc, out, _ = _main(monkeypatch, capsys, [UM, F_FAIL], baseline)
+    assert rc == 1
+    assert "STALE BASELINE" not in out
+    assert pytest_ratchet._key(F_HIDDEN) not in out
+    assert "stale-baseline check skipped: 1 unit(s) unmeasured" in out
+
+
+def test_unmeasured_unit_skips_the_stale_check_in_json(monkeypatch, capsys):
+    import json
+    baseline = {pytest_ratchet._key(F_FAIL), pytest_ratchet._key(F_HIDDEN)}
+    rc, out, _ = _main(monkeypatch, capsys, [UM, F_FAIL], baseline, argv=["--json"])
+    payload = json.loads(out)
+    assert rc == 1
+    assert payload["stale_baseline"] is None
+    assert payload["stale_check_skipped"] is True
+
+
+def test_stale_is_still_reported_when_everything_was_measured(monkeypatch, capsys):
+    import json
+    baseline = {pytest_ratchet._key(F_FAIL), pytest_ratchet._key(F_HIDDEN)}
+    rc, out, _ = _main(monkeypatch, capsys, [F_FAIL], baseline, argv=["--json"])
+    payload = json.loads(out)
+    assert rc == 1
+    assert payload["stale_baseline"] == [pytest_ratchet._key(F_HIDDEN)]
+    assert payload["stale_check_skipped"] is False
 
 
 def test_baseline_is_not_written_while_units_are_unmeasured(monkeypatch, capsys):

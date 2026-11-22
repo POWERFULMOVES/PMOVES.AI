@@ -637,14 +637,17 @@ def main() -> int:
     findings = [f for f in findings if f["kind"] != UNMEASURED]
 
     if unmeasured:
+        # stdout must stay pure under --json; the document carries "unmeasured".
+        out = sys.stderr if args.json else sys.stdout
         print(f"UNMEASURED — {len(unmeasured)} unit(s) produced no usable report."
-              " This fails the gate whatever the baseline says:")
+              " This fails the gate whatever the baseline says:", file=out)
         for f in unmeasured:
-            print(f"  {f['where']}")
-            print(f"        {f['detail']}")
+            print(f"  {f['where']}", file=out)
+            print(f"        {f['detail']}", file=out)
         print("\nA session abort (INTERNALERROR, interrupt, usage error) or a"
               " missing report hides every result in the unit. Fix the file at"
-              " fault -- e.g. an import-time sys.exit() -- rather than baselining.")
+              " fault -- e.g. an import-time sys.exit() -- rather than baselining.",
+              file=out)
 
     if args.write_baseline:
         if unmeasured:
@@ -663,7 +666,12 @@ def main() -> int:
     # A baselined entry that no longer occurs was FIXED. Leaving it would let
     # the same breakage return silently, which contradicts the count-only-down
     # claim this ratchet makes.
-    stale = sorted(baseline - live)
+    #
+    # Not computed while any unit is unmeasured: a baselined failure inside that
+    # unit is absent from `live` because nothing measured it, not because it was
+    # fixed, and telling the operator to delete it would re-blind the gate the
+    # moment the unit reports again. The gate still fails on `unmeasured`.
+    stale = None if unmeasured else sorted(baseline - live)
 
     if args.json:
         print(json.dumps({
@@ -672,6 +680,7 @@ def main() -> int:
             "baselined": len(findings) - len(new),
             "new": new,
             "stale_baseline": stale,
+            "stale_check_skipped": stale is None,
             "unmeasured": unmeasured,
         }, indent=2))
         return 1 if (new or stale or unmeasured) else 0
@@ -697,7 +706,10 @@ def main() -> int:
         print("record them deliberately:")
         print("  make -C pmoves python-tests-baseline")
 
-    if stale:
+    if stale is None:
+        print(f"\nstale-baseline check skipped: {len(unmeasured)} unit(s) unmeasured"
+              " -- a baselined failure inside one cannot be told apart from a fix.")
+    elif stale:
         print(f"\nSTALE BASELINE — {len(stale)} entr{'y' if len(stale) == 1 else 'ies'} no longer fail:")
         # Printed in FULL, deliberately unlike `new` above. The stale list is the
         # only actionable output this branch produces: `--write-baseline` cannot be
