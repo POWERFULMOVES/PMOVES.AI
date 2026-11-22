@@ -157,17 +157,58 @@ def _http_get_json(endpoint: str, headers: dict[str, str], timeout: int = 20) ->
     return []
 
 
+def _resolve_db_identity(container: str) -> tuple[str, str]:
+    """(user, dbname) for the SQL fallback.
+
+    Order: MODEL_SYNC_DB_USER / MODEL_SYNC_DB_NAME overrides, then the DB
+    container's own POSTGRES_USER / POSTGRES_DB, then postgres/postgres.
+
+    This used to be hard-coded to ``-U postgres -d postgres``. The compose
+    stack names its database ``pmoves`` (POSTGRES_DB), and ``postgres`` is a
+    near-empty sibling on the same server, so the fallback failed with
+    ``relation "pmoves_core.v_service_models" does not exist`` on every node
+    and ``--check`` reported UNDECIDED. Measured on 5090, 2026-11-22; the same
+    wrong-database probe produced a false "registry migration missing"
+    finding in the 2026-11-19 docs.
+    """
+    user = os.environ.get("MODEL_SYNC_DB_USER", "").strip()
+    name = os.environ.get("MODEL_SYNC_DB_NAME", "").strip()
+    if user and name:
+        return user, name
+    probe = [
+        "docker", "exec", container, "sh", "-c",
+        'printf "%s\\n%s\\n" "${POSTGRES_USER:-postgres}" "${POSTGRES_DB:-postgres}"',
+    ]
+    lines: list[str] = []
+    try:
+        proc = subprocess.run(probe, capture_output=True, text=True, check=False, timeout=15)
+        if proc.returncode == 0:
+            lines = [ln.strip() for ln in (proc.stdout or "").splitlines()]
+    except (OSError, subprocess.SubprocessError):
+        lines = []
+    if len(lines) >= 2 and lines[0] and lines[1]:
+        return user or lines[0], name or lines[1]
+    return user or "postgres", name or "postgres"
+
+
 def _db_json_query(sql: str) -> list[dict]:
     container = _resolve_db_container()
+    db_user, db_name = _resolve_db_identity(container)
+    # `-h 127.0.0.1`: over the unix socket psql uses peer auth, which rejects
+    # the stack's `pmoves` role ("Peer authentication failed for user
+    # pmoves", measured 5090 2026-11-22). The Makefile's supabase-bootstrap
+    # recipes connect over loopback TCP for the same reason.
     cmd = [
         "docker",
         "exec",
         container,
         "psql",
+        "-h",
+        "127.0.0.1",
         "-U",
-        "postgres",
+        db_user,
         "-d",
-        "postgres",
+        db_name,
         "-At",
         "-c",
         sql,
