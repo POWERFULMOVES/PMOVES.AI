@@ -175,6 +175,14 @@ known_failures:
   - "ERROR|services.creator-operator.tests.test_voice_operator|<collection-error>"
   - "ERROR|services.deepresearch.tests.test_worker|<collection-error>"
   - "ERROR|services.flute-gateway.test_cgp_consumer|<collection-error>"
+  # semantic-cache: the 17 test_cipher_layer / test_proxy entries below were
+  # never measured before #3511. They sat in the same ratchet chunk as
+  # pmoves/tools/test_all_tts_engines.py, whose import-time sys.exit(1) wiped
+  # that chunk behind a baselined `ERROR|pytest|internal`. They are pre-existing,
+  # not newly broken: like the 11 test_cache entries, they patch
+  # `pmoves.services.semantic_cache.*`, and pmoves/services/__init__.py
+  # `_ALIASES` has no semantic_cache entry for the hyphenated directory. Keys
+  # copied from CI run 44939025760 (job 136951912942), not re-recorded.
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheCount|test_count_returns_total"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheDimensionFilter|test_dimension_mismatch_filtered_by_sql"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheIncrement|test_increment_hit"
@@ -186,6 +194,23 @@ known_failures:
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheStore|test_store_failure_is_non_blocking"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheStore|test_store_new_entry"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheTTL|test_ttl_expired_entries_not_returned"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheHit|test_cache_hit_cipher_l0"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheHit|test_cache_hit_pgvector_l1"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheMissForward|test_cache_miss_forwards_to_tensorzero"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestHealthEndpoint|test_health_endpoint"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestMetricsEndpoint|test_metrics_endpoint"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_high_temperature"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_more_than_three_messages"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_tools"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherLifecycle|test_close"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherLifecycle|test_init"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_disabled"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_hit"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_http_error_fail_open"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_miss"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_failure_is_non_blocking"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_network_exception_fail_open"
   - "ERROR|services.sso-auth.tests.test_jwt_verify|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_login|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_oidc|<collection-error>"
