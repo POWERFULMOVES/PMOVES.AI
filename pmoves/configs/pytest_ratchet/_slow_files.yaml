@@ -208,3 +208,21 @@ slow_files:
     #
     # The mutation count in this block is GATED: the pytest-ratchet's suite
     # recomputes it by AST from the harness and fails if it drifts.
+  pmoves/tools/tests/test_silent_bind_ratchet_mutation_kill.py: 60
+    # WHY: three phases per mutation, each a full `python -m pytest` child.
+    #
+    # MEASURED on this host (Windows, Python 3.12.10) with the harness's own
+    # invocation: the file alone 38.45s for 7 mutations (each mutation runs
+    # its named test three times -- GREEN before, RED after, GREEN after the
+    # restore).
+    #
+    # The 60s allowance buys a per-file budget of 60 + 60 = 120s (3.1x the
+    # measured file). It lives in the `pmoves` group, whose chunk budget is
+    # therefore raised from 120s to 180s.
+    #
+    # THE MEASUREMENT IS NOT IN THE REPOSITORY
+    # ----------------------------------------
+    # Every number above was produced by running the harness over the file
+    # and timing the call. Those timings are properties of a machine, so
+    # they are recorded here as the BASIS for a budget rather than as a
+    # test that could fail on a slower runner.

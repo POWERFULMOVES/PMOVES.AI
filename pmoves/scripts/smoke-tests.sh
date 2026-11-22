@@ -103,6 +103,57 @@ print_info() {
     fi
 }
 
+# The host port a URL points at, resolved for the silent-bind lookup.
+# Prints the port, or nothing when it cannot be resolved.
+#
+# The URLs in this script are mostly literal ("http://localhost:8084/healthz")
+# but a few carry a substitution ("http://localhost:${ARCHON_PORT:-3090}/"). The
+# silent-bind map is keyed by the host port Docker was ASKED to publish, so the
+# port has to resolve to the same number the container requested. A port that
+# cannot be resolved is NOT guessed: the probe then falls back to the ordinary
+# "connection refused" warning, because accusing the wrong port of a silent
+# bind would be a false accusation.
+_http_port() {
+    local url="$1"
+    local rest port inner name default
+    rest="${url#*://}"           # strip the scheme
+    rest="${rest%%/*}"           # drop the path
+    rest="${rest##*@}"           # drop any userinfo
+    case "$rest" in
+        \[*\]*) rest="${rest##*\]}" ;;   # IPv6 literal: [::1]:8080
+    esac
+    # A substitution may itself contain a colon ("${VAR:-default}"), so the
+    # port cannot be split off with a bare '##*:' -- that would cut at the
+    # colon INSIDE the substitution. The three shapes are matched instead.
+    port=""
+    if [[ "$rest" =~ ^(.+):(\$\{[^}]*\})$ ]]; then
+        port="${BASH_REMATCH[2]}"        # host:${VAR} / host:${VAR:-default}
+    elif [[ "$rest" =~ ^(\$\{[^}]*\})$ ]]; then
+        port="${BASH_REMATCH[1]}"        # ${VAR} alone
+    elif [[ "$rest" =~ ^[^:]*:([0-9]+)$ ]]; then
+        port="${BASH_REMATCH[1]}"        # host:1234
+    fi
+    case "$port" in
+        '') return 0 ;;
+        '${'*)
+            inner="${port:2}"            # strip the leading "${"
+            inner="${inner%?}"           # drop the trailing "}"
+            name="${inner%%:*}"
+            default=""
+            case "$inner" in
+                *:-*) default="${inner#*:-}"; name="${inner%%:-*}" ;;
+            esac
+            if [ -n "${!name:-}" ]; then
+                printf '%s\n' "${!name}"
+            elif [ -n "$default" ]; then
+                printf '%s\n' "$default"
+            fi
+            ;;
+        *[!0-9]*) return 0 ;;           # not a port -- do not guess
+        *) printf '%s\n' "$port" ;;
+    esac
+}
+
 # Test function
 test_http_endpoint() {
     local name="$1"
@@ -146,6 +197,25 @@ test_http_endpoint() {
         print_fail "$name (timeout after ${TIMEOUT}s)"
         return 1
     elif [ $status -eq 7 ]; then
+        # Connection refused has two causes, and this path used to collapse
+        # them into ONE warning the suite tolerates: the service is DOWN
+        # (expected if you haven't started every profile), and the service is
+        # UP but Docker never activated the host port it requested -- a silent
+        # bind (moby/moby#36174). The second is a real defect, and it was
+        # passing as an expected condition: the live run reported "41 tests,
+        # 22 passed, 20 warnings, 0 failed" while four of those warnings WERE
+        # silent binds, and `grep SILENT BIND` matched nothing.
+        #
+        # The TCP path already separates the two causes; this path did not.
+        _port="$(_http_port "$url")"
+        if [ -n "$_port" ]; then
+            _owner="$(_silent_bind_owner "$_port")"
+            if [ -n "$_owner" ]; then
+                print_fail "$name — SILENT BIND: $_owner requested :$_port, Docker never activated it"
+                print_info "  diagnose: make -C pmoves net-reality   (moby/moby#36174)"
+                return 1
+            fi
+        fi
         print_warn "$name (connection refused - service may not be running)"
         return 1
     else
