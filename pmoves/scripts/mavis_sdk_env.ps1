@@ -219,7 +219,13 @@ function Strip-MavisSdkEnvFor {
         $log_dir = if ($env:PMOVES_MAVIS_SDK_LOG_DIR) { $env:PMOVES_MAVIS_SDK_LOG_DIR } else { $default_log_dir }
         $log_path = if ($env:PMOVES_MAVIS_SDK_LOG_PATH) { $env:PMOVES_MAVIS_SDK_LOG_PATH }
                     else { Join-Path $log_dir 'mavis_sdk_env.log' }
-        if (-not (Test-Path $log_dir)) { New-Item -ItemType Directory -Force -Path $log_dir | Out-Null }
+        # Create the parent of the EFFECTIVE path, not $log_dir: when
+        # PMOVES_MAVIS_SDK_LOG_PATH points elsewhere, $log_dir is irrelevant.
+        # Mirrors the bash twin (`log_dir="$(dirname "$log_path")"; mkdir -p`).
+        $log_parent = Split-Path -Parent $log_path
+        if ($log_parent -and -not (Test-Path $log_parent)) {
+            New-Item -ItemType Directory -Force -Path $log_parent | Out-Null
+        }
         $ts = (Get-Date -AsUTC).ToString('yyyy-MM-ddTHH:mm:ssZ')
         $host_name = $env:COMPUTERNAME
         if (-not $host_name) { $host_name = 'unknown' }
