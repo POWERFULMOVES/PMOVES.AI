@@ -169,7 +169,7 @@
       "current_stage": "rehearsal",
       "stage_source": "ageless-beauty.room.practice.json::stage",
       "stage_verified_at": "2026-09-13T00:00:00Z"
-},
+    },
     {
       "room_id": "b850-ledger.room.evidence",
       "agent_id": "b850-claude",
@@ -193,6 +193,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (recovered room, no P7 session yet)",
       "stage_verified_at": "2026-09-23T00:00:00Z"
+    },
+    {
+      "room_id": "openroom.default.surface",
+      "agent_id": "mavis",
+      "alter": "openroom",
+      "display_name": "OpenRoom — Default Operating Surface",
+      "stage": "rehearsal",
+      "manifest": "openroom.default.surface.json",
+      "summary": "Default operating surface for every agent session in this workspace: OpenRoom (PMOVES fork of MiniMax-AI/OpenRoom, submodule PMOVES-OpenRoom) is the browser-desktop host that opens the catalog's rooms under P7 session/stage discipline. Standing rule across all five Spynel agent roles — chat, developer, reviewer, notification, heartbeat — unless the user supersedes; source of truth: .spynel/instructions/agent-chat.md, agent-developer.md, agent-reviewer.md, agent-notification.md, agent-heartbeat.md (each carries the OpenRoom default-surface rule). Stage: rehearsal — the default-surface rule is routing policy, not a room activation.",
+      "current_stage": "rehearsal",
+      "stage_source": "openroom.default.surface.json::stage (default-surface entry added 2026-09-22; current_stage mirrors the manifest declaration, not a P7 activation)",
+      "stage_verified_at": "2026-09-22T11:53:53Z"
     }
   ]
 }
