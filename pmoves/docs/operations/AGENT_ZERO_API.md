@@ -258,13 +258,18 @@ GHCR `ghcr.io/powerfulmoves/pmoves-agent-zero` publishes `latest` / `pmoves-late
 The 11-18 exit 1 came from a checkout older than commit `361e26e9a0b` (PR #3396), which
 added the exit-2 UNDECIDED contract: `_check_undecided` (`models_sync.py:802-808`) is
 called from `:841-846` when `--check` runs with `source == "template_fallback"`. Current
-code behaves as documented. The registry fallback itself is real and measured on
-2026-11-19: the SQL fallback against the node's supabase-db fails with
-`relation "pmoves_core.v_service_models" does not exist`, because the registry migration
-has not been applied on 5090. The operator items are applying that migration on this node
-and updating the node's `main` checkout; nothing is filed against the generator. For
-comparison, the committed docked file has 3 presets and the DARKXSIDE Launcher instance
-holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
+code behaves as documented. The 11-19 exit 2 was measured correctly but explained wrongly:
+the SQL fallback failed with `relation "pmoves_core.v_service_models" does not exist` and
+this section said the registry migration was missing on 5090. It is not. The node's
+database `pmoves` has 61 migrations and 24 seeds in `public.pmoves_bootstrap_history`
+(applied 2026-11-06) and the view exists there. The fallback in `models_sync.py` was
+hard-coded to `psql -U postgres -d postgres`, a near-empty sibling database on the same
+server, so it could never see the view on any compose node; the 11-19 confirmation probe
+made the same `-d postgres` mistake. Fixed 2026-11-22: the fallback now reads
+`POSTGRES_USER` / `POSTGRES_DB` from the DB container (`MODEL_SYNC_DB_USER` /
+`MODEL_SYNC_DB_NAME` override). The remaining operator item is only updating the node's
+`main` checkout. For comparison, the committed docked file has 3 presets and the
+DARKXSIDE Launcher instance holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
 
 **WARN: `OUT=` at a Launcher usr dir, or `INSTANCE=darkxside-inst`.** A sync archives the
 live file to `pmoves/data/model-sync/review/` first, replaces only generator-owned presets
