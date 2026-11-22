@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -14,7 +15,13 @@ class _DummyAsyncClient:
         return False
 
 
-sys.modules.setdefault("httpx", SimpleNamespace(AsyncClient=_DummyAsyncClient))
+# Stub httpx ONLY when it is not installed. A bare setdefault() also fired when
+# httpx was installed but not yet imported, replacing it for the whole pytest
+# session and breaking later importers (google-genai 3.x reads httpx.Client at
+# import; 43 flute-gateway failures on main, 2026-11-21). See
+# test_shim_isolation.py.
+if importlib.util.find_spec("httpx") is None:
+    sys.modules.setdefault("httpx", SimpleNamespace(AsyncClient=_DummyAsyncClient))
 
 
 class _DummyFastAPI:
