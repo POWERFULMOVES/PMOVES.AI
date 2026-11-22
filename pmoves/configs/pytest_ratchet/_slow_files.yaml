@@ -212,16 +212,17 @@ slow_files:
     # WHY: three phases per mutation, each a full `python -m pytest` child.
     #
     # MEASURED on this host (Windows, Python 3.12.10) with the harness's own
-    # invocation: the file alone 55.46s for 9 mutations (each mutation runs
-    # its named test three times -- GREEN before, RED after, GREEN after the
-    # restore). The previous measurement, 38.45s for 7 mutations, is the
-    # number this block carried when the lane first landed; M8 and M9 added
-    # two mutations, and the file was re-measured rather than the budget
-    # being left to cover a stale number.
+    # invocation: the file alone 55.46s and 62.44s on two consecutive runs of
+    # the 9-mutation harness (each mutation runs its named test three times --
+    # GREEN before, RED after, GREEN after the restore). The earlier figure,
+    # 38.45s, was the 7-mutation harness before M8 and M9 were added; it is
+    # not a number this block may keep quoting, so both current runs are
+    # recorded and the WORST of them is the one the budget is argued from.
     #
-    # The 60s allowance buys a per-file budget of 60 + 60 = 120s (2.16x the
-    # measured file). It lives in the `pmoves` group, whose chunk budget is
-    # therefore raised from 120s to 180s.
+    # The 60s allowance buys a per-file budget of 60 + 60 = 120s, which is
+    # 1.9x the worst measured file (62.44s) and 2.2x the faster one. It lives
+    # in the `pmoves` group, whose chunk budget is therefore raised from 120s
+    # to 180s.
     #
     # THE MEASUREMENT IS NOT IN THE REPOSITORY
     # ----------------------------------------
