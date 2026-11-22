@@ -35,6 +35,7 @@ upstream source docs — before anything was changed in production compose.
 | 8 | **defense-in-depth** | **A gate that cannot read its input must FAIL CLOSED, and "could not measure" must be its own exit code.** Three files in the house scope carry Compose's `!reset` / `!override` tags, which PyYAML rejects outright; and an unreadable compose file must be an `INSTRUMENT_ERROR`, not a skip. The house convention is exit 3 = COULD NOT MEASURE, which is NOT a pass — `make` collapses 1 and 3 to 2, so the tool is called directly when the distinction matters. | `pmoves/tools/silent_bind_ratchet.py::ComposeLoader` (`!reset` / `!override` constructors) + exit code 3 + mutation **M7**; the sibling `pmoves/tools/compose_hardening_ratchet.py` and the Makefile's note "(exit 1 = new/stale finding, exit 3 = COULD NOT MEASURE … call the tool directly when the distinction matters)". | Any gate that parses files it does not control. |
 | 9 | **reasoning-gap** | **A URL port parser must not split on the colon INSIDE a substitution.** The smoke suite's URLs carry `"${VAR:-default}"`, and `##*:` cuts at the LAST colon — which is the one inside the substitution — yielding `":-default}"` instead of the port. The parser therefore matches the three authority shapes explicitly (host + substitution / bare substitution / host + digits) instead of splitting. The bug was found by the test, not by reading the code. | `pmoves/scripts/smoke-tests.sh::_http_port` + `pmoves/tools/tests/test_smoke_http_port_parser.py`, which EXTRACTS the function from the house script rather than copying it, so the test cannot drift from the code. 12/12 cases pass, including `${VAR:-default}` with and without the variable set. | Any parser that consumes compose-style substitutions. |
 | 10 | **defense-in-depth** | **A gate that cannot detect is indistinguishable from a clean tree.** Every rule the ratchet depends on is pinned by a mutation that must kill a NAMED test, with the three-phase GREEN→RED→GREEN contract and a byte-exact restore in a `finally`. The kill signal is the test NAME in pytest's own short summary — not "pytest exited non-zero", which a collection error or a timeout also satisfies. | `pmoves/tools/tests/test_silent_bind_ratchet_mutation_kill.py` — 7 mutations, 8/8 pass, measured 38.45s; the crash-safe backup is `pmoves/tests/mutation_backup.py`, and the file is declared slow with its measured basis in `pmoves/configs/pytest_ratchet/_slow_files.yaml`. | Every new ratchet in this repo. |
+| 11 | **pattern-conformance** | **The house already ships the platform shim.** The new shell test resolved bash by hand -- `shutil.which("bash")` with a Git-Bash fallback -- and the house ratchet `pmoves/tests/test_no_bare_bash_argv.py` failed it on CI as the **one** new failure in the run: on Windows a bare `bash` resolves to `C:\\Windows\\System32\\bash.exe` (the WSL launcher) before PATH is consulted, so the child silently runs a different OS. The house ships `pmoves/tools/bash_resolver.py` for exactly this: `resolve_bash()` for callers that must have bash, `find_bash()` for "skip if no bash" callers. The hand-rolled version was not merely non-conforming -- it had already bitten me once, when `shutil.which` returned the WSL stub and my probe reported "No such file or directory" for a file that plainly existed. | `pmoves/tools/bash_resolver.py` (the module docstring carries the Z890 measurement); `pmoves/tests/test_no_bare_bash_argv.py::test_no_repo_python_spawns_a_bare_bash` (the ratchet that caught it -- 26/26 pass after the fix); the fix is `from pmoves.tools.bash_resolver import find_bash` in `pmoves/tools/tests/test_smoke_http_port_parser.py`. | Any Python in this repo that spawns `bash` or `sh`. |
 
 ---
 
@@ -44,15 +45,22 @@ upstream source docs — before anything was changed in production compose.
 - **(2) semantic-naming drift** — 0 lessons.
 - **(3) contract-correctness** — 2 lessons (#5, #7) — upstream AND house provenance together, and a recorded exception is not a decision.
 - **(4) defense-in-depth** — 3 lessons (#3, #8, #10) — the vacuous-truth empty set, fail-closed on unreadable input, and the mutation-kill net.
-- **(5) pattern-conformance** — 2 lessons (#1, #6) — the house already owns the instrument, and the house's precedent is to fix the auditors first.
+- **(5) pattern-conformance** — 3 lessons (#1, #6, #11) — the house already owns the instrument, the house's precedent sets the order of work, and the house already ships the platform shim for bash.
 
 Pattern: **the lane's centre of gravity is conformance to instruments that already
-existed.** Two of the ten lessons are the same lesson seen from opposite ends
-(#1 and #6: find the house's instrument, and let the house's precedent set the
-order of work), and the two that changed the CODE most (#2 canonical
-inheritance, #3 the empty-set guard) were both found by MEASUREMENT rather
-than by reading the source — which is the point the operator made about
-"loading the dice first".
+existed.** Three of the eleven lessons are the same lesson seen from opposite ends
+(#1, #6 and #11: find the house's instrument -- the compose pipeline, the precedent
+for what to fix first, the platform shim -- instead of hand-rolling one), and the
+two that changed the CODE most (#2 canonical inheritance, #3 the empty-set guard)
+were both found by MEASUREMENT rather than by reading the source -- which is the
+point the operator made about "loading the dice first".
+
+The third of those three (#11) was caught by the HOUSE's own ratchet, on CI, on the
+first push of this lane: `pmoves/tests/test_no_bare_bash_argv.py` failed the new
+shell test as the single new failure in the run, because the test resolved bash by
+hand instead of through `pmoves/tools/bash_resolver.py`. A house instrument found a
+defect in a lane whose subject was itself a house instrument. That is the correct
+division of labour, and it is the cheapest possible audit.
 
 ---
 

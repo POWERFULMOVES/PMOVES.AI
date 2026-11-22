@@ -20,57 +20,32 @@ test, not by reading the code.
 The function is EXTRACTED from the house script rather than copied, so this
 test cannot drift from the code it claims to verify.
 
-Hermetic: no network, no docker. Skipped when no bash is available.
+THE BASH IS THE HOUSE'S
+-----------------------
+argv[0] comes from ``pmoves.tools.bash_resolver.find_bash()``, not from
+``shutil.which("bash")`` and not from a hand-rolled helper. On Windows a
+bare "bash" resolves to the WSL launcher before PATH is consulted, so the
+child would silently run in a different OS -- and
+``pmoves/tests/test_no_bare_bash_argv.py`` fails this file for exactly that
+shape. It was caught on CI on the first push of this lane.
+
+Hermetic: no network, no docker. Skipped when no usable bash is available.
 """
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from pmoves.tools.bash_resolver import find_bash
+
 SMOKE = Path(__file__).resolve().parents[2] / "scripts" / "smoke-tests.sh"
 
-
-def _bash() -> str | None:
-    """A bash that can see THIS machine's paths.
-
-    On Windows, ``shutil.which("bash")`` finds the WSL bash (C:\\Windows\\System32\\bash.exe),
-    which cannot open a Windows path -- it reported "No such file or directory"
-    for a file that plainly exists. Git Bash can, so it is preferred here.
-    """
-    if os.name == "nt":
-        for candidate in (
-            r"C:\Program Files\Git\bin\bash.exe",
-            r"C:\Program Files\Git\usr\bin\bash.exe",
-        ):
-            if Path(candidate).is_file():
-                return candidate
-    found = shutil.which("bash")
-    if found:
-        return found
-    return None
-
-
-BASH = _bash()
-pytestmark = pytest.mark.skipif(BASH is None, reason="bash is not available here")
-
-
-def _msys(path: Path) -> str:
-    """A path Git Bash can open.
-
-    Git Bash is an MSYS program: a native Windows path handed to it as an
-    argument is NOT converted, so "C:\\Users\\..." reads as a relative path
-    with a backslash in it. The MSYS form is "/c/Users/...".
-    """
-    if os.name != "nt":
-        return str(path)
-    text = str(path).replace("\\", "/")
-    if len(text) > 1 and text[1] == ":":
-        return "/" + text[0].lower() + text[2:]
-    return text
+#: An ABSOLUTE path to a usable bash, or None. Never the WSL stub.
+BASH = find_bash()
+pytestmark = pytest.mark.skipif(BASH is None, reason="no usable bash on this host")
 
 
 CASES = [
@@ -107,7 +82,7 @@ def _extracted(tmp_path: Path) -> Path:
 def test_http_port_resolves_the_requested_port(tmp_path, url, expected):
     fn = _extracted(tmp_path)
     proc = subprocess.run(
-        [BASH, "-c", f'. "{_msys(fn)}"; _http_port "{url}"'],
+        [BASH, "-c", f'. "{fn}"; _http_port "{url}"'],
         capture_output=True, text=True, timeout=60,
     )
     assert proc.returncode == 0, proc.stderr
@@ -122,7 +97,7 @@ def test_a_substitution_port_follows_the_environment(tmp_path):
     env = dict(os.environ)
     env["PMOVES_TEST_PORT"] = "3999"
     proc = subprocess.run(
-        [BASH, "-c", f'. "{_msys(fn)}"; _http_port "http://localhost:${{PMOVES_TEST_PORT}}/"'],
+        [BASH, "-c", f'. "{fn}"; _http_port "http://localhost:${{PMOVES_TEST_PORT}}/"'],
         capture_output=True, text=True, timeout=60, env=env,
     )
     assert proc.returncode == 0, proc.stderr
@@ -130,14 +105,14 @@ def test_a_substitution_port_follows_the_environment(tmp_path):
 
     env.pop("PMOVES_TEST_PORT", None)
     proc = subprocess.run(
-        [BASH, "-c", f'. "{_msys(fn)}"; _http_port "http://localhost:${{PMOVES_TEST_PORT}}/"'],
+        [BASH, "-c", f'. "{fn}"; _http_port "http://localhost:${{PMOVES_TEST_PORT}}/"'],
         capture_output=True, text=True, timeout=60, env=env,
     )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == ""
 
 
-def test_the_smoke_script_still_parses(tmp_path):
+def test_the_smoke_script_still_parses():
     """The house script must remain valid bash after the edit."""
-    proc = subprocess.run([BASH, "-n", _msys(SMOKE)], capture_output=True, text=True, timeout=60)
+    proc = subprocess.run([BASH, "-n", str(SMOKE)], capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, proc.stderr
