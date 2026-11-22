@@ -226,14 +226,22 @@ function Strip-MavisSdkEnvFor {
         if ($log_parent -and -not (Test-Path $log_parent)) {
             New-Item -ItemType Directory -Force -Path $log_parent | Out-Null
         }
-        $ts = (Get-Date -AsUTC).ToString('yyyy-MM-ddTHH:mm:ssZ')
+        # ToUniversalTime(), not `Get-Date -AsUTC`: -AsUTC is PowerShell 7+
+        # only. Under Windows PowerShell 5.1 (what `powershell` launches on
+        # the nodes) -AsUTC throws, the catch below swallows it, and NO audit
+        # line is ever written -- measured 2026-11-21 on 5090.
+        $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         $host_name = $env:COMPUTERNAME
         if (-not $host_name) { $host_name = 'unknown' }
         $pid_local = $PID
         $names_one_line = ($stripped -join ' ')
         if (-not $names_one_line) { $names_one_line = '<none>' }
         $all_consumed_str = if ($allPass) { 'true' } else { 'false' }
-        $line = ('{"ts":"{0}","host":"{1}","pid":{2},"cli":"{3}","stripped_count":{4},"stripped_names":"{5}","all_consumed":{6}}' -f `
+        # Outer braces are doubled: this is a .NET format string, and a bare
+        # `{"ts"` is a format-item parse error ("Input string was not in a
+        # correct format"), which the catch swallowed -- so no line was ever
+        # written under ANY PowerShell version. Measured 2026-11-21 on 5090.
+        $line = ('{{"ts":"{0}","host":"{1}","pid":{2},"cli":"{3}","stripped_count":{4},"stripped_names":"{5}","all_consumed":{6}}}' -f `
             $ts, $host_name, $pid_local, $CliName, $stripped.Count, $names_one_line, $all_consumed_str)
         Add-Content -Path $log_path -Value $line -Encoding UTF8
     } catch {
