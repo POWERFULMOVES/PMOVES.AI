@@ -109,6 +109,15 @@ jobs:
             "pmoves/supabase/migrations/20260802000000_voice_cloning_provenance.sql"
             "pmoves/supabase/migrations/20260804000000_ingested_videos.sql"
             "pmoves/supabase/migrations/20260805000000_review_comments.sql"
+            # --- added 2026-11-22 (supabase reconcile lane, PR 3516) ---
+            # v5_18_rls_currency_correctives: reviewed before mirroring. Every
+            # USING(true) is FOR ALL TO service_role (trusted-backend idiom this
+            # allowlist already reviews as standard in service-catalog / channel-monitor
+            # / living_pages). The single to-anon hit is a GRANT SELECT on the
+            # simulation_summary VIEW (RLS-gated narrow read), not a policy.
+            # Net content: search_path pin on the SECURITY DEFINER get_simulation_stats
+            # + grant narrowing public->anon+authenticated. Idempotent throughout.
+            "pmoves/supabase/migrations/20261122130000_v5_18_rls_currency_correctives.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev
