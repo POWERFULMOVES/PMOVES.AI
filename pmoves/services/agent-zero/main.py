@@ -38,6 +38,20 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 from services.common.config import env_bool as _env_bool
 from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
 
+try:
+    from jsonschema import ValidationError as _PayloadValidationError
+    from services.common.events import UnknownTopicError, known_topics as _known_topics
+except ImportError:  # pragma: no cover - controller falls back to an unvalidated envelope
+    class UnknownTopicError(KeyError):  # type: ignore[no-redef]
+        topic = ""
+
+    class _PayloadValidationError(Exception):  # type: ignore[no-redef]
+        message = ""
+        absolute_path: list = []
+
+    def _known_topics() -> list[str]:  # type: ignore[no-redef]
+        return []
+
 _sync_openai_compat_env()
 
 from services.agent_zero.controller import AgentZeroController, ControllerSettings
@@ -917,13 +931,37 @@ async def execute_mcp_command(request: MCPExecuteRequest) -> MCPExecuteResponse:
 async def events_publish(body: EventPublishRequest) -> Dict[str, str]:
     if not (_controller_ready.is_set() and event_controller.is_connected):
         raise HTTPException(status_code=503, detail="NATS controller not ready")
-    env = await event_controller.publish(
-        body.topic,
-        body.payload,
-        correlation_id=body.correlation_id,
-        parent_id=body.parent_id,
-        source=body.source or "agent-zero",
-    )
+    try:
+        env = await event_controller.publish(
+            body.topic,
+            body.payload,
+            correlation_id=body.correlation_id,
+            parent_id=body.parent_id,
+            source=body.source or "agent-zero",
+        )
+    except UnknownTopicError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "unknown_topic",
+                "topic": body.topic,
+                "message": (
+                    f"Topic {body.topic!r} is not registered in pmoves/contracts/topics.json; "
+                    "register it with a payload schema before publishing."
+                ),
+                "known_topics": _known_topics(),
+            },
+        ) from exc
+    except _PayloadValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_payload",
+                "topic": body.topic,
+                "message": exc.message,
+                "path": [str(part) for part in exc.absolute_path],
+            },
+        ) from exc
     response: Dict[str, str] = {"published": body.topic}
     envelope_id = env.get("id")
     if envelope_id:

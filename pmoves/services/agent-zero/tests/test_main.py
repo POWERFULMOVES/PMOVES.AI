@@ -343,3 +343,103 @@ def test_healthz_reports_200_when_inner_runtime_is_running(
     body = response.json()
     assert body["status"] == "ok"
     assert body["pid"] == 4242
+
+
+def _prepare_events_publish(module, monkeypatch):
+    """Route /events/publish through the real contract validation.
+
+    The live controller calls ``services.common.events.envelope`` before it
+    touches NATS, so the test does the same and only stubs the socket write.
+    """
+    from services.common.events import envelope
+
+    published: list[dict[str, Any]] = []
+
+    async def fake_publish(topic, payload, *, correlation_id=None, parent_id=None, source="agent-zero"):
+        env = envelope(
+            topic,
+            payload,
+            correlation_id=correlation_id,
+            parent_id=parent_id,
+            source=source,
+        )
+        published.append(env)
+        return env
+
+    monkeypatch.setattr(module.event_controller, "publish", fake_publish)
+    return published
+
+
+def test_events_publish_unknown_topic_is_422_not_500(monkeypatch, load_service_module):
+    """An unregistered topic is a caller error, not a server crash.
+
+    Measured 2026-11-23 on node 5090: claw.task.assign.v1 (then unregistered)
+    produced an unhandled KeyError and HTTP 500.
+    """
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    published = _prepare_events_publish(module, monkeypatch)
+
+    with TestClient(module.app, raise_server_exceptions=False) as client:
+        module._controller_ready.set()
+        module.event_controller._nc = SimpleNamespace(is_connected=True)
+        response = client.post(
+            "/events/publish",
+            json={"topic": "no.such.topic.v1", "payload": {"x": 1}},
+        )
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "unknown_topic"
+    assert detail["topic"] == "no.such.topic.v1"
+    assert "topics.json" in detail["message"]
+    assert "chit.economics.usage.v1" in detail["known_topics"]
+    assert detail["known_topics"] == sorted(detail["known_topics"])
+    assert published == []
+
+
+def test_events_publish_invalid_payload_is_422_not_500(monkeypatch, load_service_module):
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    published = _prepare_events_publish(module, monkeypatch)
+
+    with TestClient(module.app, raise_server_exceptions=False) as client:
+        module._controller_ready.set()
+        module.event_controller._nc = SimpleNamespace(is_connected=True)
+        response = client.post(
+            "/events/publish",
+            json={"topic": "chit.economics.usage.v1", "payload": {"agent_name": "x"}},
+        )
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "invalid_payload"
+    assert detail["topic"] == "chit.economics.usage.v1"
+    assert "required" in detail["message"]
+    assert published == []
+
+
+def test_events_publish_registered_topic_still_publishes(monkeypatch, load_service_module):
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    published = _prepare_events_publish(module, monkeypatch)
+
+    payload = {
+        "agent_name": "agent-zero",
+        "tensorzero_function": "agent_zero",
+        "prompt_tokens": 1,
+        "completion_tokens": 2,
+        "ts": "2026-11-23T06:15:00Z",
+    }
+    with TestClient(module.app, raise_server_exceptions=False) as client:
+        module._controller_ready.set()
+        module.event_controller._nc = SimpleNamespace(is_connected=True)
+        response = client.post(
+            "/events/publish",
+            json={"topic": "chit.economics.usage.v1", "payload": payload},
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["published"] == "chit.economics.usage.v1"
+    assert body["id"] == published[0]["id"]
