@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "CLAW Task Assign",
-  "description": "Cross-node agent-to-agent task delegation (cascades, handoffs, wave assignments). Fire-and-forget core NATS, not JetStream: a target only receives it if it is subscribed at publish time (see make -C pmoves nats-agent-inbox). Payload shape documented in .claude/context/nats-subjects.md 'CLAW Agent Delegation Subjects'.",
+  "description": "Cross-node agent-to-agent task delegation (cascades, handoffs, wave assignments). Fire-and-forget core NATS, not JetStream: a target only receives it if it is subscribed at publish time (see make -C pmoves nats-agent-inbox). Payload shape documented in .claude/context/nats-subjects.md 'CLAW Agent Delegation Subjects'. Command-class: field bounds and repo-relative paths are enforced here because a receiver acts on this payload; `from` is a claim, not an authenticated identity.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,25 +13,31 @@
     "from": {
       "type": "string",
       "minLength": 1,
-      "description": "Delegating agent or node identity (e.g. pmoves-4090, 5090-claude)"
+      "maxLength": 64,
+      "description": "Delegating agent or node identity as claimed by the sender (e.g. pmoves-4090, 5090-claude). Not authenticated; never use it for authorization."
     },
     "to": {
       "type": "string",
       "minLength": 1,
+      "maxLength": 64,
       "description": "Target agent or node identity expected to pick up the task"
     },
     "task": {
       "type": "string",
       "minLength": 1,
-      "description": "Short task or lane identifier (e.g. cascade-wave-B)"
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9._:-]+$",
+      "description": "Short task or lane identifier (e.g. cascade-wave-B); no spaces or path/shell metacharacters"
     },
     "files_released": {
       "type": "array",
       "items": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
       },
-      "description": "Repo-relative paths the sender has released for the target to edit"
+      "description": "Repo-relative paths the sender has released for the target to edit. No leading slash or backslash, no drive letter, no '..' segment."
     },
     "after_pr": {
       "type": "array",
@@ -43,6 +49,7 @@
     },
     "note": {
       "type": "string",
+      "maxLength": 2000,
       "description": "Free-form human-readable context for the target"
     }
   }
