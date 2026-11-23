@@ -87,7 +87,7 @@ NATS is required for service coordination.
 
 | Service | Command | Port | Health Check |
 |---------|---------|------|--------------|
-| NATS | `docker compose up -d nats` | 4222 | `nats server check` or `curl http://localhost:8222/` |
+| NATS | `docker compose up -d nats` | 4222 | `nats server check` or `curl "$(bash .claude/scripts/nats-endpoint.sh)/healthz"` (monitor is container port 8222, host port 9223 by default) |
 
 ```bash
 # Start NATS
@@ -95,8 +95,10 @@ docker compose up -d nats
 
 # Verify
 nats server info
-# or
-curl http://localhost:8222/varz
+# or, via the monitor. 8222 is the container-side port; derive the host URL
+# (9223 on a default node, 8222 on Z890). Run from the repo root.
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)
+curl "$NATS_MONITOR_URL/varz"
 ```
 
 ## Tier 2: Core Services
@@ -278,9 +280,13 @@ echo "Grafana: http://localhost:3002"
 #!/bin/bash
 # health-check.sh
 
+# NATS monitor: 8222 is the container-side port. Derive the host URL
+# (9223 on a default node, 8222 on Z890). Run from the repo root.
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)
+
 services=(
   "Supabase:http://localhost:54321/rest/v1/"
-  "NATS:http://localhost:8222/varz"
+  "NATS:${NATS_MONITOR_URL}/varz"
   "Qdrant:http://localhost:6333/"
   "Meilisearch:http://localhost:7700/health"
   "TensorZero:http://localhost:3030/healthz"
@@ -296,7 +302,7 @@ echo "====================="
 
 for service in "${services[@]}"; do
   name="${service%%:*}"
-  url="${service##*:}"
+  url="${service#*:}"
 
   if curl -s -f "$url" > /dev/null 2>&1; then
     echo "✓ $name"

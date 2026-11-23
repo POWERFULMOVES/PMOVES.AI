@@ -927,7 +927,9 @@ module.exports = {
 // Check health of all PMOVES services
 
 const services = [
-  { name: "NATS", url: "http://localhost:8222/varz", port: 4222 },
+  // NATS monitor: 8222 is the container-side port. The host port is per node
+  // (pmoves/configs/ports.yaml: NATS_MONITORING_PORT, 9223 by default; 8222 on Z890).
+  { name: "NATS", url: `http://localhost:${process.env.NATS_MONITORING_PORT || 9223}/varz`, port: 4222 },
   { name: "Qdrant", url: "http://localhost:6333/healthz", port: 6333 },
   { name: "Neo4j", url: "http://localhost:7474", port: 7474 },
   { name: "Meilisearch", url: "http://localhost:7700/health", port: 7700 },
