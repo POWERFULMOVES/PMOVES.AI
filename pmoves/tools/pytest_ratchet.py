@@ -302,6 +302,12 @@ def fallback_budget_seconds(files, allowances: Optional[Dict[str, int]] = None) 
     )
 
 
+# Returned by run_pytest() for a run it killed on timeout. Not -1: on POSIX a
+# negative returncode is a signal death (-1 is SIGHUP), and Windows returncodes
+# are non-negative, so no real process exit can produce this value.
+TIMEOUT_RC = -(10 ** 6)
+
+
 def run_pytest(files: List[Path], junit: Path,
                 timeout: Optional[int] = None) -> tuple[int, str]:
     """Run pytest over `files`, collecting results into a JUnit XML report.
@@ -351,7 +357,7 @@ def run_pytest(files: List[Path], junit: Path,
         # than concatenated first (that raised "can't concat str to bytes" on
         # Linux CI while being fine locally on Windows).
         partial = _as_text(exc.stdout) + _as_text(exc.stderr)
-        return -1, f"TIMEOUT after {effective_timeout}s{chr(10)}{partial}"
+        return TIMEOUT_RC, f"TIMEOUT after {effective_timeout}s{chr(10)}{partial}"
     # Pytest output is returned, never written to stdout: stdout carries only
     # this tool's report (and --json must stay parseable). Callers surface it
     # on stderr for groups that actually failed to produce a report.
@@ -444,17 +450,79 @@ def write_baseline(findings: List[dict]) -> None:
     BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# A report is trusted ONLY when the session ran to completion. Measured
+# 2026-11-21: pmoves/tools/test_all_tts_engines.py called sys.exit(1) at import,
+# pytest turned that into an INTERNALERROR (exit 3) for the whole session, and
+# the report held one pseudo-testcase, `ERROR|pytest|internal`. That single key
+# was baselined, so the chunk's 19 other files went unmeasured behind it, and 11
+# semantic-cache errors looked "fixed" the moment a new test file elsewhere
+# moved them into that chunk. One generic key covers any number of wiped chunks.
+#
+# So trust is an ALLOWLIST of exit codes, not a denylist of known-bad ones: a
+# test calling `pytest.exit(returncode=0)` exits 0 with a truncated report
+# (tests="0"), and an exit code pytest does not define means nothing at all.
+COMPLETE_EXIT_CODES = {0, 1, 5}        # passed / tests failed / nothing collected
+# ...and even an allowed code is distrusted if pytest printed an abort banner,
+# because pytest.exit() can choose any return code. A module-level pytest.exit()
+# is NOT an abort under --continue-on-collection-errors: it is reported as a
+# collection error of that one module, with the rest of the session intact.
+_ABORT_BANNER = re.compile(
+    r"^(?:!{3,} .*\b(?:_pytest\.outcomes\.Exit|KeyboardInterrupt|Interrupted)\b"
+    r"|INTERNALERROR>)", re.M)
+PYTEST_EXIT_CODES = {2: "interrupted", 3: "internal error", 4: "usage error"}
+# A usage error -- which is also what an unimportable conftest gives -- fails
+# identically for every file, so isolating it per file would learn nothing.
+NOT_ISOLATABLE_EXIT_CODES = {4}
+UNMEASURED = "UNMEASURED"
+
+
+def report_is_complete(junit: Path, rc: int, output: str) -> bool:
+    """True only for a report written by a session that ran to completion."""
+    return (junit.is_file() and rc in COMPLETE_EXIT_CODES
+            and not _ABORT_BANNER.search(output or ""))
+
+
+def _why(rc: int) -> str:
+    if rc == TIMEOUT_RC:
+        return "timeout"
+    if rc in PYTEST_EXIT_CODES:
+        return PYTEST_EXIT_CODES[rc]
+    if rc in COMPLETE_EXIT_CODES:
+        return "report missing, or truncated by a session abort"
+    if rc < 0:
+        return "killed by signal %d" % -rc
+    return "exit code pytest does not define"
+
+
+def _unmeasured(label: str, files: List[Path], rc: int, why: str = "") -> dict:
+    """A unit that produced no usable report. It is never baselinable."""
+    return {
+        "kind": UNMEASURED,
+        "where": label,
+        "name": "<pytest-harness>",
+        "detail": "%s (%s); unmeasured: %s" % (
+            "timeout" if rc == TIMEOUT_RC else "exit %d" % rc, why or _why(rc),
+            ", ".join(str(f).replace(chr(92), "/") for f in files)),
+    }
+
+
 def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
                             index: int) -> tuple[List[dict], List[str]]:
-    """Run a group; if it times out, re-run it one file at a time.
+    """Run a group; if it did not complete, re-run it one file at a time.
 
-    Returns (findings, dead_labels). `dead_labels` names whatever stayed
-    unmeasured -- the whole group if the fallback could not run, or the specific
-    files that hang.
+    Returns (findings, dead_labels). `dead_labels` names ONLY units observed to
+    hang -- a timeout seen when the file ran on its own, or a single-file group
+    that timed out. Those stay baselinable `<pytest-harness>` entries because
+    the label names the exact file that hangs. Every other unit without a
+    usable report comes back as an UNMEASURED finding, which fails the gate
+    whatever the baseline says.
 
-    A timed-out chunk is killed before pytest writes its JUnit report, so
-    treating the timeout as one opaque "no report" discards every result in the
-    chunk. Isolating per file narrows the loss to the file that actually hangs.
+    A timed-out chunk is killed before pytest writes its JUnit report, and an
+    aborted one (see COMPLETE_EXIT_CODES) writes a report covering only what
+    ran before the abort. Either way, treating the chunk as one opaque unit
+    discards every result in it, so it is re-run per file to narrow the loss to
+    the file at fault. Not isolated: a usage error (an unimportable conftest
+    fails the same way for every file) and a group of one.
 
     The per-file budget is FALLBACK_FILE_TIMEOUT plus the file's own declared
     allowance, so a file that is merely SLOW is measured in the isolation pass
@@ -462,48 +530,56 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
     """
     junit = tmp / f"report-{index}.xml"
     rc, output = run_pytest(gfiles, junit)
-    if junit.is_file():
+    if report_is_complete(junit, rc, output):
         return parse_junit(junit), []
 
-    if rc != -1 or len(gfiles) <= 1:
-        # Not a timeout (unimportable conftest, usage error, crash), or nothing
-        # left to split. Per-file isolation cannot help either case.
-        sys.stderr.write("--- no report for %s (exit %d) ---%s%s%s" % (
-            group, rc, chr(10), output[-1500:], chr(10)))
-        return [], [group]
+    if rc in NOT_ISOLATABLE_EXIT_CODES or len(gfiles) <= 1:
+        sys.stderr.write("--- no usable report for %s (%s) ---%s%s%s" % (
+            group, _why(rc), chr(10), output[-1500:], chr(10)))
+        if rc == TIMEOUT_RC:              # a single file, observed to hang
+            return [], [group]
+        return [_unmeasured(group, gfiles, rc)], []
 
     # The pass budget is allowance-aware: see fallback_budget_seconds(). A
     # declared-slow file can consume more than the flat default on its own,
     # so the pass must be able to afford it.
     pass_budget = fallback_budget_seconds(gfiles)
     sys.stderr.write(
-        "--- %s timed out; isolating %d files (budget %ds) ---%s" % (
-            group, len(gfiles), pass_budget, chr(10)))
+        "--- %s: %s; isolating %d files (budget %ds) ---%s" % (
+            group, _why(rc), len(gfiles), pass_budget, chr(10)))
 
     findings: List[dict] = []
     dead: List[str] = []
     spent = 0.0
     for j, f in enumerate(gfiles):
         if spent >= pass_budget:
-            # Honest about what was NOT measured. Silently stopping here would
-            # reintroduce the defect this function exists to fix.
-            remaining = [str(x).replace(chr(92), "/") for x in gfiles[j:]]
+            # Honest about what was NOT measured. These files never ran on their
+            # own, so nothing shows that they hang: they are UNMEASURED, not
+            # baselinable dead labels. Recording them as "hangs" would let
+            # --write-baseline accept silence as a finding.
+            remaining = gfiles[j:]
             sys.stderr.write(
                 "--- fallback budget exhausted; %d files unmeasured ---%s" % (
                     len(remaining), chr(10)))
-            dead.extend(remaining)
+            findings.extend(
+                _unmeasured(str(x).replace(chr(92), "/"), [x], rc,
+                            "fallback budget exhausted before it ran")
+                for x in remaining)
             break
         sub = tmp / f"report-{index}-{j}.xml"
         start = time.monotonic()
         frc, foutput = run_pytest([f], sub, timeout=file_timeout_seconds(f))
         spent += time.monotonic() - start
-        if sub.is_file():
+        if report_is_complete(sub, frc, foutput):
             findings.extend(parse_junit(sub))
             continue
         label = str(f).replace(chr(92), "/")
-        sys.stderr.write("---   no report for %s (exit %d) ---%s%s%s" % (
-            label, frc, chr(10), foutput[-600:], chr(10)))
-        dead.append(label)
+        sys.stderr.write("---   no usable report for %s (%s) ---%s%s%s" % (
+            label, _why(frc), chr(10), foutput[-600:], chr(10)))
+        if frc == TIMEOUT_RC:
+            dead.append(label)        # a hang observed in isolation
+        else:
+            findings.append(_unmeasured(label, [f], frc))
     return findings, dead
 
 
@@ -532,11 +608,11 @@ def main() -> int:
             gfindings, dead = run_chunk_with_fallback(group, gfiles, Path(tmp), i)
             findings.extend(gfindings)
             for label in dead:
-                # pytest never wrote a report for this unit: a conftest that
-                # cannot be imported, a usage error, a crash, or a hang that
-                # survived per-file isolation. Recorded as a finding so it is
-                # visible and ratchetable, rather than being mistaken for
-                # "no failures here".
+                # A hang observed in isolation (see run_chunk_with_fallback):
+                # the label names the one file that hangs. Recorded as a
+                # finding so it is visible and ratchetable, rather than being
+                # mistaken for "no failures here". Everything else that
+                # produced no usable report is UNMEASURED, handled below.
                 dead_groups += 1
                 findings.append({
                     "kind": "ERROR",
@@ -555,7 +631,30 @@ def main() -> int:
         (" (%d produced no report)" % dead_groups) if dead_groups else "",
         chr(10)))
 
+    # Pulled out BEFORE the baseline comparison: an unmeasured unit is not a
+    # finding that can be accepted, it is the absence of a measurement.
+    unmeasured = [f for f in findings if f["kind"] == UNMEASURED]
+    findings = [f for f in findings if f["kind"] != UNMEASURED]
+
+    if unmeasured:
+        # stdout must stay pure under --json; the document carries "unmeasured".
+        out = sys.stderr if args.json else sys.stdout
+        print(f"UNMEASURED — {len(unmeasured)} unit(s) produced no usable report."
+              " This fails the gate whatever the baseline says:", file=out)
+        for f in unmeasured:
+            print(f"  {f['where']}", file=out)
+            print(f"        {f['detail']}", file=out)
+        print("\nA session abort (INTERNALERROR, interrupt, usage error) or a"
+              " missing report hides every result in the unit. Fix the file at"
+              " fault -- e.g. an import-time sys.exit() -- rather than baselining.",
+              file=out)
+
     if args.write_baseline:
+        if unmeasured:
+            # Recording now would bake the silence into the baseline, which is
+            # the exact failure UNMEASURED exists to stop.
+            print("Baseline NOT written: units above are unmeasured.")
+            return 1
         write_baseline(findings)
         n = len({_key(f) for f in findings})
         print(f"Baseline written: {n} entries -> {BASELINE.relative_to(REPO_ROOT)}")
@@ -567,7 +666,12 @@ def main() -> int:
     # A baselined entry that no longer occurs was FIXED. Leaving it would let
     # the same breakage return silently, which contradicts the count-only-down
     # claim this ratchet makes.
-    stale = sorted(baseline - live)
+    #
+    # Not computed while any unit is unmeasured: a baselined failure inside that
+    # unit is absent from `live` because nothing measured it, not because it was
+    # fixed, and telling the operator to delete it would re-blind the gate the
+    # moment the unit reports again. The gate still fails on `unmeasured`.
+    stale = None if unmeasured else sorted(baseline - live)
 
     if args.json:
         print(json.dumps({
@@ -576,8 +680,10 @@ def main() -> int:
             "baselined": len(findings) - len(new),
             "new": new,
             "stale_baseline": stale,
+            "stale_check_skipped": stale is None,
+            "unmeasured": unmeasured,
         }, indent=2))
-        return 1 if (new or stale) else 0
+        return 1 if (new or stale or unmeasured) else 0
 
     by_kind: Dict[str, int] = {}
     for f in findings:
@@ -600,7 +706,10 @@ def main() -> int:
         print("record them deliberately:")
         print("  make -C pmoves python-tests-baseline")
 
-    if stale:
+    if stale is None:
+        print(f"\nstale-baseline check skipped: {len(unmeasured)} unit(s) unmeasured"
+              " -- a baselined failure inside one cannot be told apart from a fix.")
+    elif stale:
         print(f"\nSTALE BASELINE — {len(stale)} entr{'y' if len(stale) == 1 else 'ies'} no longer fail:")
         # Printed in FULL, deliberately unlike `new` above. The stale list is the
         # only actionable output this branch produces: `--write-baseline` cannot be
@@ -615,7 +724,7 @@ def main() -> int:
         print("\nThese were fixed. Drop them so the same breakage cannot return silently:")
         print("  make -C pmoves python-tests-baseline   (CI only — see note above)")
 
-    if not new and not stale:
+    if not new and not stale and not unmeasured:
         print("PASS — no failures outside the baseline, no stale entries.")
         return 0
     return 1
