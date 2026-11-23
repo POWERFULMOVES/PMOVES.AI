@@ -73,6 +73,16 @@ not allowed to become a gate that cannot fail.
   M12  the bind shape stops separating ENTRIES from SERVICES (a claim that
        mixes the units is how "37 services bound to 0.0.0.0" gets written
        when the truth is 37 entries across 20 services)
+  M13  a LITERAL host address is not classified (Compose short syntax accepts
+       "127.0.0.1:8080:80" with no environment indirection at all, and a
+       mapping that names its address outright is exactly as knowable from
+       source as one whose "${VAR:-default}" can be read -- sweeping it into
+       OTHER under-counts the wide group for any population that uses the
+       literal form)
+  M14  a BRACKETED IPv6 host is not peeled before the colon split (an IPv6
+       literal contains colons, which is why Compose requires the brackets;
+       splitting on every colon shreds "[::1]:6001:6001" into "[", "", "1]"
+       and the mapping is filed as unreadable)
 
 Run it directly to see the mutation kills in action:
 
@@ -328,6 +338,44 @@ MUTATIONS: list[Mutation] = [
             "tally on the pair collapses the two, and a claim that mixes the "
             "units is how '37 services bound to 0.0.0.0' gets written when "
             "the truth is 37 ENTRIES across 20 SERVICES."
+        ),
+    ),
+    Mutation(
+        name="M13_literal_host_address_is_not_classified",
+        target=RATCHET,
+        old="""        default = literal_address(host_expr)
+        if default is None:
+            return BIND_OTHER""",
+        new="""        default = None
+        if default is None:
+            return BIND_OTHER""",
+        target_test="test_a_literal_host_address_is_classified_and_not_swept_into_other",
+        rationale=(
+            "Compose short syntax accepts a literal address with no "
+            "environment indirection -- '127.0.0.1:8080:80' -- and a "
+            "mapping that names its address outright is exactly as knowable "
+            "from source as one whose '${VAR:-default}' can be read. "
+            "Classifying only the indirection form sweeps every literal into "
+            "OTHER, so the --bind-shape counts are wrong for any population "
+            "that uses the literal form. This repo uses the indirection "
+            "form everywhere, which is exactly why the defect survived "
+            "measurement and was found by REVIEW."
+        ),
+    ),
+    Mutation(
+        name="M14_bracketed_ipv6_host_is_not_peeled_before_the_split",
+        target=RATCHET,
+        old="""            bracketed_host = s[: end + 1]
+            s = s[end + 1 :]""",
+        new="""            bracketed_host = None
+            s = s""",
+        target_test="test_a_bracketed_ipv6_literal_survives_the_split",
+        rationale=(
+            "An IPv6 literal contains colons, which is WHY Compose requires "
+            "the brackets in the short syntax ('[::1]:6001:6001'). Splitting "
+            "on every colon shreds the address into '[', '', '1]' and the "
+            "mapping is filed as unreadable -- so the host is peeled off "
+            "FIRST and only the remainder is split."
         ),
     ),
 ]

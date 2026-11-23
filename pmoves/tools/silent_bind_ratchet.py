@@ -380,6 +380,19 @@ def split_port_spec(spec: str) -> Tuple[Optional[str], Optional[str], Optional[s
     put a wide port into the "other" bucket.
     """
     s = str(spec).strip()
+    bracketed_host: Optional[str] = None
+    if s.startswith("["):
+        # An IPv6 literal contains colons, which is WHY Compose requires the
+        # brackets in the short syntax ("[::1]:6001:6001"). Splitting on
+        # every colon would shred the address into "[", "", "1]" -- so the
+        # bracketed host is peeled off FIRST, and only the remainder is split.
+        end = s.find("]")
+        if end != -1:
+            bracketed_host = s[: end + 1]
+            s = s[end + 1 :]
+            if s.startswith(":"):
+                s = s[1:]
+
     parts: List[str] = []
     cur: List[str] = []
     depth = 0
@@ -397,6 +410,13 @@ def split_port_spec(spec: str) -> Tuple[Optional[str], Optional[str], Optional[s
             cur.append(ch)
     parts.append("".join(cur))
 
+    if bracketed_host is not None:
+        # The host was peeled off, so what is left is host_port[:container_port].
+        if len(parts) >= 2:
+            return bracketed_host, parts[0], parts[1]
+        if len(parts) == 1:
+            return bracketed_host, parts[0], None
+        return bracketed_host, None, None
     if len(parts) >= 3:
         return parts[0], parts[1], parts[2]
     if len(parts) == 2:
@@ -419,6 +439,38 @@ def bind_default(host_expr: Optional[str]) -> Optional[str]:
     return None
 
 
+#: A literal IPv4 address written directly into a port mapping.
+_LITERAL_IPV4 = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+#: A literal IPv6 address, bracketed or bare. The brackets are what Compose
+#: requires in the short syntax; the bare form is accepted here so a mapping
+#: written without them is still recognised rather than mis-filed.
+_LITERAL_IPV6 = re.compile(r"^\[?[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*\]?$")
+
+#: Host addresses that publish on EVERY interface.
+_WIDE_ADDRESSES = ("0.0.0.0", "::", "[::]")
+#: Host addresses that publish on the loopback interface ONLY.
+_LOOPBACK_ADDRESSES = ("127.0.0.1", "::1", "[::1]")
+
+
+def literal_address(host_expr: str) -> Optional[str]:
+    """The LITERAL host address, when the mapping names one outright.
+
+    Compose short syntax accepts an address with no environment indirection
+    at all -- ``127.0.0.1:8080:80``. Such a mapping is exactly as knowable
+    from source as a ``${VAR:-127.0.0.1}`` whose default is readable, so it
+    must be classified rather than swept into OTHER.
+
+    Only an IP address counts. A hostname may resolve to anything, so
+    claiming a bind class for it would be a guess.
+    """
+    if "$" in host_expr:
+        # An expression, not a literal -- its VALUE is not knowable from here.
+        return None
+    if _LITERAL_IPV4.match(host_expr) or _LITERAL_IPV6.match(host_expr):
+        return host_expr
+    return None
+
+
 def classify_port(spec: str) -> str:
     """Bind class of ONE published port mapping."""
     host_expr, _host_port, _container_port = split_port_spec(spec)
@@ -427,10 +479,14 @@ def classify_port(spec: str) -> str:
         return BIND_IMPLICIT
     default = bind_default(host_expr)
     if default is None:
-        return BIND_OTHER
-    if default in ("0.0.0.0", "::", "[::]"):
+        # No "${VAR:-default}" to read. The mapping may still name a LITERAL
+        # address outright, which is as readable as a default would have been.
+        default = literal_address(host_expr)
+        if default is None:
+            return BIND_OTHER
+    if default in _WIDE_ADDRESSES:
         return BIND_WIDE
-    if default in ("127.0.0.1", "::1", "[::1]"):
+    if default in _LOOPBACK_ADDRESSES:
         return BIND_LOOPBACK
     return BIND_OTHER
 

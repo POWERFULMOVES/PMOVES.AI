@@ -736,6 +736,67 @@ def test_a_port_with_an_explicit_host_address_is_classified_by_that_address():
         "${ALERTMANAGER_BIND:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093") == sbr.BIND_LOOPBACK
 
 
+def test_a_literal_host_address_is_classified_and_not_swept_into_other():
+    """Compose short syntax accepts an address with no environment
+    indirection at all -- "127.0.0.1:8080:80". Such a mapping is exactly as
+    knowable from source as a "${VAR:-127.0.0.1}" whose default is readable,
+    so it must be classified rather than swept into OTHER.
+
+    Codex P2 on PR #3522: bind_default() returned a value only for a
+    "${VAR:-default}" expression, so every LITERAL address fell into OTHER
+    and the --bind-shape counts would be wrong for any population that used
+    one. This repo happens to use the indirection form everywhere, so the
+    defect was invisible to the population it measures -- it was a REVIEW
+    that found it, not a red test.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("0.0.0.0:8080:80") == sbr.BIND_WIDE
+    assert sbr.classify_port("127.0.0.1:8080:80") == sbr.BIND_LOOPBACK
+
+
+def test_the_component_count_beats_a_first_part_that_looks_like_an_address():
+    """Compose decides by COUNT, not by what the text looks like: a
+    two-component mapping is host_port:container_port, so "0.0.0.0:80" names
+    a PORT named "0.0.0.0" (which Docker would reject) and carries NO host
+    address at all. Reading it as "host 0.0.0.0" would put a port into the
+    host-address slot -- the same category error the substitution case
+    guards against.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("0.0.0.0:80") == sbr.BIND_IMPLICIT
+    assert sbr.classify_port("127.0.0.1:80") == sbr.BIND_IMPLICIT
+    host, host_port, container_port = sbr.split_port_spec("0.0.0.0:80")
+    assert host is None
+    assert host_port == "0.0.0.0"
+    assert container_port == "80"
+
+
+def test_a_bracketed_ipv6_literal_survives_the_split():
+    """An IPv6 literal contains colons, which is WHY Compose requires the
+    brackets in the short syntax ("[::1]:6001:6001"). Splitting on every
+    colon shreds the address into "[", "", "1]", and the mapping would be
+    filed as unreadable.
+    """
+    sbr = _load_ratchet()
+    host, host_port, container_port = sbr.split_port_spec("[::1]:6001:6001")
+    assert host == "[::1]"
+    assert host_port == "6001"
+    assert container_port == "6001"
+    assert sbr.classify_port("[::1]:6001:6001") == sbr.BIND_LOOPBACK
+    assert sbr.classify_port("[::]:6001:6001") == sbr.BIND_WIDE
+
+
+def test_a_hostname_is_still_not_a_readable_address():
+    """A literal that is not an IP address -- a hostname -- stays OTHER: it
+    may resolve to anything, so claiming a bind class for it would be a
+    guess, and a guess that manufactures a class is worse than an admission
+    of ignorance.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("db.internal:8080:80") == sbr.BIND_OTHER
+    assert sbr.classify_port("${BIND_VAR}:8080:80") == sbr.BIND_OTHER
+
+
 def test_the_colon_inside_a_substitution_does_not_confuse_the_split():
     """The same trap the house smoke suite hit with _http_port: the colon
     inside "${BIND:-0.0.0.0}" is not a separator."""
