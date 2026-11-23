@@ -208,21 +208,30 @@ slow_files:
     #
     # The mutation count in this block is GATED: the pytest-ratchet's suite
     # recomputes it by AST from the harness and fails if it drifts.
-  pmoves/tools/tests/test_silent_bind_ratchet_mutation_kill.py: 60
+  pmoves/tools/tests/test_silent_bind_ratchet_mutation_kill.py: 90
     # WHY: three phases per mutation, each a full `python -m pytest` child.
     #
     # MEASURED on this host (Windows, Python 3.12.10) with the harness's own
-    # invocation: the file alone 55.46s and 62.44s on two consecutive runs of
-    # the 9-mutation harness (each mutation runs its named test three times --
-    # GREEN before, RED after, GREEN after the restore). The earlier figure,
-    # 38.45s, was the 7-mutation harness before M8 and M9 were added; it is
-    # not a number this block may keep quoting, so both current runs are
-    # recorded and the WORST of them is the one the budget is argued from.
+    # invocation. The file alone, on two consecutive runs of the CURRENT
+    # 12-mutation harness: 71.32s and 68.87s as pytest reports them, 72.5s
+    # and 70.22s wall clock around the call (each mutation runs its named test
+    # three times -- GREEN before, RED after, GREEN after the restore -- so
+    # the file costs 12 x 3 = 36 pytest startups). The earlier figures belong
+    # to smaller harnesses and are NOT numbers this block may keep quoting:
+    # 58.14s was the 10-mutation harness, 55.46s and 62.44s the 9-mutation
+    # one, and 38.45s the 7-mutation one before M8 and M9 were added. The
+    # WORST current run is the one the budget is argued from.
     #
-    # The 60s allowance buys a per-file budget of 60 + 60 = 120s, which is
-    # 1.9x the worst measured file (62.44s) and 2.2x the faster one. It lives
-    # in the `pmoves` group, whose chunk budget is therefore raised from 120s
-    # to 180s.
+    # The 90s allowance buys a per-file budget of 60 + 90 = 150s, which is
+    # 2.1x the worst measured file (72.5s) and 2.2x the faster one (68.87s).
+    # It lives in the `pmoves` group, whose chunk budget is therefore raised
+    # from 120s to 210s.
+    #
+    # The allowance was 60s when the harness carried 9 mutations, which gave
+    # 120s -- 1.9x the then-worst 62.44s. Adding M10, M11 and M12 moved the
+    # measurement past it, and a budget that no longer covers the file would
+    # report a healthy-but-slow file as BROKEN, which is the inversion this
+    # whole mechanism exists to prevent.
     #
     # THE MEASUREMENT IS NOT IN THE REPOSITORY
     # ----------------------------------------

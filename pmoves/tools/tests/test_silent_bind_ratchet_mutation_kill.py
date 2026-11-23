@@ -61,6 +61,18 @@ not allowed to become a gate that cannot fail.
        site (command substitution runs in a subshell, so the cache would be
        rebuilt for every refused probe -- the timeout it was written to
        prevent)
+  M10  a base file that cannot be READ becomes a hard failure (the tree being
+       measured must be fully readable, but a base file that will not parse
+       cannot have carried a measurable gap, so its gaps are zero -- failing
+       the run on it would make the gate unpassable for the very change that
+       REPAIRS the base)
+  M11  a port mapping with NO host address is treated as loopback (Docker's
+       default host address is 0.0.0.0, so the implicit mapping is WIDE at
+       runtime -- counting only the mappings whose text says "0.0.0.0"
+       under-counts the wide group)
+  M12  the bind shape stops separating ENTRIES from SERVICES (a claim that
+       mixes the units is how "37 services bound to 0.0.0.0" gets written
+       when the truth is 37 entries across 20 services)
 
 Run it directly to see the mutation kills in action:
 
@@ -262,6 +274,60 @@ MUTATIONS: list[Mutation] = [
             "from scratch -- `docker ps` plus a batched `docker inspect` per "
             "probe, which is the timeout the cache was written to prevent. "
             "The build has to happen in the PARENT shell."
+        ),
+    ),
+    Mutation(
+        name="M10_base_instrument_error_becomes_a_hard_failure",
+        target=RATCHET,
+        old="""                for e in b_errors:
+                    base_errors.append({""",
+        new="""                for e in b_errors:
+                    errors.append({""",
+        target_test="test_a_base_file_that_cannot_be_read_does_not_fail_the_run",
+        rationale=(
+            "A base file that cannot be READ is not the tree being "
+            "MEASURED. The measured tree must be fully readable -- that is "
+            "exit 3 and it is not negotiable -- but a base file that will "
+            "not parse cannot have carried a measurable gap, so its gaps "
+            "are zero and a baseline entry naming it is reported as an "
+            "ADDITION. Failing the whole run on the base instead makes the "
+            "gate unpassable for the very change that REPAIRS the base: the "
+            "repair is compared against the breakage it fixed."
+        ),
+    ),
+    Mutation(
+        name="M11_implicit_bind_treated_as_loopback",
+        target=RATCHET,
+        old="""    if host_expr is None:
+        # No host address in the mapping: Docker publishes on 0.0.0.0.
+        return BIND_IMPLICIT""",
+        new="""    if host_expr is None:
+        # No host address in the mapping: Docker publishes on 0.0.0.0.
+        return BIND_LOOPBACK""",
+        target_test="test_a_port_with_no_host_address_is_implicit",
+        rationale=(
+            "A mapping that carries NO host address publishes on 0.0.0.0 -- "
+            "Docker's default host address -- so it is WIDE at runtime even "
+            "though its text contains no '0.0.0.0'. Treating it as loopback "
+            "puts seven live ports (jaeger's three collector ports, the "
+            "collector's three, and semantic-cache's) into the safe bucket "
+            "and under-counts the group that must be rebound."
+        ),
+    ),
+    Mutation(
+        name="M12_bind_shape_stops_separating_entries_from_services",
+        target=RATCHET,
+        old="""        name = g["service"]
+        prior = service_class.get(name)""",
+        new="""        name = (g["file"], g["service"])
+        prior = service_class.get(name)""",
+        target_test="test_the_bind_shape_counts_entries_and_services_separately",
+        rationale=(
+            "The service count is the number of distinct SERVICES; the entry "
+            "count is the number of (file, service) pairs. Keying the service "
+            "tally on the pair collapses the two, and a claim that mixes the "
+            "units is how '37 services bound to 0.0.0.0' gets written when "
+            "the truth is 37 ENTRIES across 20 SERVICES."
         ),
     ),
 ]
