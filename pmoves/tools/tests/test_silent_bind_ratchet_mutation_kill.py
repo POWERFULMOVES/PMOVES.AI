@@ -61,6 +61,28 @@ not allowed to become a gate that cannot fail.
        site (command substitution runs in a subshell, so the cache would be
        rebuilt for every refused probe -- the timeout it was written to
        prevent)
+  M10  a base file that cannot be READ becomes a hard failure (the tree being
+       measured must be fully readable, but a base file that will not parse
+       cannot have carried a measurable gap, so its gaps are zero -- failing
+       the run on it would make the gate unpassable for the very change that
+       REPAIRS the base)
+  M11  a port mapping with NO host address is treated as loopback (Docker's
+       default host address is 0.0.0.0, so the implicit mapping is WIDE at
+       runtime -- counting only the mappings whose text says "0.0.0.0"
+       under-counts the wide group)
+  M12  the bind shape stops separating ENTRIES from SERVICES (a claim that
+       mixes the units is how "37 services bound to 0.0.0.0" gets written
+       when the truth is 37 entries across 20 services)
+  M13  a LITERAL host address is not classified (Compose short syntax accepts
+       "127.0.0.1:8080:80" with no environment indirection at all, and a
+       mapping that names its address outright is exactly as knowable from
+       source as one whose "${VAR:-default}" can be read -- sweeping it into
+       OTHER under-counts the wide group for any population that uses the
+       literal form)
+  M14  a BRACKETED IPv6 host is not peeled before the colon split (an IPv6
+       literal contains colons, which is why Compose requires the brackets;
+       splitting on every colon shreds "[::1]:6001:6001" into "[", "", "1]"
+       and the mapping is filed as unreadable)
 
 Run it directly to see the mutation kills in action:
 
@@ -262,6 +284,98 @@ MUTATIONS: list[Mutation] = [
             "from scratch -- `docker ps` plus a batched `docker inspect` per "
             "probe, which is the timeout the cache was written to prevent. "
             "The build has to happen in the PARENT shell."
+        ),
+    ),
+    Mutation(
+        name="M10_base_instrument_error_becomes_a_hard_failure",
+        target=RATCHET,
+        old="""                for e in b_errors:
+                    base_errors.append({""",
+        new="""                for e in b_errors:
+                    errors.append({""",
+        target_test="test_a_base_file_that_cannot_be_read_does_not_fail_the_run",
+        rationale=(
+            "A base file that cannot be READ is not the tree being "
+            "MEASURED. The measured tree must be fully readable -- that is "
+            "exit 3 and it is not negotiable -- but a base file that will "
+            "not parse cannot have carried a measurable gap, so its gaps "
+            "are zero and a baseline entry naming it is reported as an "
+            "ADDITION. Failing the whole run on the base instead makes the "
+            "gate unpassable for the very change that REPAIRS the base: the "
+            "repair is compared against the breakage it fixed."
+        ),
+    ),
+    Mutation(
+        name="M11_implicit_bind_treated_as_loopback",
+        target=RATCHET,
+        old="""    if host_expr is None:
+        # No host address in the mapping: Docker publishes on 0.0.0.0.
+        return BIND_IMPLICIT""",
+        new="""    if host_expr is None:
+        # No host address in the mapping: Docker publishes on 0.0.0.0.
+        return BIND_LOOPBACK""",
+        target_test="test_a_port_with_no_host_address_is_implicit",
+        rationale=(
+            "A mapping that carries NO host address publishes on 0.0.0.0 -- "
+            "Docker's default host address -- so it is WIDE at runtime even "
+            "though its text contains no '0.0.0.0'. Treating it as loopback "
+            "puts seven live ports (jaeger's three collector ports, the "
+            "collector's three, and semantic-cache's) into the safe bucket "
+            "and under-counts the group that must be rebound."
+        ),
+    ),
+    Mutation(
+        name="M12_bind_shape_stops_separating_entries_from_services",
+        target=RATCHET,
+        old="""        name = g["service"]
+        prior = service_class.get(name)""",
+        new="""        name = (g["file"], g["service"])
+        prior = service_class.get(name)""",
+        target_test="test_the_bind_shape_counts_entries_and_services_separately",
+        rationale=(
+            "The service count is the number of distinct SERVICES; the entry "
+            "count is the number of (file, service) pairs. Keying the service "
+            "tally on the pair collapses the two, and a claim that mixes the "
+            "units is how '37 services bound to 0.0.0.0' gets written when "
+            "the truth is 37 ENTRIES across 20 SERVICES."
+        ),
+    ),
+    Mutation(
+        name="M13_literal_host_address_is_not_classified",
+        target=RATCHET,
+        old="""        default = literal_address(host_expr)
+        if default is None:
+            return BIND_OTHER""",
+        new="""        default = None
+        if default is None:
+            return BIND_OTHER""",
+        target_test="test_a_literal_host_address_is_classified_and_not_swept_into_other",
+        rationale=(
+            "Compose short syntax accepts a literal address with no "
+            "environment indirection -- '127.0.0.1:8080:80' -- and a "
+            "mapping that names its address outright is exactly as knowable "
+            "from source as one whose '${VAR:-default}' can be read. "
+            "Classifying only the indirection form sweeps every literal into "
+            "OTHER, so the --bind-shape counts are wrong for any population "
+            "that uses the literal form. This repo uses the indirection "
+            "form everywhere, which is exactly why the defect survived "
+            "measurement and was found by REVIEW."
+        ),
+    ),
+    Mutation(
+        name="M14_bracketed_ipv6_host_is_not_peeled_before_the_split",
+        target=RATCHET,
+        old="""            bracketed_host = s[: end + 1]
+            s = s[end + 1 :]""",
+        new="""            bracketed_host = None
+            s = s""",
+        target_test="test_a_bracketed_ipv6_literal_survives_the_split",
+        rationale=(
+            "An IPv6 literal contains colons, which is WHY Compose requires "
+            "the brackets in the short syntax ('[::1]:6001:6001'). Splitting "
+            "on every colon shreds the address into '[', '', '1]' and the "
+            "mapping is filed as unreadable -- so the host is peeled off "
+            "FIRST and only the remainder is split."
         ),
     ),
 ]

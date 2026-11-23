@@ -523,10 +523,10 @@ services:
     - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
-    - PMOVES_NETWORKS=pmoves_bus
-    ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_public
+    ports: ["${VOICE_RELAY_BIND:-127.0.0.1}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
-    networks: [pmoves_bus]
+    networks: [pmoves_bus, pmoves_public]
     read_only: true
     tmpfs:
     - /tmp:noexec,nosuid,size=64m
@@ -569,7 +569,7 @@ services:
     - VOICE_SAMPLER_OWNER_ID=${VOICE_SAMPLER_OWNER_ID:-}
     - OMNIVOICE_CATALOG_DIR=/omnivoice-voices
     - VOICE_CLONE_REGISTER_ENABLED=${VOICE_CLONE_REGISTER_ENABLED:-0}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_public
     volumes:
     # Same host dir omnivoice-server mounts :ro as its ref-voice catalog —
     # the sampler is the only writer (owner-approved references only).
@@ -583,6 +583,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data  # juicefs-gateway (candidate + reference storage) lives here
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8124/healthz"]
       interval: 30s
@@ -703,7 +704,7 @@ services:
       # Operators launching NIM should still set NGC_API_KEY explicitly.
     - NGC_API_KEY=${NGC_API_KEY:-}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
     ports:
     - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000"
     profiles: ["gpu", "nim"]
@@ -712,6 +713,7 @@ services:
       # pmoves_bus: publish mesh.gpu.model.loaded.v1 / .unloaded.v1 for model-registry sync
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     deploy:
       resources:
         reservations:
@@ -746,7 +748,7 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -771,6 +773,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     ports:
     - ${GPU_ORCHESTRATOR_BIND:-127.0.0.1}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
     healthcheck:
@@ -802,7 +805,7 @@ services:
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
     volumes:
     - ${LLAMA_MODELS_PATH:-./models}:/models:ro
     - llama-results:/results
@@ -827,8 +830,9 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     ports:
-    - ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
+    - ${LLAMA_LAB_BIND:-127.0.0.1}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
 
   # =============================================================================
   # GitHub Automation Services (Phase 3)
