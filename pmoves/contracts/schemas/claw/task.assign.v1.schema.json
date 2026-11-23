@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CLAW Task Assign",
+  "description": "Cross-node agent-to-agent task delegation (cascades, handoffs, wave assignments). Fire-and-forget core NATS, not JetStream: a target only receives it if it is subscribed at publish time (see make -C pmoves nats-agent-inbox). Payload shape documented in .claude/context/nats-subjects.md 'CLAW Agent Delegation Subjects'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "from",
+    "to",
+    "task"
+  ],
+  "properties": {
+    "from": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Delegating agent or node identity (e.g. pmoves-4090, 5090-claude)"
+    },
+    "to": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target agent or node identity expected to pick up the task"
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short task or lane identifier (e.g. cascade-wave-B)"
+    },
+    "files_released": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Repo-relative paths the sender has released for the target to edit"
+    },
+    "after_pr": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "PR numbers that must land before the target starts"
+    },
+    "note": {
+      "type": "string",
+      "description": "Free-form human-readable context for the target"
+    }
+  }
+}

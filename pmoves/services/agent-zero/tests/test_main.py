@@ -443,3 +443,27 @@ def test_events_publish_registered_topic_still_publishes(monkeypatch, load_servi
     body = response.json()
     assert body["published"] == "chit.economics.usage.v1"
     assert body["id"] == published[0]["id"]
+
+
+def test_events_publish_claw_task_assign_is_registered(monkeypatch, load_service_module):
+    """The exact request that returned 500 on node 5090 (2026-11-23) now publishes."""
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    published = _prepare_events_publish(module, monkeypatch)
+
+    payload = {"from": "5090-claude", "to": "4090-claude", "task": "TEST-claw-registration"}
+    with TestClient(module.app, raise_server_exceptions=False) as client:
+        module._controller_ready.set()
+        module.event_controller._nc = SimpleNamespace(is_connected=True)
+        ok = client.post("/events/publish", json={"topic": "claw.task.assign.v1", "payload": payload})
+        bad = client.post(
+            "/events/publish",
+            json={"topic": "claw.task.assign.v1", "payload": {"from": "a", "to": "b"}},
+        )
+
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["published"] == "claw.task.assign.v1"
+    assert published[0]["payload"] == payload
+    assert bad.status_code == 422, bad.text
+    assert bad.json()["detail"]["error"] == "invalid_payload"
+    assert len(published) == 1
