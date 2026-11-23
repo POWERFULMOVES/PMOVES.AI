@@ -1,5 +1,7 @@
 # Secrets Vault Integration Runbook
 
+> **Out of scope here:** GitHub secret scopes and caps (100 repo / 100 per environment, non-pooling; `env:Prod` at cap as of 2026-11-20). See [`security/GITHUB_SECRETS_GUIDE.md`](security/GITHUB_SECRETS_GUIDE.md) § "Limits and scopes".
+
 ## Current State
 
 All secrets stored in environment variables and tier config files under `pmoves/`.

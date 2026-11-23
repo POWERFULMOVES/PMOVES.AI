@@ -67,14 +67,42 @@ EXCEPTIONS: Dict[str, str] = {
 # Node-local topology (#3188 review P1). Registered in GitHub Prod, but each
 # names a service ADDRESS, and a Prod address is wrong on every node. The
 # funnel does not write them (main never shipped them either); each node keeps
-# its own value. This literal tuple is the one declaration. The workflow must
-# carry NO row for them -- a row is reported as a finding.
+# its own value. The workflow must carry NO row for them -- a row is reported
+# as a finding.
 NODE_LOCAL_REASON = "node-local service address; a Prod value is wrong on every node"
-NODE_LOCAL: Tuple[str, ...] = (
+NODE_LOCAL_ADDRESSES: Tuple[str, ...] = (
     "NATS_URL", "NATS_URL_TAILNET", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL",
     "POSTGRES_HOSTNAME", "POSTGRES_DB", "OLLAMA_BASE_URL", "OPENAI_COMPATIBLE_BASE_URL",
 )
-EXCEPTIONS.update({name: NODE_LOCAL_REASON for name in NODE_LOCAL})
+
+# Node-sovereign Supabase keys (operator decision 2026-11-20: every node runs a
+# sovereign PMOVES.AI stack). Each node mints its own JWT secret
+# (secrets_self_generated.py, pmoves/scripts/supabase/generate-keys.sh), and
+# the anon / service-role keys are JWTs signed with it -- SUPABASE_KEY and
+# SUPABASE_SERVICE_KEY are aliases of the service-role key, and
+# SUPABASE_REALTIME_KEY is read as a JWT by hi-rag-gateway-v2. A Prod value
+# fails verification on the node's own GoTrue and PostgREST.
+# SUPABASE_REALTIME_SECRET is the node's Realtime SECRET_KEY_BASE. Same rule
+# as the addresses: the workflow must carry NO row for them.
+NODE_SOVEREIGN_SUPABASE_REASON = (
+    "node-sovereign Supabase key: minted per node, and the JWT-shaped keys are "
+    "signed with the node's own JWT secret, so a Prod value fails verification "
+    "on the node's GoTrue and PostgREST (operator decision 2026-11-20)"
+)
+NODE_SOVEREIGN_SUPABASE: Tuple[str, ...] = (
+    "SUPABASE_JWT_SECRET", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_KEY",
+    "SUPABASE_REALTIME_KEY", "SUPABASE_REALTIME_SECRET",
+)
+
+# Everything that is this node's own and never ships from Prod. This is the
+# one declaration MUST_NOT_MAP and EXCEPTIONS derive from.
+NODE_LOCAL: Tuple[str, ...] = NODE_LOCAL_ADDRESSES + NODE_SOVEREIGN_SUPABASE
+NODE_LOCAL_REASONS: Dict[str, str] = {
+    **{name: NODE_LOCAL_REASON for name in NODE_LOCAL_ADDRESSES},
+    **{name: NODE_SOVEREIGN_SUPABASE_REASON for name in NODE_SOVEREIGN_SUPABASE},
+}
+EXCEPTIONS.update(NODE_LOCAL_REASONS)
 
 # Self-generated or DB-init values (#3188 review P2). NEXT_PUBLIC_SUPABASE_ANON_KEY
 # is derived per node from SUPABASE_JWT_SECRET (secrets_self_generated.py
@@ -95,7 +123,7 @@ EXCEPTIONS.update({name: DB_INIT_LOCAL_REASON for name in DB_INIT_LOCAL})
 
 # Names that must have NO workflow row, with the reason reported for each.
 MUST_NOT_MAP: Dict[str, str] = {
-    **{name: NODE_LOCAL_REASON for name in NODE_LOCAL},
+    **NODE_LOCAL_REASONS,
     **{name: DB_INIT_LOCAL_REASON for name in DB_INIT_LOCAL},
 }
 

@@ -29,12 +29,27 @@ services:
     privileged: true
     network_mode: host
     entrypoint: ["sh", "-c"]
+    # Bounded cache, same as mk/egress.mk:379 and scripts/juicefs-cross-node-setup.sh:109.
+    # Without flags this inherits the JuiceFS default --cache-size 102400 (100 GiB in
+    # /var/jfsCache) plus --free-space-ratio 0.1, which is the exact kvm4-class disk
+    # exhaustion this overlay's own PR exists to prevent — and this is the documented
+    # `docker-compose.yml -f docker-compose.juicefs-mount.yml` path, the one an operator
+    # is most likely to take.
+    #
+    # The helper is bind-mounted and RUN IN THE CONTAINER rather than copied inline:
+    # compose renders on the host but the cache lives on the container's /data volume,
+    # so the measurement has to happen here. Verified the image can run it unmodified —
+    # juicedata/mount:ce-v1.3.0 ships /bin/bash and /usr/bin/awk.
     command:
       - >-
-        exec juicefs mount --enable-xattr
+        set -e;
+        JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data/jfsCache bash /usr/local/bin/juicefs-cache-bounds.sh)";
+        test -n "$$JFS_CACHE_FLAGS" || { echo 'ERROR: empty cache bounds - refusing unbounded mount'; exit 1; };
+        exec juicefs mount --enable-xattr $$JFS_CACHE_FLAGS
         "postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable"
         ${JUICEFS_MOUNT_POINT:-/home/pmoves-knuckles/pmoves-fs}
     volumes:
+      - ./scripts/juicefs-cache-bounds.sh:/usr/local/bin/juicefs-cache-bounds.sh:ro
       - ${HOME}/.local/share/juicefs-data:/data
       - ${JUICEFS_MOUNT_POINT:-/home/pmoves-knuckles/pmoves-fs}:${JUICEFS_MOUNT_POINT:-/home/pmoves-knuckles/pmoves-fs}:rshared
     deploy:

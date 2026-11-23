@@ -1,0 +1,727 @@
+# Recorded silent-bind gaps -- pmoves/tools/silent_bind_ratchet.py
+#
+# A service that publishes a host port while joined only to internal:true
+# networks CANNOT activate that port: Docker stores the binding and never
+# activates it (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5).
+#
+# Each entry is a (file, service) pair MEASURED by the ratchet. They are
+# recorded so the gate can be ENFORCED today without turning it red in a
+# single step. They are NOT approved, and none of them is 'expected'.
+#
+# The list may shrink and must never silently grow. A service that is fixed
+# but still listed here fails the gate as a STALE entry, so the count only
+# goes down.
+#
+# SCOPE OF THE MEASUREMENT
+# -----------------------
+# 63 compose files in the house scope; 73 (file, service) pairs across 39
+# services. A service that appears in BOTH pmoves/docker-compose.yml and its
+# generated split overlay is TWO entries, because the overlays are GENERATED
+# (scripts/split_compose.py) -- fixing the source and regenerating retires
+# both at once.
+#
+# WHY THEY ARE STILL HERE
+# -----------------------
+# PMOVES's own history on this class is the precedent: commits 6baaaa1 and
+# fec0a97 fixed the AUDITORS that report silent binds, and de27bdb fixed the
+# smoke suite that was passing them as expected -- the compose remediation
+# was a separate decision. This file records the gaps that decision will
+# retire; the reason on each entry states what it is waiting on.
+#
+# Regenerate: python pmoves/tools/silent_bind_ratchet.py --write-baseline --yes
+known_gaps:
+- file: docker-compose.agents.yml
+  service: a2ui-nats-bridge
+  reason: 'Measured 2026-11-22: publishes ${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.agents.yml
+  service: consciousness-service
+  reason: 'Measured 2026-11-22: publishes ${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.agents.yml
+  service: gateway-agent
+  reason: 'Measured 2026-11-22: publishes ${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}
+    and joins only internal:true networks (pmoves_api, pmoves_app, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.agents.yml
+  service: hf-research-agent
+  reason: 'Measured 2026-11-22: publishes ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.agents.yml
+  service: notebook-mcp
+  reason: 'Measured 2026-11-22: publishes ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8207}:8092
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.agents.yml
+  service: p7-room-orchestrator
+  reason: 'Measured 2026-11-22: publishes ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.agents.yml
+  service: wealth-mcp
+  reason: 'Measured 2026-11-22: publishes ${WEALTH_MCP_BIND:-127.0.0.1}:${WEALTH_MCP_PORT:-8208}:8092
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.alertmanager.yml
+  service: alertmanager
+  reason: 'Measured 2026-11-22: publishes ${ALERTMANAGER_BIND:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093
+    and joins only internal:true networks (pmoves_monitoring), so Docker stores the
+    binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.alertmanager.yml
+  service: alertmanager-discord-bridge
+  reason: 'Measured 2026-11-22: publishes ${BRIDGE_BIND:-127.0.0.1}:${BRIDGE_PORT:-9094}:9094
+    and joins only internal:true networks (pmoves_monitoring), so Docker stores the
+    binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.apps.yml
+  service: nats_event_bus
+  reason: 'Measured 2026-11-22: publishes ${NATS_EVENT_BUS_BIND:-127.0.0.1}:${NATS_EVENT_BUS_PORT:-8131}:8131
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.apps.yml
+  service: pinokio_bridge
+  reason: 'Measured 2026-11-22: publishes ${PINOKIO_BRIDGE_BIND:-127.0.0.1}:${PINOKIO_BRIDGE_PORT:-8130}:8130
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.cache.yml
+  service: semantic-cache
+  reason: 'Measured 2026-11-22: publishes ${SEMANTIC_CACHE_PORT:-8100}:8100 and joins
+    only internal:true networks (pmoves_app), so Docker stores the binding and never
+    activates it -- the host port refuses connections (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md
+    Rule 5). NOT REMEDIATED: the bind is 0.0.0.0, so activating it makes the service
+    reachable on the tailnet for the FIRST time, and the tier decision (pmoves_public
+    vs a dedicated egress bridge vs gateway-front) is open with the operator.'
+- file: docker-compose.core.yml
+  service: a2ui-renderer
+  reason: 'Measured 2026-11-22: publishes ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.core.yml
+  service: meilisearch
+  reason: 'Measured 2026-11-22: publishes ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
+    and joins only internal:true networks (pmoves_data, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.core.yml
+  service: qdrant
+  reason: 'Measured 2026-11-22: publishes ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
+    and joins only internal:true networks (pmoves_data, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.core.yml
+  service: supabase-pooler
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_PORT:-54329}:5432,
+    ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
+    and joins only internal:true networks (pmoves_data), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.core.yml
+  service: supabase-realtime
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
+    and joins only internal:true networks (pmoves_api), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.core.yml
+  service: supabase-storage
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
+    and joins only internal:true networks (pmoves_api), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.core.yml
+  service: supabase-studio
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
+    and joins only internal:true networks (pmoves_api), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.core.yml
+  service: tensorzero-clickhouse
+  reason: 'Measured 2026-11-22: publishes ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    and joins only internal:true networks (pmoves_data), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.media.yml
+  service: gpu-orchestrator
+  reason: 'Measured 2026-11-22: publishes ${GPU_ORCHESTRATOR_BIND:-127.0.0.1}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
+    and joins only internal:true networks (pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.media.yml
+  service: llama-throughput-lab
+  reason: 'Measured 2026-11-22: publishes ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
+    and joins only internal:true networks (pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.media.yml
+  service: nvidia-nim
+  reason: 'Measured 2026-11-22: publishes ${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000
+    and joins only internal:true networks (pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.media.yml
+  service: voice-relay
+  reason: 'Measured 2026-11-22: publishes ${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121
+    and joins only internal:true networks (pmoves_bus), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.media.yml
+  service: voice-sampler
+  reason: 'Measured 2026-11-22: publishes ${VOICE_SAMPLER_BIND:-127.0.0.1}:${VOICE_SAMPLER_PORT:-8124}:8124
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.tracing.yml
+  service: jaeger
+  reason: 'Measured 2026-11-22: publishes ${JAEGER_BIND:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686,
+    ${JAEGER_14268_PORT:-14268}:14268, ${JAEGER_14250_PORT:-14250}:14250, ${JAEGER_4317_PORT:-4317}:4317
+    and joins only internal:true networks (pmoves_monitoring), so Docker stores the
+    binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.tracing.yml
+  service: otel-collector
+  reason: 'Measured 2026-11-22: publishes ${OTEL_GRPC_PORT:-4327}:4317, ${OTEL_HTTP_PORT:-4318}:4318,
+    ${OTEL_METRICS_PORT:-8889}:8889 and joins only internal:true networks (pmoves_monitoring,
+    pmoves_app, pmoves_bus), so Docker stores the binding and never activates it --
+    the host port refuses connections (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md
+    Rule 5). NOT REMEDIATED: the bind is 0.0.0.0, so activating it makes the service
+    reachable on the tailnet for the FIRST time, and the tier decision (pmoves_public
+    vs a dedicated egress bridge vs gateway-front) is open with the operator.'
+- file: docker-compose.ui.yml
+  service: grayjay-plugin-host
+  reason: 'Measured 2026-11-22: publishes ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.ui.yml
+  service: grayjay-server
+  reason: 'Measured 2026-11-22: publishes ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.ui.yml
+  service: invidious-companion-proxy
+  reason: 'Measured 2026-11-22: publishes ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.ui.yml
+  service: tokenism-simulator
+  reason: 'Measured 2026-11-22: publishes ${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.ui.yml
+  service: tokenism-ui
+  reason: 'Measured 2026-11-22: publishes ${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504
+    and joins only internal:true networks (pmoves_app), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.workers.yml
+  service: langextract
+  reason: 'Measured 2026-11-22: publishes ${LANGEXTRACT_BIND:-0.0.0.0}:${LANGEXTRACT_PORT:-8084}:8084
+    and joins only internal:true networks (pmoves_app), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.workers.yml
+  service: notebook-sync
+  reason: 'Measured 2026-11-22: publishes ${NOTEBOOK_SYNC_BIND:-0.0.0.0}:${NOTEBOOK_SYNC_PORT:-8095}:8095
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.workers.yml
+  service: pdf-ingest
+  reason: 'Measured 2026-11-22: publishes ${PDF_INGEST_BIND:-0.0.0.0}:${PDF_INGEST_PORT:-8092}:8092
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.workers.yml
+  service: retrieval-eval
+  reason: 'Measured 2026-11-22: publishes ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.workers.yml
+  service: session-context-worker
+  reason: 'Measured 2026-11-22: publishes ${SESSION_CONTEXT_BIND:-0.0.0.0}:${SESSION_CONTEXT_WORKER_PORT:-8102}:8100
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.workers.yml
+  service: supaserch
+  reason: 'Measured 2026-11-22: publishes ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.workers.yml
+  service: watch-folder-router
+  reason: 'Measured 2026-11-22: publishes ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: a2ui-nats-bridge
+  reason: 'Measured 2026-11-22: publishes ${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: a2ui-renderer
+  reason: 'Measured 2026-11-22: publishes ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: consciousness-service
+  reason: 'Measured 2026-11-22: publishes ${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: gateway-agent
+  reason: 'Measured 2026-11-22: publishes ${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}
+    and joins only internal:true networks (pmoves_api, pmoves_app, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: gpu-orchestrator
+  reason: 'Measured 2026-11-22: publishes ${GPU_ORCHESTRATOR_BIND:-127.0.0.1}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
+    and joins only internal:true networks (pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: grayjay-plugin-host
+  reason: 'Measured 2026-11-22: publishes ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: grayjay-server
+  reason: 'Measured 2026-11-22: publishes ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: hf-research-agent
+  reason: 'Measured 2026-11-22: publishes ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: invidious-companion-proxy
+  reason: 'Measured 2026-11-22: publishes ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: langextract
+  reason: 'Measured 2026-11-22: publishes ${LANGEXTRACT_BIND:-0.0.0.0}:${LANGEXTRACT_PORT:-8084}:8084
+    and joins only internal:true networks (pmoves_app), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: llama-throughput-lab
+  reason: 'Measured 2026-11-22: publishes ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
+    and joins only internal:true networks (pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: meilisearch
+  reason: 'Measured 2026-11-22: publishes ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
+    and joins only internal:true networks (pmoves_data, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: nats_event_bus
+  reason: 'Measured 2026-11-22: publishes ${NATS_EVENT_BUS_BIND:-127.0.0.1}:${NATS_EVENT_BUS_PORT:-8131}:8131
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: notebook-mcp
+  reason: 'Measured 2026-11-22: publishes ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8207}:8092
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: notebook-sync
+  reason: 'Measured 2026-11-22: publishes ${NOTEBOOK_SYNC_BIND:-0.0.0.0}:${NOTEBOOK_SYNC_PORT:-8095}:8095
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: nvidia-nim
+  reason: 'Measured 2026-11-22: publishes ${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000
+    and joins only internal:true networks (pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: p7-room-orchestrator
+  reason: 'Measured 2026-11-22: publishes ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: pdf-ingest
+  reason: 'Measured 2026-11-22: publishes ${PDF_INGEST_BIND:-0.0.0.0}:${PDF_INGEST_PORT:-8092}:8092
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: pinokio_bridge
+  reason: 'Measured 2026-11-22: publishes ${PINOKIO_BRIDGE_BIND:-127.0.0.1}:${PINOKIO_BRIDGE_PORT:-8130}:8130
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: qdrant
+  reason: 'Measured 2026-11-22: publishes ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
+    and joins only internal:true networks (pmoves_data, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: retrieval-eval
+  reason: 'Measured 2026-11-22: publishes ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: session-context-worker
+  reason: 'Measured 2026-11-22: publishes ${SESSION_CONTEXT_BIND:-0.0.0.0}:${SESSION_CONTEXT_WORKER_PORT:-8102}:8100
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: supabase-pooler
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_PORT:-54329}:5432,
+    ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
+    and joins only internal:true networks (pmoves_data), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: supabase-realtime
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
+    and joins only internal:true networks (pmoves_api), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: supabase-storage
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
+    and joins only internal:true networks (pmoves_api), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: supabase-studio
+  reason: 'Measured 2026-11-22: publishes ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
+    and joins only internal:true networks (pmoves_api), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: supaserch
+  reason: 'Measured 2026-11-22: publishes ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: tensorzero-clickhouse
+  reason: 'Measured 2026-11-22: publishes ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    and joins only internal:true networks (pmoves_data), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: tokenism-simulator
+  reason: 'Measured 2026-11-22: publishes ${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100
+    and joins only internal:true networks (pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring),
+    so Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    bind is 0.0.0.0, so activating it makes the service reachable on the tailnet for
+    the FIRST time, and the tier decision (pmoves_public vs a dedicated egress bridge
+    vs gateway-front) is open with the operator.'
+- file: docker-compose.yml
+  service: tokenism-ui
+  reason: 'Measured 2026-11-22: publishes ${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504
+    and joins only internal:true networks (pmoves_app), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: voice-relay
+  reason: 'Measured 2026-11-22: publishes ${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121
+    and joins only internal:true networks (pmoves_bus), so Docker stores the binding
+    and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the bind is 0.0.0.0,
+    so activating it makes the service reachable on the tailnet for the FIRST time,
+    and the tier decision (pmoves_public vs a dedicated egress bridge vs gateway-front)
+    is open with the operator.'
+- file: docker-compose.yml
+  service: voice-sampler
+  reason: 'Measured 2026-11-22: publishes ${VOICE_SAMPLER_BIND:-127.0.0.1}:${VOICE_SAMPLER_PORT:-8124}:8124
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: watch-folder-router
+  reason: 'Measured 2026-11-22: publishes ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    and joins only internal:true networks (pmoves_app, pmoves_bus, pmoves_data), so
+    Docker stores the binding and never activates it -- the host port refuses connections
+    (moby/moby#36174; house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the
+    fix attaches a non-internal tier, and the house''s Rule 5 requires that the egress
+    this grants be accepted deliberately and in writing -- so the remediation lands
+    in its own PR, with the decision recorded there. The declared bind is loopback,
+    so nothing becomes reachable on the tailnet.'
+- file: docker-compose.yml
+  service: wealth-mcp
+  reason: 'Measured 2026-11-22: publishes ${WEALTH_MCP_BIND:-127.0.0.1}:${WEALTH_MCP_PORT:-8208}:8092
+    and joins only internal:true networks (pmoves_app, pmoves_bus), so Docker stores
+    the binding and never activates it -- the host port refuses connections (moby/moby#36174;
+    house DOCKER_NETWORK_HARDENING.md Rule 5). NOT REMEDIATED: the fix attaches a
+    non-internal tier, and the house''s Rule 5 requires that the egress this grants
+    be accepted deliberately and in writing -- so the remediation lands in its own
+    PR, with the decision recorded there. The declared bind is loopback, so nothing
+    becomes reachable on the tailnet.'

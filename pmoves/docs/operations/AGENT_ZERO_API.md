@@ -6,6 +6,9 @@
 > `.claude/context/mcp-api.md` is **SUPERSEDED** — it documents six endpoints that were
 > never implemented and an `MCP_CLIENT_SECRET` Bearer scheme that authenticates nothing.
 >
+> The **Launcher instances and provenance** section is a separate measurement (2026-11-18);
+> it does not re-probe the routes above, whose dates stand as stated.
+>
 > Use this when driving Agent Zero from a CLI — e.g., from B850-CLAUDE (Knuckles) over Tailscale.
 
 ## Endpoint base + auth
@@ -190,6 +193,112 @@ fails** — `main.py:54-57` sets `create_a2a_router = None` on ImportError, and
 via python-jose (`server.py:72-90`). Gated by `A2A_DISCOVERY_PUBLIC` and
 `A2A_TASKS_PUBLIC` — both default `false` in compose, so auth is required
 unless explicitly opened.
+
+## Launcher instances and provenance
+
+Measured 2026-11-18 on node 5090. Everything above describes the compose service; most
+Agent Zero instances an operator touches on a desktop node are something else.
+
+| Shape | Container | Image | usr dir |
+|---|---|---|---|
+| Compose service | `pmoves-agent-zero-1` | built from `pmoves/services/agent-zero/Dockerfile` | `pmoves/data/agent-zero/usr` (bind mount) |
+| Agent Zero Launcher instance | `a0-inst-<name>` | `agent0ai/agent-zero:latest` (upstream v2.14) on all three 5090 instances | `~/agent-zero/<instance>/usr` (one per instance) |
+| Instances compose service | service `agent-zero-darkxside-inst`, container `pmoves-agent-zero-darkxside-inst` (`pmoves/docker-compose.agent-zero-instances.yml`) | `agent0ai/agent-zero:latest` | the DARKXSIDE Launcher instance's usr dir, via `A0INST_USR_DIR` |
+
+**Config written into the repo's `pmoves/data/agent-zero/usr` reaches only the compose
+service. Launcher instances never receive it.** The third row registers the DARKXSIDE
+Launcher instance as a compose service on the SAME usr dir, so it reads exactly what that
+instance reads; `INSTANCE=darkxside-inst` targets that dir (below).
+
+**Which Launcher is installed.** The Electron app (`a0-launcher`) on 5090 is the upstream
+`agent0ai/a0-launcher` build, v1.9; its `resources/app-update.yml` names owner `agent0ai`.
+It self-updated from 1.8.0 to 1.9 on 2026-10-21 after an operator-accepted prompt
+(electron-updater, `autoDownload=false`). Upstream v1.10 shipped 2026-11-17 and changes
+Host-access defaults for new instances.
+
+**The PMOVES fork is buildable but still unshipped.** `POWERFULMOVES/PMOVES-a0-launcher`
+main (merge `629d289`, 2026-11-19) is upstream v1.10 plus five merged PRs: #1 enforces
+login/password pairing at instance creation, #2 adds a registry-qualified backend image
+repo override, #3 makes the digest endpoints registry-aware, #4 merges upstream v1.10 and
+points the `package.json` publish block, release verification and forge homepage at the
+fork (so a fork build updates from the fork, not back to `agent0ai`), and #5 restores
+the Docker Hub `/token` auth path that #3 broke. The fork still has no tags and no
+releases, so its executables workflow (fires on a `v*` tag) has never run and there is
+still no fork installer to download; pushing a `v*` tag on fork main is the remaining
+operator step before install.
+
+**Fork overrides are environment variables, not Launcher settings (fork build only).** A
+fork build's Electron shell reads them at process start; the installed upstream v1.9
+Launcher may ignore them. `docker_manager/state.json` has no image field. Variables set
+only in a shell session never reach a Start-menu launch, but user- or system-scope
+variables (`setx`, or System Properties) are inherited, so `setx` is the persistent route.
+
+| Variable (fork build only) | Effect |
+|---|---|
+| `A0_BACKEND_IMAGE_REPO` | Backend image repo; accepts registry-qualified, e.g. `ghcr.io/powerfulmoves/pmoves-agent-zero` |
+| `A0_LAUNCHER_GITHUB_REPO` | Release / content source |
+| `A0_LAUNCHER_LOCAL_REPO` + `A0_LAUNCHER_USE_LOCAL_CONTENT` | Local content |
+
+GHCR `ghcr.io/powerfulmoves/pmoves-agent-zero` publishes `latest` / `pmoves-latest`
+(2026-11-06) plus `candidate-*` tags. No 5090 Launcher instance runs it today.
+
+**Model presets.** `make -C pmoves a0-model-sync` / `a0-model-sync-check` generate / check
+`pmoves/data/agent-zero/usr/plugins/_model_config/presets.yaml` from the model registry.
+`INSTANCE=` selects a registered usr dir (`INSTANCE=darkxside-inst` maps to
+`A0INST_USR_DIR`: `models_sync.py:401`, `pmoves/docs/MODEL_PRESET_LIFECYCLE.md:52`) and
+`OUT=` names an arbitrary target file.
+
+`make -C pmoves a0-model-sync-check` on 5090:
+
+| Date | Checkout | Exit | Result |
+|---|---|---|---|
+| 2026-11-18 | stale checkout: node `main`, 98 commits behind `origin/main`, predates PR #3396 | `1` | fallback-template WARNING, then `DRIFT`; JSON `presets` `["TensorZero"]` |
+| 2026-11-19 | worktree at `origin/main` | `2` | `"check": "undecided"`, `"reason": "registry_unreachable"` |
+
+The 11-18 exit 1 came from a checkout older than commit `361e26e9a0b` (PR #3396), which
+added the exit-2 UNDECIDED contract: `_check_undecided` (`models_sync.py:802-808`) is
+called from `:841-846` when `--check` runs with `source == "template_fallback"`. Current
+code behaves as documented. The 11-19 exit 2 was measured correctly but explained wrongly:
+the SQL fallback failed with `relation "pmoves_core.v_service_models" does not exist` and
+this section said the registry migration was missing on 5090. It is not. The node's
+database `pmoves` has 61 migrations and 24 seeds in `public.pmoves_bootstrap_history`
+(applied 2026-11-06) and the view exists there. The fallback in `models_sync.py` was
+hard-coded to `psql -U postgres -d postgres`, a near-empty sibling database on the same
+server, so it could never see the view on any compose node; the 11-19 confirmation probe
+made the same `-d postgres` mistake. Fixed 2026-11-22: the fallback now reads
+`POSTGRES_USER` / `POSTGRES_DB` from the DB container (`MODEL_SYNC_DB_USER` /
+`MODEL_SYNC_DB_NAME` override). The remaining operator item is only updating the node's
+`main` checkout. For comparison, the committed docked file has 3 presets and the
+DARKXSIDE Launcher instance holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
+
+**WARN: `OUT=` at a Launcher usr dir, or `INSTANCE=darkxside-inst`.** A sync archives the
+live file to `pmoves/data/model-sync/review/` first, replaces only generator-owned presets
+(Default, TensorZero, Registry, Fallback-N; this instance has only Default among them), and carries
+Efficiency, Power, PMOVES, Agentic and Voice over verbatim (`models_sync.py:408-409`,
+`:749-765`, `:895-910`). The real hazard is the new Default: it routes chat to the
+TensorZero gateway by its compose-network service name, which a Launcher instance outside
+`pmoves-net` may not resolve. Run it only after the registry path is healthy.
+
+**Container-local fixes that are not in any fork yet** (they vanish on image replacement):
+in the DARKXSIDE instance, `/etc/supervisor/conf.d/supervisord.conf` has
+`[program:signal_bridge]` set to `autostart=false` (2026-11-08). The upstream image's
+supervisor event listener kills PID 1 on ANY program FATAL, and the unconfigured Signal
+plugin bridge went FATAL, giving a 5-minute crash loop. Plugin toggles do not edit
+supervisord program blocks. The durable home is the `PMOVES-Agent-Zero` fork image, or a
+plugin that registers its supervisord program with `autostart=false`.
+
+**Startup gap.** Agent Zero loads every saved chat (blocking) before uvicorn listens. On
+DARKXSIDE (94 chats, 2,867 files, 262 MB over the Windows bind mount) the UI is unreachable
+for 6-8 minutes after every start, and the Launcher restart button resets that clock.
+Levers: archive heavy chats from the A0 UI; do not restart during startup; keep model
+weights out of the project tree (the Time Travel plugin's `git add -f -A` snapshots the
+whole project, and 2.7 GB of weights under `research/models` strand its index lock; the
+`-f` is why `.gitignore` cannot save the weights).
+
+**Docker Desktop restart vs container fault.** A Docker Desktop restart shows identical
+SIGTERM timestamps across unrelated containers plus fleet-wide "Up N minutes".
+`RestartCount` resets to 0 whenever the Launcher issues `docker start`, so read
+`docker logs -t` boundaries instead of trusting the counter.
 
 ## Drift detection
 

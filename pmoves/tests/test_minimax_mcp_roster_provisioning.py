@@ -199,8 +199,19 @@ def test_launcher_materializes_the_roster_end_to_end(tmp_path: Path):
     home.mkdir()
 
     real_python = sys.executable
+    # Pin the user site to THIS interpreter's. The child runs with HOME set
+    # to tmp_path (below), and the user site-packages directory is derived
+    # from HOME -- so on a host where PyYAML lives in ~/.local (pip --user),
+    # the stub python3 lost it and the launcher reported "no python
+    # interpreter that can import yaml", even though importorskip("yaml")
+    # had just passed in this process. PYTHONUSERBASE keeps the child's
+    # import universe identical to the parent's while HOME stays fake.
+    import site
+
+    user_base = site.getuserbase()
     (bin_dir / "python3").write_text(
         "#!/usr/bin/env bash\n"
+        f'export PYTHONUSERBASE="{user_base}"\n'
         f'exec "{real_python}" "$@"\n',
         encoding="utf-8",
     )
