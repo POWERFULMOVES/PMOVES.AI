@@ -676,6 +676,10 @@ known_gaps:
     count: 1
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)
+  tools/secrets_provider_verify.py:
+    count: 1
+    reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
+      cp1252 class)
   tools/secrets_sync.py:
     count: 4
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
