@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import hmac
 from contextlib import asynccontextmanager
 import logging
 import os
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
-from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Path as FPath, Query, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 # Bootstrap import paths using shared module
@@ -927,8 +928,49 @@ async def execute_mcp_command(request: MCPExecuteRequest) -> MCPExecuteResponse:
     return MCPExecuteResponse(cmd=cmd_name, result=result)
 
 
+# Command-class topics instruct another agent to act, so they are not open to
+# every caller of this unauthenticated REST route (security review 2026-11-23,
+# when claw.task.assign.v1 became publishable here). They require the
+# supervisor's existing key -- the X-API-KEY header and AGENT_ZERO_API_KEY value
+# it already uses toward the runtime -- and fail closed when that key is unset.
+# The envelope source is set here, never taken from the client; payload `from`
+# is data, not an identity. Raw NATS publishes are governed by bus credentials.
+_COMMAND_TOPIC_PREFIXES = ("claw.",)
+_COMMAND_TOPIC_SOURCE = "agent-zero-supervisor"
+
+
+def _is_command_topic(topic: str) -> bool:
+    return topic.startswith(_COMMAND_TOPIC_PREFIXES)
+
+
+def _authorize_command_publish(topic: str, presented_key: Optional[str]) -> None:
+    expected = runtime_config.api_key or ""
+    if not expected:
+        logger.warning(
+            "Refusing command-topic publish %s: AGENT_ZERO_API_KEY is not configured", topic
+        )
+    if not (expected and presented_key and hmac.compare_digest(presented_key, expected)):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "forbidden",
+                "topic": topic,
+                "message": (
+                    "Command-class topics (claw.*) require an X-API-KEY header matching "
+                    "the supervisor's AGENT_ZERO_API_KEY."
+                ),
+            },
+        )
+
+
 @app.post("/events/publish", response_model=Dict[str, str])
-async def events_publish(body: EventPublishRequest) -> Dict[str, str]:
+async def events_publish(
+    body: EventPublishRequest,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-KEY"),
+) -> Dict[str, str]:
+    command_topic = _is_command_topic(body.topic)
+    if command_topic:
+        _authorize_command_publish(body.topic, x_api_key)
     if not (_controller_ready.is_set() and event_controller.is_connected):
         raise HTTPException(status_code=503, detail="NATS controller not ready")
     try:
@@ -937,7 +979,7 @@ async def events_publish(body: EventPublishRequest) -> Dict[str, str]:
             body.payload,
             correlation_id=body.correlation_id,
             parent_id=body.parent_id,
-            source=body.source or "agent-zero",
+            source=_COMMAND_TOPIC_SOURCE if command_topic else (body.source or "agent-zero"),
         )
     except UnknownTopicError as exc:
         raise HTTPException(

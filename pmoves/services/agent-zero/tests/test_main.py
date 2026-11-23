@@ -445,25 +445,107 @@ def test_events_publish_registered_topic_still_publishes(monkeypatch, load_servi
     assert body["id"] == published[0]["id"]
 
 
-def test_events_publish_claw_task_assign_is_registered(monkeypatch, load_service_module):
-    """The exact request that returned 500 on node 5090 (2026-11-23) now publishes."""
+# --- command-class topics (claw.*) ----------------------------------------
+# Security review 2026-11-23: registering claw.task.assign.v1 made a
+# command-class topic publishable over an unauthenticated REST route. claw.*
+# now needs X-API-KEY == AGENT_ZERO_API_KEY, and the envelope source is set
+# server-side; a client-supplied source (or payload `from`) is not trusted.
+
+_CLAW_PAYLOAD = {"from": "5090-claude", "to": "4090-claude", "task": "TEST-claw-registration"}
+_API_KEY = "test-supervisor-key"
+
+
+def _publish_client(module, monkeypatch, api_key):
+    monkeypatch.setattr(module.runtime_config, "api_key", api_key)
+    client = TestClient(module.app, raise_server_exceptions=False)
+    return client
+
+
+def _post(client, module, topic, payload, headers=None, source=None):
+    module._controller_ready.set()
+    module.event_controller._nc = SimpleNamespace(is_connected=True)
+    body = {"topic": topic, "payload": payload}
+    if source is not None:
+        body["source"] = source
+    return client.post("/events/publish", json=body, headers=headers or {})
+
+
+@pytest.mark.parametrize(
+    "server_key,headers",
+    [
+        pytest.param(_API_KEY, {}, id="no-header"),
+        pytest.param(_API_KEY, {"X-API-KEY": "wrong"}, id="wrong-key"),
+        pytest.param(_API_KEY, {"X-API-KEY": ""}, id="empty-header"),
+        pytest.param(None, {"X-API-KEY": "anything"}, id="server-key-unset-fails-closed"),
+        pytest.param("", {"X-API-KEY": ""}, id="server-key-empty-fails-closed"),
+    ],
+)
+def test_claw_publish_without_valid_api_key_is_403(monkeypatch, load_service_module, server_key, headers):
     module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module = _prepare_agent_zero(module, monkeypatch)
     published = _prepare_events_publish(module, monkeypatch)
 
-    payload = {"from": "5090-claude", "to": "4090-claude", "task": "TEST-claw-registration"}
-    with TestClient(module.app, raise_server_exceptions=False) as client:
-        module._controller_ready.set()
-        module.event_controller._nc = SimpleNamespace(is_connected=True)
-        ok = client.post("/events/publish", json={"topic": "claw.task.assign.v1", "payload": payload})
-        bad = client.post(
-            "/events/publish",
-            json={"topic": "claw.task.assign.v1", "payload": {"from": "a", "to": "b"}},
+    with _publish_client(module, monkeypatch, server_key) as client:
+        response = _post(client, module, "claw.task.assign.v1", _CLAW_PAYLOAD, headers)
+
+    assert response.status_code == 403, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "forbidden"
+    assert "X-API-KEY" in detail["message"]
+    assert published == []
+
+
+def test_claw_auth_is_checked_before_topic_registration(monkeypatch, load_service_module):
+    """An unauthenticated caller cannot probe which claw.* topics exist."""
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    _prepare_events_publish(module, monkeypatch)
+
+    with _publish_client(module, monkeypatch, _API_KEY) as client:
+        response = _post(client, module, "claw.not.registered.v1", {"x": 1})
+
+    assert response.status_code == 403, response.text
+
+
+def test_claw_publish_with_api_key_is_accepted_and_source_is_server_side(monkeypatch, load_service_module):
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    published = _prepare_events_publish(module, monkeypatch)
+
+    with _publish_client(module, monkeypatch, _API_KEY) as client:
+        ok = _post(
+            client, module, "claw.task.assign.v1", _CLAW_PAYLOAD,
+            headers={"X-API-KEY": _API_KEY}, source="spoofed-4090-claude",
+        )
+        bad = _post(
+            client, module, "claw.task.assign.v1", {"from": "a", "to": "b"},
+            headers={"X-API-KEY": _API_KEY},
         )
 
     assert ok.status_code == 200, ok.text
     assert ok.json()["published"] == "claw.task.assign.v1"
-    assert published[0]["payload"] == payload
+    assert published[0]["payload"] == _CLAW_PAYLOAD
+    assert published[0]["source"] == "agent-zero-supervisor"
     assert bad.status_code == 422, bad.text
     assert bad.json()["detail"]["error"] == "invalid_payload"
     assert len(published) == 1
+
+
+def test_non_command_topic_is_unchanged_without_api_key(monkeypatch, load_service_module):
+    """Already-registered topics keep their pre-lane behaviour: no key, client source honoured."""
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    published = _prepare_events_publish(module, monkeypatch)
+
+    payload = {
+        "agent_name": "agent-zero",
+        "tensorzero_function": "agent_zero",
+        "prompt_tokens": 1,
+        "completion_tokens": 2,
+        "ts": "2026-11-23T06:15:00Z",
+    }
+    with _publish_client(module, monkeypatch, _API_KEY) as client:
+        response = _post(client, module, "chit.economics.usage.v1", payload, source="custom-src")
+
+    assert response.status_code == 200, response.text
+    assert published[0]["source"] == "custom-src"
