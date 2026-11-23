@@ -229,9 +229,10 @@ slow_files:
     # It lives in the `pmoves` group, whose chunk budget is therefore raised
     # from 120s to 210s.
     #
-    # The allowance was 60s when the harness carried 9 mutations, which gave
-    # 120s -- 1.9x the then-worst 62.44s. Adding M10, M11 and M12 moved the
-    # measurement past it, and a budget that no longer covers the file would
+    # The allowance was 60s when the harness carried the 9-mutation set
+    # (M1..M9), which gave 120s -- 1.9x the then-worst 62.44s. Adding M10,
+    # M11 and M12 moved the measurement past it, and a budget that no longer
+    # covers the file would
     # report a healthy-but-slow file as BROKEN, which is the inversion this
     # whole mechanism exists to prevent.
     #
