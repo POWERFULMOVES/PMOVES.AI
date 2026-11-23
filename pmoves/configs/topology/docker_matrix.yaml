@@ -611,6 +611,14 @@ services:
     roots:
       - pmoves/services
     overlays:
+      - overlay: core
+        compose_key: container-agent
+        paths:
+          - pmoves/docker-compose.core.yml
+      - overlay: main
+        compose_key: container-agent
+        paths:
+          - pmoves/docker-compose.yml
       - overlay: z890
         compose_key: container-agent
         paths:
