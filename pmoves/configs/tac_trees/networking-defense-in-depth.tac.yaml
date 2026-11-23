@@ -228,10 +228,13 @@ root:
       agent_hint: codex
       children:
         - id: net.health.nats-healthcheck
-          task: "NATS healthcheck at :8222/varz returns 200"
+          task: "NATS monitor /varz returns 200 (host 9223 by default; 8222 is container-side)"
           action:
             type: http
-            url: "http://localhost:8222/varz"
+            # Host-side probe: base compose publishes ${NATS_MONITORING_PORT:-9223}:8222.
+            # Z890 publishes 8222 instead; derive per node with
+            # `bash .claude/scripts/nats-endpoint.sh`.
+            url: "http://localhost:9223/varz"
             expect: "200 OK with JSON server info"
           context: "10+ services depend on NATS being healthy"
           agent_hint: codex
