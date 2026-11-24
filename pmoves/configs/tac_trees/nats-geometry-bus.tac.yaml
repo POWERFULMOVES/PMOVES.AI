@@ -129,13 +129,30 @@ root:
     # =========================================================================
     # Phase 3: Hub decision (operator) — Decision A, restated
     # =========================================================================
+    # DECIDED 2026-11-24 (operator): no fixed hub. "Each stack is sovereign and
+    # should have both; what is active should be decided by the mesh, more
+    # resilient." This retires the single-hub choice (z890 / 5090 / tag:hub).
     - id: nats-bus.hub
-      task: "Operator picks the hub node"
-      action:
-        type: manual
-        expect: "One of: z890 (spec + verified leaf), 5090 (March leaf), dedicated tag:hub node (June decision). Recorded in the spec and FLEET_ACCESS_NATS_HUB.md; this tree's provenance header updated."
-      context: "Spark-local creds (the other half of the Oct Decision A) is a stopgap, not a hub."
-      agent_hint: operator
+      task: "Sovereign stacks; the mesh decides which hub is active"
+      context: "Operator decision 2026-11-24. Supersedes the single-hub claims in the provenance header; the spec and FLEET_ACCESS_NATS_HUB.md need the same update."
+      agent_hint: 4090-claude
+      children:
+        - id: nats-bus.hub.sovereign
+          task: "Every stack runs its own NATS with its own JetStream domain and keeps working with the mesh down"
+          action:
+            type: manual
+            expect: "Per-node jetstream { domain: <node> }; local publishers/subscribers never depend on a remote node being up"
+        - id: nats-bus.hub.both-roles
+          task: "Every stack carries both configs: hub-capable (leafnodes listen 7422) and leaf (remotes)"
+          action:
+            type: manual
+            expect: "One image (2.15.3, digest-pinned) and one conf template per node; role is config, not a different build"
+        - id: nats-bus.hub.mesh-elects
+          task: "The active hub is chosen by the mesh, not by a doc"
+          action:
+            type: manual
+            expect: "Hub-capable core nodes join one route cluster (RAFT elects the JetStream meta leader; a member loss is survived); every leaf remote lists ALL core members in urls, so it fails over to whichever is reachable"
+          context: "Constraint: a node cannot be leaf to a peer that is also its leaf (NATS refuses leafnode loops). So 'both roles everywhere' means every node CAN be core, while the active core set is the cluster's current membership. Core size 3 tolerates one loss (RAFT quorum)."
 
     # =========================================================================
     # Phase 4: Rollout — the runbook's phases, unchanged
