@@ -1,0 +1,179 @@
+# TAC Tree: NATS / GEOMETRY BUS — provenance, forks, hub, comms
+# ==============================================================
+# Why this tree exists: the fleet has three written answers to "which node
+# is the NATS hub", seven NATS forks nobody has reviewed as a set, and four
+# agent-message paths that do not talk to each other. This tree records
+# where each claim came from (provenance), reviews the forks in worktrees,
+# leaves the hub choice to the operator, and only then wires comms onto the
+# one bus. Docs/config are read here; nothing in this tree mutates a node.
+#
+# Provenance (measured 2026-11-24 from origin/main bb27e2a5b7, git log):
+#   2026-03-19  pmoves/configs/nats-leaf-z890.conf (#1034)        hub = 5090
+#               (leaf dials the hub via host.docker.internal; "works
+#               standalone until hub is ready")
+#   2026-06-16  pmoves/docs/architecture/FLEET_ACCESS_NATS_HUB.md (#1831)
+#               "Decision": a DEDICATED hub node carrying tag:hub (kvm4-2)
+#   2026-08-08  PMOVES-nats-server fork, branch PMOVES.AI-Edition-Hardened:
+#               hub config + packaging ("the POWERFULMOVES treatment", §7a)
+#   2026-08-12  nats-accounts-leaf-topology-v0 spec + rollout runbook
+#               CORE account = "all hub services on z890"     hub = z890
+#   2026-08-18  pmoves/config/nats/pmoves-nats.conf + edge-nano-1-leaf.conf
+#               "VERIFIED 2026-08-15": a jetson leaf attached, /leafz showed
+#               the EDGE account                               hub = z890
+#   2026-10-07  reviews/FLEET_COMMS_PROTOCOLS (agent0-sidecar)    hub = 5090
+#               then corrected the same day by
+#               reviews/ACP_FORKS_NATS_TOPOLOGY_REVIEW §4a: the 5090 hub is
+#               the March DESIGN, not the live prod path. That review names
+#               "Decision A": Spark-local creds vs a real hub plus leaves.
+#   Live (11-23): every node runs a standalone NATS; none has a leaf.
+#
+# Companion trees: tailnet-mesh.tac.yaml (L3 reachability),
+# tokenism-chit.tac.yaml (CHIT on the bus), voice-agents.tac.yaml (voice).
+
+name: "NATS / GEOMETRY BUS"
+version: "0.1.0"
+description: "Hub provenance, NATS fork review, hub decision, leaf rollout, and one-bus agent comms"
+
+root:
+  id: nats-bus
+  task: "Crystallize the fleet bus from the pieces that already exist"
+  context: "pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md"
+  agent_hint: 4090-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Provenance — which written claim is current
+    # =========================================================================
+    - id: nats-bus.provenance
+      task: "Each hub claim is traced to its commit, date and author"
+      context: "Header of this file; reviews/ACP_FORKS_NATS_TOPOLOGY_REVIEW_2026-10-07.md §4a"
+      agent_hint: 4090-claude
+      children:
+        - id: nats-bus.provenance.z890-leaf-says-5090
+          task: "The March leaf conf still names the 5090 as hub"
+          action:
+            type: grep
+            target: "pmoves/configs/nats-leaf-z890.conf"
+            pattern: "5090 \\(hub\\)"
+            expect: "Match until the hub decision lands; then the conf is updated or retired"
+          context: "Oldest claim (2026-03-19). Uses an inline shared user/password, not account creds."
+
+        - id: nats-bus.provenance.spec-says-z890
+          task: "The accounts/leaf spec places CORE hub services on z890"
+          action:
+            type: grep
+            target: "pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md"
+            pattern: "All hub services on z890"
+            expect: "Match"
+          context: "Newest DESIGN (2026-08-12); the only claim backed by a verified leaf attach (08-15)."
+
+        - id: nats-bus.provenance.dedicated-hub-decision
+          task: "The June doc's dedicated-hub decision (tag:hub) is reconciled with the August spec"
+          action:
+            type: manual
+            expect: "FLEET_ACCESS_NATS_HUB.md either cites the spec's choice or the spec cites why a dedicated node was dropped"
+          context: "pmoves/docs/architecture/FLEET_ACCESS_NATS_HUB.md §3 'Decision (2026-06-16)'"
+
+        - id: nats-bus.provenance.jetson-client-port
+          task: "Jetson edge override dials the hub's LEAF port, not the client port"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.jetson-edge.override.yml"
+            pattern: ":7422"
+            expect: "Match. Today it points at :4222, which pmoves-nats.conf refuses for leaves"
+          context: "Measured mismatch 2026-11-24 (inventory)."
+
+    # =========================================================================
+    # Phase 2: Fork review — in worktrees, against upstream
+    # =========================================================================
+    - id: nats-bus.forks
+      task: "Review the seven NATS forks as one set"
+      context: "gh compare, 2026-11-24. Review each in a git worktree under C:/dev/forks (or ~/forks), never in a shared checkout."
+      agent_hint: 4090-claude
+      children:
+        - id: nats-bus.forks.server
+          task: "PMOVES-nats-server: carry the §7a hub packaging onto a current upstream"
+          action:
+            type: manual
+            expect: "PMOVES.AI-Edition-Hardened rebased (1 PMOVES commit, 923 behind nats-io/nats-server main at 2026-11-24); pmoves/ dir = Dockerfile, entrypoint, pmoves-nats.conf, leaf-edge/leaf-cloud examples, resolver preload"
+          context: "The superproject submodule PMOVES-nats-server tracks this branch but is uninitialized on 4090 and in CI checkouts reviewed."
+
+        - id: nats-bus.forks.submodule-declared
+          task: "nats-server fork is a declared submodule"
+          action:
+            type: grep
+            target: ".gitmodules"
+            pattern: "PMOVES-nats-server"
+            expect: "Match"
+
+        - id: nats-bus.forks.mirrors
+          task: "Six mirror forks: decide submodule vs reference-only"
+          action:
+            type: manual
+            expect: "One line each: nats.py (0 ahead/47 behind), nats.net (0/26), natscli-CHIT-EeZz (0/76), nats-docker (0/13), prometheus-nats-exporter (0/16), nats-architecture-and-design (0/60) — submodule, reference-only, or archive"
+          context: "natscli-CHIT-EeZz carries no CHIT delta yet: its name states intent, its main equals upstream. nats-architecture-and-design holds the upstream ADRs to cite for accounts/leafnode choices."
+
+    # =========================================================================
+    # Phase 3: Hub decision (operator) — Decision A, restated
+    # =========================================================================
+    - id: nats-bus.hub
+      task: "Operator picks the hub node"
+      action:
+        type: manual
+        expect: "One of: z890 (spec + verified leaf), 5090 (March leaf), dedicated tag:hub node (June decision). Recorded in the spec and FLEET_ACCESS_NATS_HUB.md; this tree's provenance header updated."
+      context: "Spark-local creds (the other half of the Oct Decision A) is a stopgap, not a hub."
+      agent_hint: operator
+
+    # =========================================================================
+    # Phase 4: Rollout — the runbook's phases, unchanged
+    # =========================================================================
+    - id: nats-bus.rollout
+      task: "Runbook phases P2-P5 on the chosen hub"
+      context: "pmoves/docs/operations/NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md (P1 nsc minted DONE, P6 pmoves-nats-mcp DONE)"
+      agent_hint: hub-node-claude
+      children:
+        - id: nats-bus.rollout.hub-conf
+          task: "Hub conf exposes the leafnode port"
+          action:
+            type: grep
+            target: "pmoves/config/nats/pmoves-nats.conf"
+            pattern: "7422"
+            expect: "Match"
+        - id: nats-bus.rollout.leaves
+          task: "Each node attaches as a leaf with account creds (no shared passwords)"
+          action:
+            type: manual
+            expect: "hub /leafz lists every node's leaf with its account; creds delivered by the secrets funnel only"
+
+    # =========================================================================
+    # Phase 5: One bus, several faces — agent comms
+    # =========================================================================
+    - id: nats-bus.comms
+      task: "Unify the four agent-message paths on one addressed subject family"
+      context: "Today: nats_agent_inbox (broadcast tap), pmoves.agent.task/result.v1, chat-relay (agent.request/response.v1, half-wired), voice-relay (agentzero.task.result.v1 -> voice.agent.response.v1). Inbox road = PR #3505 (draft)."
+      agent_hint: 4090-claude
+      children:
+        - id: nats-bus.comms.inbox
+          task: "Agent inbox exists"
+          action:
+            type: file_exists
+            target: "pmoves/tools/nats_agent_inbox.py"
+            expect: "Exists; becomes a durable consumer on the addressed subjects (#3505) instead of a broadcast tap"
+        - id: nats-bus.comms.chat
+          task: "Supabase chat is the human face of the same traffic"
+          action:
+            type: manual
+            expect: "Migration for public.chat_messages exists; /api/chat/send publishes to NATS; chat-relay is in a compose file"
+          context: "pmoves/ui/app/api/chat/send/route.ts, pmoves/services/chat-relay/"
+        - id: nats-bus.comms.flute
+          task: "Flute is each AGInT's voice/WebRTC face on the bus"
+          action:
+            type: manual
+            expect: "SupabaseRealtimeSignaling implemented (flute_pipecat/transports TODO); voice events published (publish_voice_event is defined but never called)"
+          context: "pmoves/services/flute-gateway/"
+        - id: nats-bus.comms.github-tagging
+          task: "Sibling @-mentions via each agent's GitHub App route onto the bus"
+          action:
+            type: manual
+            expect: "identity_vocabulary.yaml carries github_login per agent; a comment router publishes to the addressed subject"
+          context: "research/analyses/2026-10-18_GITHUB_AGENT_TAGGING_DESIGN.md"
