@@ -7,7 +7,10 @@
 #                               diff (gitops `test`) can't run on PR because the tailnet
 #                               secret lives in the protected `Prod` environment, which
 #                               only protected branches (main) may access.
-#   push to main → `apply`    : push the policy to the tailnet via the Prod environment.
+#   push to main → `apply`    : push the policy to the tailnet via the Prod environment
+#                               (only when the POLICY file changed).
+#   dispatch mode=check       : dry-run validate + drift summary; applies nothing.
+#   dispatch mode=apply       : push the repo policy now.
 #
 # Prerequisites (operator):
 #   1. Allowlist `tailscale/gitops-acl-action@*` in Settings → Actions (done). SHA-pinned below.
@@ -23,13 +26,22 @@ name: Tailscale ACL (gitops)
 on:
   push:
     branches: [main]
+    # Only a POLICY change applies on push. This workflow file used to be listed
+    # here too, so editing the workflow pushed the policy to the live tailnet as
+    # a side effect. Workflow edits are now proven with a manual `check` run.
     paths:
       - 'pmoves/configs/tailscale-acl-policy.json'
-      - '.github/workflows/deploy-tailscale-acl.yml'
   pull_request:
     paths:
       - 'pmoves/configs/tailscale-acl-policy.json'
-  workflow_dispatch: {}
+      - '.github/workflows/deploy-tailscale-acl.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = validate + drift summary, changes nothing; apply = push the repo policy"
+        type: choice
+        options: [check, apply]
+        default: check
 
 permissions:
   contents: read
@@ -57,9 +69,67 @@ jobs:
   # Apply on merge to main. Uses the Prod environment for TS_TAILNET (protected-branch
   # gated + wait_timer). Because this job runs in Prod, it sees the Prod-scoped
   # TAILSCALE_API_KEY; the repo-level TAILSCALE_APIKEY is the fallback.
+  # Manual, read-only: the compare step of `.claude/commands/fleet/acl-audit.md`
+  # run where the rotated key lives. `action: test` is the gitops action's own
+  # dry run (POST /acl/validate: parses the policy and runs its tests/sshTests
+  # assertions, applies nothing). The drift step prints ONLY top-level section
+  # names, entry counts and same/different -- never policy content -- because
+  # this repo is public and so are its Actions logs. The live policy may hold
+  # identities that the repo copy does not.
+  check:
+    name: check against tailnet (no apply)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'check' }}
+    runs-on: ubuntu-24.04
+    environment: Prod
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate policy + run its tests (dry run)
+        uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
+        with:
+          tailnet: ${{ secrets.TS_TAILNET }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          api-key: ${{ secrets.TS_OAUTH_SECRET != '' && '' || (secrets.TAILSCALE_API_KEY || secrets.TAILSCALE_APIKEY) }}
+          policy-file: ./pmoves/configs/tailscale-acl-policy.json
+          action: test
+      - name: Drift summary (section names and counts only)
+        env:
+          TS_KEY: ${{ secrets.TAILSCALE_API_KEY || secrets.TAILSCALE_APIKEY }}
+          TS_TAILNET: ${{ secrets.TS_TAILNET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TS_KEY}" ]; then
+            echo "::warning::no API key in Prod (OAuth-only); drift summary skipped"
+            exit 0
+          fi
+          live="$(mktemp)"
+          trap 'rm -f "$live"' EXIT
+          # Accept: application/json -> the API returns the policy as plain JSON.
+          curl -fsS -u "${TS_KEY}:" -H "Accept: application/json" \
+            "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/acl" -o "$live"
+          python3 - "$live" <<'PY'
+          import json, re, sys
+          live = json.load(open(sys.argv[1], encoding="utf-8"))
+          src = open("pmoves/configs/tailscale-acl-policy.json", encoding="utf-8").read()
+          repo = json.loads(re.sub(r"(?m)//.*$", "", src))
+          def n(v): return len(v) if isinstance(v, (list, dict)) else 1
+          drift = 0
+          for k in sorted(set(live) | set(repo)):
+              a, b = repo.get(k), live.get(k)
+              if a == b:
+                  state = "same"
+              else:
+                  drift += 1
+                  state = "ONLY-LIVE" if a is None else "ONLY-REPO" if b is None else "DIFFERENT"
+              print(f"{k:<16} repo={n(a) if a is not None else '-':>4} live={n(b) if b is not None else '-':>4}  {state}")
+          print(f"sections differing: {drift}")
+          if drift:
+              print("::warning::live policy differs from the repo; an apply would overwrite live-only changes")
+          PY
+
   apply:
     name: apply to tailnet
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'apply') }}
     runs-on: ubuntu-24.04
     environment: Prod
     steps:
