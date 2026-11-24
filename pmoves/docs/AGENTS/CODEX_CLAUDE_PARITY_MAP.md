@@ -105,8 +105,8 @@ Set `PINOKIO_PTERM` to the full `pterm` executable path before running these che
 | `/n8n:execute` | `curl -X POST -H "X-N8N-API-KEY: $N8N_API_KEY" http://localhost:5678/api/v1/workflows/<id>/run` |
 | `/n8n:nodes` | query PMOVES n8n MCP node docs under `PMOVES-BoTZ/features/n8n/n8n-mcp/data/` |
 | `/n8n:suggest` | run n8n MCP suggestion flow via `pmoves-n8n-agent` for AI-assisted workflow synthesis |
-| `/nats:status` | `curl -s http://localhost:8222/varz` and `curl -s http://localhost:8222/jsz` |
-| `/nats:streams` | `curl -s http://localhost:8222/jsz?streams=1` |
+| `/nats:status` | `NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)` then `curl -s "$NATS_MONITOR_URL/varz"` and `curl -s "$NATS_MONITOR_URL/jsz"` (8222 is the container-side port; the host port is per node, 9223 by default) |
+| `/nats:streams` | `curl -s "$NATS_MONITOR_URL/jsz?streams=1"` after the same derivation |
 | `/nats:monitor` | `nats sub "<subject-pattern>" --count 20` |
 | `/nats:publish` | `nats pub "<subject>" '<json-payload>'` |
 | `/yt:help` | use `.claude/commands/yt/help.md` as the YouTube operations index |

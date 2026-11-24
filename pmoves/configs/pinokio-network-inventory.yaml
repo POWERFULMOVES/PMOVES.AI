@@ -166,6 +166,10 @@ nodes:
         class: intentional
         owner: docker-compose
         description: "JetStream message bus (hub)"
+        # Z890 only: the nats-leaf publishes host 8222 to container 8222
+        # (docker-compose.z890.yml; ports.yaml NATS_LEAF_8222_PORT). Every other
+        # node publishes the monitor on 9223. Allowlisted in
+        # pmoves/tests/tools/test_nats_monitor_host_port_ratchet.py.
         health_endpoint: "http://localhost:8222/varz"
 
       - name: Agent-Zero
@@ -286,7 +290,9 @@ nodes:
         class: intentional
         owner: docker
         description: "NATS message bus relay"
-        health_endpoint: "http://localhost:8222/varz"
+        # 8222 is the container-side monitor port. The VPS override inherits the
+        # base publish ${NATS_MONITORING_PORT:-9223}:8222 (ports.yaml NATS_MONITORING_PORT).
+        health_endpoint: "http://localhost:9223/varz"
       - name: Discord-Bot
         port: dynamic
         class: intentional
