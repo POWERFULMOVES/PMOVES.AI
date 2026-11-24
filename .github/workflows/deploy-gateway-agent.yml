@@ -22,7 +22,13 @@ env:
   # GitHub Secrets - Service Credentials
   HOSTINGER_API_KEY: ${{ secrets.HOSTINGER_API_KEY }}
   TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_APIKEY }}
+  # Same preference as sync-secrets-local.yml: canonical name first, legacy
+  # repo-level TAILSCALE_APIKEY second. CAVEAT: no job here declares
+  # `environment: Prod`, so the Prod-scoped TAILSCALE_API_KEY (the rotated one)
+  # is NOT visible to this workflow; today this still resolves to the legacy
+  # repo-level secret. It takes effect once a repo-level TAILSCALE_API_KEY exists
+  # or the deploy jobs move into the Prod environment (operator decision).
+  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY || secrets.TAILSCALE_APIKEY }}
   N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
   POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
   E2B_API_KEY: ${{ secrets.E2B_API_KEY }}

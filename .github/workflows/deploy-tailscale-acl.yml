@@ -11,7 +11,9 @@
 #
 # Prerequisites (operator):
 #   1. Allowlist `tailscale/gitops-acl-action@*` in Settings → Actions (done). SHA-pinned below.
-#   2. Prod environment secrets: TS_TAILNET (done) + TAILSCALE_APIKEY (repo-level, reused).
+#   2. Prod environment secrets: TS_TAILNET (done) + TAILSCALE_API_KEY (Prod, rotated
+#      2026-11-21). The repo-level TAILSCALE_APIKEY (last set 2026-06-23) is only a
+#      fallback now -- the same preference sync-secrets-local.yml uses.
 #      An OAuth client (scope acl:write, tag:ci) is preferred over a 90-day API key for
 #      durable CI — swap `api-key:` → `oauth-client-id:`/`oauth-secret:` to use it.
 #   Note: the Prod env has a wait_timer, so `apply` starts after that delay on merge.
@@ -53,7 +55,8 @@ jobs:
           python3 -c "import json,re; s=open('pmoves/configs/tailscale-acl-policy.json',encoding='utf-8').read(); json.loads(re.sub(r'(?m)//.*$','',s)); print('OK: HuJSON policy parses')"
 
   # Apply on merge to main. Uses the Prod environment for TS_TAILNET (protected-branch
-  # gated + wait_timer). TAILSCALE_APIKEY is repo-level and available here too.
+  # gated + wait_timer). Because this job runs in Prod, it sees the Prod-scoped
+  # TAILSCALE_API_KEY; the repo-level TAILSCALE_APIKEY is the fallback.
   apply:
     name: apply to tailnet
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
@@ -67,10 +70,12 @@ jobs:
           tailnet: ${{ secrets.TS_TAILNET }}
           # Prefer an OAuth client (durable — scope acl:write, tag:ci) over a 90-day
           # API key. The action accepts only ONE of api-key / oauth-secret, so api-key
-          # is blanked when an OAuth secret is present. Falls back to TAILSCALE_APIKEY
-          # when no OAuth client is configured.
+          # is blanked when an OAuth secret is present. With no OAuth client it uses
+          # the Prod TAILSCALE_API_KEY, then the legacy repo-level TAILSCALE_APIKEY.
+          # sync-secrets-local.yml has preferred the Prod name since 2026-09-26; the
+          # repo-level key is the static one that was revoked upstream.
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          api-key: ${{ secrets.TS_OAUTH_SECRET != '' && '' || secrets.TAILSCALE_APIKEY }}
+          api-key: ${{ secrets.TS_OAUTH_SECRET != '' && '' || (secrets.TAILSCALE_API_KEY || secrets.TAILSCALE_APIKEY) }}
           policy-file: ./pmoves/configs/tailscale-acl-policy.json
           action: apply
