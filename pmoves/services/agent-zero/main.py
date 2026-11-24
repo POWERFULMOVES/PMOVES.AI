@@ -949,7 +949,13 @@ def _authorize_command_publish(topic: str, presented_key: Optional[str]) -> None
         logger.warning(
             "Refusing command-topic publish %s: AGENT_ZERO_API_KEY is not configured", topic
         )
-    if not (expected and presented_key and hmac.compare_digest(presented_key, expected)):
+    # Compare bytes: hmac.compare_digest on str raises TypeError for non-ASCII input,
+    # which would turn a bad key into a 500 instead of this 403.
+    if not (
+        expected
+        and presented_key
+        and hmac.compare_digest(presented_key.encode("utf-8"), expected.encode("utf-8"))
+    ):
         raise HTTPException(
             status_code=403,
             detail={

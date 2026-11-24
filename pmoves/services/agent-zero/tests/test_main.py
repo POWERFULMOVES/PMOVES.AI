@@ -495,6 +495,21 @@ def test_claw_publish_without_valid_api_key_is_403(monkeypatch, load_service_mod
     assert published == []
 
 
+def test_authorize_command_publish_non_ascii_key_is_403_not_500(monkeypatch, load_service_module):
+    """hmac.compare_digest on two str raises TypeError when either is non-ASCII, which
+    would turn a wrong key into a 500. The gate compares UTF-8 bytes, so it stays a 403.
+    Called directly: the HTTP test client refuses to encode non-ASCII header values."""
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+    monkeypatch.setattr(module.runtime_config, "api_key", _API_KEY)
+
+    with pytest.raises(module.HTTPException) as excinfo:
+        module._authorize_command_publish("claw.task.assign.v1", "cl\xe9-\xf1")
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail["error"] == "forbidden"
+
+
 def test_claw_auth_is_checked_before_topic_registration(monkeypatch, load_service_module):
     """An unauthenticated caller cannot probe which claw.* topics exist."""
     module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
