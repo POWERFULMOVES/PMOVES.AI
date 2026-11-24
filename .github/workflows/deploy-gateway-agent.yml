@@ -22,7 +22,13 @@ env:
   # GitHub Secrets - Service Credentials
   HOSTINGER_API_KEY: ${{ secrets.HOSTINGER_API_KEY }}
   TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_APIKEY }}
+  # Same preference as sync-secrets-local.yml: canonical name first, legacy
+  # repo-level TAILSCALE_APIKEY second. The rotated key is Prod-scoped, so only
+  # a job that declares `environment: Prod` sees it. The one consumer is the
+  # VPS deploy (docker-compose.vps.override.yml passes TAILSCALE_API_KEY into
+  # the container), and that job runs in Prod (operator decision, 2026-11-24).
+  # Every other job here still resolves this to the legacy repo-level secret.
+  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY || secrets.TAILSCALE_APIKEY }}
   N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
   POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
   E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
@@ -368,6 +374,11 @@ jobs:
     name: Deploy to VPS (KVM4-1)
     runs-on: [self-hosted, kvm4]
     timeout-minutes: 15
+    # Prod: the rotated TAILSCALE_API_KEY is scoped here, and Prod admits only
+    # protected branches (main and PMOVES.AI-Edition-Hardened both are), so a
+    # PR or feature branch can never reach this kvm4 deploy with its secrets.
+    # Prod's wait_timer (2 min) applies before the job starts.
+    environment: Prod
     permissions:
       contents: read
     # The VPS job carries its OWN build step, so it is gated directly on the
@@ -466,6 +477,9 @@ jobs:
           NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
+          # Resolved again at step level, in this Prod job's own secrets
+          # context, so the rotated Prod key reaches compose deterministically.
+          TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY || secrets.TAILSCALE_APIKEY }}
           # Cipher lives on the Z890 GPU node (tailnet; resolve via ops vault); the
           # pmoves_* networks are internal:true so containers reach it via the
           # host-level socat relay on the pmoves_api bridge gateway. The relay
