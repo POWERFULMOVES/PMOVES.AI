@@ -1116,3 +1116,84 @@ The room enhancements closed (#2437, #2443, #2450 all merged Sat Aug 8). This sl
 
 <!-- /graphiti -->
 
+
+<!-- graphiti:mavis phase:silent-bind-remediate-tier ts:2026-11-23T20:00:00Z -->
+
+## ⬡ Mavis - The b850 stack is HANDED OFF, not recreated
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** silent-bind, network-hardening, compose-tier, port-registry, b850-handoff, kriss-kross
+**Voice:** Dimensional
+
+The silent-bind lane closed its own loop: the 73 measured gaps are retired, the
+baseline is empty, and the gate now fails on any new gap. The operator's tier
+decision is applied -- attach `pmoves_public`, pin every wide bind to
+`127.0.0.1`.
+
+One piece of that work was deliberately NOT done here: the b850's deployed
+stack. The operator's answer was *"Handoff to b850 as they have unfinished work
+on node"* -- so the b850 agent (B850-CLAUDE / Knuckles) owns it, and this lane
+touches nothing on that node.
+
+### Done (silent-bind remediation -- PR #3522)
+
+- **39 services across 10 compose files** now attach `pmoves_public`, so their
+  published host ports can actually activate.
+- **34 published host ports** move from `0.0.0.0` to `127.0.0.1`; **7 more**
+  that carried NO host address -- and therefore bound `0.0.0.0` by Docker's
+  default -- get explicit loopback binds. Attaching the tier WITHOUT pinning
+  those seven would have CREATED new wide listeners, the exact defect the lane
+  removes.
+- The **baseline is EMPTY**: the gate measures 0 gaps and fails on any new one.
+- **PR #3519's mangled `networks:` line** repaired -- it had left `main` red in
+  `compose-yaml-check` and `validate-composes-ratchet` -- and the
+  **unregistered miSSingLinc port** it had been hiding added to the port
+  registry.
+- **The prior lane's count was wrong and is corrected in place.** It said "37 of
+  them bound to `0.0.0.0`", which conflated gap ENTRIES with SERVICES and
+  counted only the mappings whose TEXT names `0.0.0.0`. Measured by the new
+  `--bind-shape` report: 80 port slots = 34 explicit + 7 implicit + 39
+  loopback; **37 ENTRIES across 20 SERVICES** are wide-or-implicit and **19
+  SERVICES** are loopback-only. The decision never depended on the count.
+
+### Left Behind (intentional -- the b850's stack)
+
+- The b850's deployed compose stack, its containers and its bindings are
+  **untouched by this lane**. No recreate, no edit, no `ssh` into
+  `pmoves-b850-ai-top`.
+- The b850's own gap list is **not** the 73 gaps this lane measured. Those 73
+  are the REPO's compose scope; the b850 runs a deployed stack. The runtime
+  audit measured 15 containers / 16 silent binds on that node, and the static
+  gate will measure a different population again -- so **re-measure; do not
+  carry this lane's number over**.
+
+### For Next Agent (B850-CLAUDE / Knuckles)
+
+- **Measure the b850's own population first.** The gate is STATIC: `python
+  pmoves/tools/silent_bind_ratchet.py --check --bind-shape` reads compose files
+  and needs **no Docker daemon**, so it runs on the b850 directly. Point it at
+  the b850's compose files and read the SHAPE, not this lane's count.
+- **The b850 checkout at `/home/pmoves-knuckles/pinokio/api/PMOVES.AI` is NOT a
+  git checkout**, so the merge path for PR #3522 does not apply to it directly.
+  Either sync it to a git checkout or re-apply the compose delta by hand. This
+  lane deliberately did not touch it.
+- **Apply the same tier decision**: attach `pmoves_public`, and pin every
+  wide-or-implicit bind to `127.0.0.1`. The implicit ones are the trap -- a
+  mapping with no host address binds `0.0.0.0` the moment its container joins
+  a non-internal network.
+- **Then recreate the affected containers** so the bindings activate, and verify
+  with the house's runtime auditor `make -C pmoves net-reality` -- the one that
+  compares what each container REQUESTED against what the daemon ACTIVATED.
+- **Blockers**: (a) the non-git deployed checkout; (b) live container recreates
+  on the b850 are the b850 agent's to make -- this lane makes none; (c) the
+  CHIT attestation signature for this handoff is **WAIVED**: no key material is
+  loaded on the Mavis host (`CHIT_PASSPHRASE` unset, `pmoves/secrets/` empty),
+  so the trail is unsigned-local per session convention, and the register row
+  carries the waiver as KRISS_KROSS_ACCORD.md requires.
+
+- ⬡
+
+</td></tr></table>
+
+<!-- /graphiti -->

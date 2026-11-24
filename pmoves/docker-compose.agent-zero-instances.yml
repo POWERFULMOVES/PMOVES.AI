@@ -52,7 +52,8 @@ services:
       - ${A0MISS_USR_DIR:-C:/Users/russe/agent-zero/PMOVES-miSSingLinc/usr}:/a0/usr
     ports:
       - ${A0MISS_BIND:-127.0.0.1}:${A0MISS_PORT:-60939}:80
-    networks:\      - pmoves-net
+    networks:
+      - pmoves-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/health >/dev/null || exit 1"]
       interval: 30s

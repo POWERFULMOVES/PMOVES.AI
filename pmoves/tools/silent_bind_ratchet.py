@@ -111,6 +111,22 @@ Without ``--base-ref`` the addition rule is NOT enforced, and the tool says
 so on every run. A gate that silently does less than it claims is worse
 than one that is explicit about the smaller thing it does.
 
+A base file that cannot be READ is not the same failure as a tree that
+cannot be read. The tree being measured must be fully readable -- that is
+exit 3, a hard failure, and it is not negotiable. A base file that will not
+parse contributes ZERO gaps at the base, which is the CONSERVATIVE direction:
+it cannot have carried a measurable gap there, so a baseline entry naming it
+is reported as an ADDITION rather than quietly accepted. Skipping those
+entries instead would be the fail-OPEN direction, and a fail-open escape
+hatch is worse than a false positive a reviewer can dismiss. The run says
+how many base files could not be read. A base that cannot be MATERIALIZED at
+all (a bad ref, a git failure) is an instrument error and fails the run
+closed.
+
+That distinction is not academic: on 2026-11-22 the base revision was a
+compose file with a mangled line, and the change that REPAIRED it would
+otherwise have been unable to pass the gate that caught the mangling.
+
 FINDINGS
 --------
   UNACTIVATABLE_PORT  a service publishes a host port but joins only
@@ -150,6 +166,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -317,6 +334,230 @@ def _default_network_is_internal(doc: dict) -> Optional[bool]:
     return None
 
 
+# --------------------------------------------------------------------------
+# bind shape
+# --------------------------------------------------------------------------
+# Docker's default host address for a published port is 0.0.0.0 when the
+# mapping carries NO host address at all. A mapping that omits the address is
+# therefore WIDE at runtime even though its text contains no "0.0.0.0".
+#
+# That is the difference between counting a service by its TEXT and counting
+# it by its RUNTIME behaviour, and it is exactly where a count of "the gaps
+# bound to 0.0.0.0" goes wrong: a mapping written as
+# "${SEMANTIC_CACHE_PORT:-8100}:8100" has no address in it at all, yet it
+# binds every interface the moment its container joins a non-internal
+# network. Counting only the mappings whose text says "0.0.0.0" UNDER-counts
+# the wide group and over-counts the safe one.
+#
+# So the shape is derived from the mapping, not from a substring search.
+
+BIND_WIDE = "wide"          # an explicit 0.0.0.0 (or ::) host address
+BIND_LOOPBACK = "loopback"  # an explicit 127.0.0.1 (or ::1) host address
+BIND_IMPLICIT = "implicit"  # no host address in the mapping -> 0.0.0.0
+BIND_OTHER = "other"        # a specific address, or a default we cannot read
+
+CLASS_WIDE_OR_IMPLICIT = "wide_or_implicit"
+CLASS_LOOPBACK = "loopback"
+CLASS_OTHER = "other"
+
+
+def split_port_spec(spec: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Split a compose port mapping into (host address, host port, container port).
+
+        ${BIND:-0.0.0.0}:${PORT:-1234}:1234 -> ("${BIND:-0.0.0.0}", "${PORT:-1234}", "1234")
+        ${PORT:-1234}:1234                 -> (None,                    "${PORT:-1234}", "1234")
+        1234:1234                          -> (None,                    "1234",         "1234")
+
+    The colon inside a substitution defeats a naive split -- the same trap the
+    house smoke suite hit with _http_port -- so the braces are matched first
+    and only the colons OUTSIDE them separate the components.
+
+    The component COUNT is what decides whether a host address is present at
+    all: a three-component mapping is host:host_port:container_port, and a
+    two-component mapping has NO host address, so Docker publishes it on
+    0.0.0.0. Reading "${PORT:-8100}:8100" as "host address ${PORT:-8100}"
+    would be a category error: that expression names a PORT, and it would
+    put a wide port into the "other" bucket.
+    """
+    s = str(spec).strip()
+    bracketed_host: Optional[str] = None
+    if s.startswith("["):
+        # An IPv6 literal contains colons, which is WHY Compose requires the
+        # brackets in the short syntax ("[::1]:6001:6001"). Splitting on
+        # every colon would shred the address into "[", "", "1]" -- so the
+        # bracketed host is peeled off FIRST, and only the remainder is split.
+        end = s.find("]")
+        if end != -1:
+            bracketed_host = s[: end + 1]
+            s = s[end + 1 :]
+            if s.startswith(":"):
+                s = s[1:]
+
+    parts: List[str] = []
+    cur: List[str] = []
+    depth = 0
+    for ch in s:
+        if ch == "{":
+            depth += 1
+            cur.append(ch)
+        elif ch == "}":
+            depth -= 1
+            cur.append(ch)
+        elif ch == ":" and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    parts.append("".join(cur))
+
+    if bracketed_host is not None:
+        # The host was peeled off, so what is left is host_port[:container_port].
+        if len(parts) >= 2:
+            return bracketed_host, parts[0], parts[1]
+        if len(parts) == 1:
+            return bracketed_host, parts[0], None
+        return bracketed_host, None, None
+    if len(parts) >= 3:
+        return parts[0], parts[1], parts[2]
+    if len(parts) == 2:
+        return None, parts[0], parts[1]
+    return None, None, parts[0]
+
+
+def bind_default(host_expr: Optional[str]) -> Optional[str]:
+    """The DEFAULT host address inside a bind expression.
+
+    None means "there is no readable default" -- an expression with no
+    ``:-default`` part at all has no value this gate can know, so it is
+    reported as OTHER rather than guessed.
+    """
+    if host_expr is None:
+        return None
+    m = re.match(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(.*)\}$", host_expr)
+    if m:
+        return m.group(1)
+    return None
+
+
+#: A literal IPv4 address written directly into a port mapping.
+_LITERAL_IPV4 = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+#: A literal IPv6 address, bracketed or bare. The brackets are what Compose
+#: requires in the short syntax; the bare form is accepted here so a mapping
+#: written without them is still recognised rather than mis-filed.
+_LITERAL_IPV6 = re.compile(r"^\[?[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*\]?$")
+
+#: Host addresses that publish on EVERY interface.
+_WIDE_ADDRESSES = ("0.0.0.0", "::", "[::]")
+#: Host addresses that publish on the loopback interface ONLY.
+_LOOPBACK_ADDRESSES = ("127.0.0.1", "::1", "[::1]")
+
+
+def literal_address(host_expr: str) -> Optional[str]:
+    """The LITERAL host address, when the mapping names one outright.
+
+    Compose short syntax accepts an address with no environment indirection
+    at all -- ``127.0.0.1:8080:80``. Such a mapping is exactly as knowable
+    from source as a ``${VAR:-127.0.0.1}`` whose default is readable, so it
+    must be classified rather than swept into OTHER.
+
+    Only an IP address counts. A hostname may resolve to anything, so
+    claiming a bind class for it would be a guess.
+    """
+    if "$" in host_expr:
+        # An expression, not a literal -- its VALUE is not knowable from here.
+        return None
+    if _LITERAL_IPV4.match(host_expr) or _LITERAL_IPV6.match(host_expr):
+        return host_expr
+    return None
+
+
+def classify_port(spec: str) -> str:
+    """Bind class of ONE published port mapping."""
+    host_expr, _host_port, _container_port = split_port_spec(spec)
+    if host_expr is None:
+        # No host address in the mapping: Docker publishes on 0.0.0.0.
+        return BIND_IMPLICIT
+    default = bind_default(host_expr)
+    if default is None:
+        # No "${VAR:-default}" to read. The mapping may still name a LITERAL
+        # address outright, which is as readable as a default would have been.
+        default = literal_address(host_expr)
+        if default is None:
+            return BIND_OTHER
+    if default in _WIDE_ADDRESSES:
+        return BIND_WIDE
+    if default in _LOOPBACK_ADDRESSES:
+        return BIND_LOOPBACK
+    return BIND_OTHER
+
+
+def service_bind_class(ports: List[str]) -> str:
+    """Bind class of a SERVICE: the worst class among its published ports.
+
+    A service with one loopback port and one implicit port is WIDE at
+    runtime -- the implicit mapping binds every interface -- so the service
+    inherits the wide class rather than the reassuring one.
+    """
+    classes = {classify_port(p) for p in ports}
+    if not classes:
+        return CLASS_OTHER
+    if classes & {BIND_WIDE, BIND_IMPLICIT}:
+        return CLASS_WIDE_OR_IMPLICIT
+    if BIND_LOOPBACK in classes:
+        return CLASS_LOOPBACK
+    return CLASS_OTHER
+
+
+#: How bad each class is. A service that appears in several files inherits
+#: the WORST class any of them carries, because the runtime bind is the
+#: widest one it can be brought up with.
+_CLASS_SEVERITY = {
+    CLASS_LOOPBACK: 0,
+    CLASS_OTHER: 1,
+    CLASS_WIDE_OR_IMPLICIT: 2,
+}
+
+
+def bind_shape(gaps: List[dict]) -> dict:
+    """The bind-shape breakdown of a measured population.
+
+    Counted three ways on purpose, because they answer different questions:
+    the PORT classes (how many published ports are wide), the ENTRY classes
+    (how many (file, service) pairs belong to a wide service) and the SERVICE
+    classes (how many distinct services are wide). A claim that mixes those
+    units is how a "37 services bound to 0.0.0.0" gets written when the
+    truth is 37 ENTRIES across 20 SERVICES.
+    """
+    port_counts = {BIND_WIDE: 0, BIND_LOOPBACK: 0, BIND_IMPLICIT: 0, BIND_OTHER: 0}
+    entry_class: Dict[Tuple[str, str], str] = {}
+    service_class: Dict[str, str] = {}
+    for g in gaps:
+        ports = g.get("ports") or []
+        for p in ports:
+            port_counts[classify_port(p)] += 1
+        cls = service_bind_class(ports)
+        entry_class[(g["file"], g["service"])] = cls
+        name = g["service"]
+        prior = service_class.get(name)
+        if prior is None or _CLASS_SEVERITY[cls] > _CLASS_SEVERITY[prior]:
+            service_class[name] = cls
+
+    def _tally(items) -> Dict[str, int]:
+        out: Dict[str, int] = {}
+        for v in items:
+            out[v] = out.get(v, 0) + 1
+        return dict(sorted(out.items()))
+
+    return {
+        "entries": len(gaps),
+        "services": len(service_class),
+        "port_slots": sum(port_counts.values()),
+        "ports_by_class": dict(sorted(port_counts.items())),
+        "entries_by_class": _tally(entry_class.values()),
+        "services_by_class": _tally(service_class.values()),
+    }
+
+
 def _rel_path(path: Path, root: Optional[Path]) -> str:
     """The file's path RELATIVE to the pmoves/ root, POSIX style.
 
@@ -472,24 +713,51 @@ def write_baseline(gaps: List[dict], path: Optional[Path] = None) -> int:
         "reason": PLACEHOLDER_REASON,
     } for g in sorted(gaps, key=lambda x: (x["file"], x["service"]))]
     body = {"known_gaps": entries}
-    header = (
-        "# Recorded silent-bind gaps -- pmoves/tools/silent_bind_ratchet.py\n"
-        "#\n"
-        "# A service that publishes a host port while joined only to\n"
-        "# internal:true networks CANNOT activate that port: Docker stores the\n"
-        "# binding and never activates it (moby/moby#36174; house\n"
-        "# DOCKER_NETWORK_HARDENING.md Rule 5).\n"
-        "#\n"
-        "# Each entry is a (file, service) pair measured by the ratchet. They are\n"
-        "# recorded so the gate can be ENFORCED today without turning it red in a\n"
-        "# single step. They are NOT approved, and none of them is 'expected'.\n"
-        "#\n"
-        "# The list may shrink and must never silently grow. A service that is\n"
-        "# fixed but still listed here fails the gate as a STALE entry, so the\n"
-        "# count only goes down.\n"
-        "#\n"
-        "# Regenerate: python pmoves/tools/silent_bind_ratchet.py --write-baseline --yes\n"
-    )
+    if entries:
+        header = (
+            "# Recorded silent-bind gaps -- pmoves/tools/silent_bind_ratchet.py\n"
+            "#\n"
+            "# A service that publishes a host port while joined only to\n"
+            "# internal:true networks CANNOT activate that port: Docker stores the\n"
+            "# binding and never activates it (moby/moby#36174; house\n"
+            "# DOCKER_NETWORK_HARDENING.md Rule 5).\n"
+            "#\n"
+            "# Each entry is a (file, service) pair measured by the ratchet. They are\n"
+            "# recorded so the gate can be ENFORCED today without turning it red in a\n"
+            "# single step. They are NOT approved, and none of them is 'expected'.\n"
+            "#\n"
+            "# The list may shrink and must never silently grow. A service that is\n"
+            "# fixed but still listed here fails the gate as a STALE entry, so the\n"
+            "# count only goes down.\n"
+            "#\n"
+            "# Regenerate: python pmoves/tools/silent_bind_ratchet.py --write-baseline --yes\n"
+        )
+    else:
+        # The EMPTY baseline is a real state with its own meaning: every
+        # measured gap is fixed, so the gate now fails on ANY new gap. A
+        # header that still says "they are recorded so the gate can be
+        # enforced today" describes a list that no longer exists, and a
+        # reviewer should not have to guess which state they are reading.
+        header = (
+            "# Recorded silent-bind gaps -- pmoves/tools/silent_bind_ratchet.py\n"
+            "#\n"
+            "# A service that publishes a host port while joined only to\n"
+            "# internal:true networks CANNOT activate that port: Docker stores the\n"
+            "# binding and never activates it (moby/moby#36174; house\n"
+            "# DOCKER_NETWORK_HARDENING.md Rule 5).\n"
+            "#\n"
+            "# THIS LIST IS EMPTY. Every measured gap has been remediated, so the\n"
+            "# gate now fails on ANY new gap: a service that publishes a host\n"
+            "# port while joined only to internal:true networks is reported as\n"
+            "# UNACTIVATABLE_PORT, and any entry added here for a gap that did\n"
+            "# not exist at the base revision is reported as BASELINE_ADDITION.\n"
+            "#\n"
+            "# The list may shrink and must never silently grow. A service that is\n"
+            "# fixed but still listed here fails the gate as a STALE entry, so the\n"
+            "# count only goes down.\n"
+            "#\n"
+            "# Regenerate: python pmoves/tools/silent_bind_ratchet.py --write-baseline --yes\n"
+        )
     cfg.write_text(header + yaml.safe_dump(body, sort_keys=False, allow_unicode=True),
                    encoding="utf-8", newline="\n")
     return len(entries)
@@ -529,6 +797,8 @@ def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None,
     # without one there is nothing to compare the entry against, and the run
     # says so rather than implying the rule was applied.
     base_gaps_measured: Optional[int] = None
+    base_errors: List[dict] = []
+    base_shape: Optional[dict] = None
     additions: List[dict] = []
     if base_ref:
         git_repo = REPO_ROOT if repo is None else Path(repo)
@@ -537,9 +807,23 @@ def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None,
             with base_tree(base_ref, git_repo) as base_root:
                 b_gaps, b_errors, _ = measure(base_root)
                 base_gaps_measured = len(b_gaps)
+                base_shape = bind_shape(b_gaps)
+                # A base file that cannot be read contributes ZERO gaps, and
+                # that is the CONSERVATIVE direction: it cannot have carried
+                # a measurable gap at the base, so a baseline entry naming it
+                # is reported as an addition rather than quietly accepted.
+                # The alternative -- skipping those entries -- would be the
+                # fail-OPEN direction, and a fail-open escape hatch is worse
+                # than a false positive a reviewer can dismiss.
+                #
+                # It is reported, never swallowed: the run says how many base
+                # files could not be read. It is NOT an instrument error of
+                # the TREE BEING MEASURED, because that tree read fine. A
+                # base that cannot be materialized at all IS an instrument
+                # error and fails the run closed.
                 base_keys = {(g["file"], g["service"]) for g in b_gaps}
                 for e in b_errors:
-                    errors.append({
+                    base_errors.append({
                         "kind": INSTRUMENT_ERROR,
                         "file": f"base:{base_ref}:{e['file']}",
                         "detail": e["detail"],
@@ -567,8 +851,11 @@ def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None,
         "gaps_measured": len(gaps),
         "gap_services": len({g["service"] for g in gaps}),
         "baseline_entries": len(baseline),
+        "bind_shape": bind_shape(gaps),
         "base_ref": base_ref,
         "base_gaps_measured": base_gaps_measured,
+        "base_bind_shape": base_shape,
+        "base_instrument_errors": base_errors,
         "baseline_additions": len(additions),
         "findings": findings,
         "instrument_errors": errors,
@@ -580,6 +867,18 @@ def run_check(path: Optional[Path] = None, pmoves_dir: Optional[Path] = None,
     else:
         rc = EXIT_CLEAN
     return rc, report
+
+
+def _print_bind_shape(label: str, shape: Optional[dict]) -> None:
+    """Print one bind-shape breakdown. Silence on a missing shape."""
+    if not shape:
+        return
+    print(f"bind shape ({label}):")
+    print(f"  entries: {shape['entries']}   services: {shape['services']}   "
+          f"port slots: {shape['port_slots']}")
+    print(f"  ports by class:    {shape['ports_by_class']}")
+    print(f"  entries by class:  {shape['entries_by_class']}")
+    print(f"  services by class: {shape['services_by_class']}")
 
 
 def main() -> int:
@@ -600,6 +899,10 @@ def main() -> int:
     ap.add_argument("--repo", default=None,
                     help="git repository to read the base revision from "
                          "(default: this repository)")
+    ap.add_argument("--bind-shape", action="store_true",
+                    help="print the bind-shape breakdown of the measured "
+                         "population, and of the base revision when --base-ref "
+                         "is given")
     args = ap.parse_args()
 
     pmoves_dir = Path(args.pmoves_dir) if args.pmoves_dir else None
@@ -637,6 +940,13 @@ def main() -> int:
         print(f"base revision: {report['base_ref']} "
               f"({report['base_gaps_measured']} gap(s) measured there) "
               f"-- the baseline-addition rule IS enforced")
+        for e in report.get("base_instrument_errors") or []:
+            print(f"  BASE INSTRUMENT ERROR {e['file']}: {e['detail']}")
+        if report.get("base_instrument_errors"):
+            print(f"  ({len(report['base_instrument_errors'])} base file(s) could not be "
+                  "read; their gaps were taken as ZERO, which is the conservative "
+                  "direction -- a baseline entry naming one of them is reported as an "
+                  "addition, not quietly accepted)")
     else:
         print("base revision: NOT SUPPLIED -- the baseline-addition rule is "
               "NOT enforced in this run")
@@ -644,6 +954,11 @@ def main() -> int:
         print(f"  INSTRUMENT ERROR {e['file']}: {e['detail']}")
     for f in report["findings"]:
         print(f"  {f['kind']} {f['file']}:{f['service']} -- {f['detail']}")
+    if args.bind_shape:
+        _print_bind_shape("tree being measured", report["bind_shape"])
+        if report.get("base_ref"):
+            _print_bind_shape(f"base {report['base_ref']}",
+                              report.get("base_bind_shape"))
     if rc == EXIT_CLEAN:
         print(f"clean: every measured gap ({report['gaps_measured']}) is recorded in "
               f"the baseline and no baseline entry is stale. The recorded gaps "
