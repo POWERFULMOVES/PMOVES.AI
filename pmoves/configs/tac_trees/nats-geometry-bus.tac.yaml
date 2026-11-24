@@ -95,8 +95,21 @@ root:
           task: "PMOVES-nats-server: carry the §7a hub packaging onto a current upstream"
           action:
             type: manual
-            expect: "PMOVES.AI-Edition-Hardened rebased (1 PMOVES commit, 923 behind nats-io/nats-server main at 2026-11-24); pmoves/ dir = Dockerfile, entrypoint, pmoves-nats.conf, leaf-edge/leaf-cloud examples, resolver preload"
-          context: "The superproject submodule PMOVES-nats-server tracks this branch but is uninitialized on 4090 and in CI checkouts reviewed."
+            expect: "Upstream merged into PMOVES.AI-Edition-Hardened via fork-sync.yml (merge commit, never squash). Trial merge in a worktree 2026-11-24: CLEAN; the PMOVES delta is 9 new files under pmoves/ only (Dockerfile, entrypoint, pmoves-nats.conf, leaf-edge/leaf-cloud examples, resolver preload, compose example)."
+          context: "The 923-commit gap is source history the hub never compiles: pmoves/Dockerfile is FROM nats:2.11-alpine (stock binary, no Go patches, by design). Server currency is set by that image tag, see nats-bus.forks.image. The superproject submodule tracks this branch but is uninitialized on 4090."
+
+        - id: nats-bus.forks.image
+          task: "Hub and leaf images run a maintained NATS release"
+          action:
+            type: manual
+            expect: "Fork Dockerfile and every compose NATS image move from 2.11 / 2.10 to a maintained line (upstream releases 2026-11-11: v2.15.3, v2.14.10), pinned by digest; jetson-edge's 2.10 included"
+          context: "Measured 2026-11-24: fork Dockerfile nats:2.11-alpine; docker-compose.yml, .core, .z890, agent-zero-twin nats:2.11.8-alpine; jetson-edge override nats:2.10-alpine. Upstream main is 2.16.0-dev."
+
+        - id: nats-bus.forks.conf-reconcile
+          task: "One hub conf: the fork's pmoves/pmoves-nats.conf and the superproject's pmoves/config/nats/pmoves-nats.conf agree"
+          action:
+            type: manual
+            expect: "One file is canonical, the other generated or deleted. Today they differ: env var names (PMOVES_NATS_SERVER_NAME vs NATS_SERVER_NAME), JetStream store dir and limits, websocket block, and resolver (include file vs inline env JWTs)"
 
         - id: nats-bus.forks.submodule-declared
           task: "nats-server fork is a declared submodule"
