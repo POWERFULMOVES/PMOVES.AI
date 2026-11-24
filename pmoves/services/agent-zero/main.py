@@ -37,6 +37,7 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 # ---------------------------------------------------------------------------
 from services.common.config import env_bool as _env_bool
 from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
+from services.common.nats_client import redact_url
 
 _sync_openai_compat_env()
 
@@ -829,7 +830,8 @@ async def healthz() -> Dict[str, Any]:
         "last_returncode": process_manager.last_returncode,
     }
     detail["nats"] = {
-        "url": service_config.nats_url,
+        # /healthz is unauthenticated and tailnet-served: never return userinfo.
+        "url": redact_url(service_config.nats_url),
         "connected": event_controller.is_connected,
         "controller_started": event_controller.is_started,
         "use_jetstream": controller_settings.use_jetstream,
@@ -866,7 +868,9 @@ async def metrics() -> Response:
 
 @app.get("/config/environment", response_model=AgentZeroServiceConfig)
 def get_environment_endpoint() -> AgentZeroServiceConfig:
-    return get_service_config()
+    # Unauthenticated like /healthz: return a copy with NATS userinfo stripped.
+    config = get_service_config()
+    return config.model_copy(update={"nats_url": redact_url(config.nats_url)})
 
 
 @app.get("/mcp/commands")
