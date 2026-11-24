@@ -8,7 +8,7 @@ communicates through NATS subjects.
 
 - **Image:** `nats:2.11.8-alpine`
 - **Client port:** 4222 (`${NATS_PORT:-4222}:4222`)
-- **Monitoring:** 8222 (`${NATS_MONITORING_PORT:-9223}:8222`) — healthcheck: `wget http://localhost:8222/varz`
+- **Monitoring:** container port 8222, published on the host as 9223 by default (`${NATS_MONITORING_PORT:-9223}:8222`). The in-container healthcheck dials `wget http://localhost:8222/varz`; host-side probes must use the published port (see [NATS monitor port](#nats-monitor-port)).
 - **JetStream:** enabled (`-js` flag)
 - **Auth:** `--user ${NATS_USER:-nats} --pass ${NATS_PASSWORD:-pmoves}`
 - **WebSocket:** not configured in main compose (available in DoX standalone at 9222/9223)
@@ -77,18 +77,55 @@ Created by `nats-init` sidecar (`pmoves/scripts/nats/init_streams.sh`):
 | `ROOMS`                | `room.>`        | limits    | 7d      | 500 MB   | **Lane 5 added** — P7 room presence/directory/manifest; `p7.room.*` is intentionally separate (see init script) |
 | `HELPDESK`             | `helpdesk.>`    | limits    | 30d     | 1 GB     | **Lane 5 added** — PMOVES-helpdesk intake/routed/room-suggested audit ledger |
 
+## NATS monitor port
+
+The NATS HTTP monitor (`/varz`, `/connz`, `/jsz`, `/healthz`) listens on **8222
+inside the container**. What answers on the **host** depends on the node's compose
+layout, and on most nodes host 8222 refuses the connection. A refused 8222 from the
+host therefore says nothing about whether NATS is up or who is subscribed.
+
+| Layout | Compose source | Host port | ports.yaml slot |
+|--------|----------------|-----------|-----------------|
+| Default (base compose; the VPS/KVM override inherits it) | `docker-compose.yml`: `${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222` | **9223** | `NATS_MONITORING_PORT` |
+| Z890 leaf | `docker-compose.z890.yml`: `127.0.0.1:${NATS_LEAF_8222_PORT:-8222}:8222` | **8222** | `NATS_LEAF_8222_PORT` |
+| Jetson edge leaf | `docker-compose.jetson-edge.override.yml` publishes 4222 only | none | none |
+| Standalone cipher stack | `pmoves/scripts/start-cipher-stack.sh` runs its own NATS with `-p 8222:8222` | **8222** | none |
+
+`NATS_MONITORING_BIND` can also move the host off loopback. Do not hardcode either
+half. Ask Docker instead, from the repo root:
+
+```bash
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh) || echo "assumed, not measured: $NATS_MONITOR_URL"
+curl -s "$NATS_MONITOR_URL/varz"
+```
+
+The script exits 0 with the URL it read from `docker port`, or exits 1 with the
+default (`http://localhost:9223`) when it could not measure. `NATS_MONITOR_URL` is
+used here instead of `NATS_URL` because `NATS_URL` is the `nats://` client URL
+everywhere else in the stack.
+
+New host-side loopback URLs on port 8222 under `pmoves/docs/` and
+`pmoves/configs/` fail
+`pmoves/tests/tools/test_nats_monitor_host_port_ratchet.py`. Legitimate uses
+(in-container healthchecks, the Z890 layout) are allowlisted there with a reason.
+
 ## Debugging
 
 ### Check NATS health
 
+8222 is the container-side monitor port; on most nodes it does not answer on the
+host. Derive the host URL first (run from the repo root; see
+[NATS monitor port](#nats-monitor-port)):
+
 ```bash
-curl http://localhost:8222/varz
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)
+curl -s "$NATS_MONITOR_URL/varz"
 ```
 
 ### List active connections
 
 ```bash
-curl http://localhost:8222/connz
+curl -s "$NATS_MONITOR_URL/connz"
 ```
 
 ### Verify JetStream streams
