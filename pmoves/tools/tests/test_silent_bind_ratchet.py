@@ -574,6 +574,103 @@ def test_without_a_base_revision_the_rule_is_not_claimed(tmp_path):
     assert "NOT enforced" in proc.stdout, proc.stdout
 
 
+def test_a_base_file_that_cannot_be_read_does_not_fail_the_run(tmp_path):
+    """Case 11e -- a base file that will not parse contributes ZERO gaps.
+
+    The tree being measured is a different thing from the base it is
+    compared against. The measured tree must be fully readable -- that is
+    exit 3, and it is not negotiable. A base file that cannot be parsed
+    cannot have carried a measurable gap at the base, so a baseline entry
+    naming it is reported as an ADDITION rather than quietly accepted.
+
+    Without this, a change that REPAIRS a mangled compose file could not
+    pass the gate that caught the mangling, because the base it is compared
+    against is the mangled one. That is not a hypothetical: it is what
+    PR #3519's mangled line would have done to the repair.
+    """
+    repo, base_sha = _base_repo(
+        tmp_path,
+        base_files={"docker-compose.yml": CANONICAL + QDRANT,
+                    "docker-compose.broken.yml": "services:\n  a: [unclosed\n"},
+        # The head REPAIRS the mangled file -- the scenario this rule exists
+        # for. The repaired file publishes no port, so it measures no gaps.
+        head_files={"docker-compose.yml": CANONICAL + QDRANT,
+                    "docker-compose.broken.yml": "services:\n  repaired:\n    image: x\n"},
+    )
+    baseline = tmp_path / "baseline.yaml"
+    _write(baseline, """
+known_gaps:
+  - file: docker-compose.yml
+    service: qdrant
+    reason: measured at the base revision
+""")
+    proc = _run(repo / "pmoves", baseline, repo=repo, base_ref=base_sha)
+    rep = _report(proc)
+    # The base file that could not be read is reported, not swallowed.
+    assert rep["base_instrument_errors"], rep
+    assert "docker-compose.broken.yml" in rep["base_instrument_errors"][0]["file"]
+    # It is NOT an instrument error of the tree being measured.
+    assert rep["instrument_errors"] == [], rep
+    # And the run did not fail closed on the base.
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_a_base_entry_for_an_unreadable_base_file_is_an_addition(tmp_path):
+    """Case 11f -- the conservative direction, proven.
+
+    A base file that cannot be read contributes ZERO gaps, so a baseline
+    entry naming it IS an addition -- the fail-OPEN alternative (skipping
+    such entries) would let the escape hatch back in through the base.
+    """
+    repo, base_sha = _base_repo(
+        tmp_path,
+        base_files={"docker-compose.yml": CANONICAL + QDRANT,
+                    "docker-compose.broken.yml": "services:\n  a: [unclosed\n"},
+        head_files={"docker-compose.yml": CANONICAL + QDRANT,
+                    "docker-compose.broken.yml": "services:\n  repaired:\n    image: x\n"},
+    )
+    baseline = tmp_path / "baseline.yaml"
+    _write(baseline, """
+known_gaps:
+  - file: docker-compose.yml
+    service: qdrant
+    reason: measured at the base revision
+  - file: docker-compose.broken.yml
+    service: could-not-have-existed
+    reason: the base file was unreadable, so this could not be a base gap
+""")
+    proc = _run(repo / "pmoves", baseline, repo=repo, base_ref=base_sha)
+    rep = _report(proc)
+    additions = [f for f in rep["findings"] if f["kind"] == "BASELINE_ADDITION"]
+    assert len(additions) == 1, rep["findings"]
+    assert additions[0]["service"] == "could-not-have-existed"
+    assert proc.returncode == 1
+
+
+def test_a_base_that_cannot_be_materialized_fails_closed(tmp_path):
+    """Case 11g -- a base that cannot be materialized at all is an instrument
+    error, and the run fails closed. There is no measurement to compare
+    against, so the rule cannot be applied and must not be implied."""
+    repo, _ = _base_repo(
+        tmp_path,
+        base_files={"docker-compose.yml": CANONICAL + QDRANT},
+        head_files={"docker-compose.yml": CANONICAL + QDRANT_AND_NEWCOMER},
+    )
+    baseline = tmp_path / "baseline.yaml"
+    _write(baseline, """
+known_gaps:
+  - file: docker-compose.yml
+    service: qdrant
+    reason: measured at the base revision
+""")
+    proc = _run(repo / "pmoves", baseline, repo=repo,
+                base_ref="0000000000000000000000000000000000000000")
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    rep = _report(proc)
+    assert rep["instrument_errors"], rep
+    assert "base:" in rep["instrument_errors"][0]["file"]
+
+
 def test_same_filename_in_two_scope_directories_does_not_collide(tmp_path):
     """Case 12 -- two files in the house scope share the name
     docker-compose.core.yml: pmoves/docker-compose.core.yml and
@@ -603,3 +700,185 @@ services:
     files = {f["file"] for f in rep["findings"]}
     assert "docker-compose.core.yml" in files, files
     assert "compose/docker-compose.core.yml" in files, files
+
+
+# --------------------------------------------------------------------------
+# bind shape -- the tier split the remediation is scoped by
+# --------------------------------------------------------------------------
+def _load_ratchet():
+    """Import the tool from its path, hermetically."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("silent_bind_ratchet", RATCHET)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_a_port_with_no_host_address_is_implicit():
+    """Docker's default host address is 0.0.0.0 when the mapping carries NO
+    address at all. So a mapping with no address in it is WIDE at runtime,
+    even though its text contains no "0.0.0.0" anywhere.
+
+    This is the distinction the prior lane's count missed: it counted the
+    mappings whose text said "0.0.0.0" and so under-counted the wide group.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("${SEMANTIC_CACHE_PORT:-8100}:8100") == sbr.BIND_IMPLICIT
+    assert sbr.classify_port("${JAEGER_14250_PORT:-14250}:14250") == sbr.BIND_IMPLICIT
+    assert sbr.classify_port("6333:6333") == sbr.BIND_IMPLICIT
+
+
+def test_a_port_with_an_explicit_host_address_is_classified_by_that_address():
+    sbr = _load_ratchet()
+    assert sbr.classify_port(
+        "${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224") == sbr.BIND_WIDE
+    assert sbr.classify_port(
+        "${ALERTMANAGER_BIND:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093") == sbr.BIND_LOOPBACK
+
+
+def test_a_literal_host_address_is_classified_and_not_swept_into_other():
+    """Compose short syntax accepts an address with no environment
+    indirection at all -- "127.0.0.1:8080:80". Such a mapping is exactly as
+    knowable from source as a "${VAR:-127.0.0.1}" whose default is readable,
+    so it must be classified rather than swept into OTHER.
+
+    Codex P2 on PR #3522: bind_default() returned a value only for a
+    "${VAR:-default}" expression, so every LITERAL address fell into OTHER
+    and the --bind-shape counts would be wrong for any population that used
+    one. This repo happens to use the indirection form everywhere, so the
+    defect was invisible to the population it measures -- it was a REVIEW
+    that found it, not a red test.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("0.0.0.0:8080:80") == sbr.BIND_WIDE
+    assert sbr.classify_port("127.0.0.1:8080:80") == sbr.BIND_LOOPBACK
+
+
+def test_the_component_count_beats_a_first_part_that_looks_like_an_address():
+    """Compose decides by COUNT, not by what the text looks like: a
+    two-component mapping is host_port:container_port, so "0.0.0.0:80" names
+    a PORT named "0.0.0.0" (which Docker would reject) and carries NO host
+    address at all. Reading it as "host 0.0.0.0" would put a port into the
+    host-address slot -- the same category error the substitution case
+    guards against.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("0.0.0.0:80") == sbr.BIND_IMPLICIT
+    assert sbr.classify_port("127.0.0.1:80") == sbr.BIND_IMPLICIT
+    host, host_port, container_port = sbr.split_port_spec("0.0.0.0:80")
+    assert host is None
+    assert host_port == "0.0.0.0"
+    assert container_port == "80"
+
+
+def test_a_bracketed_ipv6_literal_survives_the_split():
+    """An IPv6 literal contains colons, which is WHY Compose requires the
+    brackets in the short syntax ("[::1]:6001:6001"). Splitting on every
+    colon shreds the address into "[", "", "1]", and the mapping would be
+    filed as unreadable.
+    """
+    sbr = _load_ratchet()
+    host, host_port, container_port = sbr.split_port_spec("[::1]:6001:6001")
+    assert host == "[::1]"
+    assert host_port == "6001"
+    assert container_port == "6001"
+    assert sbr.classify_port("[::1]:6001:6001") == sbr.BIND_LOOPBACK
+    assert sbr.classify_port("[::]:6001:6001") == sbr.BIND_WIDE
+
+
+def test_a_hostname_is_still_not_a_readable_address():
+    """A literal that is not an IP address -- a hostname -- stays OTHER: it
+    may resolve to anything, so claiming a bind class for it would be a
+    guess, and a guess that manufactures a class is worse than an admission
+    of ignorance.
+    """
+    sbr = _load_ratchet()
+    assert sbr.classify_port("db.internal:8080:80") == sbr.BIND_OTHER
+    assert sbr.classify_port("${BIND_VAR}:8080:80") == sbr.BIND_OTHER
+
+
+def test_the_colon_inside_a_substitution_does_not_confuse_the_split():
+    """The same trap the house smoke suite hit with _http_port: the colon
+    inside "${BIND:-0.0.0.0}" is not a separator."""
+    sbr = _load_ratchet()
+    host, host_port, container_port = sbr.split_port_spec(
+        "${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224")
+    assert host == "${A2UI_BIND:-0.0.0.0}"
+    assert host_port == "${A2UI_NATS_BRIDGE_PORT:-9224}"
+    assert container_port == "9224"
+
+
+def test_a_two_component_mapping_has_no_host_address():
+    """A two-component mapping is host_port:container_port. Reading the port
+    expression as a host ADDRESS would be a category error -- it names a
+    port, not an interface."""
+    sbr = _load_ratchet()
+    host, host_port, container_port = sbr.split_port_spec(
+        "${SEMANTIC_CACHE_PORT:-8100}:8100")
+    assert host is None
+    assert host_port == "${SEMANTIC_CACHE_PORT:-8100}"
+    assert container_port == "8100"
+
+
+def test_a_service_with_one_implicit_port_is_wide_even_beside_a_loopback_port():
+    """jaeger publishes 127.0.0.1 for its UI and NO address for its three
+    collector ports. The service is WIDE at runtime, so it inherits the wide
+    class rather than the reassuring one."""
+    sbr = _load_ratchet()
+    assert sbr.service_bind_class([
+        "${JAEGER_BIND:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686",
+        "${JAEGER_14268_PORT:-14268}:14268",
+    ]) == sbr.CLASS_WIDE_OR_IMPLICIT
+    assert sbr.service_bind_class([
+        "${ALERTMANAGER_BIND:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093",
+    ]) == sbr.CLASS_LOOPBACK
+
+
+def test_the_bind_shape_counts_entries_and_services_separately():
+    """A claim that mixes the units is how "37 services bound to 0.0.0.0" gets
+    written when the truth is 37 ENTRIES across 20 SERVICES."""
+    sbr = _load_ratchet()
+    gaps = [
+        {"file": "docker-compose.yml", "service": "wide-svc",
+         "ports": ["${B:-0.0.0.0}:${P:-1}:1"]},
+        {"file": "docker-compose.core.yml", "service": "wide-svc",
+         "ports": ["${B:-0.0.0.0}:${P:-1}:1"]},
+        {"file": "docker-compose.yml", "service": "loop-svc",
+         "ports": ["${B:-127.0.0.1}:${P:-2}:2"]},
+        {"file": "docker-compose.core.yml", "service": "loop-svc",
+         "ports": ["${B:-127.0.0.1}:${P:-2}:2"]},
+    ]
+    shape = sbr.bind_shape(gaps)
+    assert shape["entries"] == 4, shape
+    assert shape["services"] == 2, shape
+    assert shape["entries_by_class"]["wide_or_implicit"] == 2, shape
+    assert shape["services_by_class"]["wide_or_implicit"] == 1, shape
+    assert shape["services_by_class"]["loopback"] == 1, shape
+
+
+def test_the_report_carries_the_bind_shape(tmp_path):
+    """The shape travels with the report so a claim about the tier split can
+    be recomputed instead of asserted."""
+    pmoves = _tree(tmp_path, {
+        "docker-compose.yml": CANONICAL + QDRANT,
+    })
+    rep = _report(_run(pmoves))
+    assert "bind_shape" in rep, rep
+    assert rep["bind_shape"]["entries"] == rep["gaps_measured"], rep
+    assert rep["bind_shape"]["services"] == rep["gap_services"], rep
+    # "6333:6333" carries no host address -> implicit -> wide at runtime
+    assert rep["bind_shape"]["ports_by_class"]["implicit"] == 1, rep
+    assert rep["bind_shape"]["services_by_class"]["wide_or_implicit"] == 1, rep
+
+
+def test_an_empty_baseline_says_so_in_its_own_header(tmp_path):
+    """The empty baseline is a real state with its own meaning -- every
+    measured gap is fixed, so the gate now fails on ANY new gap. A header
+    that still describes a populated list makes the reviewer guess whether
+    the emptiness is intentional."""
+    sbr = _load_ratchet()
+    out = tmp_path / "baseline.yaml"
+    assert sbr.write_baseline([], out) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "THIS LIST IS EMPTY" in text, text
+    assert "known_gaps: []" in text, text
