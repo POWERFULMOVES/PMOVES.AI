@@ -72,7 +72,7 @@ ALLOWLIST = {
     (
         "pmoves/configs/pinokio-network-inventory.yaml",
         'health_endpoint: "http://localhost:8222/varz"',
-    ): "pmoves-z890 block; the Z890 leaf publishes host 8222 (ports.yaml NATS_LEAF_8222_PORT)",
+    ): "Z890 node block; the Z890 leaf publishes host 8222 (ports.yaml NATS_LEAF_8222_PORT)",
     (
         "pmoves/configs/tac_trees/node-z890-coordinator.tac.yaml",
         'url: "http://localhost:8222/varz"',
