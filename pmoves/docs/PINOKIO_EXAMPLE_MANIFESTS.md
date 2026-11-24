@@ -927,9 +927,12 @@ module.exports = {
 // Check health of all PMOVES services
 
 const services = [
-  // NATS monitor: 8222 is the container-side port. The host port is per node
-  // (pmoves/configs/ports.yaml: NATS_MONITORING_PORT, 9223 by default; 8222 on Z890).
-  { name: "NATS", url: `http://localhost:${process.env.NATS_MONITORING_PORT || 9223}/varz`, port: 4222 },
+  // NATS monitor: 8222 is the container-side port, and the HOST port is per node.
+  // Base compose publishes NATS_MONITORING_PORT (9223 by default); the Z890 leaf
+  // publishes NATS_LEAF_8222_PORT instead (docker-compose.z890.yml). No single
+  // variable or default is right on every node, so the first run step asks Docker
+  // via .claude/scripts/nats-endpoint.sh and this URL is filled in from that.
+  { name: "NATS", url: "{{local.nats_monitor_url}}/varz", port: 4222 },
   { name: "Qdrant", url: "http://localhost:6333/healthz", port: 6333 },
   { name: "Neo4j", url: "http://localhost:7474", port: 7474 },
   { name: "Meilisearch", url: "http://localhost:7700/health", port: 7700 },
@@ -944,6 +947,21 @@ const results = []
 
 module.exports = {
   run: [
+    // Derive this node's NATS monitor URL from the live Docker port mapping.
+    // The helper prints the compose default (and exits 1) when it cannot measure,
+    // so the event below always matches and no per-node literal is assumed here.
+    {
+      method: "shell.run",
+      params: {
+        path: "../..",  // PMOVES.AI root
+        message: "bash .claude/scripts/nats-endpoint.sh",
+        on: [{ event: "/http:\\/\\/\\S+/", kill: true }]
+      }
+    },
+    {
+      method: "local.set",
+      params: { nats_monitor_url: "{{input.event[0]}}" }
+    },
     // Check each service
     ...services.map(service => ({
       method: "request",

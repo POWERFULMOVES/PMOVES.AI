@@ -228,13 +228,23 @@ root:
       agent_hint: codex
       children:
         - id: net.health.nats-healthcheck
-          task: "NATS monitor /varz returns 200 (host 9223 by default; 8222 is container-side)"
+          task: "NATS monitor /varz returns 200 on this node's published monitor port (8222 is container-side)"
           action:
-            type: http
-            # Host-side probe: base compose publishes ${NATS_MONITORING_PORT:-9223}:8222.
-            # Z890 publishes 8222 instead; derive per node with
-            # `bash .claude/scripts/nats-endpoint.sh`.
-            url: "http://localhost:9223/varz"
+            # Node-aware on purpose. Base compose publishes
+            # ${NATS_MONITORING_PORT:-9223}:8222, but the Z890 leaf publishes
+            # NATS_LEAF_8222_PORT (default 8222, docker-compose.z890.yml), and this
+            # shared tree is cross-referenced from node-z890-coordinator. A fixed
+            # `type: http` URL is wrong on one of them, so the probe asks Docker for
+            # the live mapping via .claude/scripts/nats-endpoint.sh and dials that.
+            # tac_runner runs `command` with shell=False from the repo root and only
+            # allowlists python3 (not bash), hence the python3 wrapper. Any
+            # connect or HTTP error raises, exits non-zero, and reads as FAIL.
+            type: command
+            target: >-
+              python3 -c "import subprocess, urllib.request;
+              ep = subprocess.run(['bash', '.claude/scripts/nats-endpoint.sh'], capture_output=True, text=True).stdout.strip();
+              r = urllib.request.urlopen(ep + '/varz', timeout=5);
+              print(ep + '/varz', r.status)"
             expect: "200 OK with JSON server info"
           context: "10+ services depend on NATS being healthy"
           agent_hint: codex
