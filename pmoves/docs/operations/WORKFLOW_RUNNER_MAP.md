@@ -12,7 +12,7 @@
 
 | Workflow | File | Trigger | Runner(s) | Purpose |
 |----------|------|---------|-----------|---------|
-| **Python Tests** | `python-tests.yml` | push, PR, schedule | `ubuntu-latest` | pytest matrix (Python 3.11) |
+| **Python Tests** | `python-tests.yml` | push, PR, schedule | `ubuntu-latest` | pytest matrix (Python 3.11 and 3.12 since #3530; both columns advisory, not required contexts) |
 | **UI Tests** | `ui-tests.yml` | push, PR, schedule | `ubuntu-latest` (4 jobs) | Node 20 frontend tests |
 | **SQL Policy Lint** | `sql-policy-lint.yml` | push, PR (sql/, migrations/) | `ubuntu-latest` | Migration validation |
 | **CHIT Contract** | `chit-contract.yml` | push, PR | `ubuntu-latest` | CHIT schema validation |

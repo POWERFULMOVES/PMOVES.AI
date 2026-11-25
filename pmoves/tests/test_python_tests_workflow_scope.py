@@ -17,9 +17,10 @@ you read the trigger and the run step together, which is what these tests do.
 
 Scope note, so nobody "fixes" this the wrong way: `pmoves/tests` is NOT
 untested. merge-gate.yml's `python-tests` job (which IS a required check on
-main, unlike `tests (3.11)`) runs pmoves/tools/pytest_ratchet.py over the whole
-repo with no paths filter. These tests do not ask python-tests.yml to duplicate
-that. They ask it to stop claiming a tree it does not run.
+main, unlike the advisory `tests (3.11)` and `tests (3.12)` columns) runs
+pmoves/tools/pytest_ratchet.py over the whole repo with no paths filter. These
+tests do not ask python-tests.yml to duplicate that. They ask it to stop
+claiming a tree it does not run.
 """
 from __future__ import annotations
 
