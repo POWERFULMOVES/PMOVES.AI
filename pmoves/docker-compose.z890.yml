@@ -19,7 +19,7 @@ services:
   # Containers connect here (nats-leaf:4222) instead of crossing the Docker
   # bridge → LAN boundary which Docker Desktop WSL2 can't route.
   nats-leaf:
-    image: nats:2.11.8-alpine
+    image: nats:2.15.3-alpine@sha256:558394a23dd3c36f2d3a64b51865fd09908010e80a542cea5e75c2af543ed62a
     restart: unless-stopped
     command: ["-c", "/etc/nats/leaf.conf"]
     extra_hosts:
