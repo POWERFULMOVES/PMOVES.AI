@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 TOOL = pathlib.Path(__file__).resolve().parents[1] / 'tools' / 'verify_register_citations.py'
-ROW = '- `2026-10-14T17:13:47Z` CLAIM `Z890-A0` branch: `erp/demo` · scope text\n'
+ROW = '- `2026-10-14T17:13:47Z` CLAIM `Z890-A0` branch: `erp/demo` | scope text\n'
 
 
 def run(tmp_path, register, doc_text):
