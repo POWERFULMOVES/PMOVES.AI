@@ -444,17 +444,51 @@ def write_baseline(findings: List[dict]) -> None:
     BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# pytest's ExitCode.INTERNAL_ERROR. Raised for an exception that escapes the
+# session itself -- the one that matters here is SystemExit during COLLECTION:
+# a `test_*.py` that is really a CLI script and calls `sys.exit(1)` at import
+# when a dependency is missing. `--continue-on-collection-errors` does not cover
+# it (it is not a collection error, it is the interpreter being told to stop).
+# pytest still writes the JUnit report on the way out, holding ONLY what was
+# collected before the abort, so the report is partial and looks complete.
+#
+# MEASURED 2026-11-25 (Merge Gate python-tests, run 45044058125):
+# pmoves/tools/test_all_tts_engines.py did exactly this to chunk `pmoves [4]`.
+# Every test in that 20-file chunk was unmeasured on every run on record, and
+# when a new test file elsewhere shifted the chunk boundary, 11 baselined
+# semantic-cache errors moved INTO the aborted chunk and this tool reported
+# them as STALE -- "fixed" -- with the recommended remedy being to drop them.
+# A partial report after exit 3 is therefore never taken at face value.
+PYTEST_INTERNAL_ERROR = 3
+
+
+def _internal_error_finding(path: Path, output: str) -> dict:
+    """The abort itself, as a finding: visible, keyed on the file, ratchetable."""
+    lines = [ln for ln in output.strip().splitlines() if ln.strip()]
+    detail = lines[-1].strip() if lines else "pytest exited 3 (INTERNALERROR)"
+    return {
+        "kind": "ERROR",
+        "where": str(path).replace(chr(92), "/"),
+        "name": "<internal-error>",
+        "detail": detail[:160],
+    }
+
+
 def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
                             index: int) -> tuple[List[dict], List[str]]:
-    """Run a group; if it times out, re-run it one file at a time.
+    """Run a group; if it is lost, re-run it one file at a time.
 
     Returns (findings, dead_labels). `dead_labels` names whatever stayed
     unmeasured -- the whole group if the fallback could not run, or the specific
     files that hang.
 
-    A timed-out chunk is killed before pytest writes its JUnit report, so
-    treating the timeout as one opaque "no report" discards every result in the
-    chunk. Isolating per file narrows the loss to the file that actually hangs.
+    A chunk is LOST two ways. A timed-out chunk is killed before pytest writes
+    its JUnit report, so treating the timeout as one opaque "no report" discards
+    every result in the chunk. A chunk that pytest aborts with INTERNALERROR
+    (exit 3) DOES get a report, but a partial one, and reading it as complete
+    turns every uncollected test into a silent pass. Isolating per file narrows
+    either loss to the file that actually hangs or aborts; an aborting file is
+    recorded as an `<internal-error>` finding rather than as nothing.
 
     The per-file budget is FALLBACK_FILE_TIMEOUT plus the file's own declared
     allowance, so a file that is merely SLOW is measured in the isolation pass
@@ -462,12 +496,19 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
     """
     junit = tmp / f"report-{index}.xml"
     rc, output = run_pytest(gfiles, junit)
-    if junit.is_file():
+    if junit.is_file() and rc != PYTEST_INTERNAL_ERROR:
         return parse_junit(junit), []
 
-    if rc != -1 or len(gfiles) <= 1:
-        # Not a timeout (unimportable conftest, usage error, crash), or nothing
-        # left to split. Per-file isolation cannot help either case.
+    if rc == PYTEST_INTERNAL_ERROR and len(gfiles) <= 1:
+        # Nothing left to split. Keep whatever the partial report holds and
+        # record the abort against the file, so it cannot read as passing.
+        sys.stderr.write("--- %s aborted pytest (exit 3) ---%s%s%s" % (
+            group, chr(10), output[-1500:], chr(10)))
+        return parse_junit(junit) + [_internal_error_finding(gfiles[0], output)], []
+
+    if rc not in (-1, PYTEST_INTERNAL_ERROR) or len(gfiles) <= 1:
+        # Not a timeout or an abort (unimportable conftest, usage error, crash),
+        # or nothing left to split. Per-file isolation cannot help either case.
         sys.stderr.write("--- no report for %s (exit %d) ---%s%s%s" % (
             group, rc, chr(10), output[-1500:], chr(10)))
         return [], [group]
@@ -476,12 +517,14 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
     # declared-slow file can consume more than the flat default on its own,
     # so the pass must be able to afford it.
     pass_budget = fallback_budget_seconds(gfiles)
+    reason = "timed out" if rc == -1 else "aborted pytest (exit 3)"
     sys.stderr.write(
-        "--- %s timed out; isolating %d files (budget %ds) ---%s" % (
-            group, len(gfiles), pass_budget, chr(10)))
+        "--- %s %s; isolating %d files (budget %ds) ---%s" % (
+            group, reason, len(gfiles), pass_budget, chr(10)))
 
     findings: List[dict] = []
     dead: List[str] = []
+    aborted: List[str] = []
     spent = 0.0
     for j, f in enumerate(gfiles):
         if spent >= pass_budget:
@@ -497,13 +540,32 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
         start = time.monotonic()
         frc, foutput = run_pytest([f], sub, timeout=file_timeout_seconds(f))
         spent += time.monotonic() - start
+        label = str(f).replace(chr(92), "/")
         if sub.is_file():
             findings.extend(parse_junit(sub))
+        if frc == PYTEST_INTERNAL_ERROR:
+            # The report (if any) holds what was collected before the abort;
+            # the abort itself is the finding. Not a dead label: we know
+            # exactly which file did it and why.
+            sys.stderr.write("---   %s aborted pytest (exit 3) ---%s%s%s" % (
+                label, chr(10), foutput[-600:], chr(10)))
+            findings.append(_internal_error_finding(f, foutput))
+            aborted.append(label)
             continue
-        label = str(f).replace(chr(92), "/")
+        if sub.is_file():
+            continue
         sys.stderr.write("---   no report for %s (exit %d) ---%s%s%s" % (
             label, frc, chr(10), foutput[-600:], chr(10)))
         dead.append(label)
+    if len(gfiles) > 1 and len(aborted) == len(gfiles):
+        # EVERY file aborts alone: that is not one file's sys.exit, it is the
+        # session itself (a conftest or plugin hook raising). Per-file findings
+        # would key the same breakage N ways and churn the baseline; the group
+        # is reported once, the same way an unimportable conftest is.
+        sys.stderr.write(
+            "--- every file in %s aborts pytest alone; reporting the group ---%s" % (
+                group, chr(10)))
+        return [], [group]
     return findings, dead
 
 
