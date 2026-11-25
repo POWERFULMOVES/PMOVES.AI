@@ -170,3 +170,24 @@ entrypoint already implements the intended escape hatch; the data is what is wro
 Kong will keep crash-looping until fault 3 is cleared. The self-hosted `pmoves-supabase`
 MCP stays non-functional until then; the cloud `supabase@claude-plugins-official` plugin is
 **not** the substitute — it targets `mcp.supabase.com`, not this stack.
+
+---
+
+## Follow-up 2026-11-25: fail fast instead of looping (4090 recurrence)
+
+The 4090 hit the same pattern (1,266 restarts in 22h). These faults live in each node's own
+env files, so a fix on one node does nothing for the next. Two guards now stop a bad config
+from ever reaching `restart: unless-stopped`:
+
+- **`make -C pmoves kong-config-check`** (`scripts/supabase/kong_config_check.sh`) renders
+  `kong.yml` in a throwaway `supabase-kong` container with the real env and mounts, then runs
+  `kong config parse`. It names faults 1 and 3 directly and prints the fix. `supa-start`
+  runs it before bringing Kong up; `SKIP_KONG_CONFIG_CHECK=1` bypasses it.
+- **CRLF-safe entrypoint.** PMOVES-supabase has no `.gitattributes`, so a Windows checkout
+  with `core.autocrlf=true` gives `kong-entrypoint.sh` CRLF endings and `#!/bin/sh\r` cannot
+  exec. The compose entrypoint now strips CRs into `/tmp` before running it. A
+  `*.sh eol=lf` rule in the fork is still the durable fix.
+
+Not done: a compose-level `${DASHBOARD_PASSWORD:?}` guard. Compose interpolates every
+service including profile-disabled ones, so it would break every `docker compose` command on
+nodes that do not run Supabase.
