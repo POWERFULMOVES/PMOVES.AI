@@ -775,6 +775,10 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
+.PHONY: kong-config-check
+kong-config-check: ## Pre-boot: render + parse Kong's declarative config in a throwaway container (catches crash-loop causes)
+	@$(DC) --profile supabase-local run --rm --no-deps -T --entrypoint /bin/sh supabase-kong -s < scripts/supabase/kong_config_check.sh
+
 .PHONY: kong-routes-check
 KONG_ADMIN_URL ?= http://localhost:8001
 KONG_CONTAINER ?= pmoves-supabase-kong-1
@@ -882,6 +886,9 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 			-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD:-$${SUPABASE_DB_PASSWORD:-postgres}} \
 			kong/kong:3.9.1 sh -c "kong migrations bootstrap --yes 2>/dev/null || true; kong migrations up --yes 2>/dev/null || true" >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
+		if [ "$${SKIP_KONG_CONFIG_CHECK:-0}" != "1" ]; then \
+			$(MAKE) --no-print-directory kong-config-check || { echo "❌ Kong would crash-loop with this config; fix the error above (or SKIP_KONG_CONFIG_CHECK=1 to bypass)."; exit 1; }; \
+		fi; \
 		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
