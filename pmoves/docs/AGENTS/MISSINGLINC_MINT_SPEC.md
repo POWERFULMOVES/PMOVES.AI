@@ -45,23 +45,27 @@ spec:
     never adjudicates beyond the verdict schema.
   role_class: reviewer            # AGNOTE4482 Three-Body surface: Control
   team_ref: orchestration          # bare key per pmoves/configs/agent-teams.yaml
-  node_affinity: [powerfulmoves, pmoves-laptop]   # 5090 + 4090
+  # SPARK first (2026-10-21 operator directive: "MiSSinGLinC node with minted
+  # agent, first on SPARK"); Mike itself runs there (make -C pmoves up-mike).
+  # Registry node ids: spark, powerfulmoves (5090), pmoves-4090 (4090 laptop).
+  node_affinity: [spark, powerfulmoves, pmoves-4090]
   model:
     provider: tensorzero
     routing: hybrid
     fallback: ollama
   build_base:
-    repository: github.com/POWERFULMOVES/PMOVES-mike
-    verified_at: "204d2d5"
+    repository: github.com/POWERFULMOVES/PMOVES-Mike   # submodule path PMOVES-Mike/ (branch main)
+    verified_at: "563c8319"        # re-verified 2026-10-21; first verified @204d2d5 (same repo, case-insensitive name)
     language: TypeScript
     architecture: Express backend + Next.js frontend
-    key_modules:                   # each verified present 2026-08-09
-      - backend/src/lib/chat/verifyCitations.ts    # exact-match quote verification
-      - backend/src/lib/chat/citations.ts          # citation extraction/parsing
-      - backend/src/lib/manifestSigning.ts         # Ed25519 signing (pkcs8 der)
-      - backend/src/lib/chat/tools/toolDispatcher.ts # validation orchestration loop
-      - backend/src/lib/courtlistener.ts           # external case-law verification
-      - backend/src/routes/caseLaw.ts
+    key_modules:                   # re-verified 2026-10-21 @563c8319 (paths moved by upstream #295)
+      - backend/src/modules/chat/engine/verifyCitations.ts      # 3-tier quote verification (exact → ws+case → punctuation-tolerant) + ellipsis/page-break
+      - backend/src/modules/chat/engine/citations.ts            # citation extraction/parsing
+      - backend/src/lib/manifestSigning.ts                      # Ed25519 signing (pkcs8 der) — unchanged path
+      - backend/src/modules/chat/engine/tools/toolDispatcher.ts # validation orchestration loop
+      - backend/src/lib/courtlistener.ts                        # external case-law verification — unchanged path
+      - backend/src/modules/chat/engine/tools/courtlistenerTools.ts  # successor of routes/caseLaw.ts (removed upstream fee97de9)
+      - backend/src/modules/source-documents/sourceDocuments.routes.ts # successor of routes/caseLaw.ts (GET /documents/:documentId)
   capabilities:
     - claim_extraction            # structured claims from agent output (tabular review pattern)
     - quote_verification          # surface level — verifyCitations exact match
@@ -161,6 +165,25 @@ scope (professional/assertive only — never warm tones for verdicts).
 - Room `4090-field.room.control` validated against `pmoves/config/rooms/catalog.json`.
 - Voice scoping matches Agent Zero's persona taxonomy
   (`tac-tree-persona-taxonomy.yaml` v0.2.0, `persona.makeda.missinglinc`).
+
+## Re-verification (2026-10-21, SPARK, PMOVES-Mike @ 563c8319)
+
+- `PMOVES-mike` and `PMOVES-Mike` are the same repository. GitHub resolves the
+  name case-insensitively, and `204d2d5` is an ancestor of `563c8319`, 828
+  commits back. The repo is now the `PMOVES-Mike` submodule. See
+  `pmoves/docs/integrations/MIKE_INTEGRATION.md`.
+- Two of the six original paths are unchanged: `manifestSigning.ts` and
+  `courtlistener.ts`.
+- Three moved to `modules/chat/engine/` (upstream #295): `verifyCitations.ts`,
+  `citations.ts`, `toolDispatcher.ts`.
+- `routes/caseLaw.ts` was removed upstream in `fee97de9`. Its successors are
+  listed above.
+- `verifyCitations` is **no longer exact-match only**. The validator port
+  reports which tier matched, so a tolerant match is never presented as an
+  exact one.
+- `POST /api/chat` is the frontend proxy path. On the backend it is
+  `POST /chat` (`requireAuth`).
+- Wave-0 surface validator: `pmoves/services/missinglinc-validator/`.
 
 ## Open gates
 
