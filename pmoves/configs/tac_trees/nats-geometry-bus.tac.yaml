@@ -143,16 +143,23 @@ root:
             type: manual
             expect: "Per-node jetstream { domain: <node> }; local publishers/subscribers never depend on a remote node being up"
         - id: nats-bus.hub.both-roles
-          task: "Every stack carries both configs: hub-capable (leafnodes listen 7422) and leaf (remotes)"
+          task: "Every node gets BOTH capabilities installed: hub (route cluster + leafnodes listen 7422) and leaf (remotes)"
           action:
             type: manual
-            expect: "One image (2.15.3, digest-pinned) and one conf template per node; role is config, not a different build"
+            expect: "One image (2.15.3, digest-pinned) and one conf template on every node; hub vs leaf is runtime config, never a different build or a node left out"
+          context: "Operator 2026-11-25: 'all nodes get both, what runs is what's needed.' Capability is universal; activation is not."
+        - id: nats-bus.hub.runs-to-capability
+          task: "What runs on a node is decided by its capability and the mesh's need, not named in a doc"
+          action:
+            type: manual
+            expect: "Role activation reads the node's capability profile (pmoves/config/profiles/<node>.yaml from the W0 probe, deploy/provision/json-to-profile.py) plus current mesh membership; no node list of hubs is hand-maintained"
+          context: "MOF: capacity-class, not expertise lane. A Jetson or ESP32-class profile normally activates leaf only; a workstation/KVM profile can activate hub. Need changes it: if hub members drop, a capable leaf promotes."
         - id: nats-bus.hub.mesh-elects
-          task: "The active hub is chosen by the mesh, not by a doc"
+          task: "Active hubs form one route cluster; the cluster elects, leaves follow"
           action:
             type: manual
-            expect: "Hub-capable core nodes join one route cluster (RAFT elects the JetStream meta leader; a member loss is survived); every leaf remote lists ALL core members in urls, so it fails over to whichever is reachable"
-          context: "Constraint: a node cannot be leaf to a peer that is also its leaf (NATS refuses leafnode loops). So 'both roles everywhere' means every node CAN be core, while the active core set is the cluster's current membership. Core size 3 tolerates one loss (RAFT quorum)."
+            expect: "Activated hubs join one route cluster (RAFT elects the JetStream meta leader); every leaf remote lists all reachable hub-capable peers, so it fails over on its own"
+          context: "Constraints the activation logic must respect: NATS refuses leafnode loops (a node cannot be leaf to its own leaf), and a RAFT group needs a majority, so at least 3 active hubs survive one loss. Each node's own JetStream domain keeps working regardless."
 
     # =========================================================================
     # Phase 4: Rollout — the runbook's phases, unchanged
