@@ -2,6 +2,8 @@
 
 A tight, copy‑pasteable upgrade plan that adds **grounding packs**, **personas**, and **publish‑gated creator pipeline** finishing touches. Includes SQL for Supabase/Postgres (pgvector), event contracts, and minimal API specs.
 
+> **STATUS (2026-11-22, v5.12 verify lane): BUILT — this gist is the pre-implementation design doc.** Schema landed and evolved: authoring ladder `pmoves/db/v5_12_grounded_personas.sql` → `v5_23_youtube_enrichment.sql`, mirrored into ledger `pmoves/supabase/migrations/` via `make db-apply-migration` (verbatim cmp gate). Initdb seed `pmoves/supabase/initdb/17_persona_seed.sql` now SELF-GUARDS on `pmoves_core.personas` (ledger migration 20250115): canonical `make supabase-bootstrap` applies migrations before seeds; standalone fresh entrypoint boots skip the seed until `make supa-migrate`. Live consumers: `pmoves/services/retrieval-eval/publish_gate.py`, `pmoves/services/evoswarm/persona_optimizer.py`.
+
 ---
 ## TL;DR
 - **New tables**: `assets`, `documents/sections/chunks`, `grounding_packs`, `pack_members`, `personas`, `persona_eval_gates`.

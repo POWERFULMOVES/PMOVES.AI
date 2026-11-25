@@ -188,12 +188,12 @@ else
 
     # Run migrations
     echo "  Running migrations..."
-    docker exec "$DB_CONTAINER" bash -c "for f in ${INIT_DIR}/migrations/*.sql; do psql -U supabase_admin -h 127.0.0.1 -d postgres -f \"\$f\" > /dev/null 2>&1 || true; done" 2>&1
-
+    echo "  Running upstream migrations (per-file status)..."
+    bash "$PMOVES_DIR/scripts/supabase/replay_dir.sh" "$INIT_DIR/migrations"
     # Run PMOVES init scripts
     echo "  Running PMOVES init scripts..."
-    docker exec "$DB_CONTAINER" bash -c "for f in ${INIT_DIR}/pmoves-init/*.sql; do psql -U supabase_admin -h 127.0.0.1 -d postgres -f \"\$f\" > /dev/null 2>&1 || true; done" 2>&1
-
+    echo "  Running PMOVES init scripts (per-file status)..."
+    bash "$PMOVES_DIR/scripts/supabase/replay_dir.sh" "$INIT_DIR/pmoves-init"
     log_info "Init scripts applied"
 fi
 

@@ -1289,9 +1289,10 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 				admin_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('$$akind', '$$name') ON CONFLICT DO NOTHING;" >/dev/null; ok=$$((ok+1)); \
 			else fail=$$((fail+1)); echo "   ⚠️  $$akind FAILED (skipped): $$name :: $$(grep -iE 'ERROR' /tmp/sb_apply.log | head -1 | cut -c1-100)"; fi; \
 		done; \
-		echo "   $$akind: applied=$$ok skipped=$$skip failed=$$fail"; }; \
+		echo "   $$akind: applied=$$ok skipped=$$skip failed=$$fail"; total_fail=$$(( $${total_fail:-0} + fail )); }; \
 	apply_dir migration supabase/migrations; \
-	apply_dir seed supabase/initdb
+	apply_dir seed supabase/initdb; \
+	if [ $${total_fail:-0} -gt 0 ]; then echo "WARNING: supabase-bootstrap had $${total_fail} FAILED file(s) - see warnings above; remediation: fix prerequisites then re-run, or make supa-migrate for the ledgered road"; fi
 	@echo "✅ Supabase bootstrap complete"
 
 .PHONY: supabase-bootstrap-no-start

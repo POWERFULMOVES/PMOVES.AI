@@ -27,6 +27,24 @@
 --
 -- Idempotent: Uses ON CONFLICT (name, version) DO UPDATE
 -- =============================================================================
+-- ---------------------------------------------------------------------------
+-- SELF-GUARD (2026-11-22, fix/supabase-initdb-ladder): this seed requires the
+-- pmoves_core.personas table, created by LEDGER migration
+-- 20250115_persona_agent_creation (pmoves/supabase/migrations/). The initdb
+-- pipeline never creates it: on a fresh first boot this seed previously hit a
+-- missing table (entrypoint abort risk), and on legacy bootstrap replays the
+-- failure was swallowed silently (per-file '|| true').
+-- Behavior now: skip CLEANLY (psql \gset/\if/\echo/\quit, exit 0) and say why.
+-- Remediation when skipped: make supa-migrate  (the ledgered road).
+-- Canonical `make supabase-bootstrap` applies migrations BEFORE seeds, so the
+-- guard passes there; pmoves_bootstrap_history records this file as processed
+-- (a guarded skip counts as processed).
+-- ---------------------------------------------------------------------------
+SELECT CASE WHEN to_regclass('pmoves_core.personas') IS NULL THEN 1 ELSE 0 END AS pmoves_persona_seed_skip \gset
+\if :pmoves_persona_seed_skip
+\echo 'SKIPPED 17_persona_seed.sql: pmoves_core.personas missing - apply the ledger first: make supa-migrate'
+\quit
+\endif
 
 -- uuid-ossp already enabled by 00_pmoves_schema.sql
 
