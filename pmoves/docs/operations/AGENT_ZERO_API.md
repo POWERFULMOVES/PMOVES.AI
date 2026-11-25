@@ -60,7 +60,7 @@ Verified via `GET /openapi.json` on 2026-05-16. Method → path → summary:
 | `GET` | `/memory/{memory_id}` | Get specific memory |
 | `PUT` | `/memory/{memory_id}` | Update memory |
 | `DELETE` | `/memory/{memory_id}` | Delete memory |
-| `POST` | `/events/publish` | Publish event (likely → NATS) |
+| `POST` | `/events/publish` | Validate `{topic, payload}` against `pmoves/contracts/topics.json` and publish an envelope to NATS. Unregistered topic → `422` `unknown_topic` with the sorted `known_topics` list; payload failing the topic schema → `422` `invalid_payload`. Before 2026-11-23 both were an unhandled `500`. Command-class `claw.*` topics need an `X-API-KEY` header equal to the supervisor's `AGENT_ZERO_API_KEY` (`403` otherwise, including when the key is unset), and their envelope `source` is fixed to `agent-zero-supervisor`. Every other topic is unchanged and needs no key. |
 
 ### `TaskSubmissionRequest` body shape
 
@@ -169,6 +169,15 @@ AZ subscribes (per `/healthz`):
 - `agentzero.memory.update` — memory write events
 
 JetStream stream `AGENTZERO` retains these. Other PMOVES NATS subjects (e.g. `archon.mint.*.v1`, `chit.signed.v1`, `tokenism.*`, `geometry.*`) are publisher-side or consumed by other services — see `.claude/context/nats-subjects.md` for the catalog.
+
+### Receive path for fire-and-forget subjects
+
+`claw.task.assign.v1` and the other coordination subjects (`branch.>`, `chit.>`, `p7.>`, `owner.presence.>`) are core NATS, not JetStream. A message published while nothing is subscribed is dropped, and the publisher gets no error. A node has **no receiver** for them until `make -C pmoves nats-agent-inbox` (or an equivalent agent runtime) is running there. Check with the NATS monitor's `connz?subs=1` before assuming delivery.
+
+- **Measured 2026-11-23 on node 5090:** 32 client connections, 0 subscribers on any of those subjects until the inbox was started.
+- **Inbox identity:** the inbox listens and writes its JSONL as `PMOVES_AGENT_ID`, else `PMOVES_REGISTER_IDENTITY`, else the node resolver `pmoves/tools/agent_terminal_theme.py --whoami` (the identity node-sitrep prints), else `<hostname>-agent`. It used to default to the literal `5090-CODEX` on every node.
+- **Publishing:** `make -C pmoves nats-pub SUBJECT=... PAYLOAD='<json>'` takes JSON with spaces, apostrophes, and `$` intact.
+- **Authorization:** publishing `claw.*` over HTTP (`POST /events/publish`) requires the supervisor API key; a raw NATS publish, including `make nats-pub`, still needs the bus credentials.
 
 ## A2A protocol routes (8 paths, conditionally mounted)
 
