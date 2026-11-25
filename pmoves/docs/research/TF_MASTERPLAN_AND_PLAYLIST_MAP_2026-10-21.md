@@ -1,6 +1,6 @@
 # Transcribe-and-Fetch Masterplan, VSS Overlap, and the Playlists: Map and Connection Table
 
-**Date:** 2026-10-21 · **Node:** SPARK · **Lane:** L4 `docs/tf-masterplan-playlist-review` (spark-claude)
+**Date:** 2026-10-21 | **Node:** SPARK | **Lane:** L4 `docs/tf-masterplan-playlist-review` (spark-claude)
 **Mode:** read-only research. Nothing was ingested, no service was started, no `.env*`/container env was read.
 
 **Pinned trees read** (the gitlinks in this branch match the checked-out submodule HEADs):
@@ -19,7 +19,7 @@ Paths below are relative to the repo root. T&F paths start `PMOVES-transcribe-an
 
 1. **"MultiStrat" is not a named artifact anywhere in the tree.** A case-insensitive search for `multistrat|multi-strat|multi_strat|MultiStrategy|multi_strategy` across every submodule (`*.md,*.py,*.yaml,*.json,*.ts`, excluding `node_modules`) hits only unrelated text: hermes memory plugins, a KVM upload doc, the composio toolkit catalog, and the claim at `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md:3410`, which names "MultiStrat (PMOVES-transcribe-and-fetch)" as something to reuse. **T&F has no file, class or doc with that name.**
 2. **T&F has no CLIP, CLAP or YOLO code.** Its Python (excluding vendored docs, `node_modules` and `.venv`) has zero hits for `open_clip|CLIPModel|clip_model`, `clap` and `yolo`. Its multimodal surface is: yt-dlp download with ffmpeg postprocessors, faster-whisper/Groq/OpenAI/Deepgram ASR, crawl4ai/Jina web fetch, and LLM vision calls (GPT-4o / Claude / Gemini) in a Pipecat `MultimodalAgent` (§1).
-3. **The connected multi-strategy segmentation the operator is describing does exist, but it is in `PMOVES.YT`, not T&F.** `PMOVES.YT/pmoves_yt_service/yt.py:4223-4292` (`_auto_tune_segment_params`) classifies each transcript as `talk`, `dialogue`, `lyrics` or `talk-long` and retunes the chunker per profile. `/yt/emit` wires it in (`yt.py:4812-4827`) with a three-step fallback. The CLIP, CLAP, YOLO/DETR and ffmpeg stages exist as **PMOVES services** (`pmoves/services/{clip-embed,clap-embed,media-video,media-audio,ffmpeg-whisper}`), not in T&F. §2 maps what "MultiStrat" plausibly refers to.
+3. **The connected multi-strategy segmentation the operator is describing does exist, but it is in `PMOVES.YT`, not T&F.** `PMOVES.YT/pmoves_yt_service/yt.py:4223-4292` (`_auto_tune_segment_params`) classifies each transcript as `talk`, `dialogue`, `lyrics` or `talk-long` and retunes the chunker per profile. `/yt/emit` wires it in (`yt.py:4812-4827`) with a three-step fallback. The CLIP, CLAP, YOLO/DETR and ffmpeg stages exist as **PMOVES services** (`pmoves/services/{clip-embed,clap-embed,media-video,media-audio,ffmpeg-whisper}`), not in T&F. section (b) maps what "MultiStrat" plausibly refers to.
 4. **One of the two "known" playlist ids is not a playlist.** `PLILCsWKAOQGPFmCLBsln1VWvPJ6tsds5v` appears in the repo **only inside a base64 image blob** (`pmoves/docs/PMOVESCHIT/the_human_construct_neural_network.py:9`, its `.ipynb` twin, and `pmoves/docs/context/py_and_collabs/the_human_construct_neural_network.py:9`). It is a regex false positive. A read-only `yt-dlp --flat-playlist` against it returned `YouTube said: The playlist does not exist.` (measured 2026-10-21).
 5. **The `ai` playlist is about 2,600 videos, not ~500.** Measured live 2026-10-21 via `yt-dlp --flat-playlist` in `pmoves-pmoves-yt-1`: `ai|2597|DARKXSIDE'S SCHOOL OF POWERFULMOVES`. The "~500" comes from a 2026-04-23 batch scan of part of the playlist (`research/PLAYLIST_BATCH_ANALYSIS.md:4-5`).
 6. **The T&F masterplan contradicts itself about readiness.** `TF/masterplan/PMOVES_AI_TEAM.md:68-149` and `TF/masterplan/BACKEND_REVIEW_SUMMARY.md:171-188` say "PRODUCTION READY ✅". `TF/masterplan/PMOVES_AGENT_PLATFORM_PLAN.md:338-458` and `TF/masterplan/PROJECT_REVIEW_AND_STATUS.md:8` say "Significantly Delayed & Partially Blocked". The code supports the second account (§1.4).
@@ -52,14 +52,14 @@ From `TF/masterplan/AGENT_CATALOG.md`. Capability strings are the registry keys 
 |---|---|---|---|---|---|
 | 1 | Core Text Chat | `chat_completion`, `text_generation` | text → text | `:13-20` | Pipecat examples only |
 | 2 | Multimodal Chat | adds `audio_input`, `audio_output`, `vision_input` | text/audio/image → text/audio | `:24-35` | `TF/pmoves-pipecat-agent/agents/multimodal_agent.py` (vision via GPT-4o / Claude 3.5 / Gemini, `:90-91`, `:347-410`) |
-| 3 | Tool-Calling | `tool_calling` + per-tool | text → tool calls/results | `:39-49` | — |
+| 3 | Tool-Calling | `tool_calling` + per-tool | text → tool calls/results | `:39-49` | -- |
 | 4 | Web Fetcher | `fetch_web_content`, `crawl_web`, `extract_data{,_structured,_semantic}`, `execute_crawl_script` | URL → markdown/JSON/PDF | `:53-70` | `TF/backend/app/main.py:2507` (`GET /fetch-content`), `TF/backend/app/crawl4ai_docker_fetcher.py` |
 | 5 | Search | `search{,_vector,_keyword,_hybrid}`, `query_database` | query → ranked hits | `:74-85` | `TF/backend/app/psearchworking.py` (2,640 lines) |
 | 6 | Summarizer | `summarize_text`, `analyze_text` | text → summary | `:89-97` | no standalone implementation (`:96`) |
 | 7 | Content Upsert | `upsert_content`, `manage_content`, `process_document` | files/MD tables → Supabase rows | `:101-110` | `TF/backend/app/pmoves_upserter.py` (943 lines) |
 | 8 | Transcriber | `transcribe_audio`, `transcribe_video` | URL/audio → segments + full text | `:114-121` | `TF/backend/app/transcribe1.py`, `TF/pmoves-pipecat-agent/agents/transcribe_agent.py` |
 | 9 | Supabase | `manage_database`, `create_table`, `query_data`, `upsert_data`, `manage_schema` | commands → DB ops | `:125-137` | `TF/pmoves-pipecat-agent/agents/supabase_agent.py` |
-| 10-12 | RLS / Migration / Function-creation helpers | `*_rls_policy`, `generate_migration`, `*_db_function` | spec → SQL | `:141-171` | AgentCommand handlers (claimed at `AGENT_COMMAND_PROTOCOL.md:63-65`) **[UNVERIFIED — handler code not opened]** |
+| 10-12 | RLS / Migration / Function-creation helpers | `*_rls_policy`, `generate_migration`, `*_db_function` | spec → SQL | `:141-171` | AgentCommand handlers (claimed at `AGENT_COMMAND_PROTOCOL.md:63-65`) **[UNVERIFIED -- handler code not opened]** |
 
 Orchestration contract: each agent self-registers, sends heartbeats, and talks over Pipecat. Archon queries `GET /agents` to assemble teams (`AGENT_CATALOG.md:175-184`).
 
@@ -68,13 +68,13 @@ Orchestration contract: each agent self-registers, sends heartbeats, and talks o
 | Stage | What it does | Segment/chunk strategy | Cite |
 |---|---|---|---|
 | **Ingest / download** | yt-dlp in a thread. ffmpeg postprocessors: `FFmpegExtractAudio`, `FFmpegMetadata`, `FFmpegEmbedSubtitle`, `EmbedThumbnail`. Playlist slicing via `playlistItems`/`playlistStart`/`playlistEnd` | none (whole file) | `TF/backend/app/main.py:1651-1790` (ffmpeg at `:1686`, `:1708-1742`; playlist at `:1744-1759`) |
-| **Process-video entry** | `POST /process-video/` queues `process_video_with_tracking` → `transcribe1.process_video` | — | `TF/backend/app/main.py:1554-1610`, `TF/backend/app/process_video_wrapper.py:7` |
+| **Process-video entry** | `POST /process-video/` queues `process_video_with_tracking` → `transcribe1.process_video` | -- | `TF/backend/app/main.py:1554-1610`, `TF/backend/app/process_video_wrapper.py:7` |
 | **ASR (local)** | faster-whisper, `beam_size=1`, `vad_filter=True`, `min_silence_duration_ms=500`, `speech_pad_ms=200` | **VAD-delimited Whisper segments** (model-native), one row per segment with `watch_url&t=Ns` | `TF/backend/app/transcribe1.py:422-470` (VAD at `:442-443`) |
 | **ASR (registry / Groq / OpenAI)** | `registry_service.transcribe_audio_advanced(..., response_format="verbose_json")`; provider segments copied 1:1, plus optional `speaker` | provider-native segments | `TF/backend/app/transcribe1.py:1061-1135` |
 | **ASR (Groq chunked, dormant)** | pydub **5-minute** chunks, timestamps offset by chunk start | fixed 300 s windows. **Defined but not called** on the live path: `transcribe1.py:660` has no caller in `transcribe1`, and the caller at `TF/backend/app/gtrans.py:789` lives in an alternate module that `main.py` does not import (`main.py:322`) | `TF/backend/app/transcribe1.py:732-734` |
 | **ASR (Pipecat TranscribeAgent)** | Groq `whisper-large-v3` / OpenAI `whisper-1` / Deepgram `nova-2` / local whisper. Declares `chunk_duration=30` | the `chunk_duration` field (`:73-75`) is **never read**: grep finds it only at its declaration | `TF/pmoves-pipecat-agent/agents/transcribe_agent.py:54-88` |
 | **Store** | MD transcript + MD table → `video_transcriptions` (segments) and `video_transcriptions_full`. Web → `webpage_content`; media → `media_content`. Dedupe via RPCs `check_{webpage,text,media}_duplicate` | segment = ASR segment | `TF/backend/app/pmoves_upserter.py:309-360`, `:559`, `:647`, `:695-740` |
-| **Embed (write side)** | **Not in T&F Python.** `pmoves_upserter.py` contains no embedding call. The only `embeddings.create` calls are query-side (`psearchworking.py:1358`, `vector_search.py:111`). `upsert_webpage_content` takes a precomputed `p_embedding vector(1536)` (`TF/migrations/V1_add_webpage_embeddings_and_search.sql:21-26`) | — | **[UNVERIFIED]** where segment embeddings are produced (a Supabase-side trigger or job is likely but was not found) |
+| **Embed (write side)** | **Not in T&F Python.** `pmoves_upserter.py` contains no embedding call. The only `embeddings.create` calls are query-side (`psearchworking.py:1358`, `vector_search.py:111`). `upsert_webpage_content` takes a precomputed `p_embedding vector(1536)` (`TF/migrations/V1_add_webpage_embeddings_and_search.sql:21-26`) | -- | **[UNVERIFIED]** where segment embeddings are produced (a Supabase-side trigger or job is likely but was not found) |
 | **Retrieve** | Query embedded with `text-embedding-3-small` (1536-d). `dot_product_search` returns each segment with **LAG/LEAD neighbour context** | **context window = ±1 segment at query time** | `TF/backend/app/psearchworking.py:1356-1360`; `TF/migrations/V1_add_webpage_embeddings_and_search.sql:212-255` |
 | **"Three tiers"** | `fine_grained`, `contextual`, `overview`, each with its own threshold/weight/percentage/max (`psearchworking.py:583-660`) | **The tiers are not separate indexes.** All three call the same RPC, `dot_product_search` (`:1384`, `:1412`, `:1440`); only `match_count`/weights differ. The `source` label (`video_transcriptions` / `document_embeddings` / `video_transcriptions_full`) is assigned **client-side afterwards** (`:1405`, `:1433`, `:1461`) | as cited |
 | **Web fetch** | crawl4ai docker (BFS/DFS deep crawl; JsonCss/LLM/Cosine/Regex/Table extraction) + Jina Reader → markdown → PDF | crawl4ai `LLMExtractionStrategy` `chunk_token_threshold` / `llm_apply_chunking` (`TF/masterplan/suportingdocs/new_test_plan.md:213-215`) | `TF/backend/app/main.py:2507`; logger workaround `TF/backend/app/crawl4ai_docker_fetcher.py:685` |
@@ -96,8 +96,8 @@ Orchestration contract: each agent self-registers, sends heartbeats, and talks o
 | `endpoint`, `status`, `last_heartbeat` | `port` + `health` (static); liveness comes from `/healthz` probes, not heartbeats | PMOVES is declarative; T&F is self-registering |
 | `dependencies`, `tags`, `config` | `nats.publishes/subscribes`, `chit_toggles`, `resilience`, `topology` | PMOVES is richer |
 | `version` | `evolution_stage` | loose |
-| — | `pmoves/config/signing_identity_cards.yaml` (`agent_id`, `display_name`, `glyph`, `voice`, `role`, e.g. `:186-202`) | T&F has **no signing identity**. Its agents could not sign CHIT trails |
-| — | `pmoves/config/identity_vocabulary.yaml` (author-string lineage for the claim register, `:1-30`) | T&F has no equivalent |
+| -- | `pmoves/config/signing_identity_cards.yaml` (`agent_id`, `display_name`, `glyph`, `voice`, `role`, e.g. `:186-202`) | T&F has **no signing identity**. Its agents could not sign CHIT trails |
+| -- | `pmoves/config/identity_vocabulary.yaml` (author-string lineage for the claim register, `:1-30`) | T&F has no equivalent |
 
 PMOVES registers T&F as a single passive entry: `transcribe_and_fetch` (`agent_registry.yaml:2805-2829`), `port: null`, `health: null`, no NATS, all `chit_toggles` false. **None of T&F's 12 catalog agents is registered individually.**
 
@@ -118,9 +118,9 @@ No file is called MultiStrat (§0.1). Three real multi-strategy mechanisms exist
 | Modality | T&F (designed → built) | PMOVES services (built) | VSS (built upstream) |
 |---|---|---|---|
 | Speech/audio | VAD segments → built | `ffmpeg-whisper` (faster-whisper + whisperx align/diarize, `pmoves/services/ffmpeg-whisper/server.py:324`, `:478-511`); PMOVES.YT M1 segmenter | `enable_audio` transcription per chunk (`VSS/services/video-summarization/README.md:371`) |
-| Audio semantics | — | `media-audio`: whisper-large-v3-turbo + hubert emotion + pyannote 3.1 (`pmoves/services/media-audio/server.py:4-11`, `:66-68`); `clap-embed`: `laion/larger_clap_music` (`pmoves/services/clap-embed/config.py:5`) | — |
+| Audio semantics | -- | `media-audio`: whisper-large-v3-turbo + hubert emotion + pyannote 3.1 (`pmoves/services/media-audio/server.py:4-11`, `:66-68`); `clap-embed`: `laion/larger_clap_music` (`pmoves/services/clap-embed/config.py:5`) | -- |
 | Video frames | vision_input via LLM APIs (designed) | `media-video`: every 5th frame (`FRAME_SAMPLE_RATE=5`), cap 600 frames, DETR (YOLO optional, AGPL) (`pmoves/services/media-video/server.py:3-8`, `:61-64`) | RT-CV detect/track; RT-Embed; **VLM caption per N-second chunk** |
-| Image/frame embeddings | — | `clip-embed`: `openai/clip-vit-large-patch14` (`pmoves/services/clip-embed/config.py:5`) | RT-Embed (`dev-profile-search` `rtvi_embed_chunk_duration: 5`, `VSS/deploy/helm/developer-profiles/dev-profile-search/configs/vss-agent/config.yml:29`) |
+| Image/frame embeddings | -- | `clip-embed`: `openai/clip-vit-large-patch14` (`pmoves/services/clip-embed/config.py:5`) | RT-Embed (`dev-profile-search` `rtvi_embed_chunk_duration: 5`, `VSS/deploy/helm/developer-profiles/dev-profile-search/configs/vss-agent/config.yml:29`) |
 | Text | crawl4ai extraction strategies | `langextract` (`pmoves/libs/langextract/providers/rule.py:17-48`: blank-line paragraphs, then `?`-sentence split, **no length cap**); `extract-worker` → Qdrant `pmoves_chunks_qwen3` + Meili (`pmoves/services/extract-worker/worker.py:25-28`, `:214-220`) | CA-RAG over captions |
 
 ---
@@ -155,7 +155,7 @@ The channel-monitor registers **one** playlist: `yt:playlist:PLGupOT04oMfok7S8W8
 
 ### P1: `ai`, `PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8` (verified)
 
-- **Size:** **2,597** (live, 2026-10-21). Earlier snapshots: 2,028 crawled 2026-07-28 (`pmoves/docs/research/DARKXSIDE_PLAYLIST_ANALYSIS_2026-07-28.md:5-6`); 1,795 on 2026-05-10 (`research/CATALOG_STUDIOS_AI_PLAYLIST_ANALYSIS.md:6`); 2,388 on 2026-09-24 (`AGNOTE4482PHI.t1.md:3412`). The "~500" figure is a partial scan (`research/PLAYLIST_BATCH_ANALYSIS.md:4-5`).
+- **Size:** **2,597** (live, 2026-10-21). Earlier snapshots: 2,028 crawled 2026-07-28 (`pmoves/docs/research/DARKXSIDE_PLAYLIST_ANALYSIS_2026-07-28.md:5-6`); 1,795 on 2026-05-10 (`research/CATALOG_STUDIOS_AI_PLAYLIST_ANALYSIS.md:6`); 2,388 on 2026-09-24 (AGNOTE4482 register row (cite-by-identity per REGISTER_CITATIONS.md)). The "~500" figure is a partial scan (`research/PLAYLIST_BATCH_ANALYSIS.md:4-5`).
 - **In-repo analyses:**
   - `pmoves/docs/research/DARKXSIDE_PLAYLIST_ANALYSIS_2026-07-28.md` (channel, duration, type and cluster distributions; tiered priorities)
   - `pmoves/docs/research/comprehensive-analysis/02_youtube_analysis.md` (nine clusters A-I)
@@ -165,7 +165,7 @@ The channel-monitor registers **one** playlist: `yt:playlist:PLGupOT04oMfok7S8W8
   - `pmoves/docs/handoffs/DARKXSIDE_PLAYLIST_PROCESSING_2026-07-28.md` (stale count "102", `:13`)
   - `pmoves/docs/specs/CATALOG_325_INGESTION_PIPELINE.md:57`
   - mavis datasets `pmoves/configs/mavis_collection/datasets/pmoves-chit-{text,multimodal}.yaml`
-  - register sweeps `AGNOTE4482PHI.t1.md:3412`, `:3418`
+  - register sweeps (AGNOTE4482 register rows, cite-by-identity per REGISTER_CITATIONS.md)
 - **Connect directions recorded:**
   1. "Process Tier 1 videos (AI/dev tutorials) **through transcribe-and-fetch** for full transcription + indexing" (`DARKXSIDE_PLAYLIST_ANALYSIS_2026-07-28.md:121`). This is the one explicit T&F connection.
   2. HF dataset (`:122`).
@@ -176,7 +176,7 @@ The channel-monitor registers **one** playlist: `yt:playlist:PLGupOT04oMfok7S8W8
   7. Ingest and analysis into Open Notebook `darkxside` plus Neo4j `MediaRef`/`Anchor` nodes, with videoId+timestamp provenance on everything (`pmoves/docs/handoffs/darkxside-youtube-analysis-2026-09-05.md:11-22`).
   8. Pipeline "composio enumerates → yt :8077 transcribes → AgentJev-0.6B classifies" (`AGNOTE4482PHI.t1.md:3418`).
   9. Four-lens provenance index, where every extract enters "THROUGH the provenance window" (`research/analyses/2026-10-15_LIVING_PROVENANCE_PLAYLIST_DESIGN.md:21-41`).
-- **State:** "No videos have been ingested yet for the DARKXSIDE `ai` playlist" via the pipeline (`.claude/skills/pmoves-yt/SKILL.md:77`). Nine priority transcripts were saved by hand under `research/transcripts` (`AGNOTE4482PHI.t1.md:3412`).
+- **State:** "No videos have been ingested yet for the DARKXSIDE `ai` playlist" via the pipeline (`.claude/skills/pmoves-yt/SKILL.md:77`). Nine priority transcripts were saved by hand under `research/transcripts` (AGNOTE4482 register row (cite-by-identity per REGISTER_CITATIONS.md)).
 
 ### P2: `PMOVES.AI`, `PLa64xecRY4d0` (verified; probable second playlist)
 
@@ -195,7 +195,7 @@ The channel-monitor registers **one** playlist: `yt:playlist:PLGupOT04oMfok7S8W8
   - science/nutrition health `PLGupOT04oMfrW5VE9CqsVP7K2h3pNECsZ` (157)
   - sustainable energy `PLGupOT04oMfrXornVDWe5LaAv00B1NBgx` (124)
   - 3d print, history, electrical, space, housing, recipes, "hoocho build list", "hy"
-  - `tf` `PLGupOT04oMfqInTKTxR-rpxwCZzgDeYPl` (5 items, **Transformers franchise videos — not transcribe-and-fetch**)
+  - `tf` `PLGupOT04oMfqInTKTxR-rpxwCZzgDeYPl` (5 items, **Transformers franchise videos -- not transcribe-and-fetch**)
   - None of these has an in-repo analysis.
 - **[UNVERIFIED]** which of these the operator means by the third playlist; it may also be private or on another account. Ask the operator for the id.
 
@@ -210,9 +210,9 @@ The channel-monitor registers **one** playlist: `yt:playlist:PLGupOT04oMfok7S8W8
 | 3 | ASR with timestamps (T&F `transcribe1.py:422-470`) | **ffmpeg-whisper** `/transcribe` (`pmoves/services/ffmpeg-whisper/server.py:688`), called by pmoves-yt `/yt/transcript` (`yt.py:2661-2783`) | none functionally. T&F's VAD tuning (`min_silence 500ms`, `pad 200ms`) is a candidate default for ffmpeg-whisper **[UNVERIFIED whether it already sets VAD]** |
 | 4 | Diarization / emotion / acoustic features (T&F designed: `speakers`) | **media-audio** `/analyze`, `/process` (`server.py:520-526`) → `analysis.audio.v1` (`analysis_event.py:1-22`) | media-audio output is not merged into M1 chunks (no speaker or emotion on Hi-RAG chunks) |
 | 5 | Transcript → chunks (M1 / T&F segments) | **pmoves-yt** `/yt/emit` M1 segmenter (`yt.py:4812-4827`) | **The M1 profile is not stamped onto the chunk payload** (`payload` = `source`, `t_start`, `t_end` only, `:4196`), so retrieval can't filter by profile. The text-path fallback `_segment_transcript` has no time anchors (`:4120-4127`) |
-| 6 | Generic text chunking (crawl4ai extraction; notebook text) | **langextract** `/extract/text` (`pmoves/services/langextract/api.py:39`) via **notebook-sync** (`pmoves/services/notebook-sync/sync.py:116-142`) | `rule.py:17-48` has **no length cap**, which causes the 8191-token clipping flagged at `AGNOTE4482PHI.t1.md:3410`. **Reuse M1's `min_chars`/`max_chars` budgets** here instead of inventing a new chunker |
+| 6 | Generic text chunking (crawl4ai extraction; notebook text) | **langextract** `/extract/text` (`pmoves/services/langextract/api.py:39`) via **notebook-sync** (`pmoves/services/notebook-sync/sync.py:116-142`) | `rule.py:17-48` has **no length cap**, which caused ~24% of embedding inputs to arrive clipped at the 8191/8192-token limit (measured by layer map PR #3406; fix = PR #3407, multi-strategy length-capped chunker). **Reuse M1's `min_chars`/`max_chars` budgets** here instead of inventing a new chunker |
 | 7 | Embed + index (T&F pgvector 1536-d, write side unlocated) | **extract-worker** `/ingest` → Qdrant `pmoves_chunks_qwen3` + Meili (`worker.py:25-28`, `:214`); **hi-rag-gateway-v2** `/hirag/upsert-batch` (`routes/query.py:164`) | T&F's Supabase tables (`video_transcriptions*`) are a parallel store; no bridge into Qdrant/Neo4j |
-| 8 | Retrieval with neighbour context (T&F LAG/LEAD; three tiers) | **hi-rag-gateway-v2** (hybrid vector+graph+lexical) | Hi-RAG has no explicit "±1 chunk" expansion or per-tier allocation **[UNVERIFIED — rerank/graph expansion may cover it]** |
+| 8 | Retrieval with neighbour context (T&F LAG/LEAD; three tiers) | **hi-rag-gateway-v2** (hybrid vector+graph+lexical) | Hi-RAG has no explicit "±1 chunk" expansion or per-tier allocation **[UNVERIFIED -- rerank/graph expansion may cover it]** |
 | 9 | Video frame detection (VSS RT-CV) | **media-video** `/analyze`, `/frame` (`server.py:412-423`) → `analysis.video.v1` (`:247-268`) | fixed frame stride, not time-chunked; no caption text |
 | 10 | Frame/semantic video embeddings (VSS RT-Embed, 5 s) | **clip-embed** `/embed/image`, `/embed/text` (`pmoves/services/clip-embed/app.py:84`, `:108`) | **No in-repo caller.** grep for `clip-embed` / `CLIP_EMBED_URL` across `pmoves/services/**/*.py` (excluding clip-embed and tests) finds none. No keyframe → CLIP → Qdrant path |
 | 11 | Audio/music embeddings | **clap-embed** `/embed/audio` (`clap-embed/app.py:121`) + NATS `audio.embed.request.v1` (`nats_responder.py:16-17`) | **No in-repo publisher** of `audio.embed.request.v1` outside clap-embed. P2's music-heavy additions would be the first consumer |
@@ -224,7 +224,7 @@ The channel-monitor registers **one** playlist: `yt:playlist:PLGupOT04oMfok7S8W8
 ### Simple connects (cheapest first; each reuses an existing service)
 
 1. **Stamp the M1 `profile` onto each chunk payload** in `/yt/emit`. This is a one-line change at `yt.py:4196`.
-2. **Point langextract's rule provider at M1's char budgets** to close the 8191-token clip (lane `fix/ingest-chunk-cap-multistrat`, `AGNOTE4482PHI.t1.md:3410`).
+2. **Point langextract's rule provider at M1's char budgets** to close the 8191-token clip (PR #3407; corrected citation - the register never contained this lane, cite PRs not register line numbers).
 3. **Register P2 in the channel-monitor**, and route its music-heavy items to clap-embed through `audio.embed.request.v1`.
 4. **Add keyframes at the M1 chunk midpoint → clip-embed → Qdrant** with the chunk's `t_start`/`t_end`. This gives every speech chunk a visual twin with no VSS dependency.
 5. **Phase in VSS** (`lvs_mcp.py`) only for the per-chunk VLM caption stage (row 12), with captions upserted to Hi-RAG on the same time grid.
