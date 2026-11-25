@@ -1,3 +1,4 @@
+import importlib.machinery
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -14,7 +15,20 @@ class _DummyAsyncClient:
         return False
 
 
-sys.modules.setdefault("httpx", SimpleNamespace(AsyncClient=_DummyAsyncClient))
+# Stub httpx ONLY when it is not installed. A bare setdefault() also fired when
+# httpx was installed but not yet imported, replacing it for the whole pytest
+# session and breaking later importers (google-genai 3.x reads httpx.Client at
+# import; 43 flute-gateway failures on main, 2026-11-21). See
+# test_shim_isolation.py.
+#
+# PathFinder, not importlib.util.find_spec: the latter consults sys.modules
+# first and RAISES ValueError when the entry there has no __spec__, which is
+# exactly what a sibling suite's stub looks like (channel-monitor's
+# test_monitor.py installs a bare ModuleType("httpx") and sorts before this
+# file in the same ratchet chunk). PathFinder answers the only question asked
+# here -- is the package on sys.path -- and never raises.
+if importlib.machinery.PathFinder.find_spec("httpx") is None:
+    sys.modules.setdefault("httpx", SimpleNamespace(AsyncClient=_DummyAsyncClient))
 
 
 class _DummyFastAPI:
