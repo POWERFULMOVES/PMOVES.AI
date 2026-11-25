@@ -69,8 +69,10 @@ docker compose -f pmoves/docker-compose.yml --profile agents up -d hi-rag-gatewa
 ```bash
 # BoTZ Gateway health
 curl http://localhost:8054/health
-# NATS health
-curl http://localhost:8222/varz
+# NATS health. The VPS override inherits the base publish
+# ${NATS_MONITORING_PORT:-9223}:8222, so 8222 is container-side only.
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)
+curl "$NATS_MONITOR_URL/varz"
 # Verify from another node via Tailscale
 curl http://${TS_KVM4}:8054/health
 ```
