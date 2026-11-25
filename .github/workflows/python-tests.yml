@@ -4,8 +4,17 @@ name: Python Tests
 # strictly (no ratchet). It is not the required merge check — `main`'s required
 # contexts are `python-tests`, `hardening-validation`, `verify` and
 # `submodule-gitlink-gate`, and the first of those is the job of the same name in
-# merge-gate.yml, which is a different thing from the `tests (3.11)` check this
-# file produces. The two names being one word apart is a trap; see below.
+# merge-gate.yml, which is a different thing from the `tests (3.11)` and
+# `tests (3.12)` checks this file produces. Both columns are advisory. The names
+# being one word apart is a trap; see below.
+#
+# Why there are two columns (2026-11-25): this job ran on 3.11 alone, while
+# merge-gate.yml's `python-tests` job already runs the ratchet on 3.12. Of the
+# service Dockerfiles that build on a python:3.x base, 56 still reference
+# python:3.11, 16 are on 3.12 and 2 on 3.10. The dependency union installed
+# below resolves to binary wheels on 3.12 as well as 3.11; its only remaining
+# pin, ruamel.yaml==0.19.1, is among them. The 3.12 column proves the service
+# suites there before any image moves. Moving the images is step 2, a later PR.
 #
 # `pmoves/tests/**` and `pytest.ini` used to be listed in the two `paths:`
 # filters below. Neither belonged there:
@@ -79,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11']
+        python-version: ['3.11', '3.12']
     env:
       PYTHONPATH: .:pmoves:pmoves/services/gateway
     steps:
