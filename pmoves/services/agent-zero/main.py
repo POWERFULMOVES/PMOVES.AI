@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import hmac
 from contextlib import asynccontextmanager
 import logging
 import os
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
-from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Path as FPath, Query, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 # Bootstrap import paths using shared module
@@ -37,6 +38,20 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 # ---------------------------------------------------------------------------
 from services.common.config import env_bool as _env_bool
 from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
+
+try:
+    from jsonschema import ValidationError as _PayloadValidationError
+    from services.common.events import UnknownTopicError, known_topics as _known_topics
+except ImportError:  # pragma: no cover - controller falls back to an unvalidated envelope
+    class UnknownTopicError(KeyError):  # type: ignore[no-redef]
+        topic = ""
+
+    class _PayloadValidationError(Exception):  # type: ignore[no-redef]
+        message = ""
+        absolute_path: list = []
+
+    def _known_topics() -> list[str]:  # type: ignore[no-redef]
+        return []
 
 _sync_openai_compat_env()
 
@@ -913,17 +928,88 @@ async def execute_mcp_command(request: MCPExecuteRequest) -> MCPExecuteResponse:
     return MCPExecuteResponse(cmd=cmd_name, result=result)
 
 
+# Command-class topics instruct another agent to act, so they are not open to
+# every caller of this unauthenticated REST route (security review 2026-11-23,
+# when claw.task.assign.v1 became publishable here). They require the
+# supervisor's existing key -- the X-API-KEY header and AGENT_ZERO_API_KEY value
+# it already uses toward the runtime -- and fail closed when that key is unset.
+# The envelope source is set here, never taken from the client; payload `from`
+# is data, not an identity. Raw NATS publishes are governed by bus credentials.
+_COMMAND_TOPIC_PREFIXES = ("claw.",)
+_COMMAND_TOPIC_SOURCE = "agent-zero-supervisor"
+
+
+def _is_command_topic(topic: str) -> bool:
+    return topic.startswith(_COMMAND_TOPIC_PREFIXES)
+
+
+def _authorize_command_publish(topic: str, presented_key: Optional[str]) -> None:
+    expected = runtime_config.api_key or ""
+    if not expected:
+        logger.warning(
+            "Refusing command-topic publish %s: AGENT_ZERO_API_KEY is not configured", topic
+        )
+    # Compare bytes: hmac.compare_digest on str raises TypeError for non-ASCII input,
+    # which would turn a bad key into a 500 instead of this 403.
+    if not (
+        expected
+        and presented_key
+        and hmac.compare_digest(presented_key.encode("utf-8"), expected.encode("utf-8"))
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "forbidden",
+                "topic": topic,
+                "message": (
+                    "Command-class topics (claw.*) require an X-API-KEY header matching "
+                    "the supervisor's AGENT_ZERO_API_KEY."
+                ),
+            },
+        )
+
+
 @app.post("/events/publish", response_model=Dict[str, str])
-async def events_publish(body: EventPublishRequest) -> Dict[str, str]:
+async def events_publish(
+    body: EventPublishRequest,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-KEY"),
+) -> Dict[str, str]:
+    command_topic = _is_command_topic(body.topic)
+    if command_topic:
+        _authorize_command_publish(body.topic, x_api_key)
     if not (_controller_ready.is_set() and event_controller.is_connected):
         raise HTTPException(status_code=503, detail="NATS controller not ready")
-    env = await event_controller.publish(
-        body.topic,
-        body.payload,
-        correlation_id=body.correlation_id,
-        parent_id=body.parent_id,
-        source=body.source or "agent-zero",
-    )
+    try:
+        env = await event_controller.publish(
+            body.topic,
+            body.payload,
+            correlation_id=body.correlation_id,
+            parent_id=body.parent_id,
+            source=_COMMAND_TOPIC_SOURCE if command_topic else (body.source or "agent-zero"),
+        )
+    except UnknownTopicError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "unknown_topic",
+                "topic": body.topic,
+                "message": (
+                    f"Topic {body.topic!r} is not registered in pmoves/contracts/topics.json; "
+                    "register it with a payload schema before publishing."
+                ),
+                "known_topics": _known_topics(),
+            },
+        ) from exc
+    except _PayloadValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_payload",
+                "topic": body.topic,
+                "message": exc.message,
+                "path": [str(part) for part in exc.absolute_path],
+            },
+        ) from exc
     response: Dict[str, str] = {"published": body.topic}
     envelope_id = env.get("id")
     if envelope_id:
