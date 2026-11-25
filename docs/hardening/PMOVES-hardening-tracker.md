@@ -1,3 +1,4 @@
+- 2026-11-16: upstream yt-dlp 2026.10.26 released -- build-validated only, NO pin moved (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md)
 - 2026-11-02: upstream yt-dlp 2026.10.26 released -- build-validated only, NO pin moved (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md)
 - 2026-09-07: upstream yt-dlp 2026.8.19 released -- build-validated only, NO pin moved (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md)
 - 2026-08-31: upstream yt-dlp 2026.8.19 released -- build-validated only, NO pin moved (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md)
