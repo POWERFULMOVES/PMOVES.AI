@@ -38,14 +38,14 @@ def main():
     args = ap.parse_args()
 
     reg = pathlib.Path(args.register)
-    rows = reg.read_text(errors='replace').splitlines() if reg.exists() else []
+    rows = reg.read_text(encoding='utf-8', errors='replace').splitlines() if reg.exists() else []
 
     violations = []
     for doc in args.docs:
         p = pathlib.Path(doc)
-        for ln, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+        for ln, line in enumerate(p.read_text(encoding='utf-8', errors='replace').splitlines(), 1):
             for m in BARE.finditer(line):
-                violations.append(f'{p}:{ln}: bare line citation {m.group(0)!r} — cite AGNOTE4482[owner@branch @ts] instead')
+                violations.append(f'{p}:{ln}: bare line citation {m.group(0)!r} -- cite AGNOTE4482[owner@branch @ts] instead')
             for m in TOKEN.finditer(line):
                 owner, branch, ts = m.groups()
                 if not any(row_matches(r, ts, branch) for r in rows):
