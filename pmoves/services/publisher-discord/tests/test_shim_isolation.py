@@ -9,7 +9,7 @@ import that reads ``httpx.<attr>`` at import time broke -- google-genai 3.x's
 (2026-11-21). The shim is for minimal environments where httpx is absent.
 """
 
-import importlib.util
+import importlib.machinery
 import os
 import subprocess
 import sys
@@ -21,7 +21,9 @@ TEST_FILE = Path(__file__).with_name("test_formatting.py")
 
 
 @pytest.mark.skipif(
-    importlib.util.find_spec("httpx") is None,
+    # PathFinder ignores sys.modules, so a sibling suite's spec-less httpx stub
+    # cannot make this raise at collection (importlib.util.find_spec would).
+    importlib.machinery.PathFinder.find_spec("httpx") is None,
     reason="httpx not installed: the shim is supposed to apply",
 )
 def test_formatting_shim_leaves_installed_httpx_alone():

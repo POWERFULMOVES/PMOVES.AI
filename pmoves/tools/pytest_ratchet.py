@@ -524,6 +524,7 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
 
     findings: List[dict] = []
     dead: List[str] = []
+    aborted: List[str] = []
     spent = 0.0
     for j, f in enumerate(gfiles):
         if spent >= pass_budget:
@@ -549,12 +550,22 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
             sys.stderr.write("---   %s aborted pytest (exit 3) ---%s%s%s" % (
                 label, chr(10), foutput[-600:], chr(10)))
             findings.append(_internal_error_finding(f, foutput))
+            aborted.append(label)
             continue
         if sub.is_file():
             continue
         sys.stderr.write("---   no report for %s (exit %d) ---%s%s%s" % (
             label, frc, chr(10), foutput[-600:], chr(10)))
         dead.append(label)
+    if len(gfiles) > 1 and len(aborted) == len(gfiles):
+        # EVERY file aborts alone: that is not one file's sys.exit, it is the
+        # session itself (a conftest or plugin hook raising). Per-file findings
+        # would key the same breakage N ways and churn the baseline; the group
+        # is reported once, the same way an unimportable conftest is.
+        sys.stderr.write(
+            "--- every file in %s aborts pytest alone; reporting the group ---%s" % (
+                group, chr(10)))
+        return [], [group]
     return findings, dead
 
 

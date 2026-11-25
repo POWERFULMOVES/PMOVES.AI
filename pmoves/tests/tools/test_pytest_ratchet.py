@@ -517,18 +517,23 @@ class _FakeRun:
     whole trap: a chunk containing one abort returns 3 with a report present.
     """
 
-    def __init__(self, hangs, chunk_times_out=True, aborts=()):
+    def __init__(self, hangs, chunk_times_out=True, aborts=(), abort_writes_report=True):
         self.hangs = set(hangs)
         self.aborts = set(aborts)
         self.chunk_times_out = chunk_times_out
+        self.abort_writes_report = abort_writes_report
         self.calls = []
+
+    def _abort(self, junit):
+        if self.abort_writes_report:
+            junit.write_text("<testsuites/>", encoding="utf-8")
+        return 3, "INTERNALERROR> SystemExit: 1"
 
     def __call__(self, files, junit, timeout=None):
         self.calls.append(([str(f) for f in files], timeout))
         if len(files) > 1:
             if any(str(f) in self.aborts for f in files):
-                junit.write_text("<testsuites/>", encoding="utf-8")
-                return 3, "INTERNALERROR> SystemExit: 1"
+                return self._abort(junit)
             if self.chunk_times_out:
                 return -1, "TIMEOUT"
             junit.write_text("<testsuites/>", encoding="utf-8")
@@ -536,8 +541,7 @@ class _FakeRun:
         if str(files[0]) in self.hangs:
             return -1, "TIMEOUT"
         if str(files[0]) in self.aborts:
-            junit.write_text("<testsuites/>", encoding="utf-8")
-            return 3, "INTERNALERROR> SystemExit: 1"
+            return self._abort(junit)
         junit.write_text("<testsuites/>", encoding="utf-8")
         return 0, ""
 
@@ -684,6 +688,36 @@ def test_abort_and_hang_in_one_chunk_are_told_apart(monkeypatch, tmp_path):
     findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "abort.py", "hang.py"], fake)
     assert dead == ["hang.py"]
     assert [f["where"] for f in _internal_errors(findings)] == ["abort.py"]
+
+
+def test_abort_without_any_report_is_still_a_finding(monkeypatch, tmp_path):
+    """pytest usually writes a partial report on INTERNALERROR; when it does not
+    (killed harder, or junitxml itself is what broke), the abort is still keyed
+    on the file rather than lost."""
+    fake = _FakeRun(hangs=[], aborts=["abort.py"], abort_writes_report=False)
+    finding = {"kind": "FAIL", "where": "x", "name": "y", "detail": ""}
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "abort.py"], fake,
+                                   parsed=[finding])
+    assert dead == []
+    assert findings.count(finding) == 1          # a.py only; abort.py had no report
+    assert [f["where"] for f in _internal_errors(findings)] == ["abort.py"]
+
+
+def test_single_file_abort_without_a_report_is_recorded_not_dead(monkeypatch, tmp_path):
+    fake = _FakeRun(hangs=[], aborts=["only.py"], abort_writes_report=False)
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["only.py"], fake)
+    assert dead == []
+    assert [f["where"] for f in _internal_errors(findings)] == ["only.py"]
+
+
+def test_every_file_aborting_alone_is_one_dead_group_not_n_findings(monkeypatch, tmp_path):
+    """A conftest or plugin hook raising fails identically for every file. That is
+    the session, not a file; N per-file findings would key one breakage N ways."""
+    fake = _FakeRun(hangs=[], aborts=["a.py", "b.py", "c.py"])
+    findings, dead = _run_fallback(monkeypatch, tmp_path, ["a.py", "b.py", "c.py"], fake)
+    assert dead == ["grp"]
+    assert findings == []
+    assert len(fake.calls) == 1 + 3            # it still had to look, per file
 
 
 def test_internal_error_detail_is_the_last_output_line_capped(monkeypatch, tmp_path):
