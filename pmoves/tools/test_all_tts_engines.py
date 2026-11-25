@@ -55,6 +55,20 @@ from pathlib import Path
 try:
     from gradio_client import Client
 except ImportError:
+    if "pytest" in sys.modules:
+        # This is a CLI against a live TTS Studio, not a pytest suite, but its
+        # name matches `test_*.py`, so the python-tests ratchet collects it.
+        # Under pytest, `sys.exit(1)` here is an INTERNALERROR during
+        # collection: it aborted the whole 20-file chunk this file sat in and
+        # pytest wrote a partial report that read as "no failures" for every
+        # other file in the chunk (measured 2026-11-25, Merge Gate run
+        # 45044058125). A module-level skip says what happened instead.
+        import pytest
+
+        pytest.skip(
+            "CLI script, not a test module; gradio_client is not installed",
+            allow_module_level=True,
+        )
     print("ERROR: gradio_client required. Install with: pip install gradio_client")
     sys.exit(1)
 
