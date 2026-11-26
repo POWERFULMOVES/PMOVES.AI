@@ -1,0 +1,107 @@
+name: Silent Bind Ratchet
+
+# A published HOST port must be able to activate.
+#
+# Docker activates a published port only when the container is attached to at
+# least one network that is NOT `internal: true`. On an internal-only
+# container the binding is STORED and never activated: the container looks
+# published in `docker inspect` and the host port refuses connections.
+# moby/moby#36174 (OPEN), and the house doctrine in
+# pmoves/docs/operations/DOCKER_NETWORK_HARDENING.md Rule 5.
+#
+# The house already owns a RUNTIME auditor for this class -- `make -C pmoves
+# net-reality` (pmoves/scripts/audit_network_reality.sh) compares what each
+# container REQUESTED against what the daemon ACTIVATED. It needs a running
+# Docker daemon, so it cannot run here. This ratchet is the STATIC twin: it
+# reads the compose files, so it runs on every PR.
+#
+# It FAILS on:
+#   UNACTIVATABLE_PORT  a service publishes a host port but joins only
+#                        internal:true networks
+#   STALE_GAP           a recorded gap that is no longer a gap
+#   UNREASONED_GAP      a recorded gap whose reason is still a placeholder
+#   INSTRUMENT_ERROR    a compose file that cannot be read or parsed (exit 3,
+#                        which is NOT a pass)
+#
+# The baseline at pmoves/configs/silent_bind/_known_gaps.yaml may only
+# SHRINK: adding an entry to silence a NEW gap is the failure this gate
+# exists to prevent. That is enforced by measuring the BASE revision too --
+# a baseline entry for a gap that did not exist at the base is a
+# BASELINE_ADDITION. The base revision is resolved from the PR's base SHA
+# over a full-history checkout, the same shape the damage-control
+# differential sweep uses.
+#
+# Same shape as the other house ratchet workflows (validate-tac-ratchet,
+# image-staleness-ratchet, fork-registry-ratchet): no network, no token, no
+# docker, read-only.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/docker-compose*.yml"
+      - "pmoves/compose/**"
+      - "pmoves/tools/silent_bind_ratchet.py"
+      - "pmoves/configs/silent_bind/**"
+      - "pmoves/tools/tests/test_silent_bind_ratchet.py"
+      - "pmoves/tools/tests/test_smoke_silent_bind_cache.py"
+      - "pmoves/scripts/smoke-tests.sh"
+      - ".github/workflows/silent-bind-ratchet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  silent-bind-ratchet:
+    name: silent-bind-ratchet
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The baseline-addition rule compares the baseline against the
+          # BASE revision's measured gaps, so the base blobs have to exist in
+          # the clone. A shallow clone has no base blob, and the comparison
+          # would exit 3 -- honestly, but uselessly, on every run.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Resolve the base revision
+        id: base
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASE" ]; then
+            # workflow_dispatch: no PR base. Compare against main's tip.
+            git fetch --no-tags --depth=1 origin main
+            BASE="$(git rev-parse FETCH_HEAD)"
+          fi
+          echo "sha=${BASE}" >> "$GITHUB_OUTPUT"
+          echo "base=${BASE} ($(git log --oneline -1 "${BASE}" | cut -c1-72))"
+
+      - name: Run ratchet (read-only, no network)
+        run: |
+          # pmoves/conftest.py is shared across the tools/tests suite and
+          # imports pytest_asyncio + pyyaml; the ratchet test file inherits
+          # both requirements even though the ratchet tests are sync +
+          # json-only -- conftest import chain still resolves.
+          python -m pip install --quiet pyyaml
+          python pmoves/tools/silent_bind_ratchet.py --check \
+            --base-ref "${{ steps.base.outputs.sha }}"
+
+      - name: Pytest the ratchet (regression net for the ratchet itself)
+        run: |
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
+          python -m pytest pmoves/tools/tests/test_silent_bind_ratchet.py -v

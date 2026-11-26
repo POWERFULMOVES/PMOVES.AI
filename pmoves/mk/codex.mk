@@ -132,8 +132,14 @@ chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
-secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale)
-	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force)
+secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale; KEYS=A,B limits it to those keys, e.g. FORCE=1 KEYS=GH_APP_SEC rotates one key without clobbering node-specific ones)
+	@# KEYS is honoured only from the make command line (incl. a parent make's
+	@# command line, via MAKEFLAGS). A generically-named KEYS exported in the
+	@# shell must not silently narrow the funnel's hydrate step. An explicitly
+	@# EMPTY KEYS= is passed through as --keys "" so the tool refuses it; the
+	@# old $(strip $(KEYS)) guard dropped the flag instead, turning "rotate
+	@# nothing" into an unscoped --force over every matching key.
+	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force) $(if $(filter command line,$(origin KEYS)),--keys "$(KEYS)")
 
 secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supabase/container) into env.shared
 	-@$(MAKE) --no-print-directory supa-status
@@ -506,3 +512,34 @@ submodule-promote: ## Create PR from integration -> hardened (run from INSIDE th
 secrets-rotate-db-role: ## Rotate a Postgres role password client-side (SCRAM verifier; plaintext never reaches the server) then funnel it. Usage: make secrets-rotate-db-role ROLE=juicefs_meta KEY=JUICEFS_META_PASSWORD [CONTAINER=..] [LEN=64] [DRY_RUN=1]
 	$(if $(strip $(ROLE)),,$(error Usage: make -C pmoves secrets-rotate-db-role ROLE=<pg role> KEY=<env.shared key> [CONTAINER=<db container>] [LEN=<n>] [DRY_RUN=1]))
 	@bash scripts/rotate_db_role.sh --role "$(ROLE)" $(if $(KEY),--key "$(KEY)",) $(if $(CONTAINER),--container "$(CONTAINER)",) $(if $(LEN),--length $(LEN),) $(if $(DRY_RUN),--dry-run,)
+
+# -- Secret shapes + provider-auth verification ------------------------------
+# secret_shapes.yaml holds per-label prefix/length/charset RULES (never values);
+# secrets_sync enforces it at delivery. secrets-provider-verify is the live half:
+# one read-only auth call per provider key, for the OPERATOR to run after a
+# rotation. Not wired into any automatic path -- it makes real provider calls.
+#
+# The env is SOURCED (not exec'd) so the exit code is the tool's own. with-env.sh
+# starts with `set -euo pipefail`, which a source carries into this shell; the
+# `||` keeps a loader hiccup from aborting the recipe, and `set +euo pipefail`
+# turns errexit back off before the tool runs. make itself still reports any
+# non-zero exit as 2, so read the VERDICT line, not make's status.
+.PHONY: secrets-shapes-check secrets-provider-verify
+
+secrets-shapes-check: ## Validate pmoves/config/secret_shapes.yaml against its pydantic model (exit 3 = malformed rules file)
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secret_shape_rules.py
+
+secrets-provider-verify: ## Post-rotation: ONE read-only auth call per provider key (model list / whoami). Prints provider, HTTP status, ok/fail/unmeasured -- never keys. ONLY="anthropic ghcr" to subset
+	@bash -c '. scripts/with-env.sh >/dev/null || { echo "secrets-provider-verify: COULD-NOT-MEASURE -- scripts/with-env.sh failed to load"; echo "VERDICT: UNMEASURED exit=3"; exit 3; }; \
+	  set +euo pipefail; \
+	  PYTHONPATH="$(CURDIR)/.." "$(CODEX_PY)" tools/secrets_provider_verify.py $(if $(strip $(ONLY)),--only $(ONLY)) $(ARGS); \
+	  rc=$$?; echo "secrets-provider-verify: tool exit $$rc (0 all ok / 1 auth failure / 3 could-not-measure)"; exit $$rc'
+
+# Read-only pre-merge check for a node holder: load the v1 secrets manifest
+# through the funnel's ManifestShape model and list every entry it would refuse
+# (ids + problems only; no values, no CHIT decode). Agents cannot read the
+# manifest, so this is how a parsing change gets measured against the real one.
+.PHONY: secrets-manifest-check
+secrets-manifest-check: ## Read-only: list manifest entries the funnel's models would refuse (ids + problems only). Exit 0 ok / 1 refusals / 3 unreadable. MANIFEST=<path> to override
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_manifest_check.py --manifest "$(if $(MANIFEST),$(MANIFEST),$(CURDIR)/../$(CHIT_MANIFEST_DEST))"; \
+	  rc=$$?; echo "secrets-manifest-check: tool exit $$rc (0 ok / 1 refusals / 3 could-not-measure)"; exit $$rc
