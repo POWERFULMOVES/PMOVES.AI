@@ -195,3 +195,24 @@ done < targets.txt | sort -n
 - **Prefix inflation.** Word-boundary matching lets a prefix target match inside its own suffixes (`up-yt` matches in `up-yt-egress`). This inflates **high** counts and never creates a false zero, so ordering among frequently-referenced targets is unreliable while the zero determinations are not.
 - **Scan (1) alone is not sufficient**, and treating it as such is what made the first revision of this file wrong. It answers "does anything written down mention this", not "is anything broken if this disappears". Only scan (2) answers the second question.
 - **Neither scan sees a human.** A target typed weekly and never written down scores zero on both.
+
+
+## FOUR Agent Zero shapes on the 5090 node (corrected 2026-11-21, per 5090-Claude sitrep)
+
+5090-Claude's Nov 21 sitrep identified a fourth shape the earlier inventory missed. Config written for "DARKXSIDE" can land in three different usr dirs depending on which shape is meant. Authoritative mapping:
+
+| # | Shape | Compose | Image | usr dir | Status |
+|---|---|---|---|---|---|
+| 1 | pmoves-agent-zero (prod :8081) | docker-compose.agents.yml | pmoves image | root usr | RUNNING — fleet prod |
+| 2 | PMOVES-AGInTZeR0 (ERP/AUTH_LOGIN :60937) | ERP service | same | ERP instance usr | RUNNING v2.14 |
+| 3 | pmoves-agent-zero-darkxside | docker-compose.darkxside-sidecar.yml (TRACKED, own compose project) | PMOVES image since 2026-10-24 | pmoves/usr (DARKXSIDE) | RUNNING since 10-24, zero restarts, crash loop fixed |
+| 4 | agent-zero-darkxside-inst (overlay) | instances overlay | — | — | DOCUMENTED BUT NEVER CREATED on this node |
+
+Rule: shape 3 is the only DARKXSIDE instance actually running on this node. Shape 4 is docs-only. Verify compose file + usr dir before writing any DARKXSIDE config.
+
+Also: PMOVES-a0-launcher fork still has ZERO tags/releases (verified Nov 21); installed Launcher is upstream agent0ai v1.9.0. Upstream now at v1.11 (not v1.10). Fork main head: 629d28968c.
+
+
+### Codex P2 clarification (2026-11-26): live DARKXSIDE Launcher instance
+
+Codex review correctly flagged that the "never created" framing for shape 4 could mislead a reader into thinking no DARKXSIDE runtime exists. Clarification: the **live DARKXSIDE runtime on this node is shape 3** (the tracked darkxside-sidecar compose project, running the PMOVES image since 2026-10-24, ~zero restarts, its own usr dir). When writing DARKXSIDE config, target **shape 3** unless the operator explicitly says otherwise. Shape 4 (the instances overlay) remains documented-but-unused. This table is the authoritative mapping; treat any other DARKXSIDE reference as stale.
