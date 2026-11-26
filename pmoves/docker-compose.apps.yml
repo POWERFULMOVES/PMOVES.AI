@@ -274,14 +274,14 @@ services:
     - NATS_URL=${NATS_URL}
     - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:-}
     - NATS_EVENT_BUS_DISABLE_SUBSCRIBER=${NATS_EVENT_BUS_DISABLE_SUBSCRIBER:-false}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_public
     ports:
     - ${NATS_EVENT_BUS_BIND:-127.0.0.1}:${NATS_EVENT_BUS_PORT:-8131}:8131
     depends_on:
       nats:
         condition: service_healthy
     profiles: ["apps", "events", "pinokio"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8131/healthz', timeout=5)"]
       interval: 30s
@@ -320,7 +320,7 @@ services:
     - PINOKIO_HOME=${PINOKIO_HOME:-/pinokio}
     - NATS_EVENT_BUS_URL=${NATS_EVENT_BUS_URL:-http://nats_event_bus:8131}
     - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:-}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_public
     ports:
     - ${PINOKIO_BRIDGE_BIND:-127.0.0.1}:${PINOKIO_BRIDGE_PORT:-8130}:8130
     volumes:
@@ -334,7 +334,7 @@ services:
       nats_event_bus:
         condition: service_healthy
     profiles: ["apps", "pinokio"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8130/healthz', timeout=5)"]
       interval: 30s

@@ -293,6 +293,13 @@ MUTATIONS = [
 ]
 
 
+# Killing tests that importorskip a third-party module (mirrors the skip in
+# test_mesh_node_compatibility.py).
+_KILLING_TEST_REQUIRES = {
+    "test_the_service_entry_points_resolve_their_imports_without_a_package": "aiohttp",
+}
+
+
 @pytest.mark.parametrize(
     "label,target,old,new,killing_test",
     MUTATIONS,
@@ -300,6 +307,16 @@ MUTATIONS = [
 )
 def test_text_mutation_is_killed(label, target, old, new, killing_test):
     """Break the fix on purpose; the named test must go RED."""
+    # A killing test that SKIPS in this interpreter cannot go red, so the
+    # kill is unmeasurable here -- report that as a skip, never as a kill or
+    # a survivor. The child runs sys.executable, so the parent's view of the
+    # dependency is the child's.
+    required = _KILLING_TEST_REQUIRES.get(killing_test)
+    if required:
+        pytest.importorskip(
+            required,
+            reason=f"{label}: {killing_test} needs {required}, not installed",
+        )
     original = _apply_mutation(target, old, new)
     try:
         mutated = _run_pytest(killing_test)

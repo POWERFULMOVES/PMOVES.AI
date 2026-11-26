@@ -2,10 +2,11 @@ import os
 from typing import Any, Dict, List, Optional
 from supabase import create_client, Client
 
-from .env import get_secret
+from .env import supabase_service_key
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = get_secret("SUPABASE_KEY")
+# SUPABASE_SERVICE_ROLE_KEY first; SUPABASE_KEY is a read-fallback alias (#3498).
+SUPABASE_KEY = supabase_service_key()
 
 _client: Client | None = None
 
@@ -13,7 +14,10 @@ def client() -> Client:
     global _client
     if _client is None:
         if not SUPABASE_URL or not SUPABASE_KEY:
-            raise RuntimeError("SUPABASE_URL and SUPABASE_KEY required")
+            raise RuntimeError(
+                "SUPABASE_URL and a service key (SUPABASE_SERVICE_ROLE_KEY, "
+                "SUPABASE_SERVICE_KEY or SUPABASE_KEY) required"
+            )
         _client = create_client(SUPABASE_URL, SUPABASE_KEY)
     return _client
 

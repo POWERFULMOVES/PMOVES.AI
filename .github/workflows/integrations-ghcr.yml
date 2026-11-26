@@ -911,13 +911,6 @@ jobs:
             GHCR_SHA="${{ env.REGISTRY }}/$GHCR_NS/${{ steps.cfg.outputs.image_name }}:${DATE_TAG}-${SHA_SHORT}"
             TAGS="${GHCR_LATEST}\n${GHCR_SHA}"
             PRIMARY_TAG="${GHCR_LATEST}"
-            # Upstream-compatible channel tag: consumers pulling :latest
-            # (a0-launcher A0_BACKEND_IMAGE_REPO override lane) resolve it to
-            # the newest pmoves-agent-zero build. Scoped to agent-zero only so
-            # no other integration image changes its tag surface.
-            if [ "${{ steps.cfg.outputs.image_name }}" = "pmoves-agent-zero" ]; then
-              TAGS="${TAGS}\n${{ env.REGISTRY }}/$GHCR_NS/${{ steps.cfg.outputs.image_name }}:latest"
-            fi
           fi
 
           if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
@@ -1198,6 +1191,22 @@ jobs:
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
+
+      - name: Promote :latest after Trivy gate (agent-zero only)
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          SOURCE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
+          IMAGE_NAME_CFG: ${{ steps.cfg.outputs.image_name }}
+          GHCR_NS: ${{ steps.meta.outputs.ghcr_ns }}
+          REGISTRY_HOST: ${{ env.REGISTRY }}
+        run: |
+          set -euo pipefail
+          if [ "$IMAGE_NAME_CFG" != "pmoves-agent-zero" ]; then
+            echo "Not agent-zero; the :latest consumer channel is not managed by this lane."
+            exit 0
+          fi
+          echo "Promoting $SOURCE -> ${REGISTRY_HOST}/${GHCR_NS}/${IMAGE_NAME_CFG}:latest"
+          docker buildx imagetools create --tag "${REGISTRY_HOST}/${GHCR_NS}/${IMAGE_NAME_CFG}:latest" "$SOURCE"
 
       - name: Clean up pulled image and dangling layers
         if: ${{ steps.meta.outputs.has_tags == 'true' && always() }}

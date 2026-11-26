@@ -477,3 +477,127 @@ def test_empty_key_list_still_mints_nothing():
     """The pre-existing EOFError guard must survive the rewiring."""
     recipe = _ensure_generated_recipe()
     assert 'if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]' in recipe
+
+
+# --- DockerProbe decoding (2026-10-09, z890) -----------------------------------
+# `text=True` with no encoding decoded docker output as cp1252 on Windows. One
+# UTF-8 byte (0x8d, e.g. the tail of U+200D) in `docker inspect` killed the
+# subprocess reader thread, stdout came back None, and the probe reported "NO
+# running container holds" SECRET_KEY_BASE / VAULT_ENC_KEY while the Supabase
+# pooler was up -- a false refusal that blocked `make secrets-funnel`.
+
+_UTF8_EMITTER = (
+    "import sys; sys.stdout.buffer.write("
+    "'{\"Env\": [\"NOTE=a\u200db\"]}'.encode('utf-8'))"
+)
+
+
+def test_probe_decodes_docker_output_as_utf8_on_every_platform():
+    """Byte 0x8d is undefined in cp1252; the probe must still read it."""
+    out = sh.DockerProbe._run([sys.executable, "-c", _UTF8_EMITTER])
+    assert "a\u200db" in out
+
+
+class _Proc:
+    def __init__(self, returncode=0, stdout=b"", stderr=b""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def test_probe_decodes_stdout_itself_as_utf8_strict(monkeypatch):
+    """Pins the intent where the platform codec is already UTF-8 (Linux CI):
+    the probe captures BYTES and decodes stdout itself, never via the
+    platform codec (no text=/encoding= handed to subprocess)."""
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        return _Proc(stdout="a\u200db".encode("utf-8"))
+
+    monkeypatch.setattr(sh.subprocess, "run", fake_run)
+    assert sh.DockerProbe._run(["docker", "ps"]) == "a\u200db"
+    assert not seen.get("text") and not seen.get("universal_newlines")
+    assert "encoding" not in seen and "errors" not in seen
+
+
+def test_probe_raises_when_stdout_is_lost(monkeypatch):
+    """Exit 0 with no stdout is "could not read", not "nothing there"."""
+    monkeypatch.setattr(sh.subprocess, "run", lambda cmd, **kw: _Proc(stdout=None))
+    import pytest
+
+    with pytest.raises(sh.DockerProbeUnreadable):
+        sh.DockerProbe._run(["docker", "inspect", "x"])
+
+
+def test_probe_raises_on_undecodable_stdout_without_leaking_bytes(monkeypatch):
+    """Non-UTF-8 stdout from a successful docker call must surface as
+    unreadable, and the error must never echo the offending bytes."""
+    monkeypatch.setattr(
+        sh.subprocess, "run", lambda cmd, **kw: _Proc(stdout=b"\xff\xfeSECRETBYTES")
+    )
+    import pytest
+
+    with pytest.raises(sh.DockerProbeUnreadable) as info:
+        sh.DockerProbe._run(["docker", "version", "--format", "x"])
+    assert "SECRETBYTES" not in str(info.value)
+    assert "position 0" in str(info.value)
+
+
+def test_probe_ignores_undecodable_stderr_on_a_failed_call(monkeypatch):
+    """Fleet review on #3321: a localized, non-UTF-8 docker error message on
+    stderr must not turn a plain failure into an unreadable-output refusal."""
+    monkeypatch.setattr(
+        sh.subprocess, "run", lambda cmd, **kw: _Proc(returncode=1, stderr=b"\x8d\xff")
+    )
+    assert sh.DockerProbe._run(["docker", "version"]) == ""
+
+
+def test_absent_docker_still_reads_as_nothing(monkeypatch):
+    """The legitimate STATE 1 path (no docker binary) must keep returning ""."""
+
+    def missing(cmd, **kw):
+        raise FileNotFoundError("docker")
+
+    monkeypatch.setattr(sh.subprocess, "run", missing)
+    assert sh.DockerProbe._run(["docker", "version"]) == ""
+
+
+class _UnreadableProbe:
+    def container_envs(self):
+        raise sh.DockerProbeUnreadable("`docker version` exited 0 but its output was lost (undecodable)")
+
+    def volumes(self):  # pragma: no cover - container_envs raises first
+        return []
+
+
+def test_undecodable_docker_version_refuses_instead_of_minting(tmp_path):
+    """The Kilo finding on #3321: if an undecodable `docker version` read as
+    "no docker", available() would be False, volumes() empty, and classify()
+    would MINT over live state. It must REFUSE instead."""
+    plan = _plan(_env(tmp_path), _UnreadableProbe())
+    d = _for(plan, "VAULT_ENC_KEY")
+    assert d.state == sh.STATE_REFUSE
+    assert d.value is None
+    assert "could NOT be measured" in d.detail
+
+
+def test_undecodable_docker_leaves_already_set_keys_satisfied(tmp_path):
+    env = _env(tmp_path, "VAULT_ENC_KEY=%s\n" % FAKE_HEX32)
+    plan = _plan(env, _UnreadableProbe(), keys=("VAULT_ENC_KEY", "SECRET_KEY_BASE"))
+    assert _for(plan, "VAULT_ENC_KEY").state == sh.STATE_SATISFIED
+    assert _for(plan, "SECRET_KEY_BASE").state == sh.STATE_REFUSE
+    assert sh.apply_plan(plan, env_path=env) == []
+
+
+def test_real_probe_refuses_end_to_end_when_docker_version_is_undecodable(tmp_path, monkeypatch):
+    """Drive the REAL DockerProbe (no fake) through build_plan with a
+    subprocess that reports success but loses stdout."""
+
+    class _Lost:
+        returncode = 0
+        stdout = None
+
+    monkeypatch.setattr(sh.subprocess, "run", lambda cmd, **kw: _Lost())
+    plan = _plan(_env(tmp_path), sh.DockerProbe())
+    assert _for(plan, "VAULT_ENC_KEY").state == sh.STATE_REFUSE
