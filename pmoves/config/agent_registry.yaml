@@ -299,6 +299,37 @@ agents:
       B850/Knuckles node Kimi Code CLI identity (PMOVES-KIMI-KNUCKLES-B850).
       Same affinity posture as claude_b850 -- a preference, not an exclusive
       claim. First harness wired to a per-node cipher_agent_id.
+  kimi_spark:
+    name: "Kimi Spark"
+    class: standard
+    # SPARK-KIMI in identity_vocabulary.yaml (canonical spark-kimi), the
+    # lineage kimi_knuckles descends from. Same shape as kimi_knuckles.
+    # Harness `kimi` (scripts/kimi-pmoves.sh), so node-vocabulary.yaml
+    # spark.default_identity.kimi binds here instead of launching unbound.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # No signing card is minted for spark-kimi yet, so node-vocabulary.yaml
+    # declares no cipher_agent_id for it; the launcher reports that absence.
+    signature: spark-kimi
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [spark]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      SPARK node Kimi Code CLI identity (SPARK-KIMI). A preference, not an
+      exclusive claim. Cipher carry waits on a minted card.
   claude_5090:
     name: "5090 Claude"
     class: standard
@@ -360,6 +391,16 @@ agents:
       ci_runner: null
       compose_profile: null
     description: "Z890 node CLI identity -- infrastructure coordinator, NATS hub"
+    # HOST SCOPE (operator direction 2026-11-08): the node identity holds the
+    # node, not just the repo. node_identity.resolve_host_roots emits these and
+    # the launchers add each as --add-dir ONLY for the main session (no --agent).
+    # Agents and teams it creates stay at max_subagent_scope: their own
+    # .claude/agents/*.md tool lists, inside the repo. Secret paths stay
+    # zero-access via damage-control whatever this says.
+    scope:
+      host_access: node
+      host_roots: ["C:/", "D:/", "I:/", "N:/"]
+      max_subagent_scope: repo
 
   crush_glm52:
     name: "Crush GLM-5.2 (Knuckles)"
@@ -478,6 +519,184 @@ agents:
       Node-agnostic Kilo CLI worker on the Z.AI coding plan, including the hosted KiloClaw
       VPS (runtime lane kilocode/zai-coding/glm-5.3). CLI harness source of truth:
       PMOVES-KeYlOkODe (fork of Kilo-Org/kilocode, @kilocode/cli); reads repo kilo.json natively.
+
+  # --- Harness rows bridged to the ACP registry (2026-10-11, #3347) ----------
+  # One entry per coding harness PMOVES overlays, so pmoves/tools/acp_registry_map.py
+  # can mark the ACP entry `linked` and so the overlay surface is DECLARED here
+  # rather than detected at launch (danger-room room `overlay-paper-over`).
+  # Signatures are harness names, not model lineage; node_affinity is empty on
+  # purpose so pmoves_launcher_generator.py emits no per-node pin file for them
+  # (the per-node identities claude_5090 / kimi_knuckles / ... already do that).
+  # Sources: skills dirs from skills/PMOVES-skills/src/agents.ts (vercel-labs
+  # fork, read 2026-10-11); settings surfaces from each harness's own docs,
+  # cited in the overlay map row.
+  claude_code:
+    name: "Claude Code"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "claude-code"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: claude-acp, command: npx, args: ["@agentclientprotocol/claude-agent-acp"]}
+      settings: ["~/.claude/settings.json", ".claude/settings.json", ".claude/settings.local.json", "--settings <file>", "--mcp-config <file>"]
+      instructions: ["CLAUDE.md", ".claude/CLAUDE.md"]
+      skills_dir: ".claude/skills"
+      launcher: "deploy/provision/claude-pmoves.sh"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "Anthropic Claude Code CLI as a PMOVES harness. Settings precedence and --mcp-config are the seam; .claude/mcp.json is the roster it is handed."
+
+  codex_cli:
+    name: "Codex CLI"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "codex"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: codex-acp, command: npx, args: ["@agentclientprotocol/codex-acp"]}
+      settings: ["~/.codex/config.toml", ".codex/config.toml (trusted projects only)", "--profile <name>", "-c key=value"]
+      instructions: ["AGENTS.md"]
+      skills_dir: ".agents/skills"
+      launcher: "pmoves/scripts/codex-pmoves.sh"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "OpenAI Codex CLI as a PMOVES harness. Reads AGENTS.md natively; the MCP roster belongs in [mcp_servers.<id>] of config.toml, not in a wrapper."
+
+  kimi_code:
+    name: "Kimi Code CLI"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kimi-code"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: null, command: kimi, args: ["acp"], note: "registry entry kimi pins the archived Python kimi-cli; Kimi Code needs its own agent.json upstream"}
+      settings: ["${KIMI_CODE_HOME:-~/.kimi-code}/config.toml", "${KIMI_CODE_HOME:-~/.kimi-code}/mcp.json", "/mcp-config (in-session)"]
+      instructions: ["AGENTS.md"]
+      skills_dir: ".agents/skills"
+      launcher: "pmoves/scripts/kimi-pmoves.sh"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "Moonshot Kimi Code CLI as a PMOVES harness. Not the archived kimi-cli (--config-file / .kimi/); the flavor on a node is declared, never sniffed from --help."
+
+  opencode:
+    name: "OpenCode"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "opencode"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: opencode, command: opencode, args: ["acp"]}
+      settings: ["~/.config/opencode/opencode.json", "$OPENCODE_CONFIG", "opencode.json", ".opencode/", "$OPENCODE_CONFIG_CONTENT"]
+      instructions: ["AGENTS.md (via instructions)"]
+      skills_dir: ".agents/skills"
+      launcher: "pmoves/scripts/kilo-pmoves.sh (kilo.json is the Kilo fork surface)"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "OpenCode as a PMOVES harness; Kilo (kilocode_glm) is its maintained fork with kilo.json and .kilocode/skills. Config sources MERGE in documented order; PMOVES sets OPENCODE_CONFIG, never a flag the binary lacks."
 
   darkxside_persona:
     name: "DARKXSIDE Persona"
@@ -716,6 +935,98 @@ agents:
       AGNOTE4482 Memory Body. CHIT encoding, Cipher Memory store/search and
       signature trails across sessions; no file edits. Loads
       .claude/agents/memory-agent.md.
+
+  harness_scope_auditor:
+    name: "Harness Scope Auditor"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role (Agent tool), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    role_class: reviewer
+    agent_definition: .claude/agents/harness-scope-auditor.md
+    # Subagent of a node identity: capped at that identity's
+    # scope.max_subagent_scope. Withholds Write/Edit/Agent.
+    scope:
+      host_access: repo
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: harness_scope
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Read-only audit of how every harness on a node is scoped vs the registry;
+      platform-aware (Windows/Git Bash/WSL/Linux, Docker linux vs windows
+      containers). Reports drift to harness_provisioner.
+      Loads .claude/agents/harness-scope-auditor.md. See
+      pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+
+  harness_provisioner:
+    name: "Harness Provisioner"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role (Agent tool), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    role_class: worker
+    agent_definition: .claude/agents/harness-provisioner.md
+    # Subagent of a node identity: capped at that identity's
+    # scope.max_subagent_scope. Writes only sources of truth, under Known Roads.
+    scope:
+      host_access: repo
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: harness_scope
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Applies scope, MCP and launcher configuration from the registry to each
+      harness (Claude Code/Desktop, Hermes, A0, crush, minimax, kimi, kilo,
+      codex) per node capability and affinity; both launcher twins.
+      Loads .claude/agents/harness-provisioner.md. See
+      pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
+
+  skills_plugin_curator:
+    name: "Skills & Plugin Curator"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role (Agent tool), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    role_class: worker
+    agent_definition: .claude/agents/skills-plugin-curator.md
+    # Subagent of a node identity: capped at that identity's
+    # scope.max_subagent_scope. Writes only sources of truth, under Known Roads.
+    scope:
+      host_access: repo
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: harness_scope
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Keeps skills, plugin packs and MCP rosters in parity across harnesses and
+      nodes (skills_parity.py); CHIT-aware; never widens permission scope.
+      Loads .claude/agents/skills-plugin-curator.md. See
+      pmoves/docs/handoffs/IDENTITY_TEAM_SCOPE_CLARIFICATION.md.
 
   space_agent:
     name: "PMOVES Space-Agent"

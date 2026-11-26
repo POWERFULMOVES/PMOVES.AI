@@ -384,7 +384,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
     # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -405,6 +405,7 @@ services:
         # Load-bearing for realtime voice + chat over WebRTC in pmoves-ui and
         # flute-gateway, which subscribe through the Kong websocket route.
         - realtime-dev.supabase-realtime
+      pmoves_public: {}  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
     deploy:
       resources:
@@ -420,7 +421,7 @@ services:
     environment:
     # Standard key names with legacy fallbacks
     - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
@@ -446,7 +447,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
       interval: 5s
@@ -468,6 +469,7 @@ services:
       pmoves_api:
         aliases:
         - storage   # upstream Supabase name used by vendored kong.yml
+      pmoves_public: {}  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
     deploy:
       resources:
@@ -841,7 +843,7 @@ services:
     - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN:-100}
     - POOLER_POOL_MODE=transaction
     - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_public
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found,
         skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
@@ -858,6 +860,7 @@ services:
     - ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
     networks:
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
   # =============================================================================
   # END SUPABASE STACK
@@ -973,7 +976,7 @@ services:
     # Probe body copied from the vendored upstream at
     # PMOVES-supabase/docker/docker-compose.yml:17-23, with `studio` swapped
     # for `localhost` because the service name differs here.
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
@@ -993,6 +996,7 @@ services:
       pmoves_api:  # supabase-meta and analytics reachable via kong on pmoves_api
         aliases:
         - studio   # upstream Supabase name used by vendored kong.yml
+      pmoves_public: {}  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -1072,18 +1076,19 @@ services:
     - CHOWN
     - SETGID
     ports:
-    - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
+    - ${QDRANT_BIND:-127.0.0.1}:${QDRANT_PORT:-6333}:6333
     networks:
     - pmoves_data
     - pmoves_api
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus,pmoves_public
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -1110,13 +1115,14 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus,pmoves_public
     ports:
-    - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
+    - ${MEILISEARCH_BIND:-127.0.0.1}:${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
     - pmoves_api
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     volumes:
     - meilisearch-data:/meili_data
     healthcheck:
@@ -1330,9 +1336,9 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_public
     ports:
-    - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    - ${CLICKHOUSE_BIND:-127.0.0.1}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
     - tensorzero-clickhouse-data:/var/lib/clickhouse
     # Cap ClickHouse self-telemetry (Debug logging + no TTL flooded the vhdx at
@@ -1348,6 +1354,7 @@ services:
       retries: 10
     networks:
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     deploy:
       resources:
         limits:
@@ -1533,7 +1540,7 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
-  clip-embed:
+  node-registry:
     <<: &tier-api-hardened
       env_file:
       - env.shared
@@ -1547,6 +1554,57 @@ services:
       - SETUID
 
     build:
+      context: .
+      dockerfile: services/node_registry/Dockerfile
+    restart: unless-stopped
+    environment:
+    # The port is pinned to 8115 in BOTH the mapping and the container env.
+    # 8082 is media-audio's live host binding; a service that claims it
+    # cannot bind alongside media-audio, and its consumers would be answered
+    # by media-audio instead of by this service.
+    - NATS_URL=${NATS_URL}
+    - NODE_REGISTRY_HOST=${NODE_REGISTRY_HOST:-0.0.0.0}
+    - NODE_REGISTRY_PORT=8115
+    # Supabase storage is OPTIONAL for this service (InMemoryNodeStore is the
+    # fallback), so neither key carries a `:?` guard -- a guard here would
+    # make `docker compose config` fail on a host that has no Supabase keys.
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
+    ports:
+    - "${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8115}:8115"
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:8115/healthz || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    # pmoves_external: required for the ports: stanza to actually publish --
+    # pmoves_api/pmoves_bus are internal:true, and Docker silently skips host
+    # port publishing when a container has no non-internal network attached
+    # (HostConfig.PortBindings gets recorded but NetworkSettings.Ports stays null).
+    - pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  clip-embed:
+    <<: *tier-api-hardened
+    build:
       context: ./services/clip-embed
       dockerfile: Dockerfile
     image: pmoves/clip-embed:latest
@@ -1558,7 +1616,7 @@ services:
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
-    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:${CLIP_EMBED_PORT:-8109}:8109"
     # networks: clip-embed carried PMOVES_NETWORKS but NO networks: key, so it
     # landed on the compose DEFAULT network while self-reporting api+bus.
     # Not cosmetic: MODEL_REGISTRY_URL is the SERVICE NAME model-registry:8110,
@@ -1595,7 +1653,7 @@ services:
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
-    - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    - "${CLAP_EMBED_BIND:-0.0.0.0}:${CLAP_EMBED_PORT:-8108}:8108"
     restart: unless-stopped
     depends_on:
       nats:
@@ -1839,9 +1897,9 @@ services:
     - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
     # Provenance agent identity for graphiti events
     - PROVENANCE_AGENT_ID=${PROVENANCE_AGENT_ID:-a2ui-renderer}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_public
     ports:
-    - ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    - ${A2UI_RENDERER_BIND:-127.0.0.1}:${A2UI_RENDERER_PORT:-8107}:8107
     profiles:
     - agents
     - media
@@ -1850,6 +1908,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s

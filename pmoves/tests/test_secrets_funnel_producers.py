@@ -94,10 +94,15 @@ def _run_pull(tmp_path: Path, extra_env: dict | None = None, *, umask: int | Non
     env["PATH"] = f"{bindir}{os.pathsep}{env.get('PATH', '')}"
     env["CHIT_EXPORT_PATH"] = str(tmp_path / "cfg" / "chit" / "env.cgp.json")
     env["PMOVES_NODE"] = "b850"
+    # These tests pin the manual recovery HINT. Self-dispatch (the default since
+    # 2026-11-18) has its own suite: test_pull_chit_bundle_self_dispatch.py.
+    env["PMOVES_BUNDLE_NO_DISPATCH"] = "1"
     env.update(extra_env or {})
     preexec = (lambda: os.umask(umask)) if umask is not None else None
+    # encoding: the script prints UTF-8 (❌/→); Windows' cp1252 default made the
+    # reader thread die and left stdout None.
     return subprocess.run([resolve_bash(), str(_PULL)], env=env, capture_output=True,
-                          text=True, timeout=60, preexec_fn=preexec)
+                          text=True, encoding="utf-8", timeout=60, preexec_fn=preexec)
 
 
 @pytest.mark.parametrize("stub", [

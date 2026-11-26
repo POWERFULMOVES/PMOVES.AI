@@ -257,27 +257,52 @@ def warn_if_not_on_path(bin_dir: Path) -> None:
         print(f"WARN: {bin_dir} is not on PATH - add it to your shell profile.")
 
 
-def _cli_version(check_cmd: str) -> str:
-    """Best-effort version capture: run the manifest's check command, keep line 1."""
+def _run_check(check_cmd: str, binary: str = "") -> tuple[bool, str]:
+    """Run the manifest's check command; return (exit 0?, first output line).
+
+    ``binary`` is the shutil.which() result. It replaces argv[0] so the check
+    runs the file the doctor just found: on Windows npm installs ``brv`` as
+    ``brv.cmd``, which CreateProcess will not resolve from the bare name but
+    will run from its full path. Before this the version column was silently
+    empty for every npm-installed CLI on Windows.
+    """
     import shlex
     import subprocess
 
     try:
+        argv = shlex.split(check_cmd)
+        if binary and argv:
+            argv[0] = binary
         completed = subprocess.run(
-            shlex.split(check_cmd),
+            argv,
             check=False,
             capture_output=True,
             text=True,
             timeout=10,
         )
     except (OSError, ValueError, subprocess.TimeoutExpired):
-        return ""
+        return False, ""
     stream = completed.stdout or completed.stderr
+    first = ""
     for line in stream.splitlines():
         line = line.strip()
         if line:
-            return line[:120]
-    return ""
+            first = line[:120]
+            break
+    return completed.returncode == 0, first
+
+
+def _cli_version(check_cmd: str, binary: str = "") -> str:
+    """Best-effort version capture: run the manifest's check command, keep line 1."""
+    return _run_check(check_cmd, binary)[1]
+
+
+def _major(version_line: str) -> int | None:
+    """Leading integer of the first dotted number in a version line (v20.1 -> 20)."""
+    import re
+
+    m = re.search(r"(\d+)(?:\.\d+)*", version_line)
+    return int(m.group(1)) if m else None
 
 
 def check_host_clis(strict: bool, report_versions: bool = False) -> int:
@@ -304,8 +329,24 @@ def check_host_clis(strict: bool, report_versions: bool = False) -> int:
         spec = spec or {}
         binary = shutil.which(name)
         required = bool(spec.get("required", False))
+        if binary and required and spec.get("check"):
+            # A REQUIRED CLI must RUN, not merely resolve: a stale npm shim, or
+            # brv under node < 20, is on PATH and still useless (review, #3452).
+            ran, line = _run_check(spec["check"], binary)
+            floor = spec.get("min_major")
+            major = _major(line) if floor is not None else None
+            if not ran:
+                print(f"  BROKEN   {name} (REQUIRED): {binary} - `{spec['check']}` did not exit 0 {line!r}")
+                missing_required.append(name)
+                continue
+            if floor is not None and (major is None or major < int(floor)):
+                print(f"  TOO OLD  {name} (REQUIRED): {binary} {line!r} - needs major >= {floor}")
+                missing_required.append(name)
+                continue
+            print(f"  OK       {name}: {binary}{'  ' + line if report_versions and line else ''}")
+            continue
         if binary:
-            version = f"  {_cli_version(spec.get('check', ''))}" if report_versions and spec.get("check") else ""
+            version = f"  {_cli_version(spec.get('check', ''), binary)}" if report_versions and spec.get("check") else ""
             print(f"  OK       {name}: {binary}{version}")
             continue
         hint = (spec.get("install", {}) or {}).get(platform_key, "")
@@ -319,7 +360,7 @@ def check_host_clis(strict: bool, report_versions: bool = False) -> int:
             missing_optional += 1
 
     if missing_required:
-        print(f"ERROR: required host CLIs missing: {', '.join(missing_required)}")
+        print(f"ERROR: required host CLIs missing or not runnable: {', '.join(missing_required)}")
         return 1
     if strict and missing_optional:
         print(f"ERROR: strict mode - {missing_optional} optional CLI(s) missing")

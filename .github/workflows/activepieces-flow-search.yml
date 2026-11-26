@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   list-flows:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # ACTIVEPIECES_API_KEY is a Prod-environment secret — the job must declare
     # the environment for it to be injected.
     environment: Prod

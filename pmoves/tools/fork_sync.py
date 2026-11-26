@@ -85,8 +85,14 @@ ORG = "POWERFULMOVES"
 def _gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     cmd = ["gh", *args]
     try:
+        # gh emits UTF-8 regardless of the host locale, so decode as UTF-8:
+        # `text=True` alone decodes with the LOCALE (cp1252 on Windows) and
+        # crashes on non-ASCII bytes in a compare payload, while `errors=`
+        # keeps a decode failure from leaving `result.stdout` as None.
+        # Forensics: pmoves/docs/services/PIPECAT_FORK_PROVENANCE_AUDIT_2026-10-30.md
         return subprocess.run(
-            cmd, capture_output=True, text=True, check=check, timeout=60,
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", check=check, timeout=60,
         )
     except FileNotFoundError:
         print(f"{RED}Error: `gh` CLI not found. Install it first.{RESET}", file=sys.stderr)

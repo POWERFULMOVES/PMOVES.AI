@@ -95,7 +95,7 @@ services:
       # to /persona/livingdoc hits the line 38 404 in production.
     - ./rooms/persona:/app/data/rooms/persona:ro
     ports:
-    - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
+    - "${PMOVES_UI_BIND:-0.0.0.0}:${PMOVES_UI_PORT:-4482}:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
     networks: [pmoves_app, pmoves_api, pmoves_external]
     profiles: ["ui"]
@@ -138,10 +138,10 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
-    - PMOVES_NETWORKS=pmoves_app
-    ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_public
+    ports: ["${TOKENISM_UI_BIND:-127.0.0.1}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks: [pmoves_app, pmoves_public]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s
@@ -195,13 +195,13 @@ services:
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
     - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring
-    ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
+    ports: ["${TOKENISM_BIND:-127.0.0.1}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
     depends_on:
       nats:
         condition: service_healthy
-    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -304,18 +304,19 @@ services:
       invidious-companion:
         condition: service_started
     ports:
-    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:8281:80
+    - ${INVIDIOUS_PROXY_BIND:-127.0.0.1}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
     profiles:
     - invidious
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -348,7 +349,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
@@ -356,6 +357,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
       interval: 30s
@@ -387,7 +389,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:
@@ -398,6 +400,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9095/ >/dev/null 2>&1 || exit 1"]
       interval: 30s

@@ -30,6 +30,7 @@ services:
       - "${ALERTMANAGER_BIND:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093"
     networks:
       - pmoves_monitoring
+      - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
       interval: 30s
@@ -63,6 +64,7 @@ services:
       - "${BRIDGE_BIND:-127.0.0.1}:${BRIDGE_PORT:-9094}:9094"
     networks:
       - pmoves_monitoring
+      - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     depends_on:
       alertmanager:
         condition: service_healthy

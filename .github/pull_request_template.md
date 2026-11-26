@@ -15,6 +15,7 @@
 - [ ] `CHIT Contract Check` (CI will block the merge until this passes)
 - [ ] Updated contracts, schemas, or topics if this change affects published events
 - [ ] Added/updated documentation when altering behavior or workflows
+- [ ] Overlay check: this change connects to each harness through its native settings/protocol surface (row in `pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md`) and does not shim, detect, or paper over it (`pmoves/docs/danger-room/anti-patterns.md` § `overlay-paper-over`)
 
 ### Review Coordination
 - [ ] Requested Codex review (attach CLI transcript or note coverage in "Reviewer Notes")

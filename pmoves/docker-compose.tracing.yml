@@ -32,11 +32,12 @@ services:
       - MEMORY_MAX_TRACES=100000
     ports:
       - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686"
-      - "14268:14268"
-      - "14250:14250"
-      - "4317:4317"
+      - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_14268_PORT:-14268}:14268"
+      - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_14250_PORT:-14250}:14250"
+      - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_4317_PORT:-4317}:4317"
     networks:
       - pmoves_monitoring
+      - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
       interval: 30s
@@ -68,9 +69,9 @@ services:
     volumes:
       - ./config/otel/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - "${OTEL_GRPC_PORT:-4327}:4317"
-      - "${OTEL_HTTP_PORT:-4318}:4318"
-      - "${OTEL_METRICS_PORT:-8889}:8889"
+      - "${OTEL_BIND:-127.0.0.1}:${OTEL_GRPC_PORT:-4327}:4317"
+      - "${OTEL_BIND:-127.0.0.1}:${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_BIND:-127.0.0.1}:${OTEL_METRICS_PORT:-8889}:8889"
     # pmoves_monitoring: reach Jaeger/Tempo (the export backend) + Prometheus scrape.
     # pmoves_app + pmoves_bus: the collector must be reachable BY the trace exporters,
     # which live on those networks. agent-zero and archon set
@@ -83,6 +84,7 @@ services:
       - pmoves_monitoring
       - pmoves_app
       - pmoves_bus
+      - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     depends_on:
       jaeger:
         condition: service_healthy

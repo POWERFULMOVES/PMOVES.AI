@@ -69,15 +69,17 @@ make -C pmoves cipher-identity AGENT=z890-claude
 ```
 
 Reads no secret, sends nothing, prints one of three verdicts. It exists because
-the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:95`
-forks on a seven-character prefix (line numbers at submodule pin `a0ee2314`,
-re-resolved by #3189 after fork PR #28 rewrote `resolveToken()`; the gitlink on `main`):
+the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:114`
+forks on a seven-character prefix (line numbers at submodule pin `3491aec89`,
+re-resolved by #3189 after fork PR #28 rewrote `resolveToken()` and again by the
+2026-11-19 promotion after fork PR #33 added the `CIPHER_AUTH_REQUIRED` switch;
+the gitlink on `main`):
 
 | your `CIPHER_API_TOKEN` | auth.ts path | your writes are filed under |
 |---|---|---|
-| starts with `cipher_` | `:54-91` Supabase lookup | the **minted agent** on that row |
-| anything else | `:44-52` single-token compare | `bootstrap` — *not you* |
-| absent (server token also unset) | `:106-109` | advisory; whatever `agentId` you pass |
+| starts with `cipher_` | `:123-195` Supabase lookup | the **minted agent** on that row |
+| anything else | `:112-121` single-token compare | `bootstrap` — *not you* |
+| absent (server token also unset) | `:215-223` | advisory; whatever `agentId` you pass |
 
 So a session can be told "you are `z890-claude`", believe it, and file every
 memory under `bootstrap` — which is also where it will read them back from,

@@ -91,6 +91,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Jellyfin Bridge** `:8093` — Jellyfin metadata webhook + helper. Syncs Jellyfin events to Supabase.
 
+**PMOVES-Mike** (SPARK, compose project `pmoves-mike`, loopback block `18300-18391`) — MikeOSS legal-AI platform with its OWN Supabase/Mailpit/RustFS/Redis. Frontend `:18300`, backend `:18301` (`GET /health`), Supabase gateway `:18321`, Postgres `:18322`, Mailpit UI+API `:18325` (`GET /readyz`), Mailpit SMTP `:18326`, Redis `:18379`, RustFS S3 `:18390` / console `:18391`. Road: `make -C pmoves up-mike | down-mike | mike-status`. Doc: `pmoves/docs/integrations/MIKE_INTEGRATION.md`.
+
 ## Monitoring Stack
 
 **Prometheus** `:9090` — Metrics scrape from all services (all expose `/metrics`).
@@ -130,7 +132,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Server | Transport | Required env | Source path | Notes |
 |--------|-----------|--------------|-------------|-------|
-| `pmoves-cipher` | SSE `localhost:8105/mcp/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
+| `pmoves-cipher` | streamable-http `localhost:8105/mcp` (legacy SSE `/mcp/sse` 400s pre-pin, 2026-10-10) | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
 | `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
 | `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
 | `hostinger-mcp` | stdio (GitHub fork `POWERFULMOVES/pmoves-hostinger-api-mcp-server#094e38c`, v1.35.7, 320 tools) | `HOSTINGER_API_KEY` | git fork, commit-pinned | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |

@@ -14,6 +14,24 @@
 # goal; adding one should require saying why in the PR. A fixed test that is
 # still listed here fails the gate as a STALE entry, so the count only goes down.
 #
+# 2026-11-25 -- 151 -> 167 (+17, -1). Chunk `pmoves [4]` of the gate had never
+# produced a test result: pmoves/tools/test_all_tts_engines.py (a CLI whose name
+# matches test_*.py) called sys.exit(1) at import, pytest aborted the session
+# with INTERNALERROR during collection and still wrote a report holding only
+# what it had collected so far, and the ratchet took that partial report as
+# complete. The abort itself was the one entry `ERROR|pytest|internal` (pytest's
+# junit record of an internal error); every test the chunk should have measured
+# read as passing. When a new test file shifted the chunk boundary, 11 baselined
+# test_cache entries moved into the aborted chunk and the gate called them STALE.
+# #3517 makes the CLI skip under pytest and teaches the ratchet that exit 3 is a
+# lost chunk (isolate per file, record the aborting file), so the chunk ran for
+# the first time and surfaced 17 real failures: 9 FAIL in semantic-cache
+# test_cipher_layer and 8 ERROR in test_proxy, the same undefined
+# `pmoves.services.semantic_cache` alias as the 11 test_cache entries (#3529).
+# Recorded from that CI run's log (run 45567996955); the stale
+# `ERROR|pytest|internal` dropped. The baseline recorded the silence again;
+# this is what it contained.
+#
 # 2026-08-16 — 182 -> 125. Adding `python-multipart` to
 # .github/requirements-tests.txt fixed 57 entries at once. flute-gateway/main.py
 # declares a fastapi Form() endpoint, and FastAPI raises at route-definition time
@@ -148,7 +166,6 @@ known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_youtube_info"
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_n8n_workflow|test_workflow"
   - "ERROR|pmoves/tests/integration/test_voice_relay_e2e.py|<pytest-harness>"
-  - "ERROR|pytest|internal"
   - "ERROR|services.channel-monitor.tests.test_monitor|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_app|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_embedder|<collection-error>"
@@ -181,6 +198,14 @@ known_failures:
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheStore|test_store_failure_is_non_blocking"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheStore|test_store_new_entry"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheTTL|test_ttl_expired_entries_not_returned"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestHealthEndpoint|test_health_endpoint"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestMetricsEndpoint|test_metrics_endpoint"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_more_than_three_messages"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_tools"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_high_temperature"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheHit|test_cache_hit_cipher_l0"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheHit|test_cache_hit_pgvector_l1"
+  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheMissForward|test_cache_miss_forwards_to_tensorzero"
   - "ERROR|services.sso-auth.tests.test_jwt_verify|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_login|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_oidc|<collection-error>"
@@ -203,9 +228,17 @@ known_failures:
   - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_handles_inline_json"
   - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources0-expected_urls0]"
   - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources1-expected_urls1]"
-  - "FAIL|services.mesh_exposure.tests.test_app|test_live_registry_loads_12_entries_from_slice4_curated"
   - "FAIL|services.nats_event_bus.tests.test_app|test_read_events_limit_is_respected"
   - "FAIL|services.nats_event_bus.tests.test_app|test_subscriber_disabled_when_nats_url_empty"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_hit"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_miss"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_disabled"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_http_error_fail_open"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_failure_is_non_blocking"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_network_exception_fail_open"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherLifecycle|test_init"
+  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherLifecycle|test_close"
   - "FAIL|tests.a2ui.test_bridge.TestMetricsEndpoint|test_metrics_returns_prometheus_format"
   - "FAIL|tests.fresh_start.test_chit_integration.TestCHITManifestV2|test_manifest_entries_have_tier"
   - "FAIL|tests.fresh_start.test_env_layout.TestCHITManifestV2|test_manifest_v2_entries_have_tier"
@@ -285,7 +318,6 @@ known_failures:
   - "FAIL|tests.test_multiagent_workflow|test_multiagent_video_to_search_pipeline"
   - "FAIL|tests.test_pmoves_yt|test_yt_download_uses_stubs"
   - "FAIL|tests.test_wger_cgp_validation.TestHealthConstellationExamples|test_workout_constellation_example"
-  - "FAIL|tests.tools.test_google_oauth_flow.TestServiceRoleKey|test_prefers_service_role_key"
   - "FAIL|tools.tests.test_cymatic|test_cymatic_features_shape"
   - "FAIL|tools.tests.test_cymatic|test_glyph_params_driven_by_real_cymatic_features"
   - "FAIL|tools.tests.test_cymatic|test_harmonic_tone_more_harmonic_than_noise"

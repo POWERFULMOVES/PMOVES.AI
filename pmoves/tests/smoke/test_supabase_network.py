@@ -194,6 +194,20 @@ def test_no_legacy_supabase_net_in_url_defaults() -> None:
             )
 
 
+def classify_pmoves_ui_health(status_code: int, body: object) -> str:
+    """Classify a pmoves-ui ``/api/health`` response as ``pass``, ``skip`` or ``fail``.
+
+    The rule itself lives in ``pmoves/tests/utils/health_verdict.py`` so the
+    ratchet can assert it directly; this alias keeps the call site readable
+    and the import obvious to a reader of this file.
+    """
+    from pmoves.tests.utils.health_verdict import (
+        classify_pmoves_ui_health as _classify,
+    )
+
+    return _classify(status_code, body)
+
+
 @pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_pmoves_ui_accessible() -> None:
@@ -202,9 +216,22 @@ async def test_pmoves_ui_accessible() -> None:
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
             response = await client.get("http://localhost:4482/api/health")
 
-            # Accept 200 (healthy) or 307 (redirect, common for Next.js)
-            assert response.status_code in [200, 307], (
-                f"pmoves-ui should respond, got {response.status_code}"
+            try:
+                body = response.json()
+            except ValueError:
+                body = None
+
+            verdict = classify_pmoves_ui_health(response.status_code, body)
+            if verdict == "skip":
+                pytest.skip(
+                    "pmoves-ui is UP but its database check is unauthorized -- "
+                    "the smoke host has no service key in scope. Service "
+                    "reachability is verified; authenticated behaviour must be "
+                    "tested on a node with the service env."
+                )
+            assert verdict == "pass", (
+                f"pmoves-ui should respond, got {response.status_code} "
+                f"({response.text[:200]})"
             )
 
     except (httpx.ConnectError, httpx.TimeoutException) as e:
