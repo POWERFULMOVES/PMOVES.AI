@@ -558,6 +558,17 @@
     "chit.economics.usage.v1": {
       "schema": "schemas/chit/economics.usage.v1.schema.json"
     },
+    "claw.task.assign.v1": {
+      "schema": "schemas/claw/task.assign.v1.schema.json",
+      "description": "Cross-node agent-to-agent task delegation (cascades, handoffs, wave assignments). Core NATS, fire-and-forget, not JetStream: delivered only to subscribers present at publish time.",
+      "publisher": [
+        "make nats-pub",
+        "agent-zero /events/publish"
+      ],
+      "subscriber": [
+        "nats-agent-inbox"
+      ]
+    },
     "archon.mint.agent.v1": {
       "schema": "schemas/archon/mint.agent.v1.schema.json"
     },

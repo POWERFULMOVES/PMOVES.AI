@@ -1700,14 +1700,20 @@ NATS_BOX_IMAGE ?= natsio/nats-box:0.14.5
 NATS_DOCKER_NETWORK ?= pmoves_bus
 
 .PHONY: nats-pub
+# SUBJECT/PAYLOAD reach the shell as env vars, never as recipe text: make pastes
+# $(PAYLOAD) in verbatim, so a JSON payload's double quotes split the `test -n`
+# word ("test: too many arguments") and an apostrophe closed the old '...'
+# quoting. $(value ...) also stops make expanding a literal $ inside the JSON.
+nats-pub: export NATS_PUB_SUBJECT = $(value SUBJECT)
+nats-pub: export NATS_PUB_PAYLOAD = $(value PAYLOAD)
 nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Road — run on the NATS node)
-## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark"}'
+## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark","task":"cascade-wave-B"}'
 ## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
-	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
-	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
+	@test -n "$$NATS_PUB_SUBJECT" || (echo "ERROR: SUBJECT is required" && exit 1)
+	@test -n "$$NATS_PUB_PAYLOAD" || (echo "ERROR: PAYLOAD is required" && exit 1)
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
-	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$$NATS_PUB_SUBJECT" "$$NATS_PUB_PAYLOAD"
 
 .PHONY: nats-agent-inbox
 nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1

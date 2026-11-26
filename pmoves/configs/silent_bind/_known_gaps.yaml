@@ -1,0 +1,19 @@
+# Recorded silent-bind gaps -- pmoves/tools/silent_bind_ratchet.py
+#
+# A service that publishes a host port while joined only to
+# internal:true networks CANNOT activate that port: Docker stores the
+# binding and never activates it (moby/moby#36174; house
+# DOCKER_NETWORK_HARDENING.md Rule 5).
+#
+# THIS LIST IS EMPTY. Every measured gap has been remediated, so the
+# gate now fails on ANY new gap: a service that publishes a host
+# port while joined only to internal:true networks is reported as
+# UNACTIVATABLE_PORT, and any entry added here for a gap that did
+# not exist at the base revision is reported as BASELINE_ADDITION.
+#
+# The list may shrink and must never silently grow. A service that is
+# fixed but still listed here fails the gate as a STALE entry, so the
+# count only goes down.
+#
+# Regenerate: python pmoves/tools/silent_bind_ratchet.py --write-baseline --yes
+known_gaps: []

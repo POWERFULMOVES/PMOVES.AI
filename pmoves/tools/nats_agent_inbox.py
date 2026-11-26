@@ -12,10 +12,11 @@ import asyncio
 import json
 import os
 import signal
+import socket
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -26,6 +27,51 @@ DEFAULT_SUBJECTS = (
     "p7.>",
     "owner.presence.>",
 )
+
+
+def _load_whoami() -> Callable[[], str] | None:
+    """The node identity resolver node-sitrep prints ("identity: 5090 Claude [5090-claude]").
+
+    Imported, never copied: agent_terminal_theme owns the hostname map, and a
+    second copy is how botz_cli kept returning "unknown" after the map was fixed.
+    """
+    try:
+        from agent_terminal_theme import _resolve_whoami  # run as a script: tools/ is sys.path[0]
+    except ImportError:
+        try:
+            from pmoves.tools.agent_terminal_theme import _resolve_whoami
+        except ImportError:
+            return None
+    return _resolve_whoami
+
+
+def _canonical_identity() -> str | None:
+    resolver = _load_whoami()
+    if resolver is None:
+        return None
+    try:
+        agent_id = (resolver() or "").strip()
+    except Exception:
+        return None
+    return agent_id if agent_id and agent_id != "unknown" else None
+
+
+def resolve_agent_id() -> tuple[str, str]:
+    """Return (agent_id, source) for this node's inbox.
+
+    Order: PMOVES_AGENT_ID, PMOVES_REGISTER_IDENTITY, the canonical node
+    resolver, then "<hostname>-agent". The old default was the literal
+    "5090-CODEX", so every node that forgot the env var listened (and wrote its
+    JSONL) as the 5090's Codex agent.
+    """
+    for name in ("PMOVES_AGENT_ID", "PMOVES_REGISTER_IDENTITY"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value, name
+    canonical = _canonical_identity()
+    if canonical:
+        return canonical, "whoami"
+    return f"{socket.gethostname()}-agent", "hostname"
 
 
 async def _ignore_nats_error(exc: Exception) -> None:
@@ -155,7 +201,12 @@ async def run_inbox(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Persist node-bound PMOVES NATS messages to a JSONL inbox.")
-    parser.add_argument("--agent-id", default=os.environ.get("PMOVES_AGENT_ID", "5090-CODEX"))
+    parser.add_argument(
+        "--agent-id",
+        default=None,
+        help="Inbox identity. Default: PMOVES_AGENT_ID, PMOVES_REGISTER_IDENTITY, the node whoami "
+        "resolver (agent_terminal_theme), then <hostname>-agent.",
+    )
     parser.add_argument("--nats-url", default=os.environ.get("NATS_URL", "nats://127.0.0.1:4222"))
     parser.add_argument(
         "--subjects",
@@ -169,13 +220,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.agent_id:
+        agent_id, source = args.agent_id, "--agent-id"
+    else:
+        agent_id, source = resolve_agent_id()
+    print(f"[agent-inbox] agent_id={agent_id} (from {source})", file=sys.stderr)
     subjects = parse_subjects(args.subjects)
-    path = inbox_path(args.agent_id, args.inbox_dir)
+    path = inbox_path(agent_id, args.inbox_dir)
     try:
         return asyncio.run(
             run_inbox(
                 nats_url=resolve_host_nats_url(args.nats_url),
-                agent_id=args.agent_id,
+                agent_id=agent_id,
                 subjects=subjects,
                 output_path=path,
                 max_messages=args.max_messages,

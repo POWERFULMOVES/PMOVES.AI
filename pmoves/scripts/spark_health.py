@@ -54,6 +54,33 @@ def _pick_first_ok(urls: Iterable[str]) -> tuple[str | None, bool, int]:
     return first, ok, code
 
 
+def _nats_monitor_urls() -> list[str]:
+    """Host-side NATS monitor candidates for this node, most likely first.
+
+    8222 is the CONTAINER-side monitor port. No compose layout in this repo
+    publishes it on a SPARK host: base compose publishes
+    ``${NATS_MONITORING_PORT:-9223}:8222`` (pmoves/configs/ports.yaml slot
+    NATS_MONITORING_PORT), docker-compose.spark-sidecar.yml runs no NATS, and
+    the Jetson-edge leaf publishes 4222 only. Host 8222 is published only by
+    docker-compose.z890.yml (slot NATS_LEAF_8222_PORT) and by
+    scripts/start-cipher-stack.sh, so it stays as the fallback for those
+    layouts rather than the default. Defaulting to 8222 reported a healthy
+    hub as DOWN on every base-compose node.
+
+    SPARK_NATS_URL, when set, is tried first. Only /healthz is probed: the
+    NATS monitor has no /health endpoint.
+    """
+    urls: list[str] = []
+    explicit = os.getenv("SPARK_NATS_URL")
+    if explicit:
+        urls.append(explicit)
+    for port in (os.getenv("NATS_MONITORING_PORT", "9223"), "8222"):
+        url = f"http://localhost:{port}/healthz"
+        if url not in urls:
+            urls.append(url)
+    return urls
+
+
 def _check_ollama() -> dict:
     """Check Ollama model inventory."""
     import urllib.request
@@ -79,10 +106,7 @@ def main() -> int:
             os.getenv("SPARK_TENSORZERO_URL", "http://localhost:3030/health"),
             "http://localhost:3030/healthz",
         ],
-        "nats-local": [
-            os.getenv("SPARK_NATS_URL", "http://localhost:8222/healthz"),
-            "http://localhost:8222/health",
-        ],
+        "nats-local": _nats_monitor_urls(),
     }
 
     # Optional services (fail gracefully)
