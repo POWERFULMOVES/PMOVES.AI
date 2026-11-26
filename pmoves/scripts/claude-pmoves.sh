@@ -232,6 +232,23 @@ if [ -f "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
   export PM_IDENT_CIPHER_ID
 fi
 
+# CIPHER TOKEN BIND — the handoff the carry check could only report as missing.
+#
+# pm-cipher-identity.sh measures which agent_id writes will carry; until the
+# minted per-agent token is bound into the session env, the answer stays
+# 'bootstrap' no matter what the model declares. Bind BEFORE the preflight and
+# the carry measurement so both report the post-bind reality, and export the
+# agentId so the inner launcher (deploy/provision/claude-pmoves.sh) can re-bind
+# after it sources env.shared — which would otherwise clobber this with the
+# node bootstrap token before the roster is normalized.
+if [ -f "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+  # shellcheck source=./pm-cipher-token-bind.sh
+  . "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+  pm_cipher_token_bind "$ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+  echo "[claude-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+  export PM_IDENT_CIPHER_ID
+fi
+
 # CIPHER — persistent memory. Same reasoning as the identity block above: the
 # agent has to be TOLD, in context, whether it has memory. An MCP server that
 # never connects contributes no tools, so a session with no memory looks exactly

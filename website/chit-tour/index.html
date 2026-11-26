@@ -120,7 +120,7 @@
     <section id="pillars" class="section">
       <div class="eyebrow">03 · Mathematical foundations</div>
       <h2>Five pillars hold up CHIT</h2>
-      <p class="lede">You don't need the math to use CHIT, but each pillar exists in code and is independently auditable. Hover for the reference implementation path. Below the cards, <strong>four laboratories run each pillar's actual math in your browser</strong> — with the exact parameters the reference implementations use, and honest notes where the shipped code and the doc prose differ. (Pillar 2's laboratory is the Poincaré section, §08.)</p>
+      <p class="lede">You don't need the math to use CHIT, but each pillar exists in code and is independently auditable. Hover for the reference implementation path. Below the cards, <strong>every pillar wires to its laboratory</strong> — four run the math inline with the exact parameters the reference implementations use (and honest notes where the shipped code and the doc prose differ), and Pillar 2's card routes straight to its laboratory: the Poincaré disk (§08).</p>
       <div class="grid c3" id="pillars-grid"></div>
 
       <!-- ═══ LAB · Pillar 1: Dirichlet ═══ -->
@@ -153,6 +153,21 @@
           </div>
         </div>
         <div class="viz-foot"><span>▸ params &amp; update rule: PMOVES-ToKenism-Multi/integrations/contracts/chit/dirichlet-weights.ts</span></div>
+      </div>
+
+      <!-- ═══ LAB · Pillar 2: Hyperbolic geometry (routes to the full §08 Poincaré disk lab) ═══ -->
+      <div class="viz-card u-mt-24">
+        <div class="viz-head"><h3>Lab · Pillar 2 — Hyperbolic geometry: the scale-and-distance mapper</h3></div>
+        <div class="viz-body">
+          <div class="digest-strip">
+            <div><span class="digest-k">Plain words</span> This is the map that keeps huge hierarchies readable: the whole agent tree lives inside one disk where distance is honest — branches that are organizationally far are genuinely far apart, no matter how deep they go.</div>
+            <div><span class="digest-k">Try this</span> Open the live Poincaré disk below (§08) and hover any agent. Distance from the center = 1 − attribution confidence; edge arcs are geodesics. Drag the distortion slider and watch the tree breathe without lying about distances.</div>
+            <div><span class="digest-k">Why it matters for attribution</span> Attribution shares (Pillar 1) become positions here via <span class="mono">getHyperbolicEncoding()</span> — closer to the origin means higher confidence. Scale and distance between the information being mapped stay accurate by construction: exponential depth fits in finite space, and <span class="mono">treeDistance()</span> sums τ along the true tree path.</div>
+          </div>
+          <p style="margin:0">The full interactive laboratory — the real 96-agent registry tree embedded via Sarkar's construction, live Möbius addition, and the hyperbolic ruler — runs in <a href="#poincare" data-target="poincare">§08 · Poincaré Disk</a>. Same implementation, same parameters: <span class="mono">hyperbolic-encoder.ts</span> (K = −1).</p>
+          <p><button class="mini-btn" data-target="poincare">open the Pillar 2 laboratory (§08) ↓</button></p>
+        </div>
+        <div class="viz-foot"><span>▸ math: 01_WHAT_IS_CHIT.md (Pillar 2, K = −1, Möbius addition, O(log n) tree distortion) · lab: §08 Poincaré Disk · source: hyperbolic-encoder.ts</span></div>
       </div>
 
       <!-- ═══ LAB · Pillar 3: Merkle ═══ -->
