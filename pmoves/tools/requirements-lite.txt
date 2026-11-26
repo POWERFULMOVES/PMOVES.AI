@@ -4,6 +4,12 @@
 # embeddings. sentence-transformers/scikit-learn (which drag torch and the
 # multi-GB nvidia wheel stack) live in requirements-lite-embeddings.txt.
 PyYAML>=6.0
+# secrets_sync.py validates delivered secrets against pydantic ShapeRule models
+# (tools/secret_shape_rules.py), so the funnel cannot run without it. Already
+# present in .venv-pmoves (2.12.x) by way of service requirements; declared here
+# so `make env-bootstrap-check` -- the funnel's entry gate -- probes for it and
+# stops with remediation (exit 3) instead of the funnel dying on import.
+pydantic>=2
 rich>=13.7.0
 jsonschema>=4.0.0
 psutil>=5.9.8

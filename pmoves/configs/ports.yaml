@@ -139,6 +139,18 @@ services:
         protocol: null
     sources:
     - compose
+  agent-zero-miSSinglinc-inst:
+    slots:
+      A0MISS_PORT:
+        bind_var: A0MISS_BIND
+        compose_files:
+        - docker-compose.agent-zero-instances.yml
+        container_port: 80
+        host_port: 60939
+        port_var: A0MISS_PORT
+        protocol: null
+    sources:
+    - compose
   agent-zero-spark:
     slots:
       SPARK_PORT:
@@ -907,7 +919,7 @@ services:
   jaeger:
     slots:
       JAEGER_14250_PORT:
-        bind_var: null
+        bind_var: JAEGER_BIND
         compose_files:
         - docker-compose.tracing.yml
         container_port: 14250
@@ -915,7 +927,7 @@ services:
         port_var: JAEGER_14250_PORT
         protocol: null
       JAEGER_14268_PORT:
-        bind_var: null
+        bind_var: JAEGER_BIND
         compose_files:
         - docker-compose.tracing.yml
         container_port: 14268
@@ -923,7 +935,7 @@ services:
         port_var: JAEGER_14268_PORT
         protocol: null
       JAEGER_4317_PORT:
-        bind_var: null
+        bind_var: JAEGER_BIND
         compose_files:
         - docker-compose.tracing.yml
         container_port: 4317
@@ -1452,7 +1464,7 @@ services:
   otel-collector:
     slots:
       OTEL_GRPC_PORT:
-        bind_var: null
+        bind_var: OTEL_BIND
         compose_files:
         - docker-compose.tracing.yml
         container_port: 4317
@@ -1460,7 +1472,7 @@ services:
         port_var: OTEL_GRPC_PORT
         protocol: null
       OTEL_HTTP_PORT:
-        bind_var: null
+        bind_var: OTEL_BIND
         compose_files:
         - docker-compose.tracing.yml
         container_port: 4318
@@ -1468,7 +1480,7 @@ services:
         port_var: OTEL_HTTP_PORT
         protocol: null
       OTEL_METRICS_PORT:
-        bind_var: null
+        bind_var: OTEL_BIND
         compose_files:
         - docker-compose.tracing.yml
         container_port: 8889
@@ -1766,7 +1778,7 @@ services:
   semantic-cache:
     slots:
       SEMANTIC_CACHE_PORT:
-        bind_var: null
+        bind_var: SEMANTIC_CACHE_BIND
         compose_files:
         - docker-compose.cache.yml
         container_port: 8100

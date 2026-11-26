@@ -354,6 +354,18 @@ def test_the_service_entry_points_resolve_their_imports_without_a_package() -> N
     parent package" and the services could not start at all. This exercises
     the PRODUCTION loaders in that mode, not a copy of them.
     """
+    # resource_detector/main.py does `from aiohttp import web` at import, so
+    # its entry point cannot be exec'd without aiohttp -- the import that
+    # would fail is a third-party one, not the PMOVES-package resolution this
+    # test measures. aiohttp is a hard service dependency that merge-gate
+    # installs via .github/requirements-tests.txt, so CI still runs this.
+    # (Not stubbed like structlog: a permissive aiohttp stub left in
+    # sys.modules would satisfy every later importorskip("aiohttp") in the
+    # same process and turn their skips into failures.)
+    pytest.importorskip(
+        "aiohttp",
+        reason="aiohttp not installed; resource_detector's entry point imports it",
+    )
     _ensure_structlog()
 
     resource_detector_main = _load_module_by_path(

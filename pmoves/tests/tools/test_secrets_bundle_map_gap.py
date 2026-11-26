@@ -25,8 +25,9 @@ import pytest
 from pmoves.tools import secrets_bundle_map_gap as gap
 
 # Rows added 2026-09-26 (plus #2888's COMPOSIO_API_KEY). Deleting any of them
-# re-opens the gap for that name on every node. The eight node-local address
-# labels and the four DB-init names are deliberately NOT here: see
+# re-opens the gap for that name on every node. The node-local address labels,
+# the node-sovereign Supabase keys and the DB-init names are deliberately NOT
+# here: see
 # test_must_not_map_names_have_no_row.
 ROWS_ADDED = {
     "ACTIVEPIECES_API_KEY", "CF_AI_GATEWAY_TOKEN", "CF_SSH_PUB", "CI_GHCR_NAMESPACE",
@@ -34,15 +35,27 @@ ROWS_ADDED = {
     "N8N_API_KEY", "N8N_RUNNERS_AUTH_TOKEN",
     "NEXT_PUBLIC_BACKEND_API_KEY",
     "NGC_KEY",
-    "SUPABASE_KEY", "SURREAL_PASS", "SURREAL_USER",
+    "SURREAL_PASS", "SURREAL_USER",
     "TAILSCALE_WEBHOOK", "TELEGRAM_BOT_NAME", "TS_TAILNET",
     "COMPOSIO_API_KEY",
 }
 
-NODE_LOCAL = {
+NODE_LOCAL_ADDRESSES = {
     "NATS_URL", "NATS_URL_TAILNET", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL",
     "POSTGRES_HOSTNAME", "POSTGRES_DB", "OLLAMA_BASE_URL", "OPENAI_COMPATIBLE_BASE_URL",
 }
+
+# Node-sovereign Supabase keys (operator decision 2026-11-20). Minted per node;
+# the JWT-shaped ones are signed with the node's own JWT secret, so a Prod value
+# fails verification on that node. SUPABASE_KEY was a ROWS_ADDED entry until
+# this decision moved it here.
+NODE_SOVEREIGN_SUPABASE = {
+    "SUPABASE_JWT_SECRET", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_KEY",
+    "SUPABASE_REALTIME_KEY", "SUPABASE_REALTIME_SECRET",
+}
+
+NODE_LOCAL = NODE_LOCAL_ADDRESSES | NODE_SOVEREIGN_SUPABASE
 
 # Self-generated / DB-init values: main never shipped them, and mapping one
 # needs operator sign-off against the manifest (#3188 review P2).
@@ -59,8 +72,10 @@ def bmap():
 
 def test_map_parses_from_the_real_workflow(bmap):
     # Guards the parser: a silently empty map would make every check vacuous.
-    assert len(bmap.rows) >= 125, len(bmap.rows)
-    assert len(bmap.sources) >= 120, len(bmap.sources)
+    # Floors lowered by 7 on 2026-11-20 when the node-sovereign Supabase rows
+    # left the map (measured after: 122 rows, 120 sources).
+    assert len(bmap.rows) >= 120, len(bmap.rows)
+    assert len(bmap.sources) >= 118, len(bmap.sources)
     assert (bmap.environment or "").lower() == "prod"
 
 
@@ -77,8 +92,12 @@ def test_must_not_map_names_have_no_row(bmap):
     assert set(gap.MUST_NOT_MAP) == NODE_LOCAL | DB_INIT_LOCAL
     forbidden = (NODE_LOCAL | DB_INIT_LOCAL) & set(bmap.rows)
     assert not forbidden, sorted(forbidden)
-    for name in NODE_LOCAL:
-        assert gap.EXCEPTIONS[name] == gap.NODE_LOCAL_REASON
+    assert set(gap.NODE_LOCAL_ADDRESSES) == NODE_LOCAL_ADDRESSES
+    assert set(gap.NODE_SOVEREIGN_SUPABASE) == NODE_SOVEREIGN_SUPABASE
+    for name in NODE_LOCAL_ADDRESSES:
+        assert gap.EXCEPTIONS[name] == gap.MUST_NOT_MAP[name] == gap.NODE_LOCAL_REASON
+    for name in NODE_SOVEREIGN_SUPABASE:
+        assert gap.EXCEPTIONS[name] == gap.MUST_NOT_MAP[name] == gap.NODE_SOVEREIGN_SUPABASE_REASON
     for name in DB_INIT_LOCAL:
         assert gap.EXCEPTIONS[name] == gap.DB_INIT_LOCAL_REASON
 
@@ -90,7 +109,10 @@ def test_must_not_map_names_are_known_exceptions_not_findings(bmap):
     assert not rep.findings
 
 
-@pytest.mark.parametrize("name", ["NATS_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SERVICE_PASSWORD_POSTGRES"])
+@pytest.mark.parametrize("name", [
+    "NATS_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SERVICE_PASSWORD_POSTGRES",
+    *sorted(NODE_SOVEREIGN_SUPABASE),
+])
 def test_must_not_map_row_is_a_finding(bmap, name):
     fake = gap.BundleMap(dict(bmap.rows, **{name: {name}}), bmap.environment)
     rep = gap.analyse(fake, {name})

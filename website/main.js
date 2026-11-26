@@ -42,7 +42,7 @@
     });
 
     // Re-sync on resize up to desktop
-    var mql = window.matchMedia("(min-width: 860px)");
+    var mql = window.matchMedia("(min-width: 1120px)");
     var onChange = function () { if (mql.matches) closeNav(); };
     if (mql.addEventListener) mql.addEventListener("change", onChange);
     else if (mql.addListener) mql.addListener(onChange);

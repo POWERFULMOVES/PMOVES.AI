@@ -141,7 +141,7 @@ known_gaps:
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)
   services/common/events.py:
-    count: 5
+    count: 4
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)
   services/deepresearch/tests/test_worker.py:
@@ -673,6 +673,10 @@ known_gaps:
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)
   tools/profile_loader.py:
+    count: 1
+    reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
+      cp1252 class)
+  tools/secrets_provider_verify.py:
     count: 1
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)

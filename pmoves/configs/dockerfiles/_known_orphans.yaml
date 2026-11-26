@@ -97,18 +97,28 @@ pmoves/services/model-fitness-bridge/Dockerfile: service with Dockerfile but no 
 # host for low-latency). Not a compose service today.
 pmoves/services/owner-presence/Dockerfile: owner-presence service run as a side-channel process (not compose); Dockerfile kept as the source for the standalone binary.
 
-# Corrected 2026-08-27. The previous reason line said this file was
-# "the source for" the compose build. It is not: compose's `pmoves-yt`
-# service builds `../PMOVES.YT` with `pmoves_yt_service/Dockerfile`
+# Corrected 2026-08-27, and again 2026-11-19. The previous reason line said
+# this file was "the source for" the compose build. It is not: compose's
+# `pmoves-yt` service builds `../PMOVES.YT` with `pmoves_yt_service/Dockerfile`
 # (the fork, from source), which is a DIFFERENT Dockerfile installing a
-# DIFFERENT yt-dlp. This file is orphaned only in this registry's sense
-# -- no compose `build:` stanza names it -- and is otherwise very much
-# live: `.github/workflows/integrations-ghcr.yml` builds and PUSHES it
-# (push: true) as ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest, which
-# `docker-compose.integrations.images.yml` consumes on the
-# `make -C pmoves up-yt-published` path. Do not delete it, and do not
-# read "orphan" here as "unused".
-pmoves/services/pmoves-yt/Dockerfile: published-image source, built+pushed to GHCR by integrations-ghcr.yml and consumed by docker-compose.integrations.images.yml (up-yt-published). No compose `build` stanza names it, hence listed here. NOT the same Dockerfile compose builds -- that is PMOVES.YT/pmoves_yt_service/Dockerfile.
+# DIFFERENT yt-dlp.
+#
+# The 2026-11-19 correction: the reason line ALSO claimed that
+# `.github/workflows/integrations-ghcr.yml` builds and PUSHES THIS file as
+# ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest, and that
+# `docker-compose.integrations.images.yml` consumes THIS file's build on the
+# `make -C pmoves up-yt-published` path. It does not. The live matrix entry
+# `.github/workflows/integrations-ghcr.matrix.json` (the `pmoves-yt` entry)
+# declares `context: PMOVES.YT` and
+# `dockerfile: PMOVES.YT/pmoves_yt_service/Dockerfile`, so CI builds the
+# FORK's Dockerfile -- the same file compose builds -- and THAT is what is
+# pushed to GHCR and what `docker-compose.integrations.images.yml` consumes.
+#
+# So this file is orphaned in BOTH senses: no compose `build:` stanza names
+# it AND no CI build names it. It is a stock yt-dlp-from-PyPI copy that is
+# not the published source of anything. It is still LISTED here rather than
+# deleted, because deleting it is an operator decision, not a doc edit.
+pmoves/services/pmoves-yt/Dockerfile: "NOT the published-image source. The published pmoves-yt image is built and pushed to GHCR by integrations-ghcr.yml from PMOVES.YT/pmoves_yt_service/Dockerfile -- the `pmoves-yt` entry of .github/workflows/integrations-ghcr.matrix.json declares `context: PMOVES.YT` and `dockerfile: PMOVES.YT/pmoves_yt_service/Dockerfile` -- and THAT image is what docker-compose.integrations.images.yml consumes on the up-yt-published path. No compose `build` stanza names this file and no CI build names it either, hence listed here. This file installs stock yt-dlp from PyPI."
 
 # The `publisher-discord` service in compose uses
 # `./services/publisher-discord/Dockerfile` (note the `-discord`
