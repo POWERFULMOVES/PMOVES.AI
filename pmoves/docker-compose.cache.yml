@@ -13,7 +13,7 @@ services:
     container_name: pmoves-semantic-cache
     restart: unless-stopped
     ports:
-      - "${SEMANTIC_CACHE_PORT:-8100}:8100"
+      - "${SEMANTIC_CACHE_BIND:-127.0.0.1}:${SEMANTIC_CACHE_PORT:-8100}:8100"
     environment:
       # Required — must be set in env.shared or local.env
       CACHE_DATABASE_URL: ${CACHE_DATABASE_URL}
@@ -43,6 +43,7 @@ services:
 
     networks:
       - pmoves_app
+      - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"]
       interval: 30s

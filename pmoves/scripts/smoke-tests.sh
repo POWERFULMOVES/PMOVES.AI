@@ -103,6 +103,57 @@ print_info() {
     fi
 }
 
+# The host port a URL points at, resolved for the silent-bind lookup.
+# Prints the port, or nothing when it cannot be resolved.
+#
+# The URLs in this script are mostly literal ("http://localhost:8084/healthz")
+# but a few carry a substitution ("http://localhost:${ARCHON_PORT:-3090}/"). The
+# silent-bind map is keyed by the host port Docker was ASKED to publish, so the
+# port has to resolve to the same number the container requested. A port that
+# cannot be resolved is NOT guessed: the probe then falls back to the ordinary
+# "connection refused" warning, because accusing the wrong port of a silent
+# bind would be a false accusation.
+_http_port() {
+    local url="$1"
+    local rest port inner name default
+    rest="${url#*://}"           # strip the scheme
+    rest="${rest%%/*}"           # drop the path
+    rest="${rest##*@}"           # drop any userinfo
+    case "$rest" in
+        \[*\]*) rest="${rest##*\]}" ;;   # IPv6 literal: [::1]:8080
+    esac
+    # A substitution may itself contain a colon ("${VAR:-default}"), so the
+    # port cannot be split off with a bare '##*:' -- that would cut at the
+    # colon INSIDE the substitution. The three shapes are matched instead.
+    port=""
+    if [[ "$rest" =~ ^(.+):(\$\{[^}]*\})$ ]]; then
+        port="${BASH_REMATCH[2]}"        # host:${VAR} / host:${VAR:-default}
+    elif [[ "$rest" =~ ^(\$\{[^}]*\})$ ]]; then
+        port="${BASH_REMATCH[1]}"        # ${VAR} alone
+    elif [[ "$rest" =~ ^[^:]*:([0-9]+)$ ]]; then
+        port="${BASH_REMATCH[1]}"        # host:1234
+    fi
+    case "$port" in
+        '') return 0 ;;
+        '${'*)
+            inner="${port:2}"            # strip the leading "${"
+            inner="${inner%?}"           # drop the trailing "}"
+            name="${inner%%:*}"
+            default=""
+            case "$inner" in
+                *:-*) default="${inner#*:-}"; name="${inner%%:-*}" ;;
+            esac
+            if [ -n "${!name:-}" ]; then
+                printf '%s\n' "${!name}"
+            elif [ -n "$default" ]; then
+                printf '%s\n' "$default"
+            fi
+            ;;
+        *[!0-9]*) return 0 ;;           # not a port -- do not guess
+        *) printf '%s\n' "$port" ;;
+    esac
+}
+
 # Test function
 test_http_endpoint() {
     local name="$1"
@@ -146,6 +197,29 @@ test_http_endpoint() {
         print_fail "$name (timeout after ${TIMEOUT}s)"
         return 1
     elif [ $status -eq 7 ]; then
+        # Connection refused has two causes, and this path used to collapse
+        # them into ONE warning the suite tolerates: the service is DOWN
+        # (expected if you haven't started every profile), and the service is
+        # UP but Docker never activated the host port it requested -- a silent
+        # bind (moby/moby#36174). The second is a real defect, and it was
+        # passing as an expected condition: the live run reported "41 tests,
+        # 22 passed, 20 warnings, 0 failed" while four of those warnings WERE
+        # silent binds, and `grep SILENT BIND` matched nothing.
+        #
+        # The TCP path already separates the two causes; this path did not.
+        _port="$(_http_port "$url")"
+        if [ -n "$_port" ]; then
+            # Build the map in the PARENT shell: the lookup below runs in a
+            # command-substitution subshell, and an assignment made there
+            # would be discarded when the substitution ends.
+            _silent_bind_map_init
+            _owner="$(_silent_bind_owner "$_port")"
+            if [ -n "$_owner" ]; then
+                print_fail "$name — SILENT BIND: $_owner requested :$_port, Docker never activated it"
+                print_info "  diagnose: make -C pmoves net-reality   (moby/moby#36174)"
+                return 1
+            fi
+        fi
         print_warn "$name (connection refused - service may not be running)"
         return 1
     else
@@ -163,24 +237,51 @@ test_http_endpoint() {
 # first version inspected every container per failed probe -- 63 exec calls per
 # test on this node -- which pushed the suite past its timeout. Build once, then
 # it is a variable lookup.
+#
+# The build and the lookup are SEPARATE functions, and the separation is
+# load-bearing. A caller reads the owner with command substitution:
+#
+#     _owner="$(_silent_bind_owner "$_port")"
+#
+# and command substitution runs in a SUBSHELL. If the map were built inside
+# the lookup function, the assignment would land in that subshell and be
+# thrown away when the substitution ended -- so every refused probe would
+# re-run `docker ps` AND `docker inspect` from scratch, which is exactly the
+# timeout the cache was written to prevent. The build therefore happens in
+# the PARENT shell, via _silent_bind_map_init, and the lookup only reads.
 _SILENT_BIND_MAP=""
+_silent_bind_map_init() {
+    if [ -n "$_SILENT_BIND_MAP" ]; then
+        return 0
+    fi
+    local proj ids
+    proj="${COMPOSE_PROJECT_NAME:-pmoves}"
+    ids="$(docker ps --filter "label=com.docker.compose.project=$proj" -q 2>/dev/null)"
+    if [ -z "$ids" ]; then
+        _SILENT_BIND_MAP="none"
+        return 0
+    fi
+    # One inspect for the whole project: "<name> <requested> <active>"
+    _SILENT_BIND_MAP="$(docker inspect $ids --format \
+        '{{.Name}}|{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}},{{end}}{{end}}|{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}},{{end}}{{end}}{{end}}' \
+        2>/dev/null)"
+    if [ -z "$_SILENT_BIND_MAP" ]; then
+        _SILENT_BIND_MAP="none"
+    fi
+    return 0
+}
 _silent_bind_owner() {
     local want="$1"
+    # The map is normally already built by the caller, in the parent shell.
+    # Init here too so the function is safe to call on its own -- but the
+    # assignment it makes in that case dies with this subshell, which is why
+    # the callers call _silent_bind_map_init FIRST.
     if [ -z "$_SILENT_BIND_MAP" ]; then
-        local proj ids
-        proj="${COMPOSE_PROJECT_NAME:-pmoves}"
-        ids="$(docker ps --filter "label=com.docker.compose.project=$proj" -q 2>/dev/null)"
-        if [ -z "$ids" ]; then
-            _SILENT_BIND_MAP="none"
-        else
-            # One inspect for the whole project: "<name> <requested> <active>"
-            _SILENT_BIND_MAP="$(docker inspect $ids --format \
-'{{.Name}}|{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}},{{end}}{{end}}|{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}},{{end}}{{end}}{{end}}' \
-                2>/dev/null)"
-            [ -z "$_SILENT_BIND_MAP" ] && _SILENT_BIND_MAP="none"
-        fi
+        _silent_bind_map_init
     fi
-    [ "$_SILENT_BIND_MAP" = "none" ] && return 0
+    if [ "$_SILENT_BIND_MAP" = "none" ]; then
+        return 0
+    fi
     printf '%s\n' "$_SILENT_BIND_MAP" | while IFS='|' read -r cname req act; do
         case ",$req" in *",$want,"*) ;; *) continue ;; esac
         case ",$act" in *",$want,"*) continue ;; esac   # active: not a silent bind
@@ -223,6 +324,10 @@ test_tcp_connectivity() {
         # Neo4j, and because that side service requests no host ports the real
         # silent bind falls back to a warning and the suite exits 0. Same defect
         # published-port.sh already solved with compose labels.
+        # Build the map in the PARENT shell: the lookup below runs in a
+        # command-substitution subshell, and an assignment made there would
+        # be discarded when the substitution ends.
+        _silent_bind_map_init
         _owner="$(_silent_bind_owner "$port")"
         if [ -n "$_owner" ]; then
             print_fail "$name — SILENT BIND: $_owner requested :$port, Docker never activated it"

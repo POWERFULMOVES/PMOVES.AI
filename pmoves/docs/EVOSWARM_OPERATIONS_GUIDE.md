@@ -496,8 +496,11 @@ echo $NATS_URL  # Should contain nats://nats:pmoves@...
 # Test connection
 nats pub test "ping" --server "$NATS_URL"
 
-# Check NATS server health
-curl http://localhost:8222/varz | jq .connections
+# Check NATS server health. 8222 is the container-side monitor port; derive the
+# host URL (9223 on a default node). Kept separate from NATS_URL, which is the
+# nats:// client URL used above. Run from the repo root.
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)
+curl "$NATS_MONITOR_URL/varz" | jq .connections
 ```
 
 ---

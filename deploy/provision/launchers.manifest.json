@@ -253,18 +253,18 @@
       "sha256": "13d0bae6a1a3bb8737b8244bb92c86f49827713dbab498cc3d75cc181373b6b9"
     },
     {
-      "bytes": 4023,
+      "bytes": 4152,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/install-kimi-pmoves-command.sh",
-      "sha256": "aa25ffc124408ca5464ce68805babea3eca14e46ab42232d91ee4185e37e5286"
+      "sha256": "708758e581701fe139d3efc09e36926b777962385ea6f8e10beacab593d8e53c"
     },
     {
-      "bytes": 3950,
+      "bytes": 4175,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/install-kimi-pmoves-command.ps1",
-      "sha256": "f6c40d8ce13a1b507833a252e702bea5482b9a16907400b249137a7d82236fb4"
+      "sha256": "6306bc42457d94f81992e7a0f07a157765d9196e01c9017380fb4f771613dd8a"
     },
     {
       "bytes": 7534,
@@ -307,6 +307,27 @@
       "managed_by": "generator",
       "relpath": "deploy/provision/kimi-pmoves-knuckles.cmd",
       "sha256": "d90f2a2cb4b08f23fcd0cc95340b2aeec6d1e7a5ab5fb57f0bd12786cda5f005"
+    },
+    {
+      "bytes": 1521,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kimi-pmoves-spark.sh",
+      "sha256": "95e1132857cb180f5a39d2d89007e70ecdd39b79ede42d42dc5c725e746c5bed"
+    },
+    {
+      "bytes": 1131,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kimi-pmoves-spark.ps1",
+      "sha256": "8d39b131876455d0d62cca2fce7d3f8cdf4702e30f6bcaf0e4cffa5c6936f40b"
+    },
+    {
+      "bytes": 772,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kimi-pmoves-spark.cmd",
+      "sha256": "26ea042bcb9b58276fb522f2fde23e57b74c634ece9578f215a610481d5ca44e"
     },
     {
       "bytes": 1522,
@@ -422,6 +443,6 @@
     }
   ],
   "generator_version": "1.0.0",
-  "identity_count": 10,
+  "identity_count": 11,
   "tool_count": 8
 }

@@ -1302,7 +1302,7 @@ supabase-bootstrap-no-start: ## Apply migrations+seeds against already-running D
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found — start it first"; exit 1; fi; \
 	pg_user=$$(docker exec "$$db" sh -c 'echo $${POSTGRES_USER:-postgres}'); \
 	echo "   DB container: $$db | pg_user: $$pg_user"; \
-	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d ${POSTGRES_DB:-pmoves} "$$@"; }; \
+	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d "$${POSTGRES_DB:-pmoves}" "$$@"; }; \
 	_psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
@@ -1344,17 +1344,17 @@ supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in 
 	@set -euo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-pmoves}" -d "$${POSTGRES_DB:-pmoves}" -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$migration"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-pmoves}" -d "$${POSTGRES_DB:-pmoves}" -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi; \
 	if [ -d "supabase/initdb" ]; then \
 		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$seed"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-pmoves}" -d "$${POSTGRES_DB:-pmoves}" -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi
 	@echo "✅ Bootstrap history updated"
@@ -1700,14 +1700,20 @@ NATS_BOX_IMAGE ?= natsio/nats-box:0.14.5
 NATS_DOCKER_NETWORK ?= pmoves_bus
 
 .PHONY: nats-pub
+# SUBJECT/PAYLOAD reach the shell as env vars, never as recipe text: make pastes
+# $(PAYLOAD) in verbatim, so a JSON payload's double quotes split the `test -n`
+# word ("test: too many arguments") and an apostrophe closed the old '...'
+# quoting. $(value ...) also stops make expanding a literal $ inside the JSON.
+nats-pub: export NATS_PUB_SUBJECT = $(value SUBJECT)
+nats-pub: export NATS_PUB_PAYLOAD = $(value PAYLOAD)
 nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Road — run on the NATS node)
-## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark"}'
+## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark","task":"cascade-wave-B"}'
 ## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
-	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
-	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
+	@test -n "$$NATS_PUB_SUBJECT" || (echo "ERROR: SUBJECT is required" && exit 1)
+	@test -n "$$NATS_PUB_PAYLOAD" || (echo "ERROR: PAYLOAD is required" && exit 1)
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
-	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$$NATS_PUB_SUBJECT" "$$NATS_PUB_PAYLOAD"
 
 .PHONY: nats-agent-inbox
 nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
@@ -4119,6 +4125,24 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 
 .PHONY: up-cipher
 up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --build cipher-api
 	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
 	@# gate fails loudly on it); every other failure — bad Qdrant creds,
@@ -4129,6 +4153,24 @@ up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory
 
 .PHONY: up-cipher-nobuild
 up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
 	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
 	@# recreated here is exactly as empty as a fresh build's.
@@ -4225,6 +4267,24 @@ up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embeddin
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --build cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher
 	@echo "✔ Cipher Memory + embedding pipeline ready"
@@ -4234,7 +4294,7 @@ up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embeddin
 
 .PHONY: cipher-memory-smoke
 cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if the vector path is dead (requires up-cipher-full)
-	@# This target previously had two defects, both fixed here.
+	@# This target previously had three defects, all fixed here.
 	@#
 	@# 1. Its POST body omitted agentId, which memory-routes.ts requires
 	@#    ("agentId is required for per-agent scope" -> 400). Under `curl -sf`
@@ -4255,38 +4315,39 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 	@#             (memory-routes.ts sets score from the vector hit; the lexical
 	@#             fallback has no score field at all)
 	@# A missing agentId is a 400, so the payload must carry one.
-	@echo "Testing cipher /api/memory POST..."
-	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
-		-H 'Content-Type: application/json' \
-		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"],"agentId":"cipher-memory-smoke"}' 2>&1) \
-		&& echo "  POST OK: $$resp" \
-		|| (echo "  POST FAILED: $$resp" && exit 1); \
-	case "$$resp" in \
-		*'"embedding_id":null'*) \
-			echo "  ✗ POST stored NOTHING in Qdrant — embedding_id is null."; \
-			echo "    sidecar.embed() returned null, so storeVector() never ran and"; \
-			echo "    ensureCollection() never fired. Check that TENSORZERO_URL or"; \
-			echo "    OLLAMA_URL is reachable FROM the cipher container:"; \
-			echo "      docker exec pmoves-cipher-api-1 node -e 'fetch(process.env.TENSORZERO_URL+\"/health\").then(r=>console.log(r.status))'"; \
-			exit 1;; \
-	esac
-	@echo "Testing cipher /api/memory/search..."
-	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
-		&& echo "  SEARCH OK: $$resp" \
-		|| (echo "  SEARCH FAILED: $$resp" && exit 1); \
-	case "$$resp" in \
-		*'"score"'*) ;; \
-		*) \
-			echo "  ✗ SEARCH returned lexical-fallback results, not vector hits (no score field)."; \
-			echo "    Either the query embedding failed or Qdrant returned no points."; \
-			echo "    Provision the collection with: make -C pmoves qdrant-provision-cipher"; \
-			exit 1;; \
-	esac
-	@echo "✔ Cipher memory pipeline smoke passed (vector path live)"
+	@#
+	@# 3. Under token enforcement it could not pass at all: it sent no
+	@#    Authorization header (401), and agentId "cipher-memory-smoke" is an
+	@#    identity no bearer resolves to (403 from assertAgentId). Both read as
+	@#    `POST FAILED:` with an empty message, the same symptom as defect 1.
+	@#
+	@# The recipe is now tools/cipher_roundtrip_probe.py: it takes the bearer
+	@# from the env the session sees (cipher_preflight.layered_environ), writes
+	@# as the agentId auth.ts accepts for it, reads the record back by id, finds
+	@# it by search, deletes it, and --require-vector keeps checks 1 and 2.
+	@$(PYTHON) tools/cipher_roundtrip_probe.py --require-vector
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+
+# Read-only: will the key cipher-api presents for per-agent token lookups pass
+# Kong key-auth AND PostgREST? Evaluates the compose expressions on disk against
+# the SAME --env-file list $(DC) uses, so it judges what the next up-cipher
+# delivers. Tells expired / wrong pair (gateway or signature) / missing / wrong
+# role apart, and WARNs on the retired CIPHER_DB_SERVICE_KEY paste (also read
+# from .env.local by presence only, since SUPABASE_RUNTIME=compose leaves the
+# overlay out of COMPOSE_ENV_FILES). Prints no key, digest or secret. The static
+# facets do NOT see the running Kong: CONTAINER=1 reads the running cipher-api
+# and supabase-kong (digests compared in-process); PROBE=1 runs cipher's own
+# lookup from inside cipher-api (GET ...?limit=0) and is the authority on what
+# the live gateway admits. make collapses exit
+# codes to 2, so read the CIPHER_AUTH_VERDICT= line (0 ok / 1 finding / 3
+# could-not-measure) or run the tool directly.
+CIPHER_AUTH_CHECK_ARGS = --compose docker-compose.yml --scan docker-compose.agents.yml --env-local .env.local $(COMPOSE_ENV_FILES)
+.PHONY: cipher-auth-check
+cipher-auth-check: ## Read-only: does cipher's service key pass Kong + PostgREST? (expired / wrong pair / missing; never prints a key) [CONTAINER=1 PROBE=1]
+	@$(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) $(if $(CONTAINER),--container,) $(if $(PROBE),--probe,)
 
 .PHONY: spark-health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
@@ -4335,20 +4396,26 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 # Registry (not compose env) owns the Agent Zero model-config surface.
-# Per-node deployment pass-through: INSTANCE stamps header/manifest; OUT
-# relocates output (default follows AGENT_ZERO_USR_DIR like compose does).
-INSTANCE ?= docked
-OUT ?=
+# Per-node deployment pass-through: INSTANCE stamps header/manifest and picks
+# the instance's usr-dir var; OUT relocates output (default follows that var
+# like compose does). INSTANCE/OUT are generic names, so they are honoured ONLY
+# from the make command line: a stray exported OUT/INSTANCE in the invoking
+# shell must not relocate presets. The namespaced A0_MODEL_SYNC_INSTANCE /
+# A0_MODEL_SYNC_OUT may come from the environment. Empty INSTANCE= -> docked.
+A0_MODEL_SYNC_INSTANCE ?=
+A0_MODEL_SYNC_OUT ?=
+A0_SYNC_INSTANCE = $(or $(if $(filter command line,$(origin INSTANCE)),$(INSTANCE)),$(A0_MODEL_SYNC_INSTANCE),docked)
+A0_SYNC_OUT = $(or $(if $(filter command line,$(origin OUT)),$(OUT)),$(A0_MODEL_SYNC_OUT))
 
 .PHONY: a0-model-sync
 a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
-	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(INSTANCE)"$(if $(OUT), --out "$(OUT)",)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 # Variant 3 of the ownership plan: drift control. Clean rooms stay quiet;
 # drifted rooms exit 1 so fleet sweepers can score them.
 .PHONY: a0-model-sync-check
-a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (exit 1 on drift; writes nothing)
-	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(INSTANCE)"$(if $(OUT), --out "$(OUT)",)
+a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (writes nothing; exit 0 clean, 1 drift, 2 undecided)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
@@ -6152,17 +6219,8 @@ stage-data-check: stage-data ## Fail if committed website/stage/data drifted fro
 	@echo "✅ website/stage/data matches room manifests"
 
 .PHONY: kimi
-kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
-	@if [ ! -f "$(CURDIR)/../.kimi/config.toml" ]; then \
-	  echo "[!] Kimi config not found: $(CURDIR)/../.kimi/config.toml"; exit 1; \
-	fi
-	@if [ -f "$(CURDIR)/../.kimi/mcp.json" ]; then \
-	  kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"; \
-	else \
-	  echo "[!] Warning: $(CURDIR)/../.kimi/mcp.json not found; launching Kimi without MCP config."; \
-	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
-	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
-	fi
+kimi: ## Launch Kimi with PMOVES project context (same as kimi-pmoves)
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
 
 .PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token cipher-identity
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
@@ -6171,8 +6229,8 @@ claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
 	@bash $(CURDIR)/scripts/kimi-pmoves.sh
 
-kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
-	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+kilo-pmoves: ## Launch the Kilo CLI with PMOVES project config (kilo.json)
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh

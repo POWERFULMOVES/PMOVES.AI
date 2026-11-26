@@ -170,6 +170,9 @@ document.getElementById('subtitle').textContent =
 
 const canvas=document.getElementById("sky"), ctx=canvas.getContext("2d");
 const tip=document.getElementById("tip"), readout=document.getElementById("readout");
+const TOUCH = !window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+const HINT = TOUCH ? "Tap a star to play." : "Hover a star - tempo, family, key. Click to play.";
+readout.innerHTML = `<span class="ro-hint">${HINT}</span>`;
 const fftOverlay=document.getElementById("fftOverlay");
 const nowPlaying=document.getElementById("nowPlaying");
 const npText=document.getElementById("npText");
@@ -297,12 +300,12 @@ canvas.addEventListener("mousemove",(e)=>{ const r=canvas.getBoundingClientRect(
     const playCtl = s.audio_url ? '<span class="ro-play" id="playBtn">PLAY</span>' : '';
     readout.innerHTML=`<span class="ro-chip">STAR</span><span class="ro-name">${esc(s.name)}</span><span class="ro-field"><b>${s.family.replace("-"," · ")}</b></span><span class="ro-field tnum">${s.key||""} ${s.scale||""}</span><span class="ro-field tnum">tempo <b>${s.bpm.toFixed(1)}</b> BPM</span><span class="ro-field tnum">δ <b>${s.delta.toFixed(3)}</b> · Hz <b>${s.hz.toFixed(2)}</b></span>${playCtl}`;
     const pb=document.getElementById("playBtn"); if(pb) pb.onclick=()=>playTrack(s);
-  } else { canvas.style.cursor="default"; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">Hover a star - tempo, family, key. Click to play.</span>`; }
+  } else { canvas.style.cursor="default"; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">${HINT}</span>`; }
 });
 
 canvas.addEventListener("click",(e)=>{ const r=canvas.getBoundingClientRect(); const s=pick(e.clientX-r.left,e.clientY-r.top); if(s) playTrack(s); });
 
-canvas.addEventListener("mouseleave",()=>{ hovered=null; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">Hover a star - tempo, family, key. Click to play.</span>`; });
+canvas.addEventListener("mouseleave",()=>{ hovered=null; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">${HINT}</span>`; });
 const legend=document.getElementById("legend");
 FAMILIES.forEach(f=>{ const n=TRACKS.filter(t=>t.family===f.id).length; const row=document.createElement("div");
   row.className="lg-row"; row.setAttribute("role","button"); row.tabIndex=0;

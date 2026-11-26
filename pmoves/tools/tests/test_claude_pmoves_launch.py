@@ -86,6 +86,11 @@ class _LauncherHarness:
         env["PMOVES_ENV_SHARED"] = str(self.env_shared)
         env["PMOVES_ROSTER_FROM_TREE"] = "1"
         env["PMOVES_PYTHON"] = sys.executable
+        # mavis_sdk_env.sh appends an audit line to $PMOVES_REPO_ROOT/pmoves/
+        # data/chit, and PMOVES_REPO_ROOT defaults to the CWD -- so a run from
+        # pmoves/ wrote pmoves/pmoves/data/chit/mavis_sdk_env.log into the tree.
+        env["PMOVES_MAVIS_SDK_LOG_DIR"] = str(self.dir)
+        env["PMOVES_MAVIS_SDK_LOG_PATH"] = str(self.dir / "mavis_sdk_env.log")
         env.update(overrides)
         return env
 

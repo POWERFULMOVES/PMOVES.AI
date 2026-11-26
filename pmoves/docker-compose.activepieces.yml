@@ -25,7 +25,9 @@ services:
       - AP_EXECUTION_MODE=${AP_EXECUTION_MODE:-SANDBOX}
       - AP_QUEUE_MODE=REDIS
       - AP_REDIS_HOST=activepieces-redis
+      - AP_REDIS_PORT=${AP_REDIS_PORT:-6379}
       - AP_POSTGRES_HOST=activepieces-postgres
+      - AP_POSTGRES_PORT=${AP_POSTGRES_PORT:-5432}
       - AP_POSTGRES_DATABASE=${AP_POSTGRES_DATABASE:-activepieces}
       - AP_POSTGRES_USERNAME=${AP_POSTGRES_USERNAME:-postgres}
       - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
@@ -48,13 +50,16 @@ services:
     profiles: [automation]
     environment:
       - AP_CONTAINER_TYPE=WORKER
-      - AP_FRONTEND_URL=${AP_FRONTEND_URL:-http://localhost:${AP_APP_PORT:-8087}}
+      - AP_INTERNAL_URL=${AP_INTERNAL_URL:-http://activepieces-app:80}
+      - AP_FRONTEND_URL=${AP_WORKER_FRONTEND_URL:-http://activepieces-app:80}
       - AP_EDITION=${AP_EDITION:-ce}
       - AP_LICENSE_KEY=${AP_LICENSE_KEY:-}
       - AP_EXECUTION_MODE=${AP_EXECUTION_MODE:-SANDBOX}
       - AP_QUEUE_MODE=REDIS
       - AP_REDIS_HOST=activepieces-redis
+      - AP_REDIS_PORT=${AP_REDIS_PORT:-6379}
       - AP_POSTGRES_HOST=activepieces-postgres
+      - AP_POSTGRES_PORT=${AP_POSTGRES_PORT:-5432}
       - AP_POSTGRES_DATABASE=${AP_POSTGRES_DATABASE:-activepieces}
       - AP_POSTGRES_USERNAME=${AP_POSTGRES_USERNAME:-postgres}
       - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
