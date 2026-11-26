@@ -211,3 +211,8 @@ done < targets.txt | sort -n
 Rule: shape 3 is the only DARKXSIDE instance actually running on this node. Shape 4 is docs-only. Verify compose file + usr dir before writing any DARKXSIDE config.
 
 Also: PMOVES-a0-launcher fork still has ZERO tags/releases (verified Nov 21); installed Launcher is upstream agent0ai v1.9.0. Upstream now at v1.11 (not v1.10). Fork main head: 629d28968c.
+
+
+### Codex P2 clarification (2026-11-26): live DARKXSIDE Launcher instance
+
+Codex review correctly flagged that the "never created" framing for shape 4 could mislead a reader into thinking no DARKXSIDE runtime exists. Clarification: the **live DARKXSIDE runtime on this node is shape 3** (the tracked darkxside-sidecar compose project, running the PMOVES image since 2026-10-24, ~zero restarts, its own usr dir). When writing DARKXSIDE config, target **shape 3** unless the operator explicitly says otherwise. Shape 4 (the instances overlay) remains documented-but-unused. This table is the authoritative mapping; treat any other DARKXSIDE reference as stale.
