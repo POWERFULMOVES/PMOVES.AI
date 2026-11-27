@@ -154,6 +154,17 @@ endif
 ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
 endif
+# Node-branded bind overlay. Source defaults every *_BIND to 127.0.0.1 unless a
+# reviewed decision made it mesh-default (see env.mesh-bind.example). A node that
+# must accept traffic from another host opts in HERE, in its own gitignored
+# env.mesh-bind.local -- never by editing a compose default. It MUST stay the
+# LAST env file so the node's decision overrides every tier file above it.
+# tools/port_audit.py reads the same file as its allowlist (only values that are
+# exactly 0.0.0.0 count there), so loading it into compose keeps the two in step.
+# tests/unit/test_makefile_mesh_bind_overlay.py pins the ordering.
+ifneq ("$(wildcard env.mesh-bind.local)","")
+  COMPOSE_ENV_FILES += --env-file env.mesh-bind.local
+endif
 
 # -------- Service Discovery Helper ----------
 # Resolve service URL using PMOVES service discovery (hybrid support)

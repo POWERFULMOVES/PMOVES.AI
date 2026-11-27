@@ -694,11 +694,12 @@ gpu-status: ## Show GPU VRAM usage and loaded models
 # ── Port Binding Security ────────────────────────────────────────────
 port-audit: ## Audit Docker port bindings for unexpected 0.0.0.0 exposure
 	@echo "=== Port Binding Security Audit ==="
-	@docker compose config --format json >/dev/null 2>&1 || { \
-	  echo "ERROR: docker compose config failed; aborting port audit."; \
-	  exit 1; \
-	}
-	@$(PYTHON) tools/port_audit.py
+	@# Resolve through $(DC) -- the SAME env-file set (tiers + the node's
+	@# env.mesh-bind.local overlay, last) and stack files every `up` uses. A bare
+	@# `docker compose config` reads no env files, so it aborted on every node and
+	@# would audit binds no recreate ever produces. The JSON is piped, never
+	@# written to disk: resolved config carries secret values.
+	@$(DC) config --format json | $(PYTHON) tools/port_audit.py --config-json -
 	@echo "=== Port audit complete ==="
 
 safe-opening-audit: ## Audit reachable surfaces for the bind->auth coupling (Safe-Activation Contract Clause 3)

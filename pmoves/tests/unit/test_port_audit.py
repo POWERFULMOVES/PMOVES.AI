@@ -21,6 +21,7 @@ from pmoves.tools.port_audit import (
     main,
     parse_compose_config,
     print_report,
+    read_config_json,
 )
 
 
@@ -672,3 +673,121 @@ class TestParseComposeConfig:
             mock_run.return_value.stdout = json.dumps(expected)
             result = parse_compose_config()
         assert result == expected
+
+
+# ============================================================================
+# Node-branded bind overlay: only a literal 0.0.0.0 allowlists
+# ============================================================================
+
+
+class TestBindFileOnlyLiteralWildcardAllowlists:
+    """env.mesh-bind.local is now ALSO loaded into compose (last env file).
+
+    The audit still treats it as an allowlist, and only a value that is
+    exactly 0.0.0.0 may allowlist a service. A node binding to one specific
+    interface (its tailnet IP, per env.mesh-bind.example) must NOT silently
+    widen what the audit accepts -- the audit expects loopback for it and
+    reports the specific-interface bind, so nothing is waved through.
+
+    Addresses are RFC 5737 documentation ranges, never a real host.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolate_bind_file_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(PORT_AUDIT_BIND_FILE_ENV, raising=False)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "198.51.100.7",           # a specific interface (tailnet-IP shape)
+            '"198.51.100.7"',
+            "127.0.0.1",
+            "",                       # blank = compose default, not an opt-in
+            "0.0.0.0 # trailing",     # an inline comment is not a bare wildcard
+            "0.0.0.0/0",
+            "::",
+            "0.0.0.00",
+        ],
+    )
+    def test_non_wildcard_value_is_not_allowlisted(self, tmp_path: Path, value: str) -> None:
+        bind_file = tmp_path / "env.mesh-bind.local"
+        bind_file.write_text(f"NATS_BIND={value}\nOPENROOM_BIND={value}\n")
+        with patch("pmoves.tools.port_audit.DEFAULT_BIND_FILE", bind_file):
+            _, allowed, unmapped = load_mesh_allowed_services()
+        assert allowed == set(), f"value {value!r} allowlisted {allowed}"
+        assert unmapped == set(), f"value {value!r} reported unmapped {unmapped}"
+
+    def test_specific_interface_bind_is_reported_not_waved_through(self, tmp_path: Path) -> None:
+        bind_file = tmp_path / "env.mesh-bind.local"
+        bind_file.write_text("NATS_BIND=198.51.100.7\n")
+        with patch("pmoves.tools.port_audit.DEFAULT_BIND_FILE", bind_file):
+            _, allowed, _ = load_mesh_allowed_services()
+        config = {"services": {"nats": {"ports": [
+            {"host_ip": "198.51.100.7", "published": "4222", "target": "4222"},
+        ]}}}
+        findings = audit_ports(config, allowed)
+        assert [f["status"] for f in findings] == ["VIOLATION"]
+        assert findings[0]["expected"] == "127.0.0.1"
+
+    def test_literal_wildcard_still_allowlists(self, tmp_path: Path) -> None:
+        """Positive control: the parametrized negatives are not vacuous."""
+        bind_file = tmp_path / "env.mesh-bind.local"
+        bind_file.write_text("NATS_BIND=0.0.0.0\n")
+        with patch("pmoves.tools.port_audit.DEFAULT_BIND_FILE", bind_file):
+            _, allowed, _ = load_mesh_allowed_services()
+        assert allowed == {"nats"}
+
+
+# ============================================================================
+# --config-json: config resolved by $(DC), piped in
+# ============================================================================
+
+
+class TestConfigJsonInput:
+    """`make port-audit` pipes `$(DC) config --format json` into --config-json -."""
+
+    CLEAN = {"services": {"web": {"ports": [{"host_ip": "127.0.0.1", "published": "8080", "target": "80"}]}}}
+    WIDE = {"services": {"web": {"ports": [{"host_ip": "0.0.0.0", "published": "8080", "target": "80"}]}}}
+
+    def _no_bind_file(self):
+        return patch(
+            "pmoves.tools.port_audit.load_mesh_allowed_services",
+            return_value=(Path("/nonexistent"), set(), set()),
+        )
+
+    def test_stdin_clean_config_returns_0(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import io
+        import json
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(self.CLEAN)))
+        with self._no_bind_file(), patch("pmoves.tools.port_audit.parse_compose_config") as bare:
+            rc = main(["--config-json", "-"])
+        assert rc == 0
+        bare.assert_not_called()
+
+    def test_stdin_violation_returns_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import io
+        import json
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(self.WIDE)))
+        with self._no_bind_file():
+            assert main(["--config-json", "-"]) == 1
+
+    @pytest.mark.parametrize("payload", ["", "   \n", "not json {{"])
+    def test_empty_or_invalid_stdin_fails_closed(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, payload: str
+    ) -> None:
+        """Upstream `$(DC) config` failing writes nothing: that must not read as clean."""
+        import io
+        monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+        with self._no_bind_file():
+            rc = main(["--config-json", "-"])
+        assert rc == 1
+        assert "failing closed" in capsys.readouterr().err
+
+    def test_reads_from_path(self, tmp_path: Path) -> None:
+        import json
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps(self.CLEAN))
+        assert read_config_json(str(cfg)) == self.CLEAN
+
+    def test_missing_path_returns_none(self, tmp_path: Path) -> None:
+        assert read_config_json(str(tmp_path / "absent.json")) is None
