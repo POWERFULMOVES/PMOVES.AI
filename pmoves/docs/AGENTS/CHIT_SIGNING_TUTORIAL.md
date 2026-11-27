@@ -234,8 +234,11 @@ File is locked by another agent:
 
 NATS connection issue:
 ```bash
-# Check NATS health (monitoring port 8222; 4222 is the client protocol port)
-curl -s http://localhost:8222/varz | jq '.server_id'
+# Check NATS health. 4222 is the client protocol port. The monitor listens on
+# 8222 inside the container and is published on the host per node (9223 by
+# default, 8222 on Z890), so derive it. Run from the repo root.
+NATS_MONITOR_URL=$(bash .claude/scripts/nats-endpoint.sh)
+curl -s "$NATS_MONITOR_URL/varz" | jq '.server_id'
 
 # Verify credentials
 echo $NATS_URL  # Should be nats://user:pass@host:port

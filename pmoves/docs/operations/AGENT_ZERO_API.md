@@ -60,7 +60,7 @@ Verified via `GET /openapi.json` on 2026-05-16. Method → path → summary:
 | `GET` | `/memory/{memory_id}` | Get specific memory |
 | `PUT` | `/memory/{memory_id}` | Update memory |
 | `DELETE` | `/memory/{memory_id}` | Delete memory |
-| `POST` | `/events/publish` | Publish event (likely → NATS) |
+| `POST` | `/events/publish` | Validate `{topic, payload}` against `pmoves/contracts/topics.json` and publish an envelope to NATS. Unregistered topic → `422` `unknown_topic` with the sorted `known_topics` list; payload failing the topic schema → `422` `invalid_payload`. Before 2026-11-23 both were an unhandled `500`. Command-class `claw.*` topics need an `X-API-KEY` header equal to the supervisor's `AGENT_ZERO_API_KEY` (`403` otherwise, including when the key is unset), and their envelope `source` is fixed to `agent-zero-supervisor`. Every other topic is unchanged and needs no key. |
 
 ### `TaskSubmissionRequest` body shape
 
@@ -170,6 +170,15 @@ AZ subscribes (per `/healthz`):
 
 JetStream stream `AGENTZERO` retains these. Other PMOVES NATS subjects (e.g. `archon.mint.*.v1`, `chit.signed.v1`, `tokenism.*`, `geometry.*`) are publisher-side or consumed by other services — see `.claude/context/nats-subjects.md` for the catalog.
 
+### Receive path for fire-and-forget subjects
+
+`claw.task.assign.v1` and the other coordination subjects (`branch.>`, `chit.>`, `p7.>`, `owner.presence.>`) are core NATS, not JetStream. A message published while nothing is subscribed is dropped, and the publisher gets no error. A node has **no receiver** for them until `make -C pmoves nats-agent-inbox` (or an equivalent agent runtime) is running there. Check with the NATS monitor's `connz?subs=1` before assuming delivery.
+
+- **Measured 2026-11-23 on node 5090:** 32 client connections, 0 subscribers on any of those subjects until the inbox was started.
+- **Inbox identity:** the inbox listens and writes its JSONL as `PMOVES_AGENT_ID`, else `PMOVES_REGISTER_IDENTITY`, else the node resolver `pmoves/tools/agent_terminal_theme.py --whoami` (the identity node-sitrep prints), else `<hostname>-agent`. It used to default to the literal `5090-CODEX` on every node.
+- **Publishing:** `make -C pmoves nats-pub SUBJECT=... PAYLOAD='<json>'` takes JSON with spaces, apostrophes, and `$` intact.
+- **Authorization:** publishing `claw.*` over HTTP (`POST /events/publish`) requires the supervisor API key; a raw NATS publish, including `make nats-pub`, still needs the bus credentials.
+
 ## A2A protocol routes (8 paths, conditionally mounted)
 
 Not part of the 14 above and **absent from `/openapi.json` when the A2A import
@@ -258,13 +267,18 @@ GHCR `ghcr.io/powerfulmoves/pmoves-agent-zero` publishes `latest` / `pmoves-late
 The 11-18 exit 1 came from a checkout older than commit `361e26e9a0b` (PR #3396), which
 added the exit-2 UNDECIDED contract: `_check_undecided` (`models_sync.py:802-808`) is
 called from `:841-846` when `--check` runs with `source == "template_fallback"`. Current
-code behaves as documented. The registry fallback itself is real and measured on
-2026-11-19: the SQL fallback against the node's supabase-db fails with
-`relation "pmoves_core.v_service_models" does not exist`, because the registry migration
-has not been applied on 5090. The operator items are applying that migration on this node
-and updating the node's `main` checkout; nothing is filed against the generator. For
-comparison, the committed docked file has 3 presets and the DARKXSIDE Launcher instance
-holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
+code behaves as documented. The 11-19 exit 2 was measured correctly but explained wrongly:
+the SQL fallback failed with `relation "pmoves_core.v_service_models" does not exist` and
+this section said the registry migration was missing on 5090. It is not. The node's
+database `pmoves` has 61 migrations and 24 seeds in `public.pmoves_bootstrap_history`
+(applied 2026-11-06) and the view exists there. The fallback in `models_sync.py` was
+hard-coded to `psql -U postgres -d postgres`, a near-empty sibling database on the same
+server, so it could never see the view on any compose node; the 11-19 confirmation probe
+made the same `-d postgres` mistake. Fixed 2026-11-22: the fallback now reads
+`POSTGRES_USER` / `POSTGRES_DB` from the DB container (`MODEL_SYNC_DB_USER` /
+`MODEL_SYNC_DB_NAME` override). The remaining operator item is only updating the node's
+`main` checkout. For comparison, the committed docked file has 3 presets and the
+DARKXSIDE Launcher instance holds 6 (Default, Efficiency, Power, PMOVES, Agentic, Voice).
 
 **WARN: `OUT=` at a Launcher usr dir, or `INSTANCE=darkxside-inst`.** A sync archives the
 live file to `pmoves/data/model-sync/review/` first, replaces only generator-owned presets

@@ -22,18 +22,33 @@ def _contracts_dir() -> str:
 
 CONTRACTS_DIR = _contracts_dir()
 
+class UnknownTopicError(KeyError):
+    """Raised when a topic is not registered in contracts/topics.json.
+
+    Subclasses KeyError so existing ``except KeyError`` callers keep working,
+    while HTTP surfaces can map it to a 4xx instead of an unhandled 500.
+    """
+
+    def __init__(self, topic: str):
+        super().__init__(f"Unknown topic: {topic}")
+        self.topic = topic
+
+
+def _load_topics() -> dict:
+    return json.loads(open(os.path.join(CONTRACTS_DIR, "topics.json")).read())["topics"]
+
+def known_topics() -> list[str]:
+    """Sorted names of every topic registered in contracts/topics.json."""
+    return sorted(_load_topics())
+
 def load_schema(topic: str):
-    topics = json.loads(open(os.path.join(CONTRACTS_DIR, "topics.json")).read())
-    if topic not in topics["topics"]:
-        raise KeyError(f"Unknown topic: {topic}")
-    schema_path = os.path.join(CONTRACTS_DIR, topics["topics"][topic]["schema"])
-    return json.loads(open(schema_path).read())
+    return json.loads(open(schema_path(topic)).read())
 
 def schema_path(topic: str) -> str:
-    topics = json.loads(open(os.path.join(CONTRACTS_DIR, "topics.json")).read())
-    if topic not in topics["topics"]:
-        raise KeyError(f"Unknown topic: {topic}")
-    return os.path.join(CONTRACTS_DIR, topics["topics"][topic]["schema"])
+    topics = _load_topics()
+    if topic not in topics:
+        raise UnknownTopicError(topic)
+    return os.path.join(CONTRACTS_DIR, topics[topic]["schema"])
 
 def validate_payload(topic: str, payload: dict):
     """Validate a topic payload, resolving schema-local relative refs."""

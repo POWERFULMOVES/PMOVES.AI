@@ -1040,7 +1040,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
     # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -1061,6 +1061,7 @@ services:
         # Load-bearing for realtime voice + chat over WebRTC in pmoves-ui and
         # flute-gateway, which subscribe through the Kong websocket route.
         - realtime-dev.supabase-realtime
+      pmoves_public: {}  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
     deploy:
       resources:
@@ -1102,7 +1103,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
       interval: 5s
@@ -1124,6 +1125,7 @@ services:
       pmoves_api:
         aliases:
         - storage   # upstream Supabase name used by vendored kong.yml
+      pmoves_public: {}  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
     deploy:
       resources:
@@ -1187,7 +1189,7 @@ services:
     # Probe body copied from the vendored upstream at
     # PMOVES-supabase/docker/docker-compose.yml:17-23, with `studio` swapped
     # for `localhost` because the service name differs here.
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
@@ -1207,6 +1209,7 @@ services:
       pmoves_api:  # supabase-meta and analytics reachable via kong on pmoves_api
         aliases:
         - studio   # upstream Supabase name used by vendored kong.yml
+      pmoves_public: {}  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -1476,7 +1479,7 @@ services:
     - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN:-100}
     - POOLER_POOL_MODE=transaction
     - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_public
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
@@ -1492,6 +1495,7 @@ services:
     - ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
     networks:
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
 
   # =============================================================================
   # END SUPABASE STACK
@@ -1516,18 +1520,19 @@ services:
     security_opt:
     - no-new-privileges:true
     ports:
-    - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
+    - ${QDRANT_BIND:-127.0.0.1}:${QDRANT_PORT:-6333}:6333
     networks:
     - pmoves_data
     - pmoves_api
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus,pmoves_public
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -1554,13 +1559,14 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus,pmoves_public
     ports:
-    - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
+    - ${MEILISEARCH_BIND:-127.0.0.1}:${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
     - pmoves_api
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     volumes:
     - meilisearch-data:/meili_data
     healthcheck:
@@ -1930,7 +1936,7 @@ services:
     environment:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_public
     # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
     # sibling overlay, and a depends_on referencing an undefined service
     # invalidates the WHOLE workers project (overlay-up-workers fails
@@ -1953,6 +1959,7 @@ services:
     - pmoves_app
     - pmoves_api
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     extra_hosts:
     - host.docker.internal:host-gateway
     deploy:
@@ -2368,14 +2375,14 @@ services:
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
     - NATS_URL=${NATS_URL}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_public
     depends_on:
       extract-worker:
         condition: service_started
       minio:
         condition: service_healthy
     ports:
-    - ${PDF_INGEST_BIND:-0.0.0.0}:${PDF_INGEST_PORT:-8092}:8092
+    - ${PDF_INGEST_BIND:-127.0.0.1}:${PDF_INGEST_PORT:-8092}:8092
     profiles:
     - workers
     - orchestration
@@ -2383,6 +2390,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data  # MinIO access (minio:9000)
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
       interval: 30s
@@ -2401,12 +2409,13 @@ services:
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
     ports:
-    - ${LANGEXTRACT_BIND:-0.0.0.0}:${LANGEXTRACT_PORT:-8084}:8084
+    - ${LANGEXTRACT_BIND:-127.0.0.1}:${LANGEXTRACT_PORT:-8084}:8084
     profiles:
     - workers
     - orchestration
     networks:
     - pmoves_app
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)"]
       interval: 30s
@@ -2419,7 +2428,7 @@ services:
           cpus: '2.0'
           memory: 2G
     environment:
-    - PMOVES_NETWORKS=pmoves_app
+    - PMOVES_NETWORKS=pmoves_app,pmoves_public
   notebook-sync:
     <<: *tier-worker-hardened
     build: ./services/notebook-sync
@@ -2432,14 +2441,14 @@ services:
     - NOTEBOOK_SYNC_DB_PATH=${NOTEBOOK_SYNC_DB_PATH:-/data/notebook_sync.db}
     - LANGEXTRACT_URL=${LANGEXTRACT_URL:-http://langextract:8084}
     - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     depends_on:
       langextract:
         condition: service_started
       extract-worker:
         condition: service_started
     ports:
-    - ${NOTEBOOK_SYNC_BIND:-0.0.0.0}:${NOTEBOOK_SYNC_PORT:-8095}:8095
+    - ${NOTEBOOK_SYNC_BIND:-127.0.0.1}:${NOTEBOOK_SYNC_PORT:-8095}:8095
     profiles:
     - workers
     - orchestration
@@ -2448,6 +2457,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)"]
       interval: 30s
@@ -2750,7 +2760,7 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:4222}
     - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
     - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_public
     ports:
     - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
     profiles:
@@ -2759,6 +2769,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
       interval: 30s
@@ -2785,7 +2796,7 @@ services:
     - VOICE_SAMPLER_OWNER_ID=${VOICE_SAMPLER_OWNER_ID:-}
     - OMNIVOICE_CATALOG_DIR=/omnivoice-voices
     - VOICE_CLONE_REGISTER_ENABLED=${VOICE_CLONE_REGISTER_ENABLED:-0}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_public
     volumes:
     # Same host dir omnivoice-server mounts :ro as its ref-voice catalog —
     # the sampler is the only writer (owner-approved references only).
@@ -2799,6 +2810,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data  # juicefs-gateway (candidate + reference storage) lives here
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8124/healthz"]
       interval: 30s
@@ -2915,14 +2927,14 @@ services:
     - NATS_URL=${NATS_URL}
     - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:-}
     - NATS_EVENT_BUS_DISABLE_SUBSCRIBER=${NATS_EVENT_BUS_DISABLE_SUBSCRIBER:-false}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_public
     ports:
     - ${NATS_EVENT_BUS_BIND:-127.0.0.1}:${NATS_EVENT_BUS_PORT:-8131}:8131
     depends_on:
       nats:
         condition: service_healthy
     profiles: ["apps", "events", "pinokio"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8131/healthz', timeout=5)"]
       interval: 30s
@@ -2961,7 +2973,7 @@ services:
     - PINOKIO_HOME=${PINOKIO_HOME:-/pinokio}
     - NATS_EVENT_BUS_URL=${NATS_EVENT_BUS_URL:-http://nats_event_bus:8131}
     - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:-}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_public
     ports:
     - ${PINOKIO_BRIDGE_BIND:-127.0.0.1}:${PINOKIO_BRIDGE_PORT:-8130}:8130
     volumes:
@@ -2975,7 +2987,7 @@ services:
       nats_event_bus:
         condition: service_healthy
     profiles: ["apps", "pinokio"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8130/healthz', timeout=5)"]
       interval: 30s
@@ -4127,14 +4139,14 @@ services:
     # resolution is the mounting harness's job on top of this baseline.
     - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
     - NATS_URL=${NATS_URL}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8207}:8092
     depends_on:
       nats:
         condition: service_healthy
     profiles: ["agents", "research"]
-    networks: [pmoves_app, pmoves_bus]  # open-notebook reachable on pmoves_app
+    networks: [pmoves_app, pmoves_bus, pmoves_public]  # open-notebook reachable on pmoves_app
     # python:3.12-slim has no curl; use a stdlib TCP-connect probe on the MCP port.
     healthcheck:
       test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
@@ -4176,14 +4188,14 @@ services:
     - FIREFLY_ACCESS_TOKEN=${FIREFLY_ACCESS_TOKEN:-}
     - FIREFLY_PAT=${FIREFLY_PAT:-}
     - NATS_URL=${NATS_URL}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${WEALTH_MCP_BIND:-127.0.0.1}:${WEALTH_MCP_PORT:-8208}:8092
     depends_on:
       nats:
         condition: service_healthy
     profiles: ["agents", "research"]
-    networks: [pmoves_app, pmoves_bus]  # firefly reachable on pmoves_app
+    networks: [pmoves_app, pmoves_bus, pmoves_public]  # firefly reachable on pmoves_app
     # python:3.12-slim has no curl; stdlib TCP-connect probe on the MCP port.
     healthcheck:
       test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
@@ -4617,9 +4629,9 @@ services:
     - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
     - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-text-generation,text2text-generation,feature-extraction,code-generation,chat,conversational}
     - HF_AVOID_TAGS=${HF_AVOID_TAGS:-text-to-image,image-generation,image-segmentation,object-detection,automatic-speech-recognition}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
-    - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
+    - ${HF_RESEARCH_BIND:-127.0.0.1}:${HF_RESEARCH_PORT:-8202}:8202
     depends_on:
       nats:
         condition: service_healthy
@@ -4628,7 +4640,7 @@ services:
       hf-agent:
         condition: service_started
     profiles: ["agents", "research"]
-    networks: [pmoves_app, pmoves_bus]
+    networks: [pmoves_app, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8202/healthz"]
       interval: 30s
@@ -4673,9 +4685,9 @@ services:
     # CHIT fail-closed verification gate (house pattern, mirrors hi-rag-gateway*)
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
-    - ${A2UI_BIND:-0.0.0.0}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224
+    - ${A2UI_BIND:-127.0.0.1}:${A2UI_NATS_BRIDGE_PORT:-9224}:9224
     depends_on:
       nats:
         condition: service_healthy
@@ -4686,6 +4698,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test:
       - CMD
@@ -4735,9 +4748,9 @@ services:
     - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
     # Provenance agent identity for graphiti events
     - PROVENANCE_AGENT_ID=${PROVENANCE_AGENT_ID:-a2ui-renderer}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_public
     ports:
-    - ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    - ${A2UI_RENDERER_BIND:-127.0.0.1}:${A2UI_RENDERER_PORT:-8107}:8107
     profiles:
     - agents
     - media
@@ -4746,6 +4759,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s
@@ -4797,7 +4811,7 @@ services:
     - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
     - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
     - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_public
     volumes:
     # Room catalog + manifests: rw so stage transitions can write back
     # current_stage (same contract as the `p7` service stanza).
@@ -4819,7 +4833,7 @@ services:
         # undefined service" when the supabase profile isn't active.
         required: false
     profiles: ["agents", "orchestration"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8122/healthz', timeout=5)"]
       interval: 30s
@@ -4899,12 +4913,13 @@ services:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     depends_on:
       nats:
         condition: service_healthy
@@ -5109,9 +5124,9 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_public
     ports:
-    - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    - ${CLICKHOUSE_BIND:-127.0.0.1}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
     - tensorzero-clickhouse-data:/var/lib/clickhouse
     # Cap ClickHouse self-telemetry (Debug logging + no TTL flooded the vhdx at
@@ -5127,6 +5142,7 @@ services:
       retries: 10
     networks:
     - pmoves_data
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     deploy:
       resources:
         limits:
@@ -5266,7 +5282,7 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -5293,6 +5309,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     ports:
     - ${GPU_ORCHESTRATOR_BIND:-127.0.0.1}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
     healthcheck:
@@ -5332,7 +5349,7 @@ services:
       # Operators launching NIM should still set NGC_API_KEY explicitly.
     - NGC_API_KEY=${NGC_API_KEY:-}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
     ports:
     - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000"
     profiles: ["gpu", "nim"]
@@ -5341,6 +5358,7 @@ services:
       # pmoves_bus: publish mesh.gpu.model.loaded.v1 / .unloaded.v1 for model-registry sync
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     deploy:
       resources:
         reservations:
@@ -5588,13 +5606,13 @@ services:
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
     - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring
-    ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
+    ports: ["${TOKENISM_BIND:-127.0.0.1}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
     depends_on:
       nats:
         condition: service_healthy
-    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -5619,10 +5637,10 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
-    - PMOVES_NETWORKS=pmoves_app
-    ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_public
+    ports: ["${TOKENISM_UI_BIND:-127.0.0.1}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks: [pmoves_app, pmoves_public]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s
@@ -5653,10 +5671,10 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PYTHONUNBUFFERED=1
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
-    ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
+    ports: ["${CONSCIOUSNESS_BIND:-127.0.0.1}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app, pmoves_bus]
+    networks: [pmoves_app, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()\" || exit 1"]
       interval: 30s
@@ -5731,10 +5749,10 @@ services:
     - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
-    - PMOVES_NETWORKS=pmoves_bus
-    ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_public
+    ports: ["${VOICE_RELAY_BIND:-127.0.0.1}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
-    networks: [pmoves_bus]
+    networks: [pmoves_bus, pmoves_public]
     read_only: true
     tmpfs:
     - /tmp:noexec,nosuid,size=64m
@@ -5875,14 +5893,15 @@ services:
     environment:
     - PORT=8100
     - NATS_URL=${NATS_URL}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
-    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:${SESSION_CONTEXT_WORKER_PORT:-8102}:8100
+    - ${SESSION_CONTEXT_BIND:-127.0.0.1}:${SESSION_CONTEXT_WORKER_PORT:-8102}:8100
     profiles:
     - workers
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
     # sibling overlay, and a depends_on referencing an undefined service
     # invalidates the WHOLE workers project (overlay-up-workers fails
@@ -6019,11 +6038,11 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus,pmoves_public
     ports:
-    - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
+    - "${GATEWAY_AGENT_BIND:-127.0.0.1}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
-    networks: [pmoves_api, pmoves_app, pmoves_bus]
+    networks: [pmoves_api, pmoves_app, pmoves_bus, pmoves_public]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${GATEWAY_AGENT_PORT:-8111}/healthz', timeout=5)"]
       interval: 30s
@@ -6201,7 +6220,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
@@ -6209,6 +6228,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
       interval: 30s
@@ -6240,7 +6260,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:
@@ -6251,6 +6271,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9095/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -6305,18 +6326,19 @@ services:
       invidious-companion:
         condition: service_started
     ports:
-    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
+    - ${INVIDIOUS_PROXY_BIND:-127.0.0.1}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
     profiles:
     - invidious
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_public
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -6343,7 +6365,7 @@ services:
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_public
     volumes:
     - ${LLAMA_MODELS_PATH:-./models}:/models:ro
     - llama-results:/results
@@ -6368,8 +6390,9 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_public  # host-publish tier -- a ports: mapping cannot activate on internal:true networks
     ports:
-    - ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
+    - ${LLAMA_LAB_BIND:-127.0.0.1}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
 
   # =============================================================================
   # GitHub Automation Services (Phase 3)

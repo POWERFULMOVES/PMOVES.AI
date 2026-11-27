@@ -47,16 +47,20 @@ PMOVES = Path(__file__).resolve().parents[1]
 # were removed (ops/knuckles-neo4j-from-fork): it is internal-only and reached over
 # the tailnet through the neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml),
 # per DOCKER_NETWORK_HARDENING Rule 5 ("gateway-front it").
-KNOWN_VIOLATORS = frozenset({
-    "a2ui-nats-bridge", "a2ui-renderer", "consciousness-service", "gateway-agent",
-    "gpu-orchestrator", "grayjay-plugin-host", "grayjay-server", "hf-research-agent",
-    "invidious-companion-proxy", "langextract", "llama-throughput-lab", "meilisearch",
-    "nats_event_bus", "notebook-mcp", "notebook-sync", "nvidia-nim",
-    "p7-room-orchestrator", "pdf-ingest", "pinokio_bridge", "qdrant", "retrieval-eval",
-    "session-context-worker", "supabase-pooler", "supabase-realtime", "supabase-storage",
-    "supabase-studio", "supaserch", "tensorzero-clickhouse", "tokenism-simulator",
-    "tokenism-ui", "voice-relay", "voice-sampler", "watch-folder-router", "wealth-mcp",
-})
+#
+# EMPTY as of 2026-11-23 (PR #3522). Every service this list named was
+# remediated: each now attaches pmoves_public, the house's host-reachable tier
+# (internal: false), so its published host port can activate at all. The list
+# had to be emptied IN THE SAME CHANGE, because these cases are
+# xfail(strict=True): fixing a violator turns its case into an XPASS FAILURE
+# until the name leaves the set. That is the house's shrink-only rule applied
+# to this list -- a service that is fixed but still listed here fails, so the
+# count only goes down.
+#
+# neo4j is deliberately NOT back on it. neo4j is internal-only and reached over
+# the tailnet through its forwarder, which is Rule 5's gateway-fronting
+# option; it publishes no host port of its own.
+KNOWN_VIOLATORS = frozenset()
 
 
 def _stack_files() -> list[str]:

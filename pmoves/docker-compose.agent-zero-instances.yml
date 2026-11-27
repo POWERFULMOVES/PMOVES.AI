@@ -34,6 +34,33 @@ services:
       retries: 3
       start_period: 60s
 
+  agent-zero-miSSinglinc-inst:
+    image: ghcr.io/powerfulmoves/pmoves-agent-zero:latest
+    container_name: pmoves-agent-zero-miSSinglinc-inst
+    hostname: agent-zero-miSSinglinc-inst
+    restart: unless-stopped
+    labels:
+      a0.launcher.managed: "true"
+      a0.launcher.instanceName: PMOVES-miSSingLinc
+      a0.launcher.role: instance
+    environment:
+      - PORT=80
+      - DOCKED_MODE=false
+      - TOPOLOGY_MODE=standalone
+      - PARENT_SYSTEM=PMOVES.AI
+    volumes:
+      - ${A0MISS_USR_DIR:-C:/Users/russe/agent-zero/PMOVES-miSSingLinc/usr}:/a0/usr
+    ports:
+      - ${A0MISS_BIND:-127.0.0.1}:${A0MISS_PORT:-60939}:80
+    networks:
+      - pmoves-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 networks:
   pmoves-net:
     external: true
