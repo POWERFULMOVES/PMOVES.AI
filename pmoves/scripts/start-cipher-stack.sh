@@ -59,7 +59,7 @@ docker run -d --name pmoves-nats \
   -p 4222:4222 -p 8222:8222 \
   -e NATS_USER -e NATS_PASSWORD \
   --entrypoint sh \
-  nats:2.11.8-alpine \
+  nats:2.15.3-alpine@sha256:558394a23dd3c36f2d3a64b51865fd09908010e80a542cea5e75c2af543ed62a \
   -c 'exec nats-server -js -m 8222 --user "$NATS_USER" --pass "$NATS_PASSWORD"' 2>&1
 echo "NATS starting on nats://localhost:4222 (monitor: http://localhost:8222)"
 
