@@ -119,6 +119,63 @@ CORE exports a **curated** set; EDGE/CLOUD export their announcements back. Ever
 | CORE ↔ CLOUD | `mesh.*` + egress/exit-node subjects only | stream |
 | CORE → EDGE (reserved, not wired v0) | `evoswarm.training.genome.v1` (genome to evaluate) | stream |
 | EDGE → CORE (reserved, not wired v0) | `evoswarm.training.fitness.v1` (result) | stream |
+| Agent inbox (OPEN, §5a) | `mesh.inbox.agent.<agent_id>.v1`, `mesh.inbox.room.<room_id>.v1` | stream `AGENT_INBOX` |
+
+### 5a. Agent inbox — which account holds it (OPEN decision, added 2026-11-27)
+
+**Subjects.** One inbox per agent, `mesh.inbox.agent.<agent_id>.v1`, and one fan-out subject per room,
+`mesh.inbox.room.<room_id>.v1`, on a single stream `AGENT_INBOX` over `mesh.inbox.>`
+(`pmoves/docs/architecture/AGENT_INBOX_ROAD_DESIGN_2026-11-21.md:47-48`, `:56`, on branch
+`feat/agent-inbox-road` @ `72f518d32`, not on main; cited below as "design"). `<agent_id>` is the
+signing-card `agent_id` (design `:23`). Neither subject is in `.claude/context/nats-subjects.md` on main
+or on that branch yet (grep, 2026-11-27).
+
+**Why it needs this spec.** The hub today is one `$G` account plus `$SYS` (design `:32-33`). In one
+account any connection may subscribe `>`, so a subject name gives no confidentiality (design `:38-41`).
+The tap is one unset variable away: `nats-echo` defaults to `>` (`pmoves/services/nats-echo/nats_echo.py:38`).
+The shipped stanzas override it to `research.deepresearch.{request,result}.v1`
+(`pmoves/docker-compose.yml:4942`, `:4971`), so the code default is the hazard; whether a running
+instance uses it was not measured. Until §5a is decided and cut over, inbox bodies carry no secrets.
+Whichever option wins, the CORE ↔ CLOUD row above must stay `mesh.*` (one token) and never become
+`mesh.>`, or a CORE-held inbox would cross to CLOUD.
+
+**Option (a): stay in CORE, with per-agent users.** One nsc user per agent, minted into CORE:
+- publish: `mesh.inbox.agent.*.v1`, `mesh.inbox.room.*.v1`
+- subscribe: `mesh.inbox.agent.<own-id>.v1` plus the rooms it belongs to, nothing else (`>` denied)
+
+This reverses the §11 deferral of "fine-grained intra-CORE permissions", for agent identities only.
+Cost: subject permissions do not guard the stream. A durable pull consumer reads through
+`$JS.API.CONSUMER.MSG.NEXT.AGENT_INBOX.<durable>`, and `$JS.API.STREAM.MSG.GET.AGENT_INBOX` returns any
+stored message. So each user also needs `$JS.API` rights narrowed to its own durable, with stream-level
+GET excluded. That is reasoned from upstream permission semantics and is not measured here.
+
+**Option (b): a dedicated AGENTS account.** `AGENT_INBOX` lives in an AGENTS account. CORE sees only
+what AGENTS exports (for example a review-request seam), and AGENTS imports the CORE subjects agents need.
+JetStream is per-account: a CORE client reaches AGENTS JetStream only through an import with an altered
+API prefix, which is stripped back to `$JS.API` at the boundary (upstream ADR-19,
+`POWERFULMOVES/Pmoves-nats-architecture-and-design` `adr/ADR-19.md:14`, `:24-25`, `:32`). Cost: a fifth
+account breaks the "four fixed zones" rationale of §3 (`:72-74`), adds a fifth `resolver_preload` entry to
+`pmoves/config/nats/pmoves-nats.conf:51-56`, and needs an nsc mint after Phase 1. Agents inside AGENTS
+still share one account, so per-agent privacy still needs option (a)'s user permissions inside it.
+
+**Proposed lab proof (NOT run).** Repeat the 2026-08-15 throwaway-container method
+(`pmoves/docs/operations/NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md:83-86`; production `pmoves-nats-1` untouched):
+1. Mint a **throwaway** nsc operator in a scratch store, not the z890 vault (runbook `:41`).
+2. Render `pmoves/config/nats/pmoves-nats.conf` from it, keeping `operator:` (`:45`; required, runbook `:100`).
+3. Mint user `inbox-a` with subscribe allow `mesh.inbox.agent.a.v1` only, and user `inbox-b` unrestricted.
+4. `inbox-a` subscribing `>` and `mesh.inbox.agent.b.v1` must each get `Permissions Violation`.
+5. Positive control: `inbox-b` publishes to `mesh.inbox.agent.a.v1` and `inbox-a` receives it (count 1).
+6. Measure whether an explicit deny `>` beside the allow list also blocks the allowed subject; pick the form from that.
+7. For (a), repeat steps 4-5 through an `AGENT_INBOX` pull consumer, which exercises the `$JS.API` scoping.
+
+**Cutover stays with the operator.** Either option takes effect only when the hub leaves `$G` (runbook
+Phase 2). Phase 2 and Phase 3 land in the same window (runbook `:31`, `:52-54`), through the Known-Road
+compose road the operator authorizes (runbook `:31-32`, `:68-69`).
+
+**Signing is orthogonal (§6).** CHIT covers the payload: `sign_cgp(kid=actor)` and `verify_cgp_detailed`
+(`pmoves/tools/chit_security.py:323`, `:347`; design `:76-77`). Accounts cover who may read it. An HMAC
+under the deployment-wide key is attribution, not authentication (design `:22`), and it does not make a
+body private.
 
 ## 6. CHIT / GEOMETRY BUS / EVO SWARM / prosodic integration
 
