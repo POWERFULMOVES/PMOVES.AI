@@ -125,8 +125,8 @@ CORE exports a **curated** set; EDGE/CLOUD export their announcements back. Ever
 
 **Subjects.** One inbox per agent, `mesh.inbox.agent.<agent_id>.v1`, and one fan-out subject per room,
 `mesh.inbox.room.<room_id>.v1`, on a single stream `AGENT_INBOX` over `mesh.inbox.>`
-(`pmoves/docs/architecture/AGENT_INBOX_ROAD_DESIGN_2026-11-21.md:47-48`, `:56`, on branch
-`feat/agent-inbox-road` @ `72f518d32`, not on main; cited below as "design"). `<agent_id>` is the
+(`origin/feat/agent-inbox-road:pmoves/docs/architecture/AGENT_INBOX_ROAD_DESIGN_2026-11-21.md` lines
+47-48 and 56, branch head `72f518d32`; the file is not on main yet, so read it with `git show`; cited below as "design"). `<agent_id>` is the
 signing-card `agent_id` (design `:23`). Neither subject is in `.claude/context/nats-subjects.md` on main
 or on that branch yet (grep, 2026-11-27).
 
