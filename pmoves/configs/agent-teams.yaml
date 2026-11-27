@@ -86,6 +86,7 @@ teams:
     - cipher_memory
     - notebooklm_agent
     - autoresearch
+    - ollama_agent
   media:
     name: Media & Voice
     description: Audio/video processing, TTS, transcription, content creation
@@ -196,6 +197,8 @@ teams:
     - headscale
     - vps_fleet_manager
     - nemoclaw
+    - ca_agent
+    - vps_agent
   sandbox:
     name: Sandbox & Execution
     description: Isolated code execution environments (E2B)

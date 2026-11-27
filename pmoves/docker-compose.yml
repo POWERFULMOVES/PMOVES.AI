@@ -1759,7 +1759,7 @@ services:
   # Requires supabase-db to be running (make up-supabase before make up-juicefs).
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
-    image: juicedata/mount:ce-v1.3.0
+    image: juicedata/mount:ce-v1.4.1
     profiles: ["juicefs"]
     restart: "no"
     entrypoint: ["sh", "-lc"]
@@ -1795,7 +1795,7 @@ services:
     - SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
-    image: juicedata/mount:ce-v1.3.0
+    image: juicedata/mount:ce-v1.4.1
     profiles: ["juicefs"]
     restart: unless-stopped
     depends_on:
@@ -4248,6 +4248,9 @@ services:
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
+    # Routable announce host for services.announce.v1 — bind host (0.0.0.0) is
+    # not an address fleet-sentinel can poll; announce the compose service name.
+    - PMOVES_ANNOUNCE_HOST=cipher-api
     - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
     - OLLAMA_BASE_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
