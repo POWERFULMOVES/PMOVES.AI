@@ -6,9 +6,16 @@ localhost-only (127.0.0.1) or mesh-accessible (0.0.0.0).  Flags unexpected
 0.0.0.0 bindings not in the mesh allowlist.
 
 Usage:
-    python tools/port_audit.py              # audit from pmoves/
-    make -C pmoves port-audit               # via Makefile
+    make -C pmoves port-audit               # canonical: resolves via $(DC)
+    $(DC) config --format json | python tools/port_audit.py --config-json -
+    python tools/port_audit.py              # bare `docker compose config`
+
+The bare form reads NO env files, so on a real node it either fails or audits
+binds that no recreate produces. `make port-audit` pipes the config resolved
+through the Makefile's $(DC) (tier env files + the node's env.mesh-bind.local
+overlay, loaded last) into --config-json, so the audit sees what `up` sees.
 """
+import argparse
 import json
 import os
 import subprocess
@@ -89,6 +96,28 @@ def parse_compose_config():
         return json.loads(result.stdout)
     except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError) as e:
         print(f"WARNING: Could not run docker compose config: {e}", file=sys.stderr)
+        return None
+
+
+def read_config_json(source: str):
+    """Read an already-resolved compose config (JSON) from a path or '-' (stdin).
+
+    Returns None on empty or unparseable input so main() fails closed: when the
+    upstream `$(DC) config` fails it writes nothing to stdout, and an empty
+    document must never read as "no ports, all clean".
+    """
+    try:
+        text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"WARNING: Could not read compose config JSON from {source}: {exc}", file=sys.stderr)
+        return None
+    if not text.strip():
+        print("WARNING: compose config JSON input was empty (did `docker compose config` fail?)", file=sys.stderr)
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        print(f"WARNING: compose config JSON input is not valid JSON: {exc}", file=sys.stderr)
         return None
 
 
@@ -179,8 +208,17 @@ def print_report(
     return 0
 
 
-def main() -> int:
-    config = parse_compose_config()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Audit compose port bindings.")
+    parser.add_argument(
+        "--config-json",
+        metavar="PATH",
+        help="read resolved compose config JSON from PATH ('-' = stdin) "
+        "instead of running a bare `docker compose config`",
+    )
+    args = parser.parse_args([] if argv is None else argv)
+
+    config = read_config_json(args.config_json) if args.config_json else parse_compose_config()
     if config is None:
         print("ERROR: dynamic compose parsing failed — failing closed.", file=sys.stderr)
         print("Run 'docker compose config' manually to diagnose.", file=sys.stderr)
@@ -195,4 +233,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
