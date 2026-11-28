@@ -5,7 +5,17 @@
 # PR critical-path, room-aware safe start/stop, Tracks reprocessing on 4090,
 # and v1.1 deferrals (Longbow, viz, retrace lifeline).
 #
-# Authoritative plan: C:/Users/DARKXSIDE/.claude/plans/we-need-work-and-partitioned-hearth.md
+# Authoritative plan: pmoves/docs/launch/PLIGHT_AND_PLAN.md (in-repo since the
+#   2026-11-27 re-baseline). The April plan it came from lived at
+#   C:/Users/DARKXSIDE/.claude/plans/we-need-work-and-partitioned-hearth.md --
+#   a file on one operator machine that no agent on another node could read.
+#
+# STATUS FIELDS ARE HAND-SET AND DRIFT. The measured state is the validator's
+# report (scripts/validate_launch_layout.py -> LAYOUT_VALIDATION_REPORT.md),
+# which runs the checks below. Where `status:` and the report disagree, the
+# report wins. Since 2026-11-27 the validator has three verdicts -- PASS,
+# UNVERIFIED, FAIL -- and only a measured PASS counts toward the gate.
+#
 # Plight & Plan: pmoves/docs/launch/PLIGHT_AND_PLAN.md
 # PR backlog: pmoves/docs/launch/PR_BACKLOG_CLASSIFICATION.md
 # Validation: scripts/validate_launch_layout.py
@@ -494,9 +504,9 @@ root:
           task: "p7-room-orchestrator service"
           action:
             type: file_exists
-            expect: "pmoves/services/p7-room-orchestrator/app.py"
+            expect: "pmoves/services/p7-room-orchestrator/main.py"
           status: done
-          notes: "Port 8122 service, registry/team/compose wiring, and focused tests landed 2026-07-17."
+          notes: "Port 8122 service, registry/team/compose wiring, and focused tests landed 2026-07-17 (#2173). The entrypoint is main.py; until 2026-11-27 this node expected app.py and read MISSING for a service that exists."
 
         - id: stage-10.skill
           task: "/p7:room skill (pause/resume/status/migrate)"
@@ -527,9 +537,9 @@ root:
           task: "4090 node online via Tailscale"
           action:
             type: manual
-            expect: "make -C pmoves fleet-status shows 5090-powerfulmoves online"
+            expect: "make -C pmoves fleet-status shows the 4090 node (hostname PMOVES-4090, node laptop-4090) online"
           status: pending
-          notes: "Per agent-teams.yaml the GPU primary is 5090-powerfulmoves; 4090 laptop is separate"
+          notes: "This node used to expect '5090-powerfulmoves online', which tested the wrong machine for a 4090 stage. The 5090 is the GPU primary per agent-teams.yaml; Stage 11 runs on the 4090."
 
         - id: stage-11.reprocess-skill
           task: "/audio:reprocess skill"
@@ -547,6 +557,140 @@ root:
               min_count: 1
           status: pending
 
+    # =========================================================================
+    # Stage 12: Reunification -- merge the parts of PMOVES back together
+    # =========================================================================
+    # Added 2026-11-27 (4090-CLAUDE, operator direction): "we are merging all
+    # the parts of PMOVES back together again so we can launch -- orchestrators,
+    # services, knowledge bases, and security hardening." Every node runs a
+    # check that already exists, except the two marked NOT YET BUILT, which FAIL
+    # on purpose until their lane lands. Nothing here is a typed-in green.
+    - id: stage-12
+      task: "Stage 12 — Reunification: forks, orchestrators, knowledge bases, hardening, public face"
+      context: "The parts were built in parallel across nodes, forks and checkouts. Launch means they agree with each other, measured."
+      agent_hint: capacity-class
+      status: in_progress
+      children:
+        # --- the parts agree on what they are -----------------------------
+        - id: stage-12.submodule-integrity
+          task: "Every required submodule initialized and its gitlink resolvable"
+          action:
+            type: make_target
+            expect: {target: submodule-integrity-strict, timeout: 600}
+          status: pending
+          notes: "Fork <- upstream is fleet-fork-sync; gitlink <- fork promotion follows. NATS fork PR POWERFULMOVES/PMOVES-nats-server#2 (2.15.3 hub image) is one open instance."
+
+        - id: stage-12.living-docs-fresh
+          task: "Living docs within their freshness windows (SITREP, AGNOTE4482, CATALOG ...)"
+          action:
+            type: make_target
+            expect: docs-reconcile-check
+          status: pending
+          notes: "The cold-start docs stopped at 2026-10-08 and the wave index at 2026-07-17; this node is the gate that says so."
+
+        - id: stage-12.identity-roster
+          task: "Claim-register identity vocabulary coherent"
+          action:
+            type: make_target
+            expect: identity-verify
+          status: pending
+          notes: "Identity roster feeds the ACP registry fork (PMOVES-registry, x-pmoves blocks) and acp_registry_map.json."
+
+        - id: stage-12.skills-parity
+          task: "Skills reach every harness that should have them"
+          action:
+            type: make_target
+            expect: {target: skills-parity, vars: {ARGS: --strict}}
+          status: pending
+
+        # --- orchestrators and knowledge bases answer ----------------------
+        - id: stage-12.orchestrator-agent-zero
+          task: "Agent Zero supervisor healthy (/healthz ok + non-empty environment)"
+          action:
+            type: make_target
+            expect: health-agent-zero
+          status: pending
+          notes: "Node-local: measures the node running the validator."
+
+        - id: stage-12.knowledge-cipher
+          task: "Cipher memory healthy"
+          action:
+            type: make_target
+            expect: cipher-health
+          status: pending
+          notes: "Node-local. Baseline 2026-11-28 on 4090: PASS (pmoves-cipher-api-1 healthy). Cipher agentId must be the signing-card agent_id."
+
+        - id: stage-12.orchestrators-knowledge-fleet
+          task: "Archon, P7 (:8122), Hermes, Hi-RAG v2, Open Notebook, Graphiti/Neo4j healthy on their home nodes"
+          action:
+            type: manual
+            expect: "make -C pmoves health-summary on each home node; record per-node results in the SITREP"
+          status: pending
+          notes: "Manual until a fleet-wide health target exists; UNVERIFIED, not green."
+
+        # --- security hardening ------------------------------------------
+        - id: stage-12.silent-binds
+          task: "No published port without a real listener (silent-bind class retired, #3518/#3522)"
+          action:
+            type: make_target
+            expect: {target: net-reality, vars: {PORTS_ONLY: "1"}}
+          status: pending
+
+        - id: stage-12.nats-2153
+          task: "NATS pinned to 2.15.3 by digest across compose (#3528)"
+          action:
+            type: pr_state
+            expect: {number: 3528, state: merged}
+          status: in_progress
+
+        - id: stage-12.nats-mesh-tac
+          task: "Sovereign-mesh NATS decision recorded (every node hub+leaf, mesh elects) (#3526)"
+          action:
+            type: pr_state
+            expect: {number: 3526, state: merged}
+          status: in_progress
+
+        - id: stage-12.tailscale-acl
+          task: "Tailscale ACL check-before-apply (#3525)"
+          action:
+            type: pr_state
+            expect: {number: 3525, state: merged}
+          status: in_progress
+
+        - id: stage-12.runners-ephemeral
+          task: "Self-hosted runners ephemeral; kilocode-review stays disabled until re-scoped"
+          action:
+            type: manual
+            expect: "Every self-hosted runner registered --ephemeral; branch-trail-emit fork guard uses head.repo.full_name"
+          status: pending
+          notes: "Operator approved ephemeral runners 2026-11-20. runner-topology.md is stale vs the 9 live runners."
+
+        # --- the public face tells the truth --------------------------------
+        - id: stage-12.chit-tour-generated
+          task: "pmoves.ai/chit-tour renders the GENERATED roster, and the check proves it is current"
+          action:
+            type: make_target
+            expect: chit-tour-data-check
+          status: pending
+          notes: |
+            NOT YET BUILT -- FAILS on purpose until the site lane lands it.
+            The tour's counts drift because data.generated.js (from
+            agent_registry.yaml) is never loaded by the page; every number is
+            typed into index.html / data.js. Same failure as the stale SITREP:
+            a generator exists, nothing makes its output what people see.
+            The target must regenerate to a temp file, diff against the
+            committed copy, and assert the page actually loads it.
+
+        - id: stage-12.site-legal-pages
+          task: "/privacy, /terms, /security are real pages, not 302s to homepage anchors"
+          action:
+            type: file_or
+            expect:
+              - "website/privacy/index.html"
+              - "website/privacy.html"
+          status: pending
+          notes: "website/_redirects:27-29 currently 302s all three to the homepage."
+
 # =============================================================================
 # Launch gates
 # =============================================================================
@@ -563,6 +707,7 @@ gates:
       - stage-9
       - stage-10
       - stage-11
+      - stage-12
 
   v1-1-deferred:
     description: "Nice-to-have, target milestone M6 (~+30d post-launch)"

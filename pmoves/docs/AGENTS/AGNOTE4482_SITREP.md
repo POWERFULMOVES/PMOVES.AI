@@ -4,7 +4,32 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below) · **2026-09-24 addendum:** EM-FLASH registration + merge-wave receipt (see below)
+> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below) · **2026-09-24 addendum:** EM-FLASH registration + merge-wave receipt (see below) · **2026-11-27 addendum:** launch re-baseline (see below)
+
+---
+
+## 2026-11-27 launch re-baseline (4090-CLAUDE)
+
+**Active lane**: `docs/launch-rebaseline-2026-11-27`, claimed under **`4090-CLAUDE`** (TTL 48h, filed through `make -C pmoves register-claim`).
+
+**Gap this closes**: this SITREP's last full refresh was 2026-09-10 and its last addendum 2026-09-24. Since 2026-10-08, **167 PRs merged** and none of them reached this page. As of this refresh **80 PRs are open, 26 of them drafts**. The launch plan was frozen at April's "Cinco de Mayo" target, with its authoritative copy on one operator machine.
+
+**Where launch stands now**: read `pmoves/docs/launch/PLIGHT_AND_PLAN.md` § Re-baseline, then the generated `LAYOUT_VALIDATION_REPORT.md`.
+- Measured: **27/59 blocking nodes pass · 15 unverified · 17 fail**.
+- The validator used to call it 33/45 on the pre-Stage-12 tree, because it passed every `manual` node and every test file that merely existed. Only a measured PASS counts now.
+- **Stage 12 (Reunification)**, the operator's "merge all the parts back together" across orchestrators, services, knowledge bases and hardening, is now a launch-blocking stage built from existing make targets.
+
+**November, in one breath**:
+- Silent-bind class retired (#3518 gate, #3522 73 binds).
+- Agent comms roads opened (#3521).
+- Node identity holds its node (#3476); harness-scope team (#3477).
+- Secrets: node-sovereign Supabase keys (#3498), KEYS allowlist (#3496), refuse `${VAR}` placeholders (#3465).
+- Site: mobile nav + rooms page (#3492, #3471).
+- NATS: the sovereign-mesh decision (every node hub+leaf, the mesh elects) is in #3526; the 2.15.3 digest pin is in #3528. Both are open.
+
+**Node-local truth on 4090 at refresh**: Cipher `:8105` healthy; Agent Zero `:8080` refused (container not running); `net-reality` reports silent-bind findings.
+
+**Operator decisions now open**: #13 launch date, #14 definition of done (hybrid tokenization track or stub only), #15 which Stage 0–11 failures move to v1.1.
 
 ---
 
